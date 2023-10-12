@@ -1,0 +1,118 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Dynamic SVG Art</title>
+    <style>
+        body, html {
+            margin: 0;
+            overflow: hidden;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #fff;
+        }
+        svg {
+            width: calc(100vmin * 16 / 9);
+            height: 100vmin;
+        }
+        @media (min-aspect-ratio: 16/9) {
+            svg {
+                width: 100vw;
+                height: calc(100vw * 9 / 16);
+            }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        let svgNamespace = "http://www.w3.org/2000/svg";
+
+        function createCircle(cx, cy, r, fill) {
+            let circle = document.createElementNS(svgNamespace, "circle");
+            circle.setAttribute("cx", cx);
+            circle.setAttribute("cy", cy);
+            circle.setAttribute("r", r);
+            circle.setAttribute("fill", fill);
+            return circle;
+        }
+
+        function createLine(x1, y1, x2, y2, stroke) {
+            let line = document.createElementNS(svgNamespace, "line");
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+            line.setAttribute("stroke", stroke);
+            line.setAttribute("stroke-width", "1");
+            return line;
+        }
+
+        function createGradient(stop1Color, stop2Color) {
+            let defs = document.createElementNS(svgNamespace, "defs");
+            let grad = document.createElementNS(svgNamespace, "linearGradient");
+            grad.setAttribute("id", "grad");
+            defs.appendChild(grad);
+            
+            let stop1 = document.createElementNS(svgNamespace, "stop");
+            stop1.setAttribute("offset", "0%");
+            stop1.setAttribute("stop-color", stop1Color);
+            grad.appendChild(stop1);
+            
+            let stop2 = document.createElementNS(svgNamespace, "stop");
+            stop2.setAttribute("offset", "100%");
+            stop2.setAttribute("stop-color", stop2Color);
+            grad.appendChild(stop2);
+            
+            return defs;
+        }
+
+        function getRandomColor(excludeColors = []) {
+            let colors = ['#FF0000', '#0000FF', '#FFFF00'];
+            colors = colors.filter(color => !excludeColors.includes(color));
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        let width = window.innerWidth;
+        let height = window.innerWidth * 9 / 16;
+        if (window.innerWidth / window.innerHeight > 16 / 9) {
+            height = window.innerHeight;
+            width = window.innerHeight * 16 / 9;
+        }
+        let grid_size = width / 50;
+
+        let svg = document.createElementNS(svgNamespace, "svg");
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+        document.body.appendChild(svg);
+
+        let stop1Color = getRandomColor();
+        let stop2Color = getRandomColor([stop1Color]);
+        let bgColor = getRandomColor([stop1Color, stop2Color]);
+
+        svg.appendChild(createGradient(stop1Color, stop2Color));
+
+        let rect = document.createElementNS(svgNamespace, "rect");
+        rect.setAttribute("width", "100%");
+        rect.setAttribute("height", "100%");
+        rect.setAttribute("fill", bgColor);
+        rect.setAttribute("opacity", "0.5");
+        svg.appendChild(rect);
+
+        let mouseX = Math.random() * width - width / 2;
+        let mouseY = Math.random() * height - height / 2;
+
+        for(let x = -width / 2; x < width / 2; x += grid_size) {
+            for(let y = -height / 2; y < height / 2; y += grid_size) {
+                svg.appendChild(createCircle(width / 2 + x, height / 2 + y, 2, "#000000"));
+                svg.appendChild(createCircle(width / 2 + x + mouseX, height / 2 + y + mouseY, 2, "#000000"));
+                svg.appendChild(createLine(width / 2 + x, height / 2 + y, width / 2 + x + mouseX, height / 2 + y + mouseY, "url(#grad)"));
+            }
+        }
+    </script>
+</body>
+</html>

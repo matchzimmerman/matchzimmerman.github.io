@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic SVG Gradient with Crosses</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gradientCanvas" width="1800" height="1800" style="display: none;"></canvas>
+    
+<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice">
+    <!-- Define the linear gradient with initial colors -->
+    <defs>
+        <linearGradient id="rotatingCrossesGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" class="stop1" />
+            <stop offset="100%" class="stop2" />
+        </linearGradient>
+        
+        <style>
+            /* Extend the transition duration for a smoother color change */
+            .stop1, .stop2 {
+                transition: stop-color 3s;
+            }
+            
+            /* Rotation animation for crosses */
+            .cross {
+                animation: rotateCross 4s linear infinite;
+            }
+
+            @keyframes rotateCross {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+
+        <!-- Define the cross pattern -->
+        <pattern id="rotatingCrossesPattern" x="0" y="0" width="175" height="175" patternUnits="userSpaceOnUse">
+            <g class="cross" transform-origin="50.0px 50.0px">
+                <line x1="50.0" y1="25" x2="50.0" y2="75" stroke="white" stroke-width="10" />
+                <line x1="25" y1="50.0" x2="75" y2="50.0" stroke="white" stroke-width="10" />
+            </g>
+        </pattern>
+    </defs>
+    
+    <!-- Draw the background rectangle with the gradient -->
+    <rect x="0" y="0" width="1000" height="1000" fill="url(#rotatingCrossesGradient)" />
+
+    <!-- Overlay the rotating cross pattern on top of the gradient -->
+    <rect x="0" y="0" width="1000" height="1000" fill="url(#rotatingCrossesPattern)" />
+
+    <!-- Embed JavaScript to randomize gradient colors -->
+    <script type="text/ecmascript"><![CDATA[
+        const colors = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
+        const stop1 = document.querySelector('.stop1');
+        const stop2 = document.querySelector('.stop2');
+
+        function getRandomColor() {
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function updateGradientColors() {
+            stop1.setAttribute('stop-color', getRandomColor());
+            stop2.setAttribute('stop-color', getRandomColor());
+        }
+
+        // Initial color assignment
+        updateGradientColors();
+
+        // Change top color every 5 seconds
+        setInterval(() => {
+            stop1.setAttribute('stop-color', getRandomColor());
+        }, 5000);
+
+        // Change bottom color every 3.5 seconds
+        setInterval(() => {
+            stop2.setAttribute('stop-color', getRandomColor());
+        }, 3500);
+    ]]></script>
+</svg>
+
+    <script>
+        window.onload = function() {
+            // Function to sample color from the gradient
+            function sampleColorFromGradient(canvas, ctx) {
+                let x = Math.floor(Math.random() * canvas.width);
+                let y = Math.floor(Math.random() * canvas.height);
+                let pixel = ctx.getImageData(x, y, 1, 1).data;
+                return `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
+            }
+
+            // Draw the gradient to the hidden canvas
+            let canvas = document.getElementById('gradientCanvas');
+            let ctx = canvas.getContext('2d');
+            let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, "yellow");
+            gradient.addColorStop(1, "yellow");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Apply the sampled colors to the SVG crosses
+            let crosses = document.querySelectorAll('.cross line');
+            crosses.forEach(line => {
+                line.setAttribute('stroke', sampleColorFromGradient(canvas, ctx));
+            });
+        };
+    </script>
+</body>
+</html>
