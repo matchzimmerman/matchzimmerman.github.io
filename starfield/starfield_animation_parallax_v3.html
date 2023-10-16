@@ -1,0 +1,95 @@
+
+<html>
+  <head>
+    <title>Starfield Animation</title>
+    <style>
+      #starfield {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: black;
+        overflow: hidden;
+      }
+      .star {
+        font-family: monospace;
+        position: absolute;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="starfield"></div>
+    <script>
+      var starfield = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        stars: [[], [], []],
+        speeds: [3.25, 2.25, 1.5],  // Adjusted speeds
+        colors: ["lightgrey", "grey", "darkgrey"],  // Text colors for each group
+        word: "starfield",
+        mousePos: {x: 0, y: 0},
+        init: function() {
+          for (var g = 0; g < 3; g++) {
+            for (var i = 0; i < 100; i++) {
+              var star = {
+                x: Math.random() * starfield.width,
+                y: Math.random() * starfield.height,
+                z: Math.random() * 1000,
+                char: starfield.word.charAt(Math.floor(Math.random() * starfield.word.length)),
+                el: null
+              };
+              starfield.stars[g].push(star);
+              star.el = document.createElement('span');
+              star.el.className = 'star';
+              star.el.innerText = star.char;
+              star.el.style.fontSize = ((3 - g) * 10) + 'px';  // Adjusted font size setup
+              star.el.style.color = starfield.colors[g];  // Set color based on group
+              document.getElementById('starfield').appendChild(star.el);
+            }
+          }
+          window.addEventListener('mousemove', function(event) {
+            starfield.mousePos.x = event.clientX;
+            starfield.mousePos.y = event.clientY;
+          });
+        },
+        update: function() {
+          for (var g = 0; g < 3; g++) {
+            for (var i = 0; i < starfield.stars[g].length; i++) {
+              var star = starfield.stars[g][i];
+              star.x -= starfield.speeds[g];
+              if (star.x <= 0) {
+                star.x = starfield.width;
+              }
+              if (Math.random() < 0.1) {
+                star.el.innerText = starfield.word.charAt(Math.floor(Math.random() * starfield.word.length));
+              }
+            }
+          }
+        },
+        render: function() {
+          for (var g = 0; g < 3; g++) {
+            for (var i = 0; i < starfield.stars[g].length; i++) {
+              var star = starfield.stars[g][i];
+              var dx = star.x - starfield.mousePos.x;
+              var dy = star.y - starfield.mousePos.y;
+              var distance = Math.sqrt(dx * dx + dy * dy);
+              var sizeFactor = Math.max(100 / (distance + 100), 1);
+              var fontSize = sizeFactor * ((3 - g) * 10);
+              star.el.style.left = star.x + 'px';
+              star.el.style.top = star.y + 'px';
+              star.el.style.fontSize = fontSize + 'px';
+            }
+          }
+        },
+        loop: function() {
+          starfield.update();
+          starfield.render();
+          requestAnimationFrame(starfield.loop);
+        }
+      };
+      starfield.init();
+      starfield.loop();
+    </script>
+  </body>
+</html>
