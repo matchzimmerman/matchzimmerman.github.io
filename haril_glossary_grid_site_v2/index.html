@@ -8,43 +8,43 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Background layers (cosmic spiral + starfield) -->
   <canvas id="sky" aria-hidden="true"></canvas>
   <canvas id="spiral" aria-hidden="true"></canvas>
 
-  <!-- Top controls -->
+  <!-- Top bar: centered brand, controls on the right -->
   <div class="topbar" role="region" aria-label="Controls">
-    <div class="left">
-      <h1 class="brand">Human–AI Glossary</h1>
+    <div class="tb-left"></div>
+    <div class="tb-center">
+      <a class="brand-link" href="#/" title="Go to main glossary page">
+        <span class="brand-title">HUMAN–AI GLOSSARY</span>
+        <span class="brand-byline">by Match Zimmerman</span>
+      </a>
     </div>
-    <div class="right">
+    <div class="tb-right">
       <button class="button" id="paletteBtn" title="Change colors (c)">Colors</button>
       <button class="button" id="pauseBtn" title="Pause/Play (space)">Pause</button>
     </div>
   </div>
 
-  <!-- Main content: Grid + Detail (SPA style) -->
   <main id="app" class="app">
-    <!-- Grid view -->
+    <!-- Lead text (visible in grid mode) -->
+    <p id="lead" class="lead" role="note">Select a tile below for more information on the term you are interested in.</p>
+
+    <!-- Grid view (remains visible even in detail mode) -->
     <section id="gridView" class="grid-view" aria-label="Glossary Terms Grid">
       <div class="grid" id="cardGrid" role="list"></div>
     </section>
 
-    <!-- Detail view -->
+    <!-- Detail view overlay -->
     <section id="detailView" class="detail-view" aria-label="Term Details" hidden>
-      <div class="detail-wrap glass">
-        <div class="detail-top">
-          <button class="button back" id="backBtn" title="Back to Glossary">← Back to gloss­ary</button>
-          <div class="spacer"></div>
-          <button class="button" id="openInNew" title="Open term page in a new tab">Open ↗</button>
-        </div>
+      <div class="detail-wrap glass" role="dialog" aria-modal="false">
         <article id="termContent" class="term-content"></article>
       </div>
     </section>
   </main>
 
   <div class="hint">
-    <span class="chip">Click any card · Esc to go back · c = colors · space = pause</span>
+    <span class="chip">Click any card · c = colors · space = pause</span>
   </div>
 
   <script src="app.js"></script>
