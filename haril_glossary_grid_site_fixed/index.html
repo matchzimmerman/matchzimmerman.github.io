@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Human–AI Glossary</title>
+  <meta name="description" content="Grid of HARIL terms over a cosmic, interactive background.">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <canvas id="spiral" aria-hidden="true"></canvas>
+
+  <div class="topbar" role="region" aria-label="Controls">
+    <div class="left">
+      <h1 class="brand">
+        <span class="brand-title">HUMAN–AI GLOSSARY</span>
+        <span class="brand-byline">by Match Zimmerman</span>
+      </h1>
+    </div>
+    <div class="right">
+      <button class="button" id="paletteBtn" title="Change colors (c)">Colors</button>
+      <button class="button" id="pauseBtn" title="Pause/Play (space)">Pause</button>
+    </div>
+  </div>
+
+  <main id="app" class="app">
+    <section id="gridView" class="grid-view" aria-label="Glossary Terms Grid">
+      <div class="grid" id="cardGrid" role="list"></div>
+    </section>
+
+    <section id="detailView" class="detail-view" aria-label="Term Details" hidden>
+      <div class="detail-wrap glass">
+        <div class="detail-top">
+          <a class="button back" id="backBtn" href="#/" title="Back to Glossary">← Back to glossary</a>
+          <div class="spacer"></div>
+        </div>
+        <article id="termContent" class="term-content"></article>
+      </div>
+    </section>
+  </main>
+
+  <div class="hint">
+    <span class="chip">Click any card · Esc to go back · c = colors · space = pause</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
