@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Human–AI Glossary</title>
+  <meta name="description" content="HARIL glossary of terms and definitions by Match Zimmerman.">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <canvas id="spiral" aria-hidden="true"></canvas>
+
+  <!-- Top bar: left site link, centered brand, controls on the right -->
+  <div class="topbar" role="region" aria-label="Site header">
+    <div class="tb-left">
+      <a class="site-link" href="https://matchzimmerman.com" target="_blank" rel="noopener">matchzimmerman.com ↗</a>
+    </div>
+    <div class="tb-center">
+      <a class="brand-link" href="#/" title="Go to main glossary page">
+        <span class="brand-title">HUMAN–AI GLOSSARY</span>
+        <span class="brand-byline">by Match Zimmerman</span>
+      </a>
+    </div>
+    <div class="tb-right">
+      <button class="button" id="paletteBtn" title="Change colors (c)">Colors</button>
+      <button class="button" id="pauseBtn" title="Pause/Play (space)">Pause</button>
+    </div>
+  </div>
+
+  <main id="app" class="app">
+    <!-- Lead description -->
+    <p id="lead" class="lead" role="note">
+      a series of terms and definitions that Match Zimmerman has developed throughout his ongoing practice‑based research related to Human‑AI interaction and synthetic cognitive profile development.
+    </p>
+    <p id="lead2" class="lead2" role="note">
+      Select a tile below for more information on the term you are interested in.
+    </p>
+
+    <!-- Grid stays visible always; position shifts based on detail state -->
+    <section id="gridView" class="grid-view" aria-label="Glossary Terms Grid">
+      <div class="grid" id="cardGrid" role="list"></div>
+    </section>
+
+    <!-- Detail view overlay -->
+    <section id="detailView" class="detail-view" aria-label="Term Details" hidden>
+      <div class="detail-wrap glass" role="dialog" aria-modal="false">
+        <article id="termContent" class="term-content"></article>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer / attribution -->
+  <footer class="footer">
+    <span class="foot-left">Created using HARIL Communications Engine, designed by Match Zimmerman.</span>
+  </footer>
+
+  <div class="hint">
+    <span class="chip">Click any card · c = colors · space = pause</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

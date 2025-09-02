@@ -1,3 +1,4 @@
+/* v2.2 behavior tweaks */
 const PALETTES = [
   ["hsl(240 28% 6%)","hsl(35 12% 95%)","hsl(265 85% 72%)","hsl(200 90% 70%)","hsl(240 8% 50%)","hsl(265 90% 65% / 0.25)"],
   ["hsl(210 25% 6%)","hsl(20 14% 94%)","hsl(195 85% 70%)","hsl(160 80% 72%)","hsl(210 8% 52%)","hsl(195 90% 65% / 0.25)"],
@@ -21,7 +22,7 @@ function applyPalette(i){
 }
 applyPalette(paletteIndex);
 
-/* Background layers */
+/* Background stars */
 const sky = document.getElementById('sky'); const sctx = sky.getContext('2d');
 let SW=0, SH=0, SDPR = Math.min(devicePixelRatio||1, 2);
 function fitSky(){ SW = sky.width = Math.floor(innerWidth * SDPR); SH = sky.height = Math.floor(innerHeight * SDPR);
@@ -34,6 +35,7 @@ function drawStars(){ sctx.clearRect(0,0,SW,SH); sctx.fillStyle = 'white';
     sctx.beginPath(); sctx.arc(s.x, s.y, s.r*SDPR, 0, Math.PI*2); sctx.fill(); } sctx.globalAlpha = 1; }
 fitSky(); seedStars(); drawStars(); addEventListener('resize', ()=>{ fitSky(); seedStars(); drawStars(); });
 
+/* Spiral */
 const cvs = document.getElementById('spiral'); const ctx = cvs.getContext('2d');
 let W=0, H=0, DPR = Math.min(devicePixelRatio || 1, 2); let CX=0, CY=0;
 function fit(){ W = cvs.width = Math.floor(innerWidth * DPR); H = cvs.height = Math.floor(innerHeight * DPR);
@@ -42,7 +44,6 @@ fit(); addEventListener('resize', fit);
 
 let paused = false; let reverse = 1; let mouse = {x:0, y:0};
 addEventListener('mousemove', e=>{ mouse.x = (e.clientX / innerWidth - 0.5) * 2; mouse.y = (e.clientY / innerHeight - 0.5) * 2; }, {passive:true});
-
 const pauseBtn = document.getElementById('pauseBtn'); const paletteBtn = document.getElementById('paletteBtn');
 function togglePause(){ paused = !paused; if(pauseBtn) pauseBtn.textContent = paused ? 'Play' : 'Pause'; if(!paused) requestAnimationFrame(draw); }
 function cyclePalette(){ paletteIndex = (paletteIndex+1) % PALETTES.length; applyPalette(paletteIndex); drawStars(); }
@@ -65,9 +66,11 @@ function draw(now){ if(paused) return; drawStars(); ctx.clearRect(0,0,W,H);
 }
 const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches; if(!prefersReduced){ requestAnimationFrame(draw); }
 
-/* -------- Grid + Term loader -------- */
-const gridEl = document.getElementById('cardGrid'); const detailView = document.getElementById('detailView');
-const termContent = document.getElementById('termContent'); const lead = document.getElementById('lead');
+/* Grid + Term loader */
+const gridEl = document.getElementById('cardGrid');
+const detailView = document.getElementById('detailView');
+const termContent = document.getElementById('termContent');
+const lead2 = document.getElementById('lead2');
 
 let TERMS = [];
 fetch('terms.json', { cache: 'no-store' }).then(r => r.json()).then(data => { TERMS = data; renderGrid(); route(location.hash); });
@@ -84,9 +87,16 @@ function renderGrid(){
   });
 }
 function navigateTo(slug){ location.hash = `#/term/${slug}`; }
-function showGrid(){ detailView.hidden = true; lead.hidden = false; if(location.hash !== '#/'){ history.pushState(null, '', '#/'); } }
+function showGrid(){
+  detailView.hidden = true;
+  document.body.classList.remove('has-detail');
+  if(location.hash !== '#/'){ history.pushState(null, '', '#/'); }
+  lead2.hidden = false;
+}
 function showDetail(slug){
-  detailView.hidden = false; lead.hidden = true;
+  detailView.hidden = false;
+  document.body.classList.add('has-detail');
+  lead2.hidden = true;
   termContent.innerHTML = `<p style="opacity:.7">Loading…</p>`;
   fetch(`terms/${slug}.html`, { cache: 'no-store' }).then(r => r.ok ? r.text() : Promise.reject())
     .then(html => { termContent.innerHTML = html; })

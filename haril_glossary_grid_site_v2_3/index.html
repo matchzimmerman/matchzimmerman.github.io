@@ -4,16 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Human–AI Glossary</title>
-  <meta name="description" content="Grid of HARIL terms over a cosmic, interactive background.">
+  <meta name="description" content="HARIL glossary of terms and definitions by Match Zimmerman.">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <canvas id="sky" aria-hidden="true"></canvas>
   <canvas id="spiral" aria-hidden="true"></canvas>
 
-  <!-- Top bar: centered brand, controls on the right -->
-  <div class="topbar" role="region" aria-label="Controls">
-    <div class="tb-left"></div>
+  <div class="topbar" role="region" aria-label="Site header">
+    <div class="tb-left">
+      <a class="site-link" href="https://matchzimmerman.com" target="_blank" rel="noopener">matchzimmerman.com ↗</a>
+    </div>
     <div class="tb-center">
       <a class="brand-link" href="#/" title="Go to main glossary page">
         <span class="brand-title">HUMAN–AI GLOSSARY</span>
@@ -27,21 +28,28 @@
   </div>
 
   <main id="app" class="app">
-    <!-- Lead text (visible in grid mode) -->
-    <p id="lead" class="lead" role="note">Select a tile below for more information on the term you are interested in.</p>
+    <!-- Tighter, sexier copy -->
+    <p id="lead" class="lead" role="note">
+      An evolving lexicon for Human–AI collaboration and Synthetic Cognitive Profiles.
+    </p>
+    <p id="lead2" class="lead2" role="note">
+      Select a tile to dive in.
+    </p>
 
-    <!-- Grid view (remains visible even in detail mode) -->
     <section id="gridView" class="grid-view" aria-label="Glossary Terms Grid">
       <div class="grid" id="cardGrid" role="list"></div>
     </section>
 
-    <!-- Detail view overlay -->
     <section id="detailView" class="detail-view" aria-label="Term Details" hidden>
       <div class="detail-wrap glass" role="dialog" aria-modal="false">
         <article id="termContent" class="term-content"></article>
       </div>
     </section>
   </main>
+
+  <footer class="footer">
+    <span class="foot-left">Created using HARIL Communications Engine, designed by Match Zimmerman.</span>
+  </footer>
 
   <div class="hint">
     <span class="chip">Click any card · c = colors · space = pause</span>
