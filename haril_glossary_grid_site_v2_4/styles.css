@@ -67,8 +67,8 @@ body{
   letter-spacing: .04em;
 }
 
-/* Buttons / chips */
-.button, .chip{
+/* Buttons */
+.button{
   appearance: none;
   border: 1px solid color-mix(in oklab, var(--fg) 45%, transparent);
   background: color-mix(in oklab, var(--bg) 85%, black);
@@ -78,29 +78,27 @@ body{
   transition: transform .15s ease, background .2s ease, color .2s ease, border-color .2s ease;
 }
 .button:hover{ transform: translateY(-1px); background: color-mix(in oklab, var(--fg) 12%, var(--bg)); }
-.chip{ font-family: ui-monospace, Menlo, SFMono-Regular, Consolas, monospace; opacity: .85; }
 
-/* Lead text — increased spacing to avoid overlap */
-.lead, .lead2{
+/* Lead text */
+.lead{
   position: relative; z-index: 2;
   max-width: min(var(--maxw), 1000px);
   text-align: center;
   color: color-mix(in oklab, var(--fg) 84%, #fff);
   padding: 0 .9rem;
   line-height: 1.35;
+  margin: calc(110px + 1.2vw) auto 16px auto;
+  font-size: clamp(1rem, .9rem + .4vw, 1.15rem);
 }
-/* Put these AFTER the fixed header; tune with vw so it scales */
-.lead{ margin: calc(110px + 1.2vw) auto 6px auto; font-size: clamp(1rem, .9rem + .4vw, 1.15rem); }
-.lead2{ margin: 4px auto 6px auto; opacity: .84; font-size: .98rem; }
 
 /* Main app */
 .app{ position: relative; z-index: 2; min-height: 100dvh; display: grid; }
 .grid-view{
   display: grid; place-items: center;
-  padding-top: 8px;  /* tucks grid up under the copy */
+  padding-top: 6px;
   padding-bottom: 60px;
 }
-.has-detail .grid-view{ padding-top: 240px; }
+.has-detail .grid-view{ padding-top: 260px; }
 
 .grid{
   width: 100%;
@@ -114,18 +112,18 @@ body{
 
 /* Mobile responsiveness */
 @media (max-width: 900px){
-  .has-detail .grid-view{ padding-top: 210px; }
+  .has-detail .grid-view{ padding-top: 230px; }
 }
 @media (max-width: 768px) {
   .grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card{ height: 150px; }
   .lead{ margin-top: calc(118px + 1.2vw); }
-  .has-detail .grid-view{ padding-top: 200px; }
+  .has-detail .grid-view{ padding-top: 210px; }
 }
 @media (max-width: 500px) {
   .grid{ grid-template-columns: 1fr; }
   .card{ height: 140px; }
-  .has-detail .grid-view{ padding-top: 190px; }
+  .has-detail .grid-view{ padding-top: 200px; }
 }
 
 .card{
@@ -148,7 +146,8 @@ body{
 
 /* Detail overlay */
 .detail-view{
-  position: fixed; inset: 150px 0 0 0; z-index: 2;
+  position: fixed; inset: 190px 0 0 0;
+  z-index: 2;
   display: grid; place-items: start center; padding: 14px; overflow: auto;
   pointer-events: none;
 }
@@ -172,9 +171,9 @@ body{
 .term-content a{ color: var(--accent2); text-decoration: none; border-bottom: 1px solid color-mix(in oklab, var(--accent2) 60%, transparent); }
 .term-content a:hover{ border-bottom-color: var(--accent2); }
 
-/* Footer / attribution */
+/* Footer / attribution (moved to bottom-right) */
 .footer{
-  position: fixed; left: 10px; bottom: 10px; z-index: 3;
+  position: fixed; right: 10px; bottom: 10px; z-index: 3;
   font-size: .85rem; color: color-mix(in oklab, var(--fg) 75%, #fff);
   background: color-mix(in oklab, var(--bg) 80%, black);
   border: 1px solid color-mix(in oklab, var(--fg) 30%, transparent);
@@ -183,15 +182,4 @@ body{
   -webkit-backdrop-filter: blur(6px) saturate(120%);
 }
 
-/* Hint chip */
-.hint{
-  position: fixed; inset: auto 0 0 0; z-index: 3;
-  display:flex; justify-content:center; padding:.5rem;
-  pointer-events:none;
-}
-.hint .chip{ pointer-events:auto; background: color-mix(in oklab, var(--bg) 78%, black); }
-
-@media (prefers-reduced-motion: reduce){
-  body{ overflow: auto; }
-  canvas#spiral, canvas#sky{ display:none; }
-}
+/* No hint chip */
