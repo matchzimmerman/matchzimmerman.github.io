@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Match Zimmerman — Under Construction</title>
+  <meta name="description" content="i build systems that help build stronger systems." />
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #fff;
+      --glass: rgba(0,0,0,0.4);
+      --glass-border: rgba(255,255,255,0.08);
+      --linkColor: #ffffff; /* set dynamically from JS to match node color */
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow: hidden;
+    }
+
+    .bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    #bgCanvas { filter: brightness(0.7) contrast(1.05) saturate(1.1); }
+    #bgVideo { object-fit: cover; filter: brightness(0.7) contrast(1.05) saturate(1.1); }
+
+    .bg-fallback { position: fixed; inset: 0; background: #000; z-index: -1; }
+
+    .terminal {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(90vw, 820px);
+      box-sizing: border-box;
+      padding: clamp(18px, 4vw, 32px);
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+      z-index: 2;
+    }
+
+    .output { line-height: 1.6; white-space: pre-wrap; }
+    .line { display:block; }
+    .cursor { display:inline-block; width:0.6ch; animation: blink 1.1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .link a { color: var(--linkColor); text-decoration: none; border-bottom: 1px solid var(--linkColor); }
+
+    .top-left { position: fixed; top:16px; left:16px; z-index:3; font-size:14px; line-height:1.5; opacity:0.85; }
+    .top-left a { color: var(--fg); text-decoration: none; }
+
+    .top-right { position: fixed; top: 16px; right: 16px; z-index: 3; }
+    .btn { 
+      display:inline-flex; align-items:center; justify-content:center; 
+      padding: 10px 14px; border-radius: 12px; cursor: pointer; user-select:none; 
+      border: 1px solid var(--glass-border); background: var(--glass); color: var(--fg);
+      font: inherit; letter-spacing: 0.02em;
+    }
+    .btn:active { transform: translateY(1px); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cursor { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bgCanvas" class="bg"></canvas>
+
+  <video id="bgVideo" class="bg" autoplay loop muted playsinline preload="auto" poster="">
+    <source src="media/beacon.mp4" type="video/mp4" />
+    <source src="media/beacon.webm" type="video/webm" />
+  </video>
+  <div class="bg-fallback" aria-hidden="true"></div>
+
+  <!-- Top bars -->
+  <div class="top-left">
+    <div><strong>Match Zimmerman</strong></div>
+    <div>Human-AI Systems Architect + Artist</div>
+    <div><a href="mailto:mz@matchzimmerman.com">mz@matchzimmerman.com</a></div>
+</div>
+
+  <div class="top-right">
+    <button id="recolorBtn" class="btn" type="button">change colors</button>
+  </div>
+
+  <section class="terminal" role="region" aria-label="Terminal">
+    <div id="output" class="output" aria-live="polite"></div>
+  </section>
+
+  <script>
+    const LINKS = {
+      substack: "https://matchzimmerman.substack.com/",
+      linkedin: "https://www.linkedin.com/in/matchzimmerman/",
+      instagram: "https://instagram.com/matchzimmerman",
+      prevsite: "https://www.matchzimmerman.com/about",
+      email: "mailto:mz@matchzimmerman.com"
+
+    };
+
+    const ITEMS = [
+      { kind: 'text', text: 'i build systems that help build stronger systems.' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: 'i talk and write about them too.' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: ' ' },     
+      { kind: 'text', text: 'right now,' },
+      { kind: 'text', text: "i'm building this system." },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: 'please come back soon to see the full new site.' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: 'in the meantime, you can:'},
+      { kind: 'link', text: 'book a talk, workshop, meeting', href: LINKS.email },
+      { kind: 'text', text: ' ' },
+      { kind: 'text', text: 'or visit my:' },
+      { kind: 'link', text: '_substack', href: LINKS.substack },
+      { kind: 'link', text: '_linkedin', href: LINKS.linkedin },
+      { kind: 'link', text: '_instagram', href: LINKS.instagram },
+      { kind: 'link', text: '_prev.site', href: LINKS.prevsite }
+    ];
+
+    const TYPING_SPEED = 18;
+    const LINE_PAUSE = 400;
+
+    const out = document.getElementById('output');
+    function makeLineEl(kind) { const div = document.createElement('div'); div.className = 'line' + (kind==='link'?' link':''); return div; }
+    function clearCursors(){ out.querySelectorAll('.cursor').forEach(n=>n.remove()); }
+    function addCursor(target){ const c=document.createElement('span'); c.className='cursor'; c.textContent='▌'; target.appendChild(c); }
+
+    async function typeItem(item){
+      const line = makeLineEl(item.kind);
+      const span = document.createElement('span');
+      line.appendChild(span); out.appendChild(line);
+      clearCursors(); addCursor(line);
+      const s=item.text;
+      for(let i=0;i<s.length;i++){ span.textContent=s.slice(0,i+1); await wait(TYPING_SPEED); }
+      if(item.kind==='link'){
+        const a=document.createElement('a'); a.href=item.href; a.target='_blank'; a.rel='noopener'; a.textContent=item.text; 
+        const linkColor = getComputedStyle(document.documentElement).getPropertyValue('--linkColor') || '#fff';
+        a.style.color = linkColor; a.style.borderBottomColor = linkColor;
+        line.replaceChildren(a);
+      }
+      clearCursors(); addCursor(line); await wait(LINE_PAUSE);
+    }
+
+    async function runTyping(){ out.textContent=''; for(const it of ITEMS){ await typeItem(it); } clearCursors(); const endLine=makeLineEl('text'); out.appendChild(endLine); addCursor(endLine); }
+
+    function wait(ms){ return new Promise(res=>setTimeout(res,ms)); }
+
+    // ===== Background Canvas Animation with random palette & subtle depth =====
+    const cv=document.getElementById('bgCanvas'); const cx=cv.getContext('2d'); let w,h,dpr;
+    function resize(){ dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1)); w=cv.width=Math.floor(innerWidth*dpr); h=cv.height=Math.floor(innerHeight*dpr); cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px'; }
+    window.addEventListener('resize',resize); resize();
+
+    // Palette + link sync
+    let bgHue, bgSat, bgLight, fgHue, nodeSat, nodeLight, bgColor, nodeColor;
+    function setPalette(){
+      bgHue=Math.floor(Math.random()*360);
+      bgSat=Math.random()*100;        // 0–100%
+      bgLight=Math.random()*100;      // 0–100%
+      fgHue=(bgHue+180)%360;          // complementary
+      nodeSat=40+Math.random()*60;    // 40–100%
+      nodeLight=35+Math.random()*45;  // 35–80%
+      bgColor=`hsl(${bgHue}, ${bgSat.toFixed(1)}%, ${bgLight.toFixed(1)}%)`;
+      nodeColor=`hsl(${fgHue}, ${nodeSat.toFixed(1)}%, ${nodeLight.toFixed(1)}%)`;
+      document.documentElement.style.setProperty('--linkColor', nodeColor);
+      // update existing link colors instantly
+      document.querySelectorAll('.link a').forEach(a=>{ a.style.color=nodeColor; a.style.borderBottomColor=nodeColor; });
+    }
+    setPalette();
+
+    const N=70;
+    const nodes=Array.from({length:N},()=>({
+      x:Math.random()*w,
+      y:Math.random()*h,
+      vx:(Math.random()*2-1)*0.18*dpr,
+      vy:(Math.random()*2-1)*0.18*dpr,
+      r:(2.2 + Math.random()*7.8) * dpr,   // much larger max size
+      phase: Math.random()*Math.PI*2,
+      speed: 0.00015 + Math.random()*0.00035 // very slow depth change
+    }));
+
+    function step(t){
+      cx.fillStyle=bgColor; cx.fillRect(0,0,w,h);
+      for(let i=0;i<N;i++){
+        const a=nodes[i];
+        a.x+=a.vx; a.y+=a.vy; if(a.x<0||a.x>w) a.vx*=-1; if(a.y<0||a.y>h) a.vy*=-1;
+        // very subtle depth oscillation (~±8%)
+        const depth = 1 + 0.08*Math.sin(a.phase + t*a.speed);
+        const radius = a.r * depth;
+
+        // node
+        cx.beginPath(); cx.arc(a.x,a.y,radius,0,Math.PI*2);
+        cx.fillStyle=nodeColor; cx.fill();
+
+        // connectors, thicker overall and scale with depth
+        for(let j=i+1;j<N;j++){
+          const b=nodes[j];
+          const dx=a.x-b.x, dy=a.y-b.y; const dist=Math.hypot(dx,dy);
+          const depthB = 1 + 0.08*Math.sin(b.phase + t*b.speed);
+          const avgDepth = (depth + depthB)/2;
+          const maxDist = (160*dpr) * avgDepth;
+          if(dist < maxDist){
+            const alpha = 0.32 * (1 - dist/maxDist);
+            cx.strokeStyle = `hsla(${fgHue}, ${nodeSat.toFixed(1)}%, ${nodeLight.toFixed(1)}%, ${alpha.toFixed(3)})`;
+            cx.lineWidth = (1.8 * dpr) * avgDepth; // heavier
+            cx.beginPath(); cx.moveTo(a.x,a.y); cx.lineTo(b.x,b.y); cx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+
+    // Recolor button
+    document.getElementById('recolorBtn').addEventListener('click', setPalette);
+
+    function prefersReducedMotion(){ return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    window.addEventListener('load',()=>{
+      if(prefersReducedMotion()){
+        for(const it of ITEMS){ const line=document.createElement('div'); line.className='line'+(it.kind==='link'?' link':''); if(it.kind==='link'){ const a=document.createElement('a'); a.href=it.href; a.target='_blank'; a.rel='noopener'; a.textContent=it.text; a.style.color=nodeColor; a.style.borderBottomColor=nodeColor; line.appendChild(a);} else { line.textContent=it.text;} out.appendChild(line);} 
+      } else {
+        runTyping();
+      }
+    });
+  </script>
+</body>
+</html>
