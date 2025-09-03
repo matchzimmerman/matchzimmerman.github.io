@@ -9,7 +9,7 @@ export default function AboutPage() {
       <section className="mb-12 text-center">
         <div className="relative w-full h-64 sm:h-80 md:h-96 mb-6 rounded-2xl overflow-hidden shadow-soft">
           <Image
-            src="/media/Magpie Signal Code Printout.png" // <-- replace with your favorite image
+            src="/media/FS Mapgie Images/Magpie Signal Code Printout.png" 
             alt="Field Station: Magpie signal discovery"
             fill
             priority
