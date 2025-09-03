@@ -41,9 +41,9 @@ const first = (obj, keys) => { for (const key of keys){ if(obj && obj[key]!=null
 const asList = (arr, label) => Array.isArray(arr)&&arr.length ? `<h3>${label}</h3><ul>${arr.map(x=>`<li>${x}</li>`).join('')}</ul>` : '';
 const asCites = (arr) => Array.isArray(arr)&&arr.length ? `<h3>References</h3><ul>${arr.map(x=>`<li>${x}</li>`).join('')}</ul>` : '';
 
-function hubCard(id){const c=document.createElement('article');c.className='hcard';c.tabIndex=0;c.innerHTML=`<h2>${SECTION_INFO[id].title}</h2><p>${SECTION_INFO[id].desc}</p>`;c.onclick=()=>location.hash=`#/section/${id}`;c.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/section/${id}`;};return c;}
+function hubCard(id){const c=document.createElement('article');c.className='hcard cat-'+id;c.tabIndex=0;c.innerHTML=`<h2>${SECTION_INFO[id].title}</h2><p>${SECTION_INFO[id].desc}</p>`;c.onclick=()=>location.hash=`#/section/${id}`;c.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/section/${id}`;};return c;}
 function renderHub(){hubEl.hidden=false;sectionsEl.innerHTML='';navRow.hidden=true;hubEl.innerHTML='<div class="hgrid"></div>';const g=hubEl.querySelector('.hgrid');['recursive','telemetry','agency','identity'].forEach(id=>g.appendChild(hubCard(id)));}
-function cardFor(t){const el=document.createElement('article');el.className='card';el.role='listitem';el.tabIndex=0;el.dataset.slug=t.slug;el.innerHTML=`<h2 class="card-title">${t.title}</h2><p class="card-sub">${t.subtitle||''}</p>`;el.onclick=()=>location.hash=`#/term/${t.slug}`;el.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/term/${t.slug}`;};return el;}
+function cardFor(t){const el=document.createElement('article');const cat=(t.tags||[])[0];el.className='card' + (cat?` cat-${cat}`:'');el.role='listitem';el.tabIndex=0;el.dataset.slug=t.slug;el.innerHTML=`<h2 class="card-title">${t.title}</h2><p class="card-sub">${t.subtitle||''}</p>`;el.onclick=()=>location.hash=`#/term/${t.slug}`;el.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/term/${t.slug}`;};return el;}
 function renderSection(tag){hubEl.hidden=true;sectionsEl.innerHTML='';navRow.hidden=false;const sec=document.createElement('section');sec.className='section';sec.id=`sec-${tag}`;sec.innerHTML=`<h3>${SECTION_INFO[tag].title}</h3><p class="desc">${SECTION_INFO[tag].desc}</p>`;const grid=document.createElement('div');grid.className='grid';TERMS.filter(t=>(t.tags||[])[0]===tag).forEach(t=>grid.appendChild(cardFor(t)));sec.appendChild(grid);sectionsEl.appendChild(sec);}
 
 function normalizeContent(t){
@@ -61,31 +61,35 @@ function normalizeContent(t){
 
 function renderTermContent(t){
   const C = normalizeContent(t);
-  const tags = (t.tags||[]).map(x=>`<span class="label">${x}</span>`).join('');
+  const tags = (t.tags||[]).map(x=>{const k=String(x).toLowerCase(); const cat=['recursive','telemetry','agency','identity'].includes(k) ? ` tag-${k}` : ''; return `<span class=\"label${cat}\">${x}</span>`;}).join('');
+  const addTitle = (html) => {
+    const startsWithH = /<h[12][^>]*>/i.test(html.trim().slice(0,120));
+    if (startsWithH) return html + `<div class="term-meta">${tags}</div>`;
+    return `<h2>${t.title}</h2>${t.subtitle?`<p><em>${t.subtitle}</em></p>`:''}<hr class="term-rule">` + html + `<div class="term-meta">${tags}</div>`;
+  };
   if (C.body) {
-    return `<h2>${t.title}</h2>${t.subtitle?`<p><em>${t.subtitle}</em></p>`:''}${C.body}<div class="term-meta">${tags}</div>`;
+    return addTitle(String(C.body));
   }
   const looksHTML = Array.isArray(C.looks) ? asList(C.looks,'What it looks like') : (k(C.looks)? `<h3>What it looks like</h3><p>${k(C.looks)}</p>` : '');
   const overlapsHTML = Array.isArray(C.overlaps) ? asList(C.overlaps,'Overlaps') : (k(C.overlaps)? `<h3>Overlaps</h3><p>${k(C.overlaps)}</p>` : '');
   const citesHTML = Array.isArray(C.citations) ? asCites(C.citations) : (k(C.citations)? `<h3>References</h3><p>${k(C.citations)}</p>` : '');
 
   if (!C.definition && !looksHTML && !overlapsHTML && !C.importance) {
-    return ''; // signal empty so we fallback to HTML file
+    return ''; // induce fallback to HTML file
   }
-  return `
-    <h2>${t.title}</h2>
-    ${t.subtitle?`<p><em>${t.subtitle}</em></p>`:''}
-    ${C.definition?`<h3>Definition</h3><p>${k(C.definition)}</p>`:''}
+  const inner = `
+    ${C.definition?`<h3>Description</h3><p>${k(C.definition)}</p>`:''}
+    ${C.importance?`<h3>Importance</h3><p>${k(C.importance)}</p>`:''}
     ${looksHTML}
     ${overlapsHTML}
-    ${C.importance?`<h3>Importance</h3><p>${k(C.importance)}</p>`:''}
     ${citesHTML}
-    <div class="term-meta">${tags}</div>
   `;
+  return addTitle(inner);
 }
 
 function showDetail(slug){
   detailView.hidden=false; termContent.innerHTML='<p style="opacity:.7">Loading…</p>';
+  const wrap=document.querySelector('.detail-wrap'); wrap.classList.remove('cat-recursive','cat-telemetry','cat-agency','cat-identity');
   const t = TERMS.find(x=>x.slug===slug);
   if (!t) { termContent.innerHTML = `<h2>${slug}</h2><p>Not found in terms.json.</p>`; return; }
   const html = renderTermContent(t);
@@ -94,7 +98,7 @@ function showDetail(slug){
   } else {
     fetch(`terms/${slug}.html`,{cache:'no-store'})
       .then(r=>r.ok?r.text():Promise.reject())
-      .then(h=> termContent.innerHTML = `<h2>${t.title}</h2>${t.subtitle?`<p><em>${t.subtitle}</em></p>`:''}${h}`)
+      .then(h=> termContent.innerHTML = (/<h[12][^>]*>/i.test(h.trim().slice(0,120)) ? h : `<h2>${t.title}</h2>${t.subtitle?`<p><em>${t.subtitle}</em></p>`:''}<hr class="term-rule">` + h))
       .catch(()=> termContent.innerHTML = `<h2>${t.title}</h2><p>Content not found.</p>`);
   }
 }

@@ -89,12 +89,48 @@ body{
 .close-btn:hover{ background:color-mix(in oklab,var(--fg) 10%, var(--bg)); }
 
 .term-content{ line-height:1.7; font-size:1rem; }
-.term-content h2{ margin-top:.2em; font-size:1.7rem; letter-spacing:-.01em; }
-.term-content h3{ margin-top:1.1em; font-size:1.15rem; }
+.term-content h2{ margin-top:.2em; font-size:2.1rem; letter-spacing:-.01em; }
+.term-content h3{ margin-top:1.2em; font-size:1.28rem; letter-spacing:.01em; padding-bottom:.25rem; border-bottom:1px solid color-mix(in oklab,var(--fg) 18%, transparent); margin-bottom:.6rem; }
 .term-content p{ margin:.5em 0; }
+.term-rule{margin:.6rem 0 1.1rem;border:0;border-top:1px solid color-mix(in oklab,var(--fg) 18%, transparent);}
 .term-meta{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
 .term-meta .label{ font-size:.8rem; padding:.2rem .5rem; border-radius:999px; background:color-mix(in oklab,var(--bg) 78%, #000); border:1px solid color-mix(in oklab,var(--fg) 25%, transparent); }
 
 .footer{ position:fixed; right:10px; bottom:10px; z-index:3; font-size:.85rem; color:color-mix(in oklab,var(--fg) 75%,#fff);
   background:color-mix(in oklab,var(--bg) 80%, #000); border:1px solid color-mix(in oklab,var(--fg) 30%, transparent);
   border-radius:12px; padding:.35rem .6rem; backdrop-filter: blur(6px) saturate(120%); -webkit-backdrop-filter: blur(6px) saturate(120%); }
+
+
+/* Category color accents */
+:root {
+  --rec:  hsl(265 85% 72% / .28);
+  --tel:  hsl(200 90% 70% / .28);
+  --ag:   hsl(35 90% 66% / .28);
+  --id:   hsl(312 85% 68% / .28);
+  --rec-b: hsl(265 85% 72% / .55);
+  --tel-b: hsl(200 90% 70% / .55);
+  --ag-b:  hsl(35 90% 66% / .55);
+  --id-b:  hsl(312 85% 68% / .55);
+}
+.card.cat-recursive { border-color: var(--rec-b); box-shadow: 0 10px 40px color-mix(in oklab, var(--rec) 60%, transparent); }
+.card.cat-telemetry { border-color: var(--tel-b); box-shadow: 0 10px 40px color-mix(in oklab, var(--tel) 60%, transparent); }
+.card.cat-agency    { border-color: var(--ag-b);  box-shadow: 0 10px 40px color-mix(in oklab, var(--ag) 60%, transparent); }
+.card.cat-identity  { border-color: var(--id-b);  box-shadow: 0 10px 40px color-mix(in oklab, var(--id) 60%, transparent); }
+
+/* Tag pills colorized when tag == category key */
+.term-meta .label.tag-recursive { background: color-mix(in oklab, var(--rec) 50%, transparent); border-color: var(--rec-b); }
+.term-meta .label.tag-telemetry { background: color-mix(in oklab, var(--tel) 50%, transparent); border-color: var(--tel-b); }
+.term-meta .label.tag-agency    { background: color-mix(in oklab, var(--ag) 50%, transparent); border-color: var(--ag-b); }
+.term-meta .label.tag-identity  { background: color-mix(in oklab, var(--id) 50%, transparent); border-color: var(--id-b); }
+
+/* Hub category glow */
+.hcard.cat-recursive { border-color: var(--rec-b); box-shadow: 0 10px 40px color-mix(in oklab, var(--rec) 60%, transparent); }
+.hcard.cat-telemetry { border-color: var(--tel-b); box-shadow: 0 10px 40px color-mix(in oklab, var(--tel) 60%, transparent); }
+.hcard.cat-agency    { border-color: var(--ag-b);  box-shadow: 0 10px 40px color-mix(in oklab, var(--ag) 60%, transparent); }
+.hcard.cat-identity  { border-color: var(--id-b);  box-shadow: 0 10px 40px color-mix(in oklab, var(--id) 60%, transparent); }
+
+/* Detail dialog category glow */
+.detail-wrap.cat-recursive { box-shadow: 0 40px 120px color-mix(in oklab, var(--rec) 70%, transparent), var(--glass-shadow); border-color: var(--rec-b); }
+.detail-wrap.cat-telemetry { box-shadow: 0 40px 120px color-mix(in oklab, var(--tel) 70%, transparent), var(--glass-shadow); border-color: var(--tel-b); }
+.detail-wrap.cat-agency    { box-shadow: 0 40px 120px color-mix(in oklab, var(--ag) 70%, transparent), var(--glass-shadow); border-color: var(--ag-b); }
+.detail-wrap.cat-identity  { box-shadow: 0 40px 120px color-mix(in oklab, var(--id) 70%, transparent), var(--glass-shadow); border-color: var(--id-b); }
