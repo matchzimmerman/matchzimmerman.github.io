@@ -9,7 +9,7 @@ export default function AboutPage() {
       <section className="mb-12 text-center">
         <div className="relative w-full h-64 sm:h-80 md:h-96 mb-6 rounded-2xl overflow-hidden shadow-soft">
           <Image
-            src="/media/FS Mapgie Images/Magpie Signal Code Printout.png" 
+            src="public/media/FS Mapgie Images/Magpie Signal Code Printout.png" 
             alt="Field Station: Magpie signal discovery"
             fill
             priority
@@ -20,7 +20,7 @@ export default function AboutPage() {
         <h1 className="text-4xl font-semibold mb-4 text-rust-900">
           Field Station: Magpie
         </h1>
-        <p className="text-lg leading-relaxed max-w-2xl mx-auto text-rust-800">
+        <p className="text-left leading-relaxed max-w-2xl mx-auto text-rust-800">
           <span className="font-semibold">Project: Magpie</span> is a fictional world and
           research lab — built with generative AI and unfolding in real time.
           This site serves as both an archive and a narrative experiment:
@@ -33,7 +33,7 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <section className="text-center">
+      <section className="text-left">
         <p className="text-rust-700 mb-6">
           Explore the visuals, read the canon, or interact with live systems.
         </p>
