@@ -1,4 +1,4 @@
-import artifacts from "@/app/data/artifacts.json";
+import artifacts from "../../data/artifacts.json";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
