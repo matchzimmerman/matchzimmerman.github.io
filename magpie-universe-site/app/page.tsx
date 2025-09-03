@@ -1,6 +1,6 @@
 'use client';
 
-import artifacts from "@/app/data/artifacts.json";
+import artifacts from "./data/artifacts.json";
 import { useMemo, useState } from "react";
 import ArtifactGrid from "@/app/components/ArtifactGrid";
 import Filters from "@/app/components/Filters";
