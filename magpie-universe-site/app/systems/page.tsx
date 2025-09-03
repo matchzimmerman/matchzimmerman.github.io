@@ -1,1 +1,1 @@
-export default function Page(){return (<main className='mx-auto max-w-7xl px-4 py-10'><h1 className='text-3xl font-semibold'>Live Systems</h1><p className='opacity-80'>Interactive generative loops and PICO-8 consoles.</p></main>);}
+export default function Page(){return (<main className='mx-auto max-w-7xl px-4 py-10'><h1 className='text-3xl font-semibold'>Live Systems</h1><p className='opacity-80'>COMING SOON | Interactive models and simulations.</p></main>);}
