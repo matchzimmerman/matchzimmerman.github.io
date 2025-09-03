@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --grid-gap: 1rem; }
+html, body { height: 100%; background: #0a0a0a; color: #ececec; }
+a { color: inherit; }
+
+.scanlines::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 1px,
+    transparent 1px, transparent 3px
+  );
+  mix-blend-mode: overlay;
+  opacity: .35;
+}

@@ -41,7 +41,7 @@ const first = (obj, keys) => { for (const key of keys){ if(obj && obj[key]!=null
 const asList = (arr, label) => Array.isArray(arr)&&arr.length ? `<h3>${label}</h3><ul>${arr.map(x=>`<li>${x}</li>`).join('')}</ul>` : '';
 const asCites = (arr) => Array.isArray(arr)&&arr.length ? `<h3>References</h3><ul>${arr.map(x=>`<li>${x}</li>`).join('')}</ul>` : '';
 
-function hubCard(id){const c=document.createElement('article');c.className='hcard';c.tabIndex=0;c.innerHTML=`<h2>${SECTION_INFO[id].title}</h2><p>${SECTION_INFO[id].desc}</p>`;c.onclick=()=>location.hash=`#/section/${id}`;c.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/section/${id}`;};return c;}
+function hubCard(id){const c=document.createElement('article');c.className='hcard cat-'+id;c.tabIndex=0;c.innerHTML=`<h2>${SECTION_INFO[id].title}</h2><p>${SECTION_INFO[id].desc}</p>`;c.onclick=()=>location.hash=`#/section/${id}`;c.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/section/${id}`;};return c;}
 function renderHub(){hubEl.hidden=false;sectionsEl.innerHTML='';navRow.hidden=true;hubEl.innerHTML='<div class="hgrid"></div>';const g=hubEl.querySelector('.hgrid');['recursive','telemetry','agency','identity'].forEach(id=>g.appendChild(hubCard(id)));}
 function cardFor(t){const el=document.createElement('article');const cat=(t.tags||[])[0];el.className='card' + (cat?` cat-${cat}`:'');el.role='listitem';el.tabIndex=0;el.dataset.slug=t.slug;el.innerHTML=`<h2 class="card-title">${t.title}</h2><p class="card-sub">${t.subtitle||''}</p>`;el.onclick=()=>location.hash=`#/term/${t.slug}`;el.onkeypress=e=>{if(e.key==='Enter')location.hash=`#/term/${t.slug}`;};return el;}
 function renderSection(tag){hubEl.hidden=true;sectionsEl.innerHTML='';navRow.hidden=false;const sec=document.createElement('section');sec.className='section';sec.id=`sec-${tag}`;sec.innerHTML=`<h3>${SECTION_INFO[tag].title}</h3><p class="desc">${SECTION_INFO[tag].desc}</p>`;const grid=document.createElement('div');grid.className='grid';TERMS.filter(t=>(t.tags||[])[0]===tag).forEach(t=>grid.appendChild(cardFor(t)));sec.appendChild(grid);sectionsEl.appendChild(sec);}
@@ -89,6 +89,7 @@ function renderTermContent(t){
 
 function showDetail(slug){
   detailView.hidden=false; termContent.innerHTML='<p style="opacity:.7">Loading…</p>';
+  const wrap=document.querySelector('.detail-wrap'); wrap.classList.remove('cat-recursive','cat-telemetry','cat-agency','cat-identity');
   const t = TERMS.find(x=>x.slug===slug);
   if (!t) { termContent.innerHTML = `<h2>${slug}</h2><p>Not found in terms.json.</p>`; return; }
   const html = renderTermContent(t);
