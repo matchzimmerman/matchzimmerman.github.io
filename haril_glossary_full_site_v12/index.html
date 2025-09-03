@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Human–AI Glossary</title>
+  <meta name="description" content="An evolving lexicon for human–AI interaction by Match Zimmerman." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Background canvases -->
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <canvas id="spiral" aria-hidden="true"></canvas>
+
+  <!-- Fixed top row with site link and colors only -->
+  <div class="utilitybar">
+    <a class="site-link" href="https://matchzimmerman.com" target="_blank" rel="noopener">matchzimmerman.com ↗</a>
+    <button class="button" id="paletteBtn" title="Change colors (c)">Colors</button>
+  </div>
+
+  <!-- Brand block is in-flow (not fixed), so it won't float over tiles -->
+  <header class="brand-block">
+    <a class="brand-link" href="#/">
+      <h1 class="brand-title">HUMAN–AI GLOSSARY</h1>
+      <div class="brand-byline">by Match Zimmerman</div>
+    </a>
+    <p id="lead" class="lead">an evolving lexicon for human‑ai interaction</p>
+    <p id="hubIntro" class="hub-intro">Four themed groupings of glossary terms. Choose one to explore the group's terms in more detail.</p>
+  </header>
+
+  <main id="app" class="app">
+    <div class="navrow" id="navRow" hidden>
+      <button class="button ghost" id="backBtn" aria-label="Back to sections">← Back to sections</button>
+    </div>
+
+    <div id="hub" class="hub" hidden></div>
+    <div id="sections" class="sections"></div>
+
+    <section id="detailView" class="detail-view" hidden>
+      <div class="detail-wrap glass" role="dialog" aria-modal="false">
+        <button id="closeDetail" class="close-btn" aria-label="Close">×</button>
+        <article id="termContent" class="term-content"></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer footer-right">
+    created using custom HARIL Engine designed by Match Zimmerman
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
