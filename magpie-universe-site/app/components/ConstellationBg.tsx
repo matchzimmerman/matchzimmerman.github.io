@@ -40,7 +40,7 @@ export default function ConstellationBg(){
           const dx=a.x-b.x, dy=a.y-b.y;
           const d=Math.sqrt(dx*dx+dy*dy);
           if (d < 120*devicePixelRatio){
-            ctx.strokeStyle = "rgba(238, 109, 11, 0.44)";
+            ctx.strokeStyle = "rgba(255,255,255,0.08)";
             ctx.lineWidth = 1*devicePixelRatio;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
