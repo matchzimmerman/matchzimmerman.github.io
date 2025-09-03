@@ -13,7 +13,7 @@ export default function ArtifactCard({
   const isImage = type === "image";
   return (
     <div className="group">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl panel">
         <img
           src={src}
           alt={title}
