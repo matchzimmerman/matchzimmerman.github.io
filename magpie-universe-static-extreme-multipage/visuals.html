@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visuals — FS: MAGPIE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-glitch-intensity="1.2">
+  <canvas id="bg-base" class="bg-layer"></canvas>
+  <canvas id="bg-fg" class="bg-layer fg"></canvas>
+  <div class="reticle" aria-hidden="true"></div>
+  
+    <header>
+      <div class="container header-inner">
+        <a class="brand" href="index.html">FS: MAGPIE</a>
+        <nav class="nav">
+          <a href="index.html" >Terminal</a>
+          <a href="about.html" >About</a>
+          <a href="visuals.html" style="text-decoration:underline">Visuals</a>
+        </nav>
+      </div>
+    </header>
+    
+  <main>
+  <section class="section container">
+    <h1>Visuals</h1>
+    <p>Drop images into <code>media/</code> as <code>v1.jpg</code>…<code>v9.jpg</code>.</p>
+    <div class="grid" id="grid"></div>
+  </section>
+  <script>
+  (function(){
+    const grid = document.getElementById('grid');
+    for(let i=1;i<=74;i++){
+      const el = document.createElement('div');
+      el.className = 'card';
+      const img = document.createElement('img');
+      img.src = 'media/v'+i+'.jpg';
+      img.alt = 'visual '+i;
+      img.style.width='100%'; img.style.height='100%'; img.style.objectFit='cover';
+      img.onerror = () => { el.textContent = 'Add media/v'+i+'.jpg'; };
+      el.appendChild(img);
+      grid.appendChild(el);
+    }
+  })();
+  </script>
+  </main>
+  <footer>FS: MAGPIE • Signal Monitor • Visuals — FS: MAGPIE</footer>
+  <script src="assets/glitch.js"></script>
+</body>
+</html>

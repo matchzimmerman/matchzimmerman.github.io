@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Endless Shape Animator — two‑tone orange/black</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --fg: #ff6a00; /* safety orange */
+      --fg2: #ffb46b; /* light orange accent */
+    }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--fg2);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    #c { display:block; width:100vw; height:100vh; }
+    .hud {
+      position: fixed; left: 16px; bottom: 16px; background: rgba(0,0,0,.55); color: var(--fg2);
+      border: 1px solid rgba(255,106,0,.35); padding: 10px 12px; border-radius: 12px; backdrop-filter: blur(2px);
+      user-select: none; pointer-events: none; font-size: 12px; line-height: 1.3;
+    }
+    .topbar {
+      position: fixed; left: 16px; top: 16px; right: 16px; display:flex; gap:8px; align-items:center; pointer-events:auto;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: transparent; color: var(--fg2); border: 1px solid var(--fg);
+      padding: 8px 10px; border-radius: 999px; cursor:pointer; transition: transform .08s ease;
+    }
+    .btn:active { transform: translateY(1px) scale(.98); }
+    .slider { accent-color: var(--fg); }
+    .pill {
+      border:1px solid rgba(255,106,0,.35); padding:4px 10px; border-radius:999px; font-size:12px;
+      color:var(--fg2);
+    }
+    .modes { display:flex; gap:6px; flex-wrap:wrap; }
+    .mode-btn { cursor:pointer; background:rgba(255,106,0,.08); }
+    .mode-btn.active { background:rgba(255,106,0,.18); border-color: var(--fg); color: #ffd7b0; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="topbar">
+    <button class="btn" id="toggle">⏯︎ Play/Pause</button>
+    <button class="btn" id="save">⬇︎ Save Frame</button>
+    <label class="pill">Speed <input id="speed" class="slider" type="range" min="0" max="3" step="0.01" value="1"></label>
+    <label class="pill">Density <input id="density" class="slider" type="range" min="100" max="2400" step="10" value="1200"></label>
+    <div class="modes">
+      <span class="pill mode-btn active" data-mode="clover">Clover</span>
+      <span class="pill mode-btn" data-mode="lissajous">Lissajous</span>
+      <span class="pill mode-btn" data-mode="epitrochoid">Epitrochoid</span>
+      <span class="pill mode-btn" data-mode="orbitals">Orbitals</span>
+      <span class="pill mode-btn" data-mode="glyphs">Glyphs</span>
+    </div>
+  </div>
+  <div class="hud">
+    Endless parametric shapes — two‑tone. Keys: [Space] pause, [S] save, [1–5] modes.
+  </div>
+<script>
+(function(){
+  const TAU = Math.PI * 2;
+  const rand = (a=1,b=0)=>Math.random()*(a-b)+b;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  const cnv = document.getElementById('c');
+  const ctx = cnv.getContext('2d');
+  let W=0,H=0, DPR=window.devicePixelRatio||1;
+  function resize(){
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    cnv.width = Math.floor(W*DPR);
+    cnv.height = Math.floor(H*DPR);
+    cnv.style.width = W+'px';
+    cnv.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize, {passive:true});
+  resize();
+
+  // Controls
+  const speedEl = document.getElementById('speed');
+  const densEl = document.getElementById('density');
+  const saveBtn = document.getElementById('save');
+  const toggleBtn = document.getElementById('toggle');
+  const modeBtns = [...document.querySelectorAll('.mode-btn')];
+
+  let running = true;
+  toggleBtn.onclick = ()=>{ running=!running; if(running) loop(performance.now()); };
+  saveBtn.onclick = ()=>{
+    const link = document.createElement('a');
+    link.download = `endless-shape-${Date.now()}.png`;
+    link.href = cnv.toDataURL('image/png');
+    link.click();
+  };
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key===' ') { e.preventDefault(); toggleBtn.click(); }
+    if(e.key.toLowerCase()==='s') saveBtn.click();
+    if(/^[1-5]$/.test(e.key)) {
+      const modes=['clover','lissajous','epitrochoid','orbitals','glyphs'];
+      setMode(modes[parseInt(e.key)-1]);
+    }
+  });
+
+  let mode='clover';
+  function setMode(m){ mode = m; modeBtns.forEach(b=>b.classList.toggle('active', b.dataset.mode===m)); seed(); }
+  modeBtns.forEach(b=> b.onclick = ()=> setMode(b.dataset.mode));
+
+  // Visual seed state
+  let t = 0; // time
+  let seedParams = {};
+  function seed(){
+    seedParams = {
+      clover: { m: Math.floor(rand(3,2))*2+1, n1: rand(0.7, 1.8), n2: rand(0.1, 1.0), n3: rand(0.1, 1.0) },
+      lissajous: { ax: Math.floor(rand(2,9)), ay: Math.floor(rand(2,9)), d: rand(TAU) },
+      epitrochoid: { R: rand(60, 180), r: rand(8, 72), d: rand(10, 160) },
+      orbitals: { count: Math.floor(rand(6, 14)), ring: rand(60, 200) },
+      glyphs: { count: 48, spread: rand(60, 180) }
+    }[mode];
+    // Subtle flash line for cut-like transitions
+    flash = 1.0;
+  }
+  seed();
+
+  // Simple RNG-driven accent flicker (comic two-tone vibe)
+  let flash = 0;
+
+  function superformula(a, b, m, n1, n2, n3, phi){
+    // r = [ (|cos(m*phi/4)/a|^n2 + |sin(m*phi/4)/b|^n3) ]^(-1/n1)
+    const t1 = Math.pow(Math.abs(Math.cos(m*phi/4)/a), n2);
+    const t2 = Math.pow(Math.abs(Math.sin(m*phi/4)/b), n3);
+    const r = Math.pow(t1+t2, -1/n1);
+    return r;
+  }
+
+  function drawBackground(delta){
+    // Motion blur + film grain
+    ctx.fillStyle = 'rgba(0,0,0,0.24)';
+    ctx.fillRect(0,0,W,H);
+    // Grain
+    const grainCount = 1200;
+    ctx.globalAlpha = 0.05;
+    ctx.fillStyle = 'rgba(255,106,0,0.6)';
+    for(let i=0;i<grainCount;i++){
+      const x = Math.random()*W, y=Math.random()*H;
+      ctx.fillRect(x,y,1,1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function strokeStyle(alpha=1){
+    ctx.strokeStyle = `rgba(255,106,0,${alpha})`;
+  }
+  function fillStyle(alpha=1){
+    ctx.fillStyle = `rgba(255,106,0,${alpha})`;
+  }
+
+  function drawClover(tt){
+    const { m, n1, n2, n3 } = seedParams;
+    const cx = W/2, cy = H/2;
+    const base = Math.min(W,H)*0.36;
+    const points = Math.floor(densEl.value);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(tt*0.08);
+
+    // Outline
+    ctx.beginPath();
+    for(let i=0;i<=points;i++){
+      const p = i/points * TAU;
+      const r = superformula(1,1, m, n1, n2, n3, p);
+      const R = base * r * (1.0 + 0.08*Math.sin(tt*0.6 + p*3));
+      const x = R*Math.cos(p), y=R*Math.sin(p);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    strokeStyle(0.9);
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+
+    // Inner hatch
+    ctx.lineWidth = 1.0;
+    strokeStyle(0.3);
+    const rings = 38;
+    for(let j=0;j<rings;j++){
+      const k = j/(rings-1);
+      ctx.beginPath();
+      for(let i=0;i<=points;i++){
+        const p = i/points * TAU;
+        const r = superformula(1,1, m, n1, n2, n3, p);
+        const R = base * r * k * (1.0 + 0.02*Math.sin(tt*0.7 + j*0.3 + p*6));
+        const x = R*Math.cos(p), y=R*Math.sin(p);
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawLissajous(tt){
+    const { ax, ay, d } = seedParams;
+    const cx=W/2, cy=H/2, s=Math.min(W,H)*0.42;
+    const pts = Math.floor(densEl.value);
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(tt*0.05);
+    ctx.beginPath();
+    for(let i=0;i<=pts;i++){
+      const t=i/pts * TAU;
+      const x = s*Math.sin(ax*t + d);
+      const y = s*Math.sin(ay*t);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    strokeStyle(0.9);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Orbits
+    ctx.lineWidth = 1; strokeStyle(0.25);
+    for(let k=0;k<18;k++){
+      const r = (k+1)/18 * s;
+      ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawEpitrochoid(tt){
+    const {R,r,d} = seedParams;
+    const cx=W/2, cy=H/2; const s=1.0;
+    const pts = Math.floor(densEl.value);
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(tt*0.02);
+    ctx.beginPath();
+    for(let i=0;i<=pts;i++){
+      const t=i/pts*TAU*5;
+      const x = (R+r)*Math.cos(t) - d*Math.cos(((R+r)/r)*t);
+      const y = (R+r)*Math.sin(t) - d*Math.sin(((R+r)/r)*t);
+      if(i===0) ctx.moveTo(x*s,y*s); else ctx.lineTo(x*s,y*s);
+    }
+    strokeStyle(0.9); ctx.lineWidth=2; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawOrbitals(tt){
+    const {count, ring} = seedParams; const cx=W/2, cy=H/2;
+    ctx.save(); ctx.translate(cx,cy);
+    for(let i=0;i<count;i++){
+      const a = i/count * TAU + tt*0.07*(i%2?1:-1);
+      const r = ring + 60*Math.sin(tt*0.5 + i*0.6);
+      const x = r*Math.cos(a), y=r*Math.sin(a);
+      ctx.beginPath(); ctx.arc(x,y, 6+3*Math.sin(tt+i), 0, TAU);
+      fillStyle(0.9); ctx.fill();
+      ctx.beginPath(); ctx.arc(0,0, r, 0, TAU);
+      strokeStyle(0.18); ctx.lineWidth=1; ctx.stroke();
+    }
+    // nucleus
+    ctx.beginPath(); ctx.arc(0,0, 14, 0, TAU);
+    fillStyle(0.95); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawGlyphs(tt){
+    const {count, spread} = seedParams; const cx=W/2, cy=H/2;
+    ctx.save(); ctx.translate(cx,cy);
+    ctx.rotate(0.3*Math.sin(tt*0.25));
+    for(let i=0;i<count;i++){
+      const a = (i/count)*TAU + tt*0.07;
+      const r = spread + 40*Math.sin(tt*0.6 + i*0.4);
+      const x = r*Math.cos(a), y=r*Math.sin(a);
+      ctx.save(); ctx.translate(x,y); ctx.rotate(a+tt);
+      ctx.beginPath();
+      const w = 6 + 6*Math.sin(i+tt*0.9), h = 22 + 8*Math.cos(i*1.3-tt*1.4);
+      ctx.rect(-w/2,-h/2,w,h);
+      fillStyle(0.85); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(0,h/2);
+      strokeStyle(0.25); ctx.lineWidth=1; ctx.stroke();
+      ctx.restore();
+    }
+    // ring
+    ctx.beginPath(); ctx.arc(0,0, spread, 0, TAU);
+    strokeStyle(0.25); ctx.lineWidth=1; ctx.stroke();
+    ctx.restore();
+  }
+
+  function loop(now){
+    if(!running) return;
+    const dt = clamp((now - (loop.last||now)) / 1000, 0, 0.05);
+    loop.last = now;
+    const spd = parseFloat(speedEl.value) || 1;
+    t += dt * spd;
+
+    drawBackground(dt);
+
+    ctx.save();
+    if(flash>0){
+      ctx.globalAlpha = Math.min(1, flash);
+      ctx.fillStyle = 'rgba(255,106,0,0.04)';
+      ctx.fillRect(0,0,W,H);
+      ctx.globalAlpha = 1;
+      flash *= 0.92;
+    }
+
+    switch(mode){
+      case 'clover': drawClover(t); break;
+      case 'lissajous': drawLissajous(t); break;
+      case 'epitrochoid': drawEpitrochoid(t); break;
+      case 'orbitals': drawOrbitals(t); break;
+      case 'glyphs': drawGlyphs(t); break;
+    }
+    ctx.restore();
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

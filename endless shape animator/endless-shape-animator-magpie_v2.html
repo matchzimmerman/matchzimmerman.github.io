@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Endless Shape Animator — two‑tone orange/black (v2)</title>
+  <style>
+    :root { --bg:#0a0a0a; --fg:#ff6a00; --fg2:#ffb46b; }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg2);
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;}
+    #c{display:block;width:100vw;height:100vh;}
+    .hud{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,.55);color:var(--fg2);
+      border:1px solid rgba(255,106,0,.35);padding:10px 12px;border-radius:12px;backdrop-filter:blur(2px);
+      user-select:none;pointer-events:none;font-size:12px;line-height:1.3;}
+    .topbar{position:fixed;left:16px;top:16px;right:16px;display:flex;gap:8px;align-items:center;pointer-events:auto;flex-wrap:wrap}
+    .btn{background:transparent;color:var(--fg2);border:1px solid var(--fg);padding:8px 10px;border-radius:999px;cursor:pointer;transition:transform .08s ease;}
+    .btn:active{transform:translateY(1px) scale(.98)}
+    .slider{accent-color:var(--fg)}
+    .pill{border:1px solid rgba(255,106,0,.35);padding:4px 10px;border-radius:999px;font-size:12px;color:var(--fg2);}
+    .modes{display:flex;gap:6px;flex-wrap:wrap}
+    .mode-btn{cursor:pointer;background:rgba(255,106,0,.08)}
+    .mode-btn.active{background:rgba(255,106,0,.18);border-color:var(--fg);color:#ffd7b0}
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="topbar">
+    <button class="btn" id="toggle">⏯︎ Play/Pause</button>
+    <button class="btn" id="save">⬇︎ Save Frame</button>
+    <label class="pill">Speed <input id="speed" class="slider" type="range" min="0" max="3" step="0.01" value="1"></label>
+    <label class="pill">Density <input id="density" class="slider" type="range" min="200" max="1800" step="10" value="900"></label>
+    <div class="modes">
+      <span class="pill mode-btn active" data-mode="clover">Clover</span>
+      <span class="pill mode-btn" data-mode="lissajous">Lissajous</span>
+      <span class="pill mode-btn" data-mode="epitrochoid">Epitrochoid</span>
+      <span class="pill mode-btn" data-mode="orbitals">Orbitals</span>
+      <span class="pill mode-btn" data-mode="glyphs">Glyphs</span>
+    </div>
+  </div>
+  <div class="hud">Endless parametric shapes — two‑tone. Keys: [Space] pause, [S] save, [1–5] modes.</div>
+<script>
+(function(){
+  const TAU=Math.PI*2, EPS=1e-9;
+  const rand=(a=1,b=0)=>Math.random()*(a-b)+b;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const cnv=document.getElementById('c'), ctx=cnv.getContext('2d');
+  let W=0,H=0,DPR=window.devicePixelRatio||1;
+  function resize(){ W=innerWidth|0; H=innerHeight|0; cnv.width=(W*DPR)|0; cnv.height=(H*DPR)|0; cnv.style.width=W+'px'; cnv.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+  addEventListener('resize',resize,{passive:true}); resize();
+
+  const speedEl=document.getElementById('speed');
+  const densEl=document.getElementById('density');
+  const saveBtn=document.getElementById('save');
+  const toggleBtn=document.getElementById('toggle');
+  const modeBtns=[...document.querySelectorAll('.mode-btn')];
+
+  let running=true;
+  toggleBtn.onclick=()=>{ running=!running; if(running) loop(performance.now()); };
+  saveBtn.onclick=()=>{ const a=document.createElement('a'); a.download=`endless-shape-${Date.now()}.png`; a.href=cnv.toDataURL('image/png'); a.click(); };
+  document.addEventListener('keydown',(e)=>{
+    if(e.key===' '){ e.preventDefault(); toggleBtn.click(); }
+    if(e.key.toLowerCase()==='s') saveBtn.click();
+    if(/^[1-5]$/.test(e.key)){ const m=['clover','lissajous','epitrochoid','orbitals','glyphs'][+e.key-1]; setMode(m); }
+  });
+
+  let mode='clover'; function setMode(m){ mode=m; modeBtns.forEach(b=>b.classList.toggle('active',b.dataset.mode===m)); seed(); }
+  modeBtns.forEach(b=> b.onclick=()=> setMode(b.dataset.mode));
+
+  let t=0, seedParams={}, flash=0, frame=0;
+  function seed(){
+    seedParams = {
+      clover:{ m:(Math.floor(rand(2,4))*2+1), n1:rand(0.9,1.6), n2:rand(0.2,1.2), n3:rand(0.2,1.2) },
+      lissajous:{ ax:Math.floor(rand(2,9)), ay:Math.floor(rand(2,9)), d:rand(TAU) },
+      epitrochoid:{ R:rand(80,180), r:rand(12,72), d:rand(20,160) },
+      orbitals:{ count:Math.floor(rand(8,14)), ring:rand(80,220) },
+      glyphs:{ count:56, spread:rand(80,200) }
+    }[mode];
+    flash=1; frame=0;
+  }
+  seed();
+
+  function superformula(a,b,m,n1,n2,n3,phi){
+    const t1=Math.pow(Math.abs(Math.cos(m*phi/4)/a), n2);
+    const t2=Math.pow(Math.abs(Math.sin(m*phi/4)/b), n3);
+    const sum=t1+t2+EPS; // avoid 0^negative
+    const r=Math.pow(sum, -1/n1);
+    return isFinite(r) ? r : 0;
+  }
+
+  function drawBG(){
+    // hard clear first frame for visibility, then go to motion-blur
+    if(frame<2){ ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); }
+    else { ctx.fillStyle='rgba(0,0,0,0.24)'; ctx.fillRect(0,0,W,H); }
+    // grain
+    const grain = 900;
+    ctx.globalAlpha=0.05; ctx.fillStyle='rgba(255,106,0,0.6)';
+    for(let i=0;i<grain;i++){ const x=Math.random()*W, y=Math.random()*H; ctx.fillRect(x,y,1,1); }
+    ctx.globalAlpha=1;
+  }
+  const stroke=(a=1)=> ctx.strokeStyle=`rgba(255,106,0,${a})`;
+  const fill=(a=1)=> ctx.fillStyle=`rgba(255,106,0,${a})`;
+
+  function drawClover(tt){
+    const {m,n1,n2,n3}=seedParams, cx=W/2, cy=H/2, base=Math.min(W,H)*0.36, pts=+densEl.value|0;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(tt*0.08);
+    // guide ring (ensures something visible on first paint)
+    stroke(0.25); ctx.lineWidth=1; ctx.beginPath(); ctx.arc(0,0, base*0.95, 0, TAU); ctx.stroke();
+    // outline
+    ctx.beginPath();
+    for(let i=0;i<=pts;i++){ const p=i/pts*TAU; let r=superformula(1,1,m,n1,n2,n3,p); r=clamp(r, 0, 2.0);
+      const R = base * r * (1.0 + 0.08*Math.sin(tt*0.6 + p*3));
+      const x = R*Math.cos(p), y=R*Math.sin(p);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    stroke(0.95); ctx.lineWidth=2.2; ctx.stroke();
+    // inner hatch
+    ctx.lineWidth=1; stroke(0.3);
+    const rings=34;
+    for(let j=0;j<rings;j++){ const k=j/(rings-1); ctx.beginPath();
+      for(let i=0;i<=pts;i++){ const p=i/pts*TAU; let r=superformula(1,1,m,n1,n2,n3,p); r=clamp(r,0,2.0);
+        const R= base*r*k*(1.0+0.02*Math.sin(tt*0.7+j*0.3+p*6));
+        const x=R*Math.cos(p), y=R*Math.sin(p);
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      } ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawLissajous(tt){
+    const {ax,ay,d}=seedParams, cx=W/2, cy=H/2, s=Math.min(W,H)*0.42, pts=+densEl.value|0;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(tt*0.05);
+    ctx.beginPath();
+    for(let i=0;i<=pts;i++){ const t=i/pts*TAU; const x=s*Math.sin(ax*t+d), y=s*Math.sin(ay*t); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+    stroke(0.95); ctx.lineWidth=2; ctx.stroke();
+    ctx.lineWidth=1; stroke(0.25);
+    for(let k=0;k<18;k++){ const r=(k+1)/18*s; ctx.beginPath(); ctx.arc(0,0,r,0,TAU); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawEpitrochoid(tt){
+    const {R,r,d}=seedParams, cx=W/2, cy=H/2, pts=+densEl.value|0;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(tt*0.02);
+    ctx.beginPath();
+    for(let i=0;i<=pts;i++){ const t=i/pts*TAU*5;
+      const x=(R+r)*Math.cos(t)-d*Math.cos(((R+r)/r)*t);
+      const y=(R+r)*Math.sin(t)-d*Math.sin(((R+r)/r)*t);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    stroke(0.95); ctx.lineWidth=2; ctx.stroke(); ctx.restore();
+  }
+
+  function drawOrbitals(tt){
+    const {count,ring}=seedParams, cx=W/2, cy=H/2; ctx.save(); ctx.translate(cx,cy);
+    for(let i=0;i<count;i++){ const a=i/count*TAU+tt*0.07*(i%2?1:-1); const r=ring+60*Math.sin(tt*0.5+i*0.6);
+      const x=r*Math.cos(a), y=r*Math.sin(a);
+      ctx.beginPath(); ctx.arc(x,y,6+3*Math.sin(tt+i),0,TAU); fill(0.92); ctx.fill();
+      ctx.beginPath(); ctx.arc(0,0,r,0,TAU); stroke(0.18); ctx.lineWidth=1; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0,0,14,0,TAU); fill(0.97); ctx.fill(); ctx.restore();
+  }
+
+  function drawGlyphs(tt){
+    const {count,spread}=seedParams, cx=W/2, cy=H/2; ctx.save(); ctx.translate(cx,cy); ctx.rotate(0.3*Math.sin(tt*0.25));
+    for(let i=0;i<count;i++){ const a=i/count*TAU+tt*0.07; const r=spread+40*Math.sin(tt*0.6+i*0.4);
+      const x=r*Math.cos(a), y=r*Math.sin(a);
+      ctx.save(); ctx.translate(x,y); ctx.rotate(a+tt);
+      ctx.beginPath(); const w=6+6*Math.sin(i+tt*0.9), h=22+8*Math.cos(i*1.3-tt*1.4);
+      ctx.rect(-w/2,-h/2,w,h); fill(0.88); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0,-h/2); ctx.lineTo(0,h/2); stroke(0.25); ctx.lineWidth=1; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(0,0,spread,0,TAU); stroke(0.25); ctx.lineWidth=1; ctx.stroke(); ctx.restore();
+  }
+
+  function loop(now){
+    if(!running) return;
+    const dt=clamp((now-(loop.last||now))/1000,0,0.05); loop.last=now;
+    t += dt*(parseFloat(speedEl.value)||1); frame++;
+    drawBG();
+    if(flash>0){ ctx.globalAlpha=Math.min(1,flash); ctx.fillStyle='rgba(255,106,0,0.05)'; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; flash*=0.9; }
+    switch(mode){ case 'clover': drawClover(t); break; case 'lissajous': drawLissajous(t); break; case 'epitrochoid': drawEpitrochoid(t); break; case 'orbitals': drawOrbitals(t); break; case 'glyphs': drawGlyphs(t); break; }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();</script>
+</body>
+</html>
