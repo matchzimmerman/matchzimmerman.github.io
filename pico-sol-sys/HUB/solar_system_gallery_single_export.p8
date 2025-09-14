@@ -90,7 +90,7 @@ end
 
 --------------- input helpers ---------------
 function any_key()
-  for i=0,5 do if(btnp(i)) return true end end
+  for i=0,5 do if(btnp(i)) return true end 
   return false
 end
 
