@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HARIL Interactive</title>
+  <link rel="preload" href="data.json" as="fetch" crossorigin="anonymous">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="neutral">
+  <canvas id="bg"></canvas>
+
+  <header class="topbar">
+    <div class="brand">HARIL<span class="dot">•</span>Interactive</div>
+    <nav class="controls">
+      <button data-view="stack">Stack</button>
+      <button data-view="tree">Tree</button>
+      <button data-view="spiral">Loop</button>
+      <button id="learn">Learn</button>
+      <button id="exportSvg">Export SVG</button>
+      <button id="exportPng">Export PNG</button>
+      <button id="theme">Theme</button>
+      <button id="searchToggle">Search</button>
+      <button id="commands">Commands</button>
+      <button id="pages">Pages</button>
+      <button id="tour">Tour</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>HARIL: Human–AI Recursive Interaction Loop</h1>
+      <p class="lede">An interactive guide to the methodology, engines, architecture, agents, and human–AI teams—powered by JSON.</p>
+      <div class="cta-row">
+        <button class="cta" id="expandAll">Expand All</button>
+        <button class="cta ghost" id="collapseAll">Collapse All</button>
+      </div>
+    </section>
+
+    <section id="content" class="content"></section>
+
+    <section id="viz" class="viz">
+      <div class="telemetry">
+        <div class="t-metric"><span>Drift Index</span><div class="bar"><div class="fill" data-key="drift_index"></div></div></div>
+        <div class="t-metric"><span>Friction Index</span><div class="bar"><div class="fill" data-key="friction_index"></div></div></div>
+        <div class="t-metric"><span>Compression Rate</span><div class="bar"><div class="fill" data-key="compression_rate"></div></div></div>
+      </div>
+      <svg id="vizSvg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet" aria-label="HARIL visualization"></svg>
+      <div class="viz-hint">Views: <code>#/stack</code>, <code>#/tree</code>, <code>#/loop</code> · Tiers: <code>#/tier/&lt;n&gt;</code> · Query demo: <code>?view=tree&tier=3&theme=riso&tour=1</code></div>
+    </section>
+
+    <aside id="relations" class="relations" aria-live="polite">
+      <h3>HARIL ↔ SCP ↔ SCIA</h3>
+      <ul id="relList"></ul>
+      <div class="rel-links">Glossary:
+        <a class="g haril" target="_blank" rel="noopener">HARIL</a> ·
+        <a class="g scp" target="_blank" rel="noopener">SCP</a> ·
+        <a class="g scia" target="_blank" rel="noopener">SCIA</a>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <div>Built from JSON • © HARIL</div>
+  </footer>
+
+  <dialog id="modal">
+    <button class="close" aria-label="Close">✕</button>
+    <div class="modal-body"></div>
+  </dialog>
+
+  <dialog id="learnDlg">
+    <button class="close" aria-label="Close">✕</button>
+    <div class="modal-body learn">
+      <h3>Learn by Doing: HARIL Core Loop</h3>
+      <p class="muted">Step through the loop with guided prompts. Your notes stay local (browser memory).</p>
+      <div class="stepper">
+        <div class="steps"></div>
+        <textarea id="note" placeholder="Write your thought here…"></textarea>
+        <div class="row">
+          <button id="prev">Prev</button>
+          <button id="next">Next</button>
+          <button id="reset">Reset</button>
+          <button id="exportNotes">Export Notes</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="searchDlg">
+    <button class="close" aria-label="Close">✕</button>
+    <div class="modal-body">
+      <h3>Glossary & Term Search</h3>
+      <input id="searchInput" type="search" placeholder="Search HARIL terms…" />
+      <ul id="searchResults"></ul>
+    </div>
+  </dialog>
+
+  <dialog id="commandsDlg">
+    <button class="close" aria-label="Close">✕</button>
+    <div class="modal-body">
+      <h3>HARIL Command Palette</h3>
+      <input id="cmdSearch" type="search" placeholder="Filter commands…" />
+      <ul id="cmdList"></ul>
+      <h4>Core Loop Templates</h4>
+      <ul id="tmplList"></ul>
+    </div>
+  </dialog>
+
+  <dialog id="pagesDlg">
+    <button class="close" aria-label="Close">✕</button>
+    <div class="modal-body">
+      <h3>Pages</h3>
+      <ul id="pagesList"></ul>
+      <article id="pageView"></article>
+    </div>
+  </dialog>
+
+  <dialog id="tourDlg">
+    <button class="close" aria-label="Close">✕</button>
+    <div class="modal-body">
+      <h3>Welcome to HARIL Interactive</h3>
+      <ol class="tour-steps">
+        <li><b>Views:</b> Switch Stack/Tree/Loop to see different metaphors.</li>
+        <li><b>Click a node:</b> Open deep-dive details for any tier.</li>
+        <li><b>Learn mode:</b> Step through Inquire→Explore→Compress→Expand with notes.</li>
+        <li><b>Commands:</b> Copy common HARIL snippets and templates.</li>
+        <li><b>Export:</b> Save the current diagram as SVG or PNG.</li>
+      </ol>
+      <button id="tourDone">Got it</button>
+    </div>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>

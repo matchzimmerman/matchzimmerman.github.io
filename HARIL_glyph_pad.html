@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>HARIL Glyph Pad</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{
+      --bg:#1f1f1f;
+      --panel:#2a2a2a;
+      --btn:#3a3a3a;
+      --btn-hover:#505050;
+      --accent:#ffffff;
+      --radius:16px;
+      --size:72px;
+    }
+    * { box-sizing: border-box; }
+    body { 
+      margin:0; padding:24px; background:var(--bg); color:var(--accent); 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; 
+    }
+    h1 { font-size:18px; font-weight:600; margin:0 0 12px; }
+    .wrap{
+      max-width:720px; margin:0 auto; background:var(--panel); border-radius:20px; padding:18px 18px 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    .row{
+      display:flex; flex-wrap:wrap; gap:14px; align-items:center;
+    }
+    .glyph{
+      width:var(--size); height:var(--size);
+      display:flex; align-items:center; justify-content:center;
+      border-radius:14px; background:var(--btn); cursor:pointer;
+      user-select:none; transition:transform .06s ease, background .15s ease;
+      font-size:42px; line-height:1;
+    }
+    .glyph:hover{ background:var(--btn-hover); transform:translateY(-1px); }
+    .glyph:active{ transform:translateY(0); }
+    .rounded-container{ /* visual treatment for first icon */
+      position:relative; border-radius:18px; background:#3c3c3c;
+    }
+    .triangle{ font-size:40px; }
+    .bullseye{ font-size:40px; }
+    .starburst{ font-size:40px; }
+    .spark{ font-size:40px; }
+    .bar{
+      display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;
+    }
+    .msg{
+      font-size:14px; opacity:.85; min-height:20px;
+    }
+    .hint{
+      font-size:12px; opacity:.6; margin-top:6px;
+    }
+    .footer{
+      margin-top:10px; font-size:12px; opacity:.5; text-align:right;
+    }
+    button.add{
+      border:0; background:var(--btn); color:var(--accent); border-radius:10px; padding:6px 10px; cursor:pointer;
+    }
+    button.add:hover{ background:var(--btn-hover); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="bar">
+      <h1>HARIL Glyph Pad</h1>
+      <button class="add" id="copyAll" title="Copy all visible glyphs (space-separated)">Copy All</button>
+    </div>
+    <div id="grid" class="row"></div>
+    <div id="msg" class="msg"></div>
+    <div class="hint">Click or tap a glyph to copy it. First tile shows the triangle inside a rounded box but copies only the triangle character.</div>
+    <div class="footer">v1 • data-driven • expand symbols in code easily</div>
+  </div>
+
+  <script>
+    // Configure your glyphs here. 'display' controls what you see;
+    // 'copy' controls what gets copied. 'className' adds CSS for styling.
+    const GLYPHS = [
+      { display: '△', copy: '△', className: 'rounded-container triangle', label: 'Triangle' },
+      { display: '◎', copy: '◎', className: 'bullseye', label: 'Bullseye' },
+      { display: '✹', copy: '✹', className: 'starburst', label: 'Starburst' },
+      { display: '✦', copy: '✦', className: 'spark', label: 'Four-point' },
+    ];
+
+    const grid = document.getElementById('grid');
+    const msg = document.getElementById('msg');
+    const copyAllBtn = document.getElementById('copyAll');
+
+    function makeTile(g){
+      const d = document.createElement('div');
+      d.className = 'glyph ' + (g.className||'');
+      d.setAttribute('title', g.label || g.copy);
+      d.dataset.copy = g.copy;
+      d.textContent = g.display;
+      d.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(g.copy);
+        flash('Copied: ' + g.copy);
+      });
+      return d;
+    }
+
+    function flash(text){
+      msg.textContent = text;
+      msg.style.opacity = 1;
+      clearTimeout(window.__msgTimer);
+      window.__msgTimer = setTimeout(() => { msg.style.opacity = .7; }, 900);
+    }
+
+    function render(){
+      grid.innerHTML = '';
+      GLYPHS.forEach(g => grid.appendChild(makeTile(g)));
+    }
+
+    copyAllBtn.addEventListener('click', async () => {
+      const text = GLYPHS.map(g => g.copy).join(' ');
+      await navigator.clipboard.writeText(text);
+      flash('Copied all: ' + text);
+    });
+
+    render();
+  </script>
+</body>
+</html>

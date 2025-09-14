@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HARIL GlyphLab</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <header>
+    <h1>HARIL GlyphLab</h1>
+    <div class="actions">
+      <button id="exportSVG">Export SVG</button>
+      <button id="exportPNG">Export PNG</button>
+      <button id="saveBoard">Save Board</button>
+      <button id="loadBoard">Load Board</button>
+      <input type="file" id="loadBoardFile" accept="application/json" style="display:none"/>
+    </div>
+  </header>
+
+  <main>
+    <aside>
+      <div class="uploader">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".svg" multiple />
+          <span>Drop SVGs here or click to upload</span>
+        </label>
+      </div>
+      <h2>Palette</h2>
+      <div id="palette" class="palette"></div>
+
+      <div class="tips">
+        <h3>Tips</h3>
+        <ul>
+          <li>Drag a glyph from the palette onto the canvas.</li>
+          <li>Click an element on the canvas to select.</li>
+          <li>Use controls to transform the selected element.</li>
+          <li>Cmd/Ctrl+C to copy selection, Cmd/Ctrl+V to paste.</li>
+          <li>Delete key removes selection.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="work">
+      <div class="toolbar">
+        <label>Scale <input type="range" id="scale" min="0.1" max="4" step="0.01" value="1"/></label>
+        <label>Rotate <input type="range" id="rotate" min="-180" max="180" step="1" value="0"/></label>
+        <label>Opacity <input type="range" id="opacity" min="0.1" max="1" step="0.01" value="1"/></label>
+        <label>Fill <input type="color" id="fill" value="#000000"/></label>
+        <button id="flipH">Flip H</button>
+        <button id="flipV">Flip V</button>
+        <button id="bringFwd">Bring Forward</button>
+        <button id="sendBack">Send Back</button>
+        <button id="duplicate">Duplicate</button>
+        <button id="delete">Delete</button>
+      </div>
+
+      <div id="canvasWrap">
+        <svg id="canvas" xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+          <rect x="0" y="0" width="1200" height="800" fill="white"/>
+          <!-- Items will be appended here -->
+        </svg>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <small>HARIL GlyphLab — drag, compose, export.</small>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

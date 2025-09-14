@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MAGPIE | Bunker Ops — v6 (perf + markers/comms)</title>
+  <style>
+    :root{ --amber:#ff9d2e; --amber-hi:#ffb347; --grid:#78ff78; --ui:#ff9d2e; --bg:#000; }
+    html,body{height:100%;margin:0;background:#000;color:var(--ui);font:12px/1.25 ui-monospace, monospace;}
+    #wrap{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto;min-height:100vh;}
+    #stage{position:relative;background:#000;min-height:420px;cursor:crosshair;}
+    canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;}
+    #scanlines{pointer-events:none;background:repeating-linear-gradient(to bottom, rgba(255,157,46,0.05) 0 2px, rgba(0,0,0,0) 2px 4px);}  
+    #hints{position:absolute;left:12px;top:12px;opacity:.85}
+    #credits{position:absolute;right:10px;bottom:10px;opacity:.55}
+    #panel{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid rgba(255,157,46,.25);background:linear-gradient(180deg, rgba(255,157,46,.06), rgba(0,0,0,.5));}
+    .group{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input[type="range"]{accent-color:var(--amber);width:120px}
+    button{background:transparent;color:var(--amber);border:1px solid var(--amber);padding:6px 10px;border-radius:6px;cursor:pointer}
+    button:hover{filter:brightness(1.2)}
+    .win{position:absolute;min-width:240px;max-width:46vw;min-height:120px;background:rgba(0,0,0,0.85);border:1px solid rgba(255,157,46,.35);box-shadow:0 0 0 1px rgba(255,157,46,.12) inset;user-select:none;}
+    .title{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,157,46,.25);padding:6px 8px;background:linear-gradient(180deg, rgba(255,157,46,.08), rgba(0,0,0,.2));cursor:grab}
+    .title.dragging{cursor:grabbing}
+    .body{padding:8px;max-height:45vh;overflow:auto}
+    #cmd{position:fixed;left:50%;top:14%;transform:translateX(-50%);width:min(720px,86vw);background:#000;border:1px solid rgba(255,157,46,.4);box-shadow:0 10px 30px rgba(0,0,0,.6);display:none}
+    #cmd input{width:100%;box-sizing:border-box;background:#0a0a0a;border:0;color:var(--amber);padding:12px 10px;font:14px ui-monospace, monospace;border-bottom:1px solid rgba(255,157,46,.25)}
+    #cmd ul{list-style:none;margin:0;padding:6px 8px;max-height:50vh;overflow:auto}
+    #cmd li{padding:6px 4px;border-bottom:1px dashed rgba(255,157,46,.2)}
+    .pill{border:1px solid rgba(255,157,46,.4); padding:2px 6px; border-radius:999px; font-size:11px; opacity:.8}
+    .tabs{display:flex;gap:8px;margin-bottom:6px}
+    .tabs button{padding:4px 8px}
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="lowres"></canvas>
+      <canvas id="hires"></canvas>
+      <div id="scanlines"></div>
+      <div id="hints">[Space]=Pause • [S]=Screenshot • [/]=Commands • [1]=Inspector • [2]=Log • [3]=Comms • [4]=Timeline • [M]=Drop Marker</div>
+      <div id="credits">MAGPIE // SIGNAL-TRACE</div>
+
+      <div class="win" id="win-inspector" style="left:14px; top:60px; display:block">
+        <div class="title"><b>NODE INSPECTOR</b><div class="actions"><span id="audioState" class="pill">audio: off</span><button data-close="win-inspector">×</button></div></div>
+        <div class="body mono" id="inspector-body">booting…</div>
+      </div>
+      <div class="win" id="win-log" style="right:14px; top:60px; width:380px; display:block">
+        <div class="title"><b>INCIDENT LOG</b><div class="actions"><button data-close="win-log">×</button></div></div>
+        <div class="body mono" id="log-body">— boot
+— linking sensor bus
+— syncing field integrator
+— listening…</div>
+      </div>
+      <div class="win" id="win-comms" style="left:14px; bottom:72px; width:420px; display:block">
+        <div class="title"><b>COMMS</b><div class="actions"><button data-close="win-comms">×</button></div></div>
+        <div class="body mono">
+          <div class="tabs">
+            <button data-tab="baun">Baun</button>
+            <button data-tab="cassie">Cassie</button>
+            <button data-tab="mero">Mero</button>
+          </div>
+          <div id="tab-baun">[BAUN] overlay up—keep the lock tight.
+> threshold 0.78
+> quarantine route R-13 armed
+</div>
+          <div id="tab-cassie" style="display:none">[CASSIE] cadence repeats every 13.4s; breath mismatch persists.
+> triangulate // pulse-verify
+</div>
+          <div id="tab-mero" style="display:none">[MERO] not artifacts—recalls. someone’s pushing memory back through us.
+> mark the quiet node
+</div>
+        </div>
+      </div>
+      <div class="win" id="win-time" style="right:14px; bottom:72px; width:320px; display:none">
+        <div class="title"><b>TIMELINE</b><div class="actions"><button data-close="win-time">×</button></div></div>
+        <div class="body mono">
+          t = <span id="tval">0.0</span>
+          <input id="tscrub" type="range" min="0" max="200" step="0.1" value="0" style="width:100%">
+          <div>mode: <b id="timemode">live</b> (toggle with L)</div>
+        </div>
+      </div>
+      <div id="cmd" class="win">
+        <input id="cmdin" placeholder="/ commands: toggle inspector|log|channels|timeline · glitch:x · density:x · tempo:x · contrast:x · bright:x · seed · snapshot · lock · unlock · mark · clear markers · goto #id · audio on|off|mute|vol:0..1 · reset"/>
+        <ul id="cmdlist"></ul>
+      </div>
+    </div>
+
+    <div id="panel">
+      <div class="group">
+        <label>Glitch</label><input id="glitch" type="range" min="0" max="1" step="0.01" value="0.12"/>
+        <label>Density</label><input id="density" type="range" min="0.2" max="1.2" step="0.01" value="0.80"/>
+        <label>Tempo</label><input id="tempo" type="range" min="0.2" max="2" step="0.01" value="1.0"/>
+        <label>Contrast</label><input id="contrast" type="range" min="0.6" max="2.0" step="0.01" value="1.20"/>
+        <label>Bright</label><input id="bright" type="range" min="0.2" max="1.2" step="0.01" value="0.60"/>
+      </div>
+      <div class="group">
+        <button data-toggle="win-inspector">Inspector [1]</button>
+        <button data-toggle="win-log">Log [2]</button>
+        <button data-toggle="win-comms">Comms [3]</button>
+        <button data-toggle="win-time">Timeline [4]</button>
+        <button id="toggle">Pause</button>
+        <button id="boot">Boot</button>
+        <button id="reset">Reset</button>
+        <button id="shot">Capture PNG</button>
+      </div>
+      <div class="group">
+        <label>Volume</label><input id="volume" type="range" min="0" max="1" step="0.01" value="0.80"/>
+        <button id="mute">Mute</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const stage = document.getElementById('stage');
+  const s = document.getElementById('lowres');
+  const v = document.getElementById('hires');
+  const ctx = s.getContext('2d');
+  const vtx = v.getContext('2d');
+
+  const glitchCtl = document.getElementById('glitch');
+  const densCtl   = document.getElementById('density');
+  const tempoCtl  = document.getElementById('tempo');
+  const contCtl   = document.getElementById('contrast');
+  const brtCtl    = document.getElementById('bright');
+  const toggleBtn = document.getElementById('toggle');
+  const shotBtn   = document.getElementById('shot');
+  const bootBtn   = document.getElementById('boot');
+  const resetBtn  = document.getElementById('reset');
+  const volCtl    = document.getElementById('volume');
+  const muteBtn   = document.getElementById('mute');
+  const audioState= document.getElementById('audioState');
+
+  // Fit canvases
+  let LW=320, LH=200;
+  function fit(){ const r=stage.getBoundingClientRect(); v.width=r.width*DPR; v.height=r.height*DPR; v.style.width=r.width+'px'; v.style.height=r.height+'px'; s.width=LW; s.height=LH; s.style.width=r.width+'px'; s.style.height=r.height+'px'; vtx.imageSmoothingEnabled=false; }
+  window.addEventListener('resize', fit, {passive:true}); fit();
+  if(stage.getBoundingClientRect().height < 50){ setTimeout(()=>{ window.dispatchEvent(new Event('resize')); }, 80); }
+
+  // Draggable windows
+  const wins = ['win-inspector','win-log','win-comms','win-time'];
+  wins.forEach(id=>{
+    const el=document.getElementById(id);
+    const title=el.querySelector('.title');
+    let ox=0,oy=0,drag=false;
+    title.addEventListener('pointerdown',e=>{drag=true;title.classList.add('dragging');ox=e.clientX-el.offsetLeft;oy=e.clientY-el.offsetTop;el.setPointerCapture(e.pointerId)});
+    title.addEventListener('pointermove',e=>{if(!drag)return; const nx=Math.min(window.innerWidth-el.offsetWidth-6,Math.max(6,e.clientX-ox)); const ny=Math.min(window.innerHeight-220,Math.max(40,e.clientY-oy)); el.style.left=nx+'px'; el.style.top=ny+'px';});
+    title.addEventListener('pointerup',()=>{drag=false;title.classList.remove('dragging');});
+    el.querySelectorAll('[data-close]')?.forEach(btn=>btn.addEventListener('click',()=>{el.style.display='none'}));
+    document.querySelector(`[data-toggle="${id}"]`)?.addEventListener('click',()=>{ el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none'});
+  });
+
+  // Comms tabs
+  document.querySelectorAll('#win-comms .tabs button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const name=btn.dataset.tab;
+      ['baun','cassie','mero'].forEach(t=>{
+        document.getElementById('tab-'+t).style.display=(t===name)?'block':'none';
+      });
+    });
+  });
+
+  // Robust field
+  let SEED=(Math.random()*1e9)>>>0;
+  function reseed(){ SEED=(Math.random()*1e9)>>>0; }
+  function hash(x,y,t){ let h=x*374761393+y*668265263+(t|0)*69069+SEED; h=(h^(h>>>13))*1274126177; return ((h^(h>>>16))>>>0)/4294967295; }
+  function smooth(a){return a*a*(3-2*a)}
+  function vnoise(x,y,t){ const xi=Math.floor(x), yi=Math.floor(y); const xf=x-xi, yf=y-yi; const h00=hash(xi,yi,t), h10=hash(xi+1,yi,t), h01=hash(xi,yi+1,t), h11=hash(xi+1,yi+1,t); const u=smooth(xf), v=smooth(yf); const x1=h00*(1-u)+h10*u; const x2=h01*(1-u)+h11*u; return x1*(1-v)+x2*v; }
+  function fbm(x,y,t){ let a=0,f=1,amp=0.58; for(let o=0;o<5;o++){ a+=vnoise(x*f,y*f,t)*amp; f*=1.95; amp*=0.52;} return a; }
+  function field(x,y,t){ return fbm(x*0.017,y*0.017,t*0.08); }
+  function curl(x,y,t){ const e=0.6; const n1=field(x,y+e,t), n2=field(x,y-e,t), n3=field(x+e,y,t), n4=field(x-e,y,t); return {x:(n2-n1), y:(n3-n4)}; }
+  function agree3(x,y,t){ const f0=field(x,y,t), f1=field(x+1.7,y+0.9,t), f2=field(x-1.3,y-0.6,t); return 1.0-Math.abs(f0-(f1+f2)*0.5); }
+
+  function toneMap(a,contrast,bright){
+    a = Math.max(0, Math.min(1, a));
+    a = Math.pow(a, 1.0/contrast);
+    a = a * bright;
+    return Math.max(0, Math.min(1, a));
+  }
+  function amber(a){ const r=0.55+0.45*a, g=0.20+0.62*a, b=0.02+0.06*a; return [r*255,g*255,b*255,255]; }
+
+  const img = ctx.createImageData(LW, LH);
+  const data = img.data;
+
+  function drawField(t, glitchAmt, density, contrast, bright){
+    let bx=LW>>1, by=LH>>1, bv=-1, avg=0;
+    let i=0;
+    for(let y=0;y<LH;y++){
+      for(let x=0;x<LW;x++){
+        const n = fbm(x*0.017,y*0.017,t*0.08);
+        const agr = Math.max(0, agree3(x,y,t));
+        const m = Math.sin(((x-y*1.05)*0.01 + t*0.6))**8 * glitchAmt;
+        let I = 0.52*n + 0.95*agr*density - 0.5*m;
+        I = toneMap(I, contrast, bright);
+        avg += I;
+        if(agr>bv){ bv=agr; bx=x; by=y; }
+        const c=amber(I); data[i++]=c[0]; data[i++]=c[1]; data[i++]=c[2]; data[i++]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+    return {bx,by,bv,avg:avg/(LW*LH)};
+  }
+
+  function drawGrid(t){
+    ctx.globalAlpha=0.22; ctx.strokeStyle='rgba(120,255,120,0.55)'; ctx.lineWidth=0.5; const step=16;
+    for(let gx=0; gx<LW; gx+=step){ ctx.beginPath(); for(let y=0;y<LH;y+=2){ const p=curl(gx,y,t*0.8); const wx=gx+p.x*10.0; if(y===0) ctx.moveTo(wx,y); else ctx.lineTo(wx,y);} ctx.stroke(); }
+    for(let gy=0; gy<LH; gy+=step){ ctx.beginPath(); for(let x=0;x<LW;x+=2){ const p=curl(x,gy,t*0.8); const wy=gy+p.y*10.0; if(x===0) ctx.moveTo(x,wy); else ctx.lineTo(x,wy);} ctx.stroke(); }
+    ctx.globalAlpha=1;
+  }
+
+  // Markers + Inspector list
+  const markers=[]; let markerId=1; let autoCooldown=0; let locked=false;
+  function manualMark(){ const tx=_track.x, ty=_track.y; const threat=localThreat(tx,ty,_t, parseFloat(glitchCtl.value), parseFloat(densCtl.value)); addMarker(tx,ty,{auto:false, threat}); }
+  function addMarker(x,y,opts={}){ const id=markerId++; const threat=opts.threat||0; const auto=!!opts.auto; markers.push({id,x,y,threat,auto,ts:Date.now()}); log(`— marker #${id} ${(auto?'[auto] ':'')}@ ${x},${y} threat:${(threat*100).toFixed(0)}%`); renderMarkerList(); pingForMarker(threat); return id; }
+  function renderMarkerList(){ const inspector=document.getElementById('inspector-body'); const lines = markers.slice(-12).map(m=>`#${m.id}\tpos ${m.x},${m.y}\tthreat ${(m.threat*100).toFixed(0)}%${m.auto?'\t[auto]':''}`).join('\n'); const base = inspector.textContent.split('\n\n-- markers --')[0]; inspector.textContent = base + `\n\n-- markers --\n` + (lines||'(none)'); }
+  function drawMarkers(){ for(const m of markers){ const isThreat=m.threat>0.5; ctx.save(); ctx.strokeStyle=isThreat?'rgba(255,60,60,0.95)':'rgba(255,157,46,0.95)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(m.x,m.y,4,0,Math.PI*2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(m.x-6,m.y); ctx.lineTo(m.x+6,m.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(m.x,m.y-6); ctx.lineTo(m.x,m.y+6); ctx.stroke(); ctx.fillStyle = 'rgba(255,157,46,0.95)'; ctx.font = '8px monospace'; ctx.textBaseline='top'; ctx.fillText('#'+m.id, m.x+6, m.y+6); ctx.restore(); } }
+
+  // Command palette
+  const cmd=document.getElementById('cmd'); const cmdin=document.getElementById('cmdin'); const cmdlist=document.getElementById('cmdlist');
+  function openCmd(){ cmd.style.display='block'; cmdin.value=''; cmdin.focus(); renderCmdList(''); }
+  function closeCmd(){ cmd.style.display='none'; }
+  cmdin.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ closeCmd(); } if(e.key==='Enter'){ runCmd(cmdin.value.trim()); closeCmd(); }});
+  cmdin.addEventListener('input',()=>renderCmdList(cmdin.value.trim()));
+  function renderCmdList(q){ const options=['toggle inspector','toggle log','toggle channels','toggle timeline','lock','unlock','mark','clear markers','glitch:0.25','density:0.9','tempo:1.2','contrast:1.2','bright:0.6','seed','snapshot','goto #1','goto #2','audio on','audio off','audio mute','vol:0.9','reset']; const items=options.filter(o=>o.indexOf(q)>=0); cmdlist.innerHTML = items.map(i=>`<li><b>/${i}</b></li>`).join(''); }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function runCmd(s){ if(!s) return;
+    if(s.startsWith('glitch:')) glitchCtl.value=clamp(parseFloat(s.split(':')[1]),0,1);
+    else if(s.startsWith('density:')) densCtl.value=clamp(parseFloat(s.split(':')[1]),0.2,1.2);
+    else if(s.startsWith('tempo:')) tempoCtl.value=clamp(parseFloat(s.split(':')[1]),0.2,2);
+    else if(s.startsWith('contrast:')) contCtl.value=clamp(parseFloat(s.split(':')[1]),0.6,2.0);
+    else if(s.startsWith('bright:')) brtCtl.value=clamp(parseFloat(s.split(':')[1]),0.2,1.2);
+    else if(s==='toggle inspector') toggleWin('win-inspector');
+    else if(s==='toggle log') toggleWin('win-log');
+    else if(s==='toggle channels') toggleWin('win-comms');
+    else if(s==='toggle timeline') toggleWin('win-time');
+    else if(s==='snapshot') shotBtn.click();
+    else if(s==='lock') { locked=true; toneLock(); }
+    else if(s==='unlock') { locked=false; toneUnlock(); }
+    else if(s==='mark') manualMark();
+    else if(s==='clear markers'){ markers.length=0; log('— cleared markers'); renderMarkerList(); }
+    else if(s==='seed'){ reseed(); }
+    else if(s.startsWith('goto #')){ const id=parseInt(s.replace('goto #','').trim()); const m=markers.find(mm=>mm.id===id); if(m){ _track={x:m.x,y:m.y,val:1}; locked=true; log(`— centered on marker #${id}`); toneLock(); } }
+    else if(s==='audio on'){ audioEnable(true); }
+    else if(s==='audio off'){ shutdownAudio(); }
+    else if(s==='audio mute'){ toggleMute(); }
+    else if(s.startsWith('vol:')){ volCtl.value = clamp(parseFloat(s.split(':')[1]),0,1); syncVolume(); }
+    else if(s==='reset'){ resetDefaults(); }
+  }
+  function toggleWin(id){ const el=document.getElementById(id); el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none'; }
+  window.addEventListener('keydown',(e)=>{
+    if(e.key===' '){ e.preventDefault(); toggleBtn.click(); }
+    if(e.key==='s' || e.key==='S'){ shotBtn.click(); }
+    if(e.key==='/'){ e.preventDefault(); openCmd(); }
+    if(e.key==='1'){ toggleWin('win-inspector'); }
+    if(e.key==='2'){ toggleWin('win-log'); }
+    if(e.key==='3'){ toggleWin('win-comms'); }
+    if(e.key==='4'){ toggleWin('win-time'); }
+    if(e.key==='m' || e.key==='M'){ manualMark(); }
+    if(e.key==='l' || e.key==='L'){ liveMode=!liveMode; timemode.textContent=liveMode?'live':'scrub'; }
+  });
+
+  // Log
+  const logBody=document.getElementById('log-body'); function log(line){ logBody.textContent += "\n"+line; logBody.scrollTop=logBody.scrollHeight; }
+
+  // Timeline (for inspector text)
+  const tval=document.getElementById('tval'); const tscrub=document.getElementById('tscrub'); const timemode=document.getElementById('timemode');
+  let liveMode=true;
+
+  // Loop
+  let running=true, t0=performance.now(), _track={x:LW>>1,y:LH>>1,val:0}, _t=0;
+  function frame(ts){
+    if(!running) return;
+    _t = (liveMode ? (ts - t0)*0.001 : parseFloat(tscrub.value)*0.05) * parseFloat(tempoCtl.value);
+    if(!liveMode){ tval.textContent=(parseFloat(tscrub.value)*0.05).toFixed(2); }
+    const g = parseFloat(glitchCtl.value), d = parseFloat(densCtl.value), c=parseFloat(contCtl.value), b=parseFloat(brtCtl.value);
+
+    const best = drawField(_t,g,d,c,b);
+    drawGrid(_t);
+    if(!locked){ _track=best; }
+    // crosshair
+    const tx=_track.x, ty=_track.y, tv=_track.val;
+    ctx.globalAlpha=0.9; ctx.strokeStyle='rgba(255,157,46,0.9)'; ctx.beginPath(); ctx.moveTo(tx-12,ty); ctx.lineTo(tx+12,ty); ctx.stroke(); ctx.beginPath(); ctx.moveTo(tx,ty-12); ctx.lineTo(tx,ty+12); ctx.stroke(); ctx.globalAlpha=1;
+
+    // Auto-marker when coherent
+    if(tv>0.82 && autoCooldown<=0){ const threat=localThreat(tx,ty,_t,g,d); addMarker(tx,ty,{auto:true, threat}); autoCooldown=120; }
+    autoCooldown = Math.max(0, autoCooldown-1);
+
+    drawMarkers();
+
+    // HUD text
+    const inspector=document.getElementById('inspector-body');
+    const pct=(tv*100).toFixed(1);
+    inspector.textContent = `lock: ${locked?'ON':'OFF'}\ncoherence: ${pct}%\npos: ${tx},${ty}  (grid ${Math.floor(tx/16)}:${Math.floor(ty/16)})\nmode: ${liveMode?'live':'scrub'}`;
+    renderMarkerList();
+
+    // present
+    const r=stage.getBoundingClientRect(); v.width=r.width*DPR; v.height=r.height*DPR; vtx.imageSmoothingEnabled=false; vtx.drawImage(s,0,0,v.width,v.height);
+
+    // Audio modulation (very light): filter follows average brightness; crackle from glitch
+    audioTick({avg:best.avg, glitch:g, markers:markers.length});
+    requestAnimationFrame(frame);
+  }
+  function boot(){ running=true; requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+  setInterval(()=>{ if(!running) return; frame(performance.now()); }, 1000/12);
+
+  s.addEventListener('click',()=>{ locked=!locked; log( locked? '— node locked' : '— node released'); locked?toneLock():toneUnlock(); });
+
+  toggleBtn.onclick=()=>{ running=!running; toggleBtn.textContent = running? 'Pause':'Play'; if(running) requestAnimationFrame(frame); };
+  shotBtn.onclick=()=>{ const a=document.createElement('a'); a.download='magpie_signal_field.png'; a.href=v.toDataURL('image/png'); a.click(); };
+  bootBtn.onclick=boot;
+  resetBtn.onclick=resetDefaults;
+  function resetDefaults(){ glitchCtl.value=0.12; densCtl.value=0.80; tempoCtl.value=1.0; contCtl.value=1.20; brtCtl.value=0.60; reseed(); }
+
+  // Threat estimate
+  function localThreat(x,y,t,g,d){ const gm = Math.sin(((x-y*1.05)*0.01 + t*0.6))**8 * g; const th = Math.max(0, Math.min(1, g*0.7 + (1-d)*0.2)); return Math.max(0, Math.min(1, 0.6*gm + 0.6*th)); }
+
+  // -------- Audio layer (low-latency) --------
+  let ac=null, master=null, masterVol=0.8, muted=false;
+  let noiseSrc=null, noiseGain=null, lp=null, pingGain=null, crackleGain=null, lockGain=null;
+  let lastPing=0, glitchAccum=0;
+
+  function audioEnable(on){ if(on){ initAudio(); } else { shutdownAudio(); } }
+  function initAudio(){
+    if(ac) return;
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = muted ? 0 : masterVol; master.connect(ac.destination);
+
+    // Looping noise buffer (cheap)
+    const len = ac.sampleRate * 1;
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<len;i++){ data[i] = (Math.random()*2-1); }
+    noiseSrc = ac.createBufferSource(); noiseSrc.buffer = buf; noiseSrc.loop = true;
+
+    lp = ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=420; lp.Q.value=0.7;
+    noiseGain = ac.createGain(); noiseGain.gain.value = 0.28;
+
+    noiseSrc.connect(lp); lp.connect(noiseGain); noiseGain.connect(master);
+    noiseSrc.start();
+
+    pingGain = ac.createGain(); pingGain.gain.value=0.0; pingGain.connect(master);
+    crackleGain = ac.createGain(); crackleGain.gain.value=0.0; crackleGain.connect(master);
+    lockGain = ac.createGain(); lockGain.gain.value=0.0; lockGain.connect(master);
+
+    audioState.textContent='audio: on'; log('— audio online');
+  }
+  function shutdownAudio(){ if(!ac) return; ac.close(); ac=null; audioState.textContent='audio: off'; log('— audio offline'); }
+  function syncVolume(){ masterVol = parseFloat(volCtl.value); if(master) master.gain.value = muted?0:masterVol; }
+  volCtl.addEventListener('input', syncVolume);
+  function toggleMute(){ muted=!muted; if(master) master.gain.value = muted?0:masterVol; muteBtn.textContent=muted? 'Unmute':'Mute'; audioState.textContent = muted? 'audio: muted' : 'audio: on'; }
+  muteBtn.addEventListener('click', ()=>{ if(!ac) initAudio(); toggleMute(); });
+  ['click','keydown','pointerdown','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{ if(!ac) initAudio(); },{once:true,passive:true}));
+
+  function pingForMarker(threat){
+    if(!ac) return;
+    const osc = ac.createOscillator(), mod=ac.createOscillator(), g=ac.createGain(), d=ac.createGain();
+    const base = 360 + threat*240; osc.frequency.value=base; mod.frequency.value=9 + threat*40; d.gain.value=20 + threat*120; mod.connect(d); d.connect(osc.frequency); g.gain.value=0.0; osc.connect(g); g.connect(pingGain);
+    const now=ac.currentTime; g.gain.setValueAtTime(0.0, now); g.gain.linearRampToValueAtTime(0.26 + threat*0.2, now+0.02); g.gain.exponentialRampToValueAtTime(0.0001, now+0.35+threat*0.15); osc.start(now); mod.start(now); osc.stop(now+0.5); mod.stop(now+0.5);
+    pingGain.gain.cancelScheduledValues(now); pingGain.gain.setTargetAtTime(0.38, now, 0.03); pingGain.gain.setTargetAtTime(0.0, now+0.25, 0.1);
+  }
+
+  function glitchBurst(intensity){
+    if(!ac) return;
+    const len = Math.max(0.02, Math.min(0.12, 0.03 + intensity*0.09));
+    const buffer = ac.createBuffer(1, ac.sampleRate*len, ac.sampleRate);
+    const d = buffer.getChannelData(0);
+    for(let i=0;i<d.length;i++){ d[i] = (Math.random()*2-1) * (1-i/d.length); }
+    const src = ac.createBufferSource(); src.buffer=buffer;
+    const g = ac.createGain(); g.gain.value=0.0;
+    src.connect(g); g.connect(crackleGain);
+    const now=ac.currentTime; g.gain.setValueAtTime(0.0, now); g.gain.linearRampToValueAtTime(0.35*intensity, now+0.005); g.gain.exponentialRampToValueAtTime(0.0001, now+len);
+    src.start(now);
+  }
+
+  function toneLock(){ if(!ac) return; const now=ac.currentTime; const o=ac.createOscillator(), g=ac.createGain(); o.type='sine'; o.frequency.setValueAtTime(220, now); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.24, now+0.02); g.gain.exponentialRampToValueAtTime(0.0001, now+0.25); o.connect(g); g.connect(lockGain); o.start(now); o.stop(now+0.3); }
+  function toneUnlock(){ if(!ac) return; const now=ac.currentTime; const o=ac.createOscillator(), g=ac.createGain(); o.type='sine'; o.frequency.setValueAtTime(140, now); g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.15, now+0.02); g.gain.exponentialRampToValueAtTime(0.0001, now+0.2); o.connect(g); g.connect(lockGain); o.start(now); o.stop(now+0.25); }
+
+  // Light per-frame audio modulation (no heavy processors)
+  function audioTick({avg, glitch, markers}){
+    if(!ac) return;
+    const now = ac.currentTime;
+    const cut = 280 + avg*1600;
+    lp.frequency.setTargetAtTime(cut, now, 0.12);
+    noiseGain.gain.setTargetAtTime(0.2 + avg*0.18, now, 0.2);
+
+    glitchAccum += glitch * 0.02;
+    if(glitchAccum > 0.25){ glitchBurst(glitch); glitchAccum = 0; }
+
+    // global ping cadence from markers
+    const interval = Math.max(0.4, 2.2 - Math.min(1, markers/8)*1.6);
+    if(now - lastPing > interval){
+      pingForMarker(Math.min(1, markers/10));
+      lastPing = now;
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MAGPIE | Amber Terminal Signal Field</title>
+  <style>
+    :root{
+      --amber:#ff9d2e;
+      --amber-hi:#ffb347;
+      --grid:#78ff78;
+      --rev:#ff2a2a;
+      --ui:#ff9d2e;
+      --bg:#000;
+    }
+    html,body{height:100%;margin:0;background:#000;color:var(--ui);font:12px/1.2 monospace;}
+    #wrap{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto;}
+    #stage{position:relative;background:#000;}
+    canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;}
+    #scanlines{pointer-events:none;background:repeating-linear-gradient(to bottom, rgba(255,157,46,0.05) 0 2px, rgba(0,0,0,0) 2px 4px);}  
+    #panel{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid rgba(255,157,46,.25);background:linear-gradient(180deg, rgba(255,157,46,.06), rgba(0,0,0,.5));}
+    .group{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    label{opacity:.85}
+    input[type="range"]{accent-color:var(--amber);width:160px}
+    button{background:transparent;color:var(--amber);border:1px solid var(--amber);padding:6px 10px;border-radius:6px;cursor:pointer}
+    button:hover{filter:brightness(1.2)}
+    #hud{position:absolute;inset:0;pointer-events:none;}
+    #credits{position:absolute;right:10px;bottom:10px;opacity:.55}
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="lowres"></canvas>
+      <canvas id="hires"></canvas>
+      <div id="scanlines"></div>
+      <div id="hud"></div>
+      <div id="credits">MAGPIE // SIGNAL-TRACE</div>
+    </div>
+    <div id="panel">
+      <div class="group">
+        <label>Glitch</label><input id="glitch" type="range" min="0" max="1" step="0.01" value="0.35"/>
+        <label>Node Density</label><input id="density" type="range" min="0.2" max="1.2" step="0.01" value="0.75"/>
+        <label>Tempo</label><input id="tempo" type="range" min="0.2" max="2" step="0.01" value="1"/>
+      </div>
+      <div class="group">
+        <button id="toggle">Pause</button>
+        <button id="shot">Capture PNG</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const stage = document.getElementById('stage');
+  const s = document.getElementById('lowres');
+  const v = document.getElementById('hires');
+  const ctx = s.getContext('2d');
+  const vtx = v.getContext('2d');
+
+  const glitchCtl = document.getElementById('glitch');
+  const densCtl   = document.getElementById('density');
+  const tempoCtl  = document.getElementById('tempo');
+  const toggleBtn = document.getElementById('toggle');
+  const shotBtn   = document.getElementById('shot');
+
+  let LW = 320, LH = 200;
+
+  function fit(){
+    const r = stage.getBoundingClientRect();
+    v.width  = r.width * DPR; v.height = r.height * DPR; v.style.width = r.width+'px'; v.style.height = r.height+'px';
+    s.width  = LW; s.height = LH; s.style.width = r.width+'px'; s.style.height = r.height+'px';
+    vtx.imageSmoothingEnabled = false;
+  }
+  window.addEventListener('resize', fit, {passive:true});
+  fit();
+
+  const seed = (Math.random()*1e9)>>>0;
+  function hash(x,y,t){
+    let h = x*374761393 + y*668265263 + (t|0)*69069 + seed;
+    h = (h ^ (h>>>13)) * 1274126177;
+    return ((h ^ (h>>>16)) >>> 0) / 4294967295;
+  }
+  function smoothstep(a){return a*a*(3-2*a)}
+  function valueNoise(x,y,t){
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const h00 = hash(xi,yi,t), h10 = hash(xi+1,yi,t), h01 = hash(xi,yi+1,t), h11 = hash(xi+1,yi+1,t);
+    const u = smoothstep(xf), v = smoothstep(yf);
+    const x1 = h00*(1-u)+h10*u;
+    const x2 = h01*(1-u)+h11*u;
+    return x1*(1-v)+x2*v;
+  }
+  function fbm(x,y,t){
+    let a=0, f=1, amp=0.6;
+    for(let o=0;o<4;o++){
+      a += valueNoise(x*f,y*f,t) * amp;
+      f*=1.9; amp*=0.5;
+    }
+    return a/(1.0);
+  }
+
+  function field(x,y,t){
+    return fbm(x*0.015, y*0.015, t*0.08);
+  }
+  function curl(x,y,t){
+    const e=0.5;
+    const n1 = field(x, y+e, t);
+    const n2 = field(x, y-e, t);
+    const n3 = field(x+e, y, t);
+    const n4 = field(x-e, y, t);
+    return {x:(n2-n1), y:(n3-n4)};
+  }
+
+  function nodeStrength(x,y,t){
+    const f0 = field(x,y,t);
+    const f1 = field(x+1.7,y+0.9,t);
+    const f2 = field(x-1.3,y-0.6,t);
+    const agree = 1.0 - Math.abs(f0 - (f1+f2)*0.5);
+    return Math.pow(Math.max(0,agree), 2.2);
+  }
+
+  function glitchMask(x,y,t){
+    const g = ((x - y*1.05) * 0.01 + t*0.6) % 6.28318;
+    let m = Math.sin(g)*0.5+0.5;
+    return Math.pow(m, 8.0);
+  }
+
+  function amberColor(intensity){
+    const a = Math.min(1, Math.max(0, intensity));
+    const r = 0.6 + 0.4*a;
+    const g = 0.25 + 0.6*a;
+    const b = 0.0 + 0.05*a;
+    return [r*255, g*255, b*255, 255];
+  }
+
+  let running = true;
+  toggleBtn.onclick = ()=>{ running = !running; toggleBtn.textContent = running ? 'Pause' : 'Play'; if(running) req(); };
+  shotBtn.onclick = ()=>{
+    const a = document.createElement('a');
+    a.download = 'magpie_signal_field.png';
+    a.href = v.toDataURL('image/png');
+    a.click();
+  };
+
+  let last=0; function req(){requestAnimationFrame(loop);} req();
+  function loop(ts){
+    if(!running) return;
+    const dt = Math.min(33, ts-last); last = ts;
+    const t = ts*0.001 * parseFloat(tempoCtl.value);
+    const glitchAmt = parseFloat(glitchCtl.value);
+    const density = parseFloat(densCtl.value);
+
+    const img = ctx.getImageData(0,0,LW,LH);
+    const data = img.data;
+
+    for(let y=0;y<LH;y++){
+      for(let x=0;x<LW;x++){
+        const n = field(x,y,t);
+        const s = nodeStrength(x*1.0,y*1.0,t);
+        const m = glitchMask(x,y,t) * glitchAmt;
+
+        let I = 0.55*n + 0.9*s*density - m*0.6; 
+        I = Math.max(0, Math.min(1, I));
+
+        const off = (y*LW + x)*4;
+        const [r,g,b,a] = amberColor(I);
+        data[off] = r; data[off+1] = g; data[off+2] = b; data[off+3] = a;
+      }
+    }
+
+    ctx.putImageData(img,0,0);
+
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = 'rgba(120,255,120,0.6)';
+    ctx.lineWidth = 0.5;
+    const step = 16;
+    for(let gx=0; gx<LW; gx+=step){
+      ctx.beginPath();
+      for(let y=0;y<LH;y+=2){
+        const p = curl(gx,y,t*0.8);
+        const wx = gx + p.x*10.0;
+        if(y===0) ctx.moveTo(wx,y); else ctx.lineTo(wx,y);
+      }
+      ctx.stroke();
+    }
+    for(let gy=0; gy<LH; gy+=step){
+      ctx.beginPath();
+      for(let x=0;x<LW;x+=2){
+        const p = curl(x,gy,t*0.8);
+        const wy = gy + p.y*10.0;
+        if(x===0) ctx.moveTo(x,wy); else ctx.lineTo(x,wy);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = 'rgba(255,157,46,0.95)';
+    ctx.font = '8px monospace';
+    ctx.textBaseline = 'top';
+    ctx.fillText('14:07:32  SYS:MAG-01', 4, 4);
+    ctx.fillText('MAP LAYER: SIGNAL-TRACE', 4, 14);
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('TROJAN PULSE PROB: 32%   T-CODE: A2.53.91', 4, LH-4);
+
+    vtx.clearRect(0,0,v.width,v.height);
+    vtx.imageSmoothingEnabled = false;
+    vtx.drawImage(s, 0, 0, v.width, v.height);
+
+    const grd = vtx.createRadialGradient(v.width*0.5, v.height*0.5, 0, v.width*0.5, v.height*0.5, Math.max(v.width,v.height)*0.6);
+    grd.addColorStop(0, 'rgba(255,157,46,0.05)');
+    grd.addColorStop(1, 'rgba(0,0,0,0.6)');
+    vtx.fillStyle = grd; vtx.fillRect(0,0,v.width,v.height);
+
+    req();
+  }
+})();
+</script>
+</body>
+</html>

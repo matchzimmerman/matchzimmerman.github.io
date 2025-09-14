@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>HARIL Glyph + Command Pad</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root{
+      --bg:#1e1f22;
+      --panel:#24262a;
+      --btn:#2f3238;
+      --btn-hover:#3b3f46;
+      --text:#ffffff;
+      --muted:#b7bcc7;
+      --accent:#9ad1ff;
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; padding:20px; background:var(--bg); color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    .wrap{max-width:920px; margin:0 auto; display:grid; gap:16px}
+    .card{
+      background:var(--panel); border-radius:20px; padding:16px 16px 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .card h2{margin:0 0 10px; font-size:16px; letter-spacing:.2px}
+    .bar{display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:10px}
+    .row{display:flex; flex-wrap:wrap; gap:12px}
+    .glyph, .cmd{
+      display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
+      background:var(--btn); border-radius:14px; transition:transform .06s ease, background .15s ease, box-shadow .15s ease;
+      border:1px solid rgba(255,255,255,.06);
+    }
+    .glyph:hover, .cmd:hover{background:var(--btn-hover); transform:translateY(-1px)}
+    .glyph{width:76px; height:76px; font-size:40px}
+    .rounded-container{background:#3a3d43}
+    .cmd{
+      padding:10px 14px; font-size:14px; color:var(--text); white-space:nowrap;
+    }
+    .msg{font-size:13px; color:var(--muted); min-height:18px}
+    .hint{font-size:12px; color:var(--muted); margin-top:6px}
+    .actions{display:flex; gap:8px; align-items:center}
+    button, input[type="text"]{
+      background:var(--btn); color:var(--text); border:1px solid rgba(255,255,255,.08);
+      border-radius:10px; padding:8px 10px; outline:none;
+    }
+    button:hover{background:var(--btn-hover); cursor:pointer}
+    input[type="text"]{min-width: 180px}
+    .footer{opacity:.55; text-align:right; font-size:12px; margin-top:2px}
+    @media (max-width:560px){
+      .glyph{width:64px; height:64px; font-size:34px}
+      .cmd{font-size:13px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- GLYPHS -->
+    <section class="card" id="glyphCard">
+      <div class="bar">
+        <h2>HARIL Glyphs</h2>
+        <div class="actions">
+          <button id="copyAllGlyphs" title="Copy all glyphs (space-separated)">Copy All</button>
+        </div>
+      </div>
+      <div id="glyphGrid" class="row"></div>
+      <div id="glyphMsg" class="msg"></div>
+      <div class="hint">Click a tile to copy the glyph. First tile shows a rounded container around △ but copies the triangle character itself.</div>
+    </section>
+
+    <!-- COMMANDS -->
+    <section class="card" id="commandCard">
+      <div class="bar">
+        <h2>HARIL Commands</h2>
+        <div class="actions">
+          <input id="filterInput" type="text" placeholder="Filter commands (e.g., compress, swarm, stack)" />
+          <button id="copyAllCmds" title="Copy all visible commands (newline-separated)">Copy Visible</button>
+        </div>
+      </div>
+      <div id="cmdGrid" class="row"></div>
+      <div id="cmdMsg" class="msg"></div>
+      <div class="hint">Tap any command to copy it exactly as shown. Use the filter to narrow the list.</div>
+    </section>
+
+    <div class="footer">HARIL pad v2 • data-driven • edit arrays in code to customize</div>
+  </div>
+
+  <script>
+    // ====== DATA ======
+    // Glyphs (display vs copy)
+    const GLYPHS = [
+      { display: '△', copy: '△', className: 'rounded-container', label: 'Triangle' },
+      { display: '◎', copy: '◎', label: 'Bullseye' },
+      { display: '✹', copy: '✹', label: 'Starburst' },
+      { display: '✦', copy: '✦', label: 'Spark' },
+    ];
+
+    // Common HARIL commands (starter set — editable)
+    const COMMANDS = [
+      "[ MZprimary ]",
+      "[ haril ]",
+      "[ haril.compress 8 ]",
+      "[ haril.compress 10 ]",
+      "[ gauntlet ]",
+      "[ haril.swarm ]",
+      "[ haril.labz ]",
+      "[ haril.strategy ]",
+      "[ haril.stack.run ]",
+      "[ haril.export.json.state ]",
+      "[ haril.glossary.update ]",
+      "[ haril.archive.node ]",
+      "[ haril.diagnostics ]",
+      "[ haril.moderator.scan ]",
+      "[ exc haril.agentic.job.team.drills.daily ]"
+    ];
+
+    // ====== UTIL ======
+    const glyphGrid = document.getElementById('glyphGrid');
+    const glyphMsg  = document.getElementById('glyphMsg');
+    const cmdGrid   = document.getElementById('cmdGrid');
+    const cmdMsg    = document.getElementById('cmdMsg');
+    const filterInput = document.getElementById('filterInput');
+
+    const copyText = async (text, sink) => {
+      await navigator.clipboard.writeText(text);
+      sink.textContent = 'Copied: ' + text;
+      clearTimeout(sink.__t);
+      sink.__t = setTimeout(()=> sink.textContent = '', 1200);
+    };
+
+    // ====== RENDER GLYPHS ======
+    function renderGlyphs(){
+      glyphGrid.innerHTML = '';
+      GLYPHS.forEach(g => {
+        const el = document.createElement('div');
+        el.className = 'glyph ' + (g.className || '');
+        el.title = g.label || g.copy;
+        el.textContent = g.display;
+        el.addEventListener('click', () => copyText(g.copy, glyphMsg));
+        glyphGrid.appendChild(el);
+      });
+    }
+
+    // ====== RENDER COMMANDS ======
+    function renderCommands(filter=''){
+      cmdGrid.innerHTML = '';
+      const f = filter.trim().toLowerCase();
+      const list = f ? COMMANDS.filter(c => c.toLowerCase().includes(f)) : COMMANDS;
+      list.forEach(cmd => {
+        const el = document.createElement('div');
+        el.className = 'cmd';
+        el.textContent = cmd;
+        el.title = 'Copy: ' + cmd;
+        el.addEventListener('click', () => copyText(cmd, cmdMsg));
+        cmdGrid.appendChild(el);
+      });
+      if(list.length === 0){
+        const none = document.createElement('div');
+        none.className = 'cmd';
+        none.style.opacity = .5;
+        none.textContent = 'No commands match your filter.';
+        none.style.pointerEvents = 'none';
+        cmdGrid.appendChild(none);
+      }
+    }
+
+    // ====== EVENTS ======
+    document.getElementById('copyAllGlyphs').addEventListener('click', () => {
+      const all = GLYPHS.map(g => g.copy).join(' ');
+      copyText(all, glyphMsg);
+    });
+
+    document.getElementById('copyAllCmds').addEventListener('click', () => {
+      const f = filterInput.value.trim().toLowerCase();
+      const list = f ? COMMANDS.filter(c => c.toLowerCase().includes(f)) : COMMANDS;
+      const text = list.join('\\n');
+      copyText(text, cmdMsg);
+    });
+
+    filterInput.addEventListener('input', (e) => {
+      renderCommands(e.target.value);
+    });
+
+    // Initial render
+    renderGlyphs();
+    renderCommands();
+  </script>
+</body>
+</html>

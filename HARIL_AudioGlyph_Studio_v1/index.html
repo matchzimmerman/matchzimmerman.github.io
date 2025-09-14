@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>HARIL AudioGlyph Studio — v1</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header>
+  <h1>HARIL AudioGlyph Studio — v1</h1>
+  <div class="buttons">
+    <button id="loadSamples">Load Samples</button>
+    <label class="filebtn">
+      <input id="fileInput" type="file" accept=".svg" multiple/>
+      Upload SVGs
+    </label>
+    <button id="startEngine">Start Engine</button>
+    <button id="stopEngine">Stop Engine</button>
+    <button id="enableMic">Mic Mode</button>
+    <button id="fullscreen">Fullscreen</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <h2>Audio</h2>
+    <div class="group">
+      <div class="control">
+        <label>BPM <input id="ctlBPM" type="range" min="40" max="160" step="1" value="78"/></label>
+        <span class="val" id="valBPM">78</span>
+      </div>
+      <div class="control">
+        <label>Key
+          <select id="ctlKey">
+            <option>C</option><option>C#</option><option>D</option><option>Eb</option>
+            <option>E</option><option>F</option><option>F#</option><option>G</option>
+            <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+          </select>
+        </label>
+      </div>
+      <div class="control">
+        <label>Scale
+          <select id="ctlScale">
+            <option value="minor">Minor (Aeolian)</option>
+            <option value="dorian">Dorian</option>
+            <option value="pentatonic">Pentatonic</option>
+            <option value="chromatic">Chromatic</option>
+          </select>
+        </label>
+      </div>
+      <div class="control">
+        <label>Melody Density <input id="ctlMelody" type="range" min="0" max="1" step="0.01" value="0.45"/></label>
+        <span class="val" id="valMelody">0.45</span>
+      </div>
+      <div class="control">
+        <label>Drum Density <input id="ctlDrums" type="range" min="0" max="1" step="0.01" value="0.35"/></label>
+        <span class="val" id="valDrums">0.35</span>
+      </div>
+      <div class="control">
+        <label>Space (Echo) <input id="ctlSpace" type="range" min="0" max="1" step="0.01" value="0.3"/></label>
+        <span class="val" id="valSpace">0.3</span>
+      </div>
+      <div class="control">
+        <label>Master Volume <input id="ctlVol" type="range" min="0" max="1" step="0.01" value="0.3"/></label>
+        <span class="val" id="valVol">0.3</span>
+      </div>
+    </div>
+
+    <h2>Visual Mapping</h2>
+    <div class="group">
+      <div class="control">
+        <label>Bass → Scale <input id="mapBassScale" type="range" min="0" max="2" step="0.01" value="1.1"/></label>
+        <span class="val" id="valBassScale">1.1</span>
+      </div>
+      <div class="control">
+        <label>Mid → Stroke <input id="mapMidStroke" type="range" min="0" max="3" step="0.01" value="1.5"/></label>
+        <span class="val" id="valMidStroke">1.5</span>
+      </div>
+      <div class="control">
+        <label>High → Color Chaos <input id="mapHighColor" type="range" min="0" max="1" step="0.01" value="0.35"/></label>
+        <span class="val" id="valHighColor">0.35</span>
+      </div>
+      <div class="control">
+        <label>Displace Strength <input id="mapDisplace" type="range" min="0" max="150" step="1" value="40"/></label>
+        <span class="val" id="valDisplace">40</span>
+      </div>
+      <div class="control">
+        <label>Base Smoothness <input id="ctlSmooth" type="range" min="0.002" max="0.04" step="0.001" value="0.009"/></label>
+        <span class="val" id="valSmooth">0.009</span>
+      </div>
+    </div>
+
+    <h2>Population & Palette</h2>
+    <div class="group">
+      <div class="control">
+        <label>Density <input id="ctlDensity" type="range" min="1" max="48" step="1" value="16"/></label>
+        <span class="val" id="valDensity">16</span>
+      </div>
+      <div class="control">
+        <label>Palette
+          <select id="paletteSelect">
+            <option value="nightfall">Nightfall</option>
+            <option value="embers">Embers</option>
+            <option value="glacier">Glacier</option>
+            <option value="mono">Monochrome</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="note">
+      • Press <b>Start Engine</b> to begin the music core.<br/>
+      • Press <b>Mic Mode</b> to drive visuals by external audio (music/speech).<br/>
+      • Use <b>Load Samples</b> to test without your own SVGs.
+    </div>
+
+    <div id="palette"></div>
+  </aside>
+
+  <section class="stagewrap">
+    <svg id="stage" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+      <defs id="defs"></defs>
+      <rect x="0" y="0" width="1600" height="900" fill="black"/>
+    </svg>
+  </section>
+</main>
+
+<footer>
+  <small>Audio drives the field. Internal synth + drums, or mic-reactive mode. ⌘/Ctrl+L loads samples.</small>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Custom Symbol Keyboard</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: white; text-align: center; padding: 20px; }
+    h2 { color: #fff; }
+    .symbol-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 600px;
+      margin: 20px auto;
+    }
+    .symbol { 
+      display: inline-block; 
+      padding: 15px 25px; 
+      margin: 8px;
+      font-size: 28px; 
+      background: #444; 
+      border-radius: 8px; 
+      cursor: pointer;
+      transition: background 0.2s ease;
+      user-select: none;
+    }
+    .symbol:hover { background: #666; }
+    .copied-message {
+      margin-top: 15px;
+      color: #0f0;
+      font-size: 16px;
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <h2>Custom Symbol Keyboard</h2>
+  <div class="symbol-container">
+    <div class="symbol">π</div>
+    <div class="symbol">°</div>
+    <div class="symbol">✓</div>
+    <div class="symbol">⚡</div>
+    <div class="symbol">☀</div>
+    <div class="symbol">∞</div>
+    <div class="symbol">★</div>
+    <div class="symbol">❤</div>
+    <div class="symbol">♻</div>
+  </div>
+  <div class="copied-message" id="copiedMessage">Copied!</div>
+  <script>
+    const copiedMessage = document.getElementById('copiedMessage');
+    document.querySelectorAll('.symbol').forEach(symbol => {
+      symbol.addEventListener('click', () => {
+        navigator.clipboard.writeText(symbol.textContent);
+        copiedMessage.style.visibility = 'visible';
+        copiedMessage.textContent = 'Copied: ' + symbol.textContent;
+        setTimeout(() => {
+          copiedMessage.style.visibility = 'hidden';
+        }, 1000);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>HARIL AV Lab — v2</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header>
+  <h1>HARIL AV Lab — v2</h1>
+  <div class="buttons">
+    <button id="loadSamples">Load Samples</button>
+    <label class="filebtn">
+      <input id="fileInput" type="file" accept=".svg" multiple/>
+      Upload SVGs
+    </label>
+    <button id="startAudio">Start Audio</button>
+    <button id="stopAudio">Stop Audio</button>
+    <button id="enableMic">Enable Mic React</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <h2>Controls</h2>
+
+    <div class="group">
+      <div class="gtitle">Motion</div>
+      <div class="control">
+        <label>Speed <input id="ctlSpeed" type="range" min="0" max="3" step="0.01" value="0.35"/></label>
+        <span class="val" id="valSpeed">0.35</span>
+      </div>
+      <div class="control sub">
+        <label>Motion Chaos <input id="ctlChaosMotion" type="range" min="0" max="1" step="0.01" value="0.12"/></label>
+        <span class="val" id="valChaosMotion">0.12</span>
+      </div>
+      <div class="control">
+        <label>Smoothness <input id="ctlSmooth" type="range" min="0.001" max="0.04" step="0.001" value="0.008"/></label>
+        <span class="val" id="valSmooth">0.008</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle">Appearance</div>
+      <div class="control">
+        <label>Stroke <input id="ctlStroke" type="range" min="0" max="6" step="0.1" value="1.2"/></label>
+        <span class="val" id="valStroke">1.2</span>
+      </div>
+      <div class="control sub">
+        <label>Stroke Chaos <input id="ctlChaosStroke" type="range" min="0" max="1" step="0.01" value="0.1"/></label>
+        <span class="val" id="valChaosStroke">0.1</span>
+      </div>
+
+      <div class="control">
+        <label>Color Blend <input id="ctlBlend" type="range" min="0" max="1" step="0.001" value="0.25"/></label>
+        <span class="val" id="valBlend">0.25</span>
+      </div>
+      <div class="control sub">
+        <label>Color Chaos <input id="ctlChaosColor" type="range" min="0" max="1" step="0.01" value="0.08"/></label>
+        <span class="val" id="valChaosColor">0.08</span>
+      </div>
+
+      <div class="control">
+        <label>Palette
+          <select id="paletteSelect">
+            <option value="nightfall">Nightfall (deep blues / violet)</option>
+            <option value="embers">Embers (amber / rust / umber)</option>
+            <option value="glacier">Glacier (teal / ice / gray)</option>
+            <option value="mono">Monochrome (off-white)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle">Population</div>
+      <div class="control">
+        <label>Density <input id="ctlDensity" type="range" min="1" max="36" step="1" value="14"/></label>
+        <span class="val" id="valDensity">14</span>
+      </div>
+      <div class="control">
+        <label>Generativeness <input id="ctlGen" type="range" min="0" max="3" step="0.05" value="0.4"/></label>
+        <span class="val" id="valGen">0.4</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="gtitle">Audio</div>
+      <div class="control">
+        <label>Audio Level <input id="ctlAudio" type="range" min="0" max="1" step="0.01" value="0.25"/></label>
+        <span class="val" id="valAudio">0.25</span>
+      </div>
+      <div class="control">
+        <label>Audio Timbre <input id="ctlTimbre" type="range" min="0" max="1" step="0.01" value="0.35"/></label>
+        <span class="val" id="valTimbre">0.35</span>
+      </div>
+    </div>
+
+    <div class="note">
+      • Slower defaults. Chaos appears as a sub-slider under Motion, Stroke, and Color.<br/>
+      • Color blends are subtle multi-stop gradients applied over time.<br/>
+      • Use <b>Load Samples</b> to test quickly.
+    </div>
+
+    <div id="palette"></div>
+  </aside>
+
+  <section class="stagewrap">
+    <svg id="stage" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+      <defs id="defs"></defs>
+      <rect x="0" y="0" width="1600" height="900" fill="black"/>
+    </svg>
+  </section>
+</main>
+
+<footer>
+  <small>HARIL AV Lab v2 — gentler motion, categorized controls, and color blends. ⌘/Ctrl+L loads samples.</small>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

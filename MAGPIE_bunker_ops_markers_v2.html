@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MAGPIE | Amber Terminal Signal Field — Bunker Ops + Markers (v2)</title>
+  <style>
+    :root{ --amber:#ff9d2e; --amber-hi:#ffb347; --grid:#78ff78; --ui:#ff9d2e; --bg:#000; }
+    html,body{height:100%;margin:0;background:#000;color:var(--ui);font:12px/1.25 ui-monospace, monospace;}
+    #wrap{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto;min-height:100vh;}
+    #stage{position:relative;background:#000;min-height:320px;}
+    canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;}
+    #scanlines{pointer-events:none;background:repeating-linear-gradient(to bottom, rgba(255,157,46,0.05) 0 2px, rgba(0,0,0,0) 2px 4px);}  
+    #hints{position:absolute;left:12px;top:12px;opacity:.85}
+    #credits{position:absolute;right:10px;bottom:10px;opacity:.55}
+    #panel{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid rgba(255,157,46,.25);background:linear-gradient(180deg, rgba(255,157,46,.06), rgba(0,0,0,.5));}
+    .group{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    input[type="range"]{accent-color:var(--amber);width:140px}
+    button{background:transparent;color:var(--amber);border:1px solid var(--amber);padding:6px 10px;border-radius:6px;cursor:pointer}
+    button:hover{filter:brightness(1.2)}
+    .win{position:absolute;min-width:240px;max-width:46vw;min-height:120px;background:rgba(0,0,0,0.85);border:1px solid rgba(255,157,46,.35);box-shadow:0 0 0 1px rgba(255,157,46,.12) inset;}
+    .title{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,157,46,.25);padding:6px 8px;background:linear-gradient(180deg, rgba(255,157,46,.08), rgba(0,0,0,.2));cursor:move}
+    .body{padding:8px;max-height:45vh;overflow:auto}
+    #cmd{position:fixed;left:50%;top:14%;transform:translateX(-50%);width:min(720px,86vw);background:#000;border:1px solid rgba(255,157,46,.4);box-shadow:0 10px 30px rgba(0,0,0,.6);display:none}
+    #cmd input{width:100%;box-sizing:border-box;background:#0a0a0a;border:0;color:var(--amber);padding:12px 10px;font:14px ui-monospace, monospace;border-bottom:1px solid rgba(255,157,46,.25)}
+    #cmd ul{list-style:none;margin:0;padding:6px 8px;max-height:50vh;overflow:auto}
+    #cmd li{padding:6px 4px;border-bottom:1px dashed rgba(255,157,46,.2)}
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="lowres"></canvas>
+      <canvas id="hires"></canvas>
+      <div id="scanlines"></div>
+      <div id="hints">[Space]=Pause • [S]=Screenshot • [/]=Commands • [1]=Inspector • [2]=Log • [3]=Comms • [4]=Timeline • [M]=Drop Marker</div>
+      <div id="credits">MAGPIE // SIGNAL-TRACE</div>
+
+      <div class="win" id="win-inspector" style="left:14px; top:60px; display:block">
+        <div class="title"><b>NODE INSPECTOR</b><div class="actions"><button data-close="win-inspector">×</button></div></div>
+        <div class="body mono" id="inspector-body">booting…</div>
+      </div>
+
+      <div class="win" id="win-log" style="right:14px; top:60px; width:380px; display:block">
+        <div class="title"><b>INCIDENT LOG</b><div class="actions"><button data-close="win-log">×</button></div></div>
+        <div class="body mono" id="log-body">— boot
+— linking sensor bus
+— syncing field integrator
+— listening…</div>
+      </div>
+
+      <div class="win" id="win-comms" style="left:14px; bottom:72px; width:420px; display:none">
+        <div class="title"><b>COMMS</b><div class="actions"><button data-close="win-comms">×</button></div></div>
+        <div class="body mono">
+          <div class="tabs">
+            <button data-tab="baun">Baun</button>
+            <button data-tab="cassie">Cassie</button>
+            <button data-tab="mero">Mero</button>
+          </div>
+          <div id="tab-baun">[BAUN] copy that. overlay up. if the tear crosses the ridge again, lock it.
+> set threshold 0.78
+> arm quarantine route R-13
+</div>
+          <div id="tab-cassie" style="display:none">[CASSIE] signal feels human-adjacent. cadence repeats every 13.4s but breath is off. watching.
+> triangulate // pulse-verify
+</div>
+          <div id="tab-mero" style="display:none">[MERO] those aren’t artifacts, they’re recalls. whoever this is— they want us to remember.
+> drop a marker at the quiet node
+</div>
+        </div>
+      </div>
+
+      <div class="win" id="win-time" style="right:14px; bottom:72px; width:320px; display:none">
+        <div class="title"><b>TIMELINE</b><div class="actions"><button data-close="win-time">×</button></div></div>
+        <div class="body mono">
+          t = <span id="tval">0.0</span>
+          <input id="tscrub" type="range" min="0" max="200" step="0.1" value="0" style="width:100%">
+          <div>mode: <b id="timemode">live</b> (toggle with L)</div>
+        </div>
+      </div>
+
+      <div id="cmd" class="win">
+        <input id="cmdin" placeholder="/ commands: toggle inspector|log|channels|timeline · glitch:x · density:x · tempo:x · snapshot · lock · unlock · mark · clear markers · goto #id"/>
+        <ul id="cmdlist"></ul>
+      </div>
+    </div>
+
+    <div id="panel">
+      <div class="group">
+        <label>Glitch</label><input id="glitch" type="range" min="0" max="1" step="0.01" value="0.15"/>
+        <label>Density</label><input id="density" type="range" min="0.2" max="1.2" step="0.01" value="1.0"/>
+        <label>Tempo</label><input id="tempo" type="range" min="0.2" max="2" step="0.01" value="1"/>
+      </div>
+      <div class="group">
+        <button data-toggle="win-inspector">Inspector [1]</button>
+        <button data-toggle="win-log">Log [2]</button>
+        <button data-toggle="win-comms">Comms [3]</button>
+        <button data-toggle="win-time">Timeline [4]</button>
+        <button id="toggle">Pause</button>
+        <button id="boot">Boot</button>
+        <button id="shot">Capture PNG</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const stage = document.getElementById('stage');
+  const s = document.getElementById('lowres');
+  const v = document.getElementById('hires');
+  const ctx = s.getContext('2d');
+  const vtx = v.getContext('2d');
+
+  const glitchCtl = document.getElementById('glitch');
+  const densCtl   = document.getElementById('density');
+  const tempoCtl  = document.getElementById('tempo');
+  const toggleBtn = document.getElementById('toggle');
+  const shotBtn   = document.getElementById('shot');
+  const bootBtn   = document.getElementById('boot');
+
+  // open Inspector & Log by default
+
+  const wins = ['win-inspector','win-log','win-comms','win-time'];
+  wins.forEach(id=>{
+    const el=document.getElementById(id);
+    const title=el.querySelector('.title');
+    let ox=0,oy=0,drag=false;
+    title.addEventListener('pointerdown',e=>{drag=true;ox=e.clientX-el.offsetLeft;oy=e.clientY-el.offsetTop;el.setPointerCapture(e.pointerId)});
+    title.addEventListener('pointermove',e=>{if(!drag)return; el.style.left=(e.clientX-ox)+'px'; el.style.top=(e.clientY-oy)+'px'});
+    title.addEventListener('pointerup',()=>{drag=false});
+    el.querySelectorAll('[data-close]')?.forEach(btn=>btn.addEventListener('click',()=>{el.style.display='none'}));
+    document.querySelector(`[data-toggle="${id}"]`)?.addEventListener('click',()=>{ el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none'});
+  });
+
+  const tval=document.getElementById('tval'); const tscrub=document.getElementById('tscrub'); const timemode=document.getElementById('timemode');
+  let locked=false, liveMode=true, running=true;
+
+  let LW=320, LH=200;
+  function fit(){ const r=stage.getBoundingClientRect(); v.width=r.width*DPR; v.height=r.height*DPR; v.style.width=r.width+'px'; v.style.height=r.height+'px'; s.width=LW; s.height=LH; s.style.width=r.width+'px'; s.style.height=r.height+'px'; vtx.imageSmoothingEnabled=false; }
+  window.addEventListener('resize', fit, {passive:true}); fit();
+  // Failsafe in case stage initially 0px tall
+  if(stage.getBoundingClientRect().height < 50){ setTimeout(()=>{ window.dispatchEvent(new Event('resize')); }, 50); }
+
+  const seed=(Math.random()*1e9)>>>0; function hash(x,y,t){ let h=x*374761393+y*668265263+(t|0)*69069+seed; h=(h^(h>>>13))*1274126177; return ((h^(h>>>16))>>>0)/4294967295; }
+  function smoothstep(a){return a*a*(3-2*a)}
+  function valueNoise(x,y,t){ const xi=Math.floor(x), yi=Math.floor(y); const xf=x-xi, yf=y-yi; const h00=hash(xi,yi,t), h10=hash(xi+1,yi,t), h01=hash(xi,yi+1,t), h11=hash(xi+1,yi+1,t); const u=smoothstep(xf), v=smoothstep(yf); const x1=h00*(1-u)+h10*u; const x2=h01*(1-u)+h11*u; return x1*(1-v)+x2*v; }
+  function fbm(x,y,t){ let a=0,f=1,amp=0.6; for(let o=0;o<4;o++){ a+=valueNoise(x*f,y*f,t)*amp; f*=1.9; amp*=0.5;} return a; }
+  function field(x,y,t){ return fbm(x*0.015,y*0.015,t*0.08); }
+  function curl(x,y,t){ const e=0.5; const n1=field(x,y+e,t), n2=field(x,y-e,t), n3=field(x+e,y,t), n4=field(x-e,y,t); return {x:(n2-n1), y:(n3-n4)}; }
+  function nodeStrength(x,y,t){ const f0=field(x,y,t), f1=field(x+1.7,y+0.9,t), f2=field(x-1.3,y-0.6,t); const agree=1.0-Math.abs(f0-(f1+f2)*0.5); return Math.pow(Math.max(0,agree),2.2); }
+  function glitchMask(x,y,t){ const g=((x-y*1.05)*0.01 + t*0.6)%6.28318; let m=Math.sin(g)*0.5+0.5; return Math.pow(m,8.0); }
+  function amber(a){ a=Math.min(1,Math.max(0,a)); const r=0.6+0.4*a, g=0.25+0.6*a, b=0.0+0.05*a; return [r*255,g*255,b*255,255]; }
+
+  const logBody=document.getElementById('log-body'); function log(line){ logBody.textContent += "\n"+line; logBody.scrollTop=logBody.scrollHeight; }
+  const inspector=document.getElementById('inspector-body');
+
+  const markers=[]; let markerId=1; let autoCooldown=0;
+  function trojanProb(glitchAmt,density){ return Math.max(0, Math.min(1, glitchAmt*0.7 + (1-density)*0.2)); }
+  function localThreat(x,y,t){ const g = glitchMask(x,y,t); const th = trojanProb(parseFloat(glitchCtl.value), parseFloat(densCtl.value)); return Math.max(0, Math.min(1, 0.6*g + 0.6*th)); }
+  function addMarker(x,y,opts={}){ const {auto=false, threat=0} = opts; const id=markerId++; markers.push({id,x,y,threat,auto,ts:Date.now()}); log(`— marker #${id} ${(auto?'[auto] ':'')}@ ${x},${y} threat:${(threat*100).toFixed(0)}%`); renderMarkerList(); return id; }
+  function renderMarkerList(){ const lines = markers.slice(-12).map(m=>`#${m.id}\tpos ${m.x},${m.y}\tthreat ${(m.threat*100).toFixed(0)}%${m.auto?'\t[auto]':''}`).join('\n'); const base = inspector.textContent.split('\n\n-- markers --')[0]; inspector.textContent = base + `\n\n-- markers --\n` + (lines||'(none)'); }
+  function drawMarkers(ctx){ for(const m of markers){ const isThreat=m.threat>0.5; ctx.save(); ctx.strokeStyle=isThreat?'rgba(255,60,60,0.95)':'rgba(255,157,46,0.95)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(m.x,m.y,4,0,Math.PI*2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(m.x-6,m.y); ctx.lineTo(m.x+6,m.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(m.x,m.y-6); ctx.lineTo(m.x,m.y+6); ctx.stroke(); ctx.fillStyle='rgba(255,157,46,0.95)'; ctx.font='8px monospace'; ctx.textBaseline='top'; ctx.fillText('#'+m.id, m.x+6, m.y+6); ctx.restore(); } }
+
+  const cmd=document.getElementById('cmd'); const cmdin=document.getElementById('cmdin'); const cmdlist=document.getElementById('cmdlist');
+  function openCmd(){ cmd.style.display='block'; cmdin.value=''; cmdin.focus(); renderCmdList(''); }
+  function closeCmd(){ cmd.style.display='none'; }
+  cmdin.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ closeCmd(); } if(e.key==='Enter'){ runCmd(cmdin.value.trim()); closeCmd(); }});
+  cmdin.addEventListener('input',()=>renderCmdList(cmdin.value.trim()));
+  function renderCmdList(q){ const options=['toggle inspector','toggle log','toggle channels','toggle timeline','lock','unlock','mark','clear markers','glitch:0.6','glitch:0.1','density:0.9','density:0.5','tempo:1.5','tempo:0.6','snapshot','goto #1','goto #2','boot']; const items=options.filter(o=>o.indexOf(q)>=0); cmdlist.innerHTML = items.map(i=>`<li><b>/${i}</b></li>`).join(''); }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function runCmd(s){ if(!s) return; if(s.startsWith('glitch:')) glitchCtl.value=clamp(parseFloat(s.split(':')[1]),0,1); else if(s.startsWith('density:')) densCtl.value=clamp(parseFloat(s.split(':')[1]),0.2,1.2); else if(s.startsWith('tempo:')) tempoCtl.value=clamp(parseFloat(s.split(':')[1]),0.2,2); else if(s==='toggle inspector') toggleWin('win-inspector'); else if(s==='toggle log') toggleWin('win-log'); else if(s==='toggle channels') toggleWin('win-comms'); else if(s==='toggle timeline') toggleWin('win-time'); else if(s==='snapshot') shotBtn.click(); else if(s==='lock') locked=true; else if(s==='unlock') locked=false; else if(s==='mark') manualMark(); else if(s==='clear markers'){ markers.length=0; log('— cleared markers'); renderMarkerList(); } else if(s.startsWith('goto #')){ const id=parseInt(s.replace('goto #','').trim()); const m=markers.find(mm=>mm.id===id); if(m){ window._track={x:m.x,y:m.y,val:1}; locked=true; log(`— centered on marker #${id}`);} } else if(s==='boot'){ boot(); } }
+  function toggleWin(id){ const el=document.getElementById(id); el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none'; }
+
+  window.addEventListener('keydown',(e)=>{
+    if(e.key===' '){ e.preventDefault(); toggleBtn.click(); }
+    if(e.key==='s' || e.key==='S'){ shotBtn.click(); }
+    if(e.key==='/'){ e.preventDefault(); openCmd(); }
+    if(e.key==='1'){ toggleWin('win-inspector'); }
+    if(e.key==='2'){ toggleWin('win-log'); }
+    if(e.key==='3'){ toggleWin('win-comms'); }
+    if(e.key==='4'){ toggleWin('win-time'); }
+    if(e.key==='m' || e.key==='M'){ manualMark(); }
+    if(e.key==='l' || e.key==='L'){ liveMode=!liveMode; timemode.textContent=liveMode?'live':'scrub'; }
+  });
+
+  function manualMark(){ const t=_nowT; const tx=_track?.x ?? (LW>>1), ty=_track?.y ?? (LH>>1); const threat=localThreat(tx,ty,t); addMarker(tx,ty,{auto:false, threat}); }
+
+  let _nowT=0;
+  function loop(ts){
+    if(!running) return;
+    _nowT = ts*0.001 * parseFloat(tempoCtl.value);
+    const glitchAmt=parseFloat(glitchCtl.value); const density=parseFloat(densCtl.value);
+
+    const img = ctx.getImageData(0,0,LW,LH); const data=img.data; let bx=LW>>1, by=LH>>1, bv=-1;
+    for(let y=0;y<LH;y++){
+      for(let x=0;x<LW;x++){
+        const n = fbm(x*0.015,y*0.015,_nowT*0.08);
+        const f0=field(x,y,_nowT), f1=field(x+1.7,y+0.9,_nowT), f2=field(x-1.3,y-0.6,_nowT);
+        const sN = Math.pow(Math.max(0, 1.0 - Math.abs(f0 - (f1+f2)*0.5)), 2.2);
+        const m = glitchMask(x,y,_nowT) * glitchAmt;
+        let I = 0.65*n + 1.0*sN*density - m*0.6; I = Math.max(0, Math.min(1, I));
+        if(sN>bv){ bv=sN; bx=x; by=y; }
+        const off=(y*LW+x)*4; const c=amber(I); data[off]=c[0]; data[off+1]=c[1]; data[off+2]=c[2]; data[off+3]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+
+    ctx.globalAlpha=0.25; ctx.strokeStyle='rgba(120,255,120,0.6)'; ctx.lineWidth=0.5; const step=16;
+    for(let gx=0; gx<LW; gx+=step){ ctx.beginPath(); for(let y=0;y<LH;y+=2){ const p=curl(gx,y,_nowT*0.8); const wx=gx+p.x*10.0; if(y===0) ctx.moveTo(wx,y); else ctx.lineTo(wx,y);} ctx.stroke(); }
+    for(let gy=0; gy<LH; gy+=step){ ctx.beginPath(); for(let x=0;x<LW;x+=2){ const p=curl(x,gy,_nowT*0.8); const wy=gy+p.y*10.0; if(x===0) ctx.moveTo(x,wy); else ctx.lineTo(x,wy);} ctx.stroke(); }
+    ctx.globalAlpha=1;
+
+    if(!locked){ window._track={x:bx,y:by,val:bv}; }
+    const tx=(window._track?.x)||bx, ty=(window._track?.y)||by, tv=(window._track?.val)||bv;
+
+    if(tv>0.80 && autoCooldown<=0){ const threat=localThreat(tx,ty,_nowT); addMarker(tx,ty,{auto:true, threat}); autoCooldown=120; }
+    autoCooldown = Math.max(0, autoCooldown-1);
+
+    ctx.globalAlpha=0.9; ctx.strokeStyle='rgba(255,157,46,0.9)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(tx-12,ty); ctx.lineTo(tx+12,ty); ctx.stroke(); ctx.beginPath(); ctx.moveTo(tx,ty-12); ctx.lineTo(tx,ty+12); ctx.stroke(); ctx.globalAlpha=1;
+
+    drawMarkers(ctx);
+
+    ctx.fillStyle='rgba(255,157,46,0.95)'; ctx.font='8px monospace'; ctx.textBaseline='top'; ctx.fillText('14:07:32  SYS:MAG-01', 4, 4); ctx.fillText('MAP LAYER: SIGNAL-TRACE', 4, 14);
+    ctx.textBaseline='bottom'; const tp = trojanProb(parseFloat(glitchCtl.value), parseFloat(densCtl.value)); ctx.fillText('TROJAN PULSE PROB: '+tp.toFixed(2)+'   T-CODE: A2.53.91', 4, LH-4);
+
+    vtx.clearRect(0,0,v.width,v.height); vtx.imageSmoothingEnabled=false; vtx.drawImage(s,0,0,v.width,v.height);
+    const grd=vtx.createRadialGradient(v.width*0.5,v.height*0.5,0,v.width*0.5,v.height*0.5,Math.max(v.width,v.height)*0.6); grd.addColorStop(0,'rgba(255,157,46,0.05)'); grd.addColorStop(1,'rgba(0,0,0,0.6)'); vtx.fillStyle=grd; vtx.fillRect(0,0,v.width,v.height);
+
+    const pct=(tv*100).toFixed(1); const base=`lock: ${locked?'ON':'OFF'}\ncoherence: ${pct}%\npos: ${tx},${ty}  (grid ${Math.floor(tx/16)}:${Math.floor(ty/16)})\nmode: ${liveMode?'live':'scrub'}`; inspector.textContent=base; renderMarkerList();
+
+    requestAnimationFrame(loop);
+  }
+
+  function toggleWin(id){ const el=document.getElementById(id); el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none'; }
+  function boot(){ running=true; requestAnimationFrame(loop); }
+  bootBtn.addEventListener('click', boot);
+
+  // start immediately (some browsers throttle, so Boot is also available)
+  requestAnimationFrame(loop);
+
+  // screenshot + pause
+  shotBtn.onclick = ()=>{ const a=document.createElement('a'); a.download='magpie_signal_field.png'; a.href=v.toDataURL('image/png'); a.click(); };
+  toggleBtn.onclick = ()=>{ running = !running; toggleBtn.textContent = running ? 'Pause' : 'Play'; if(running) requestAnimationFrame(loop); };
+})();
+</script>
+</body>
+</html>
