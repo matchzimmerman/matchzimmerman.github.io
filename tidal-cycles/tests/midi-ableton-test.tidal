@@ -1,0 +1,37 @@
+-- FS: Magpie — MIDI routing:
+-- d1 → ch.1  | d2 → ch.2 | d5 (drums) → ch.10
+-- Assumes SuperCollider added a MIDI target named "midi"
+
+-- ACOU_BASS_01 (gm_acoustic_bass vibe)
+-- Phrase approx of: "<36 34, - - [- 36 34 46]>, <- - - [- - [- 36 34 46]], 41 39, [- 44 - 56]>"
+d1 $
+  s "midi"
+  # midichan 1
+  # n "[36 34] ~ ~ [36 34 46]  ~ ~ ~ [36 34 46]  [41 39]  [44 56]"
+  # vel 0.74
+  # legato 1.1
+  -- add one of these if needed:
+  -- # slow 2
+  -- # fast 2
+
+-- ACOU_BASS_02 ("sawtooth square")
+-- Strudel: "[48 - 48 -]*4"  (dashes become rests)
+d2 $
+  s "midi"
+  # midichan 2
+  # n "[48 ~ 48 ~]*4"
+  # vel 0.37
+  # pan 0.438
+  # legato 0.9
+
+-- DRUMS (Roland TR-909 style / GM mapping on ch.10)
+-- lt = 45, rim = 37, hh = 42, oh = 46, bd = 36
+d5 $ stack
+  [ s "midi" # midichan 10 # n "45 45 37 37 45 37"
+  , s "midi" # midichan 10 # n "42*8 46"
+  , s "midi" # midichan 10 # n "36*4"
+  ]
+  # vel 0.414
+
+-- stop all:
+-- :hush
