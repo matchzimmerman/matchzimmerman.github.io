@@ -100,7 +100,6 @@
       linkedin: "https://www.linkedin.com/in/matchzimmerman/",
       instagram: "https://instagram.com/matchzimmerman",
       email: "mailto:mz@matchzimmerman.com",
-      magpie: "https://www.youtube.com/embed/INirwyWH6iY?si=cKcPOYDLWqwhTF7C"
 
     };
 
@@ -116,7 +115,7 @@
       { kind: 'text', text: ' ' },
       { kind: 'text', text: 'in the meantime, you can:'},
       { kind: 'text', text: 'view a video tour of my current Field Station: Magpie art exhibtion'},
-      { kind: 'link', href: LINKS.magpie },
+      { kind: 'embed', videoId: 'INirwyWH6iY' },
       { kind: 'text', text: 'or visit my:' },
       { kind: 'link', text: '_substack', href: LINKS.substack },
       { kind: 'link', text: '_linkedin', href: LINKS.linkedin },
@@ -128,6 +127,20 @@
 
     const out = document.getElementById('output');
     function makeLineEl(kind) { const div = document.createElement('div'); div.className = 'line' + (kind==='link'?' link':''); return div; }
+    function makeLine(kind, text) {
+    if (kind === 'embed') {
+        const div = document.createElement('div');
+        div.innerHTML = `
+            <iframe width="560" height="315"
+                src="https://www.youtube.com/embed/${text}?si=cKcPOYDLWqwhTF7C"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen>
+            </iframe>`;
+        return div;
+    }
+    // existing text + link logic...
+}
     function clearCursors(){ out.querySelectorAll('.cursor').forEach(n=>n.remove()); }
     function addCursor(target){ const c=document.createElement('span'); c.className='cursor'; c.textContent='▌'; target.appendChild(c); }
 
