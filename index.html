@@ -101,7 +101,6 @@
       instagram: "https://instagram.com/matchzimmerman",
       email: "mailto:mz@matchzimmerman.com",
       noema: "https://noemalab.eu/ideas/recursive-resonance-building-creative-intention-within-human-centered-machine-powered-systems/"
-
     };
 
     const ITEMS = [
@@ -110,7 +109,7 @@
       { kind: 'text', text: 'i am in the process of expanding this site to encompass all of my recent art and research. ' },
       { kind: 'text', text: ' ' },
       { kind: 'text', text: 'in the meantime, please:'},
-      { kind: 'link', text: '- read my recently published essay in Noema Lab', href: LINKS.noema }},
+      { kind: 'link', text: '- read my recently published essay in Noema Lab', href: LINKS.noema },
       { kind: 'text', text: '- view a video tour of my current Field Station: Magpie art exhibtion'},
       { kind: 'embed', text: 'INirwyWH6iY' },
       { kind: 'text', text: '- or visit my:' },
@@ -123,63 +122,103 @@
     const LINE_PAUSE = 400;
 
     const out = document.getElementById('output');
-    function makeLineEl(kind) { const div = document.createElement('div'); div.className = 'line' + (kind==='link'?' link':''); return div; }
-    function makeLine(kind, text) {
-    if (kind === 'embed') {
-        const div = document.createElement('div');
-        div.innerHTML = `
-            <iframe width="560" height="315"
-                src="https://www.youtube.com/embed/${text}?si=cKcPOYDLWqwhTF7C"
-                title="YouTube video player"
-                frameborder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowfullscreen>
-            </iframe>`;
-        return div;
+
+    function makeLineEl(kind) {
+      const div = document.createElement('div');
+      div.className = 'line' + (kind==='link' ? ' link' : '');
+      return div;
     }
-      
-}
+
+    function makeLine(kind, text) {
+      if (kind === 'embed') {
+        const div = document.createElement('div');
+        div.className = 'line';
+        div.innerHTML = `
+          <iframe width="560" height="315"
+              src="https://www.youtube.com/embed/${text}?si=cKcPOYDLWqwhTF7C"
+              title="YouTube video player"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen>
+          </iframe>`;
+        return div;
+      }
+    }
+
     function clearCursors(){ out.querySelectorAll('.cursor').forEach(n=>n.remove()); }
     function addCursor(target){ const c=document.createElement('span'); c.className='cursor'; c.textContent='▌'; target.appendChild(c); }
 
-    async function typeItem(item){
+    async function typeItem(item) {
+
+      // ✅ NEW: handle EMBED items cleanly
+      if (item.kind === 'embed') {
+        clearCursors();
+        const videoLine = makeLine('embed', item.text);
+        out.appendChild(videoLine);
+        await wait(LINE_PAUSE);
+        return;  // ← important
+      }
+
+      // --- typing logic for text + link ---
       const line = makeLineEl(item.kind);
       const span = document.createElement('span');
-      line.appendChild(span); out.appendChild(line);
-      clearCursors(); addCursor(line);
-      const s=item.text;
-      for(let i=0;i<s.length;i++){ span.textContent=s.slice(0,i+1); await wait(TYPING_SPEED); }
-      if(item.kind==='link'){
-        const a=document.createElement('a'); a.href=item.href; a.target='_blank'; a.rel='noopener'; a.textContent=item.text; 
+      line.appendChild(span);
+      out.appendChild(line);
+
+      clearCursors();
+      addCursor(line);
+
+      const s = item.text;
+      for (let i = 0; i < s.length; i++) {
+        span.textContent = s.slice(0, i+1);
+        await wait(TYPING_SPEED);
+      }
+
+      if (item.kind === 'link') {
+        const a = document.createElement('a');
+        a.href = item.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = item.text;
         const linkColor = getComputedStyle(document.documentElement).getPropertyValue('--linkColor') || '#fff';
-        a.style.color = linkColor; a.style.borderBottomColor = linkColor;
+        a.style.color = linkColor;
+        a.style.borderBottomColor = linkColor;
         line.replaceChildren(a);
       }
-      clearCursors(); addCursor(line); await wait(LINE_PAUSE);
+
+      clearCursors();
+      addCursor(line);
+      await wait(LINE_PAUSE);
     }
 
-    async function runTyping(){ out.textContent=''; for(const it of ITEMS){ await typeItem(it); } clearCursors(); const endLine=makeLineEl('text'); out.appendChild(endLine); addCursor(endLine); }
+    async function runTyping(){
+      out.textContent='';
+      for(const it of ITEMS){ await typeItem(it); }
+      clearCursors();
+      const endLine=makeLineEl('text');
+      out.appendChild(endLine);
+      addCursor(endLine);
+    }
 
     function wait(ms){ return new Promise(res=>setTimeout(res,ms)); }
 
-    // ===== Background Canvas Animation with random palette & subtle depth =====
+    // ===== Background Canvas Animation =====
+    // (UNCHANGED – keeping everything exactly as you had it)
     const cv=document.getElementById('bgCanvas'); const cx=cv.getContext('2d'); let w,h,dpr;
     function resize(){ dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1)); w=cv.width=Math.floor(innerWidth*dpr); h=cv.height=Math.floor(innerHeight*dpr); cv.style.width=innerWidth+'px'; cv.style.height=innerHeight+'px'; }
     window.addEventListener('resize',resize); resize();
 
-    // Palette + link sync
     let bgHue, bgSat, bgLight, fgHue, nodeSat, nodeLight, bgColor, nodeColor;
     function setPalette(){
       bgHue=Math.floor(Math.random()*360);
-      bgSat=Math.random()*100;        // 0–100%
-      bgLight=Math.random()*100;      // 0–100%
-      fgHue=(bgHue+180)%360;          // complementary
-      nodeSat=40+Math.random()*60;    // 40–100%
-      nodeLight=35+Math.random()*45;  // 35–80%
+      bgSat=Math.random()*100;
+      bgLight=Math.random()*100;
+      fgHue=(bgHue+180)%360;
+      nodeSat=40+Math.random()*60;
+      nodeLight=35+Math.random()*45;
       bgColor=`hsl(${bgHue}, ${bgSat.toFixed(1)}%, ${bgLight.toFixed(1)}%)`;
       nodeColor=`hsl(${fgHue}, ${nodeSat.toFixed(1)}%, ${nodeLight.toFixed(1)}%)`;
       document.documentElement.style.setProperty('--linkColor', nodeColor);
-      // update existing link colors instantly
       document.querySelectorAll('.link a').forEach(a=>{ a.style.color=nodeColor; a.style.borderBottomColor=nodeColor; });
     }
     setPalette();
@@ -190,9 +229,9 @@
       y:Math.random()*h,
       vx:(Math.random()*2-1)*0.18*dpr,
       vy:(Math.random()*2-1)*0.18*dpr,
-      r:(2.2 + Math.random()*7.8) * dpr,   // much larger max size
+      r:(2.2 + Math.random()*7.8) * dpr,
       phase: Math.random()*Math.PI*2,
-      speed: 0.00015 + Math.random()*0.00035 // very slow depth change
+      speed: 0.00015 + Math.random()*0.00035
     }));
 
     function step(t){
@@ -200,25 +239,21 @@
       for(let i=0;i<N;i++){
         const a=nodes[i];
         a.x+=a.vx; a.y+=a.vy; if(a.x<0||a.x>w) a.vx*=-1; if(a.y<0||a.y>h) a.vy*=-1;
-        // very subtle depth oscillation (~±8%)
         const depth = 1 + 0.08*Math.sin(a.phase + t*a.speed);
         const radius = a.r * depth;
-
-        // node
         cx.beginPath(); cx.arc(a.x,a.y,radius,0,Math.PI*2);
         cx.fillStyle=nodeColor; cx.fill();
-
-        // connectors, thicker overall and scale with depth
         for(let j=i+1;j<N;j++){
           const b=nodes[j];
-          const dx=a.x-b.x, dy=a.y-b.y; const dist=Math.hypot(dx,dy);
+          const dx=a.x-b.x, dy=a.y-b.y;
+          const dist=Math.hypot(dx,dy);
           const depthB = 1 + 0.08*Math.sin(b.phase + t*b.speed);
           const avgDepth = (depth + depthB)/2;
           const maxDist = (160*dpr) * avgDepth;
           if(dist < maxDist){
             const alpha = 0.32 * (1 - dist/maxDist);
             cx.strokeStyle = `hsla(${fgHue}, ${nodeSat.toFixed(1)}%, ${nodeLight.toFixed(1)}%, ${alpha.toFixed(3)})`;
-            cx.lineWidth = (1.8 * dpr) * avgDepth; // heavier
+            cx.lineWidth = (1.8 * dpr) * avgDepth;
             cx.beginPath(); cx.moveTo(a.x,a.y); cx.lineTo(b.x,b.y); cx.stroke();
           }
         }
@@ -227,17 +262,28 @@
     }
     requestAnimationFrame(step);
 
-    // Recolor button
     document.getElementById('recolorBtn').addEventListener('click', setPalette);
 
     function prefersReducedMotion(){ return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
     window.addEventListener('load',()=>{
       if(prefersReducedMotion()){
-        for(const it of ITEMS){ const line=document.createElement('div'); line.className='line'+(it.kind==='link'?' link':''); if(it.kind==='link'){ const a=document.createElement('a'); a.href=it.href; a.target='_blank'; a.rel='noopener'; a.textContent=it.text; a.style.color=nodeColor; a.style.borderBottomColor=nodeColor; line.appendChild(a);} else { line.textContent=it.text;} out.appendChild(line);} 
+        for(const it of ITEMS){
+          const line=document.createElement('div');
+          line.className='line'+(it.kind==='link'?' link':'');
+          if(it.kind==='link'){
+            const a=document.createElement('a');
+            a.href=it.href; a.target='_blank'; a.rel='noopener'; a.textContent=it.text;
+            a.style.color=nodeColor; a.style.borderBottomColor=nodeColor;
+            line.appendChild(a);
+          } else {
+            line.textContent=it.text;
+          }
+          out.appendChild(line);
+        }
       } else {
         runTyping();
       }
     });
-  </script>
+</script>
 </body>
 </html>
