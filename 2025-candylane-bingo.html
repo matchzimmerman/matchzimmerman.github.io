@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta
   name="viewport"
-  content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+  content="width=device-width, initial-scale=1.0"
 />
 <title>🎄 ZimSemDem’s 2025 Hersheypark Candylane Bingo 🍫</title>
 
@@ -19,58 +19,49 @@
 
   body {
     margin: 0;
-    padding: 0.75rem 0;
+    padding: 0.75rem;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg);
     color: var(--text);
   }
 
-  /* Shared width for title + board */
   .container {
-    width: 100%;
-    max-width: min(96vw, 520px);
+    max-width: 100%;
     margin: 0 auto;
-    padding: 0 0.5rem;
   }
 
   h1 {
     text-align: center;
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     line-height: 1.3;
-    margin: 0 0 0.6rem;
-
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: clip; /* intentional cut-off = scroll cue */
+    margin: 0 0 0.75rem;
   }
 
   .board {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 0.45rem;
+    gap: 0.4rem;
     width: 100%;
   }
 
   .cell {
     aspect-ratio: 1 / 1;
     background: var(--tile);
-    border-radius: 0.6rem;
-    padding: 0.5rem;
+    border-radius: 0.55rem;
+    padding: 0.35rem;
 
     display: flex;
     align-items: center;
     justify-content: center;
 
     text-align: center;
-    font-size: 0.78rem;
+    font-size: clamp(0.65rem, 2.6vw, 0.85rem);
     line-height: 1.15;
 
     cursor: pointer;
     user-select: none;
 
-    transition:
-      background 0.2s ease,
-      transform 0.08s ease;
+    transition: background 0.2s ease, transform 0.08s ease;
   }
 
   .cell:active {
@@ -104,81 +95,42 @@
 </div>
 
 <footer>
-  Refresh for a new board · Tap squares to mark
+  Tap squares to mark · Refresh for a new board
 </footer>
 
 <script>
-/* ===============================
-   BINGO ITEM POOL
-   =============================== */
+/* ========= ITEM POOL ========= */
 
 const pool = [
-  "Candylane entry arch",
-  "NOEL letters display",
-  "Founder’s Way lights",
-  "Kissing Tower lights",
-  "Boardwalk winter lights",
-  "Midway of Misery holiday décor",
-  "Giant candy sculpture",
-  "Candy-themed light arch",
+  "Candylane entry arch","NOEL letters display","Founder’s Way lights",
+  "Kissing Tower lights","Boardwalk winter lights","Midway of Misery holiday décor",
+  "Giant candy sculpture","Candy-themed light arch",
 
-  "Light-up snowman",
-  "Oversized snowflake lights",
-  "Candy-cane light tunnel",
-  "Christmas tree light display",
-  "Candy-shaped light sculpture",
-  "Holiday light pathway",
-  "Kisses light strands",
-  "Wreath light display",
+  "Light-up snowman","Oversized snowflake lights","Candy-cane light tunnel",
+  "Christmas tree light display","Candy-shaped light sculpture",
+  "Holiday light pathway","Kisses light strands","Wreath light display",
 
-  "Candymonium night ride",
-  "Wild Mouse lights view",
-  "Cocoa Cruiser train",
-  "Laff Trakk exterior glow",
-  "Carrousel holiday lighting",
-  "Ride queue holiday décor",
-  "Closed winter ride sign",
+  "Candymonium night ride","Wild Mouse lights view","Cocoa Cruiser train",
+  "Laff Trakk exterior glow","Carrousel holiday lighting",
+  "Ride queue holiday décor","Closed winter ride sign",
 
-  "Hershey Bar character",
-  "Reese’s character",
-  "Kisses character",
-  "Jolly Rancher character",
-  "Candy character group",
+  "Hershey Bar character","Reese’s character","Kisses character",
+  "Jolly Rancher character","Candy character group",
 
-  "Character wave",
-  "Character dance",
-  "Character photo pose",
-  "Character meet sign",
-  "Character line queue",
+  "Character wave","Character dance","Character photo pose",
+  "Character meet sign","Character line queue",
 
-  "Hot chocolate stand",
-  "Warm pretzel stand",
-  "Seasonal candy dessert",
-  "Holiday menu board",
-  "Free refills station",
+  "Hot chocolate stand","Warm pretzel stand","Seasonal candy dessert",
+  "Holiday menu board","Free refills station",
 
-  "Lost mitten",
-  "Matching family outfits",
-  "Santa photo setup",
-  "Crying baby",
-  "Family argument",
-  "Influencer photo pose",
-  "Dropped food",
-  "Stroller traffic jam",
-  "Overdressed toddler",
-  "Underprepared teenager",
-  "Fogged glasses",
-  "Hot drink spill",
-  "Park map confusion",
-  "Group reunion hug",
-  "Grandparents in tow",
-  "Tired child carry",
-  "Bench rest stop"
+  "Lost mitten","Matching family outfits","Santa photo setup","Crying baby",
+  "Family argument","Influencer photo pose","Dropped food",
+  "Stroller traffic jam","Overdressed toddler","Underprepared teenager",
+  "Fogged glasses","Hot drink spill","Park map confusion",
+  "Group reunion hug","Grandparents in tow","Tired child carry","Bench rest stop"
 ];
 
-/* ===============================
-   HELPERS
-   =============================== */
+/* ========= HELPERS ========= */
 
 function shuffle(arr) {
   return arr
@@ -187,35 +139,33 @@ function shuffle(arr) {
     .map(o => o.v);
 }
 
-/* ===============================
-   BUILD BOARD
-   =============================== */
+/* ========= BUILD BOARD ========= */
 
 const boardEl = document.getElementById("board");
-const boardKey = "candylane-bingo-random";
+const boardKey = "candylane-bingo";
 
 const items = shuffle(pool).slice(0, 24);
-items.splice(12, 0, "FREE"); // center square
+items.splice(12, 0, "FREE");
 
 items.forEach((text, index) => {
   const cell = document.createElement("div");
   cell.className = "cell";
   cell.textContent = text;
 
-  const storageKey = `${boardKey}-${index}`;
+  const key = `${boardKey}-${index}`;
 
   if (text === "FREE") {
     cell.classList.add("free", "marked");
   }
 
-  if (localStorage.getItem(storageKey) === "marked") {
+  if (localStorage.getItem(key) === "marked") {
     cell.classList.add("marked");
   }
 
   cell.addEventListener("click", () => {
     cell.classList.toggle("marked");
     localStorage.setItem(
-      storageKey,
+      key,
       cell.classList.contains("marked") ? "marked" : ""
     );
   });
