@@ -4,49 +4,73 @@
 <meta charset="UTF-8" />
 <meta
   name="viewport"
-  content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
 />
 <title>🎄 ZimSemDem’s 2025 Hersheypark Candylane Bingo 🍫</title>
 
 <style>
+  :root {
+    --bg: #0b1b14;
+    --tile: #173b2a;
+    --marked: #e63946;
+    --free: #457b9d;
+    --text: #ffffff;
+  }
+
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #0b1b14;
-    color: #ffffff;
     margin: 0;
-    padding: 0.75rem;
+    padding: 0.75rem 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* Shared width for title + board */
+  .container {
+    width: 100%;
+    max-width: min(96vw, 520px);
+    margin: 0 auto;
+    padding: 0 0.5rem;
   }
 
   h1 {
     text-align: center;
-    font-size: 1.2rem;
-    margin-bottom: 0.75rem;
+    font-size: 1.15rem;
     line-height: 1.3;
+    margin: 0 0 0.6rem;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip; /* intentional cut-off = scroll cue */
   }
 
   .board {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.45rem;
-
-  width: 100%;
-  max-width: min(96vw, 520px); /* 🔑 key line */
-  margin: 0 auto;
-}
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.45rem;
+    width: 100%;
+  }
 
   .cell {
     aspect-ratio: 1 / 1;
-    background: #173b2a;
-    border-radius: 0.55rem;
+    background: var(--tile);
+    border-radius: 0.6rem;
     padding: 0.5rem;
+
     display: flex;
     align-items: center;
     justify-content: center;
+
     text-align: center;
     font-size: 0.78rem;
+    line-height: 1.15;
+
     cursor: pointer;
     user-select: none;
-    transition: background 0.2s ease, transform 0.1s ease;
+
+    transition:
+      background 0.2s ease,
+      transform 0.08s ease;
   }
 
   .cell:active {
@@ -54,18 +78,18 @@
   }
 
   .cell.marked {
-    background: #e63946;
+    background: var(--marked);
     font-weight: 600;
   }
 
   .cell.free {
-    background: #457b9d;
+    background: var(--free);
     font-weight: 700;
   }
 
   footer {
     text-align: center;
-    margin-top: 0.75rem;
+    margin-top: 0.6rem;
     font-size: 0.7rem;
     opacity: 0.75;
   }
@@ -74,14 +98,20 @@
 
 <body>
 
-<h1>🎄 ZimSemDem’s 2025 Hersheypark Candylane Bingo 🍫</h1>
-<div class="board" id="board"></div>
+<div class="container">
+  <h1>🎄 ZimSemDem’s 2025 Hersheypark Candylane Bingo 🍫</h1>
+  <div class="board" id="board"></div>
+</div>
 
 <footer>
   Refresh for a new board · Tap squares to mark
 </footer>
 
 <script>
+/* ===============================
+   BINGO ITEM POOL
+   =============================== */
+
 const pool = [
   "Candylane entry arch",
   "NOEL letters display",
@@ -146,43 +176,51 @@ const pool = [
   "Bench rest stop"
 ];
 
-function shuffle(array) {
-  return array
-    .map(value => ({ value, sort: Math.random() }))
-    .sort((a, b) => a.sort - b.sort)
-    .map(({ value }) => value);
+/* ===============================
+   HELPERS
+   =============================== */
+
+function shuffle(arr) {
+  return arr
+    .map(v => ({ v, r: Math.random() }))
+    .sort((a, b) => a.r - b.r)
+    .map(o => o.v);
 }
 
-const shuffled = shuffle(pool).slice(0, 24);
-shuffled.splice(12, 0, "FREE");
+/* ===============================
+   BUILD BOARD
+   =============================== */
 
-const board = document.getElementById("board");
-const boardId = "candylane-random-board";
+const boardEl = document.getElementById("board");
+const boardKey = "candylane-bingo-random";
 
-shuffled.forEach((text, index) => {
+const items = shuffle(pool).slice(0, 24);
+items.splice(12, 0, "FREE"); // center square
+
+items.forEach((text, index) => {
   const cell = document.createElement("div");
   cell.className = "cell";
   cell.textContent = text;
 
-  const key = `${boardId}-cell-${index}`;
+  const storageKey = `${boardKey}-${index}`;
 
   if (text === "FREE") {
     cell.classList.add("free", "marked");
   }
 
-  if (localStorage.getItem(key) === "marked") {
+  if (localStorage.getItem(storageKey) === "marked") {
     cell.classList.add("marked");
   }
 
   cell.addEventListener("click", () => {
     cell.classList.toggle("marked");
     localStorage.setItem(
-      key,
+      storageKey,
       cell.classList.contains("marked") ? "marked" : ""
     );
   });
 
-  board.appendChild(cell);
+  boardEl.appendChild(cell);
 });
 </script>
 
