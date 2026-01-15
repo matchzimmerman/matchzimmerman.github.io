@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM</title>
+  <style>
+    html, body { background: #000; color: #fff; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; font-family: monospace; }
+    #start { font-size: 1.2em; border: 1px solid #fff; padding: 10px 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="start">activate magpie hum</div>
+  <script>
+    const startButton = document.getElementById('start');
+    startButton.addEventListener('click', () => {
+      startButton.remove();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Base hum
+      const hum = audioCtx.createOscillator();
+      hum.type = 'sine';
+      hum.frequency.value = 65; // low C
+      const humGain = audioCtx.createGain();
+      humGain.gain.value = 0.08;
+      hum.connect(humGain).connect(audioCtx.destination);
+      hum.start();
+
+      // Random slow noise wash
+      const noise = audioCtx.createBufferSource();
+      const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 5, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      noise.buffer = buffer;
+      noise.loop = true;
+      const noiseFilter = audioCtx.createBiquadFilter();
+      noiseFilter.type = 'lowpass';
+      noiseFilter.frequency.value = 800;
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.value = 0.03;
+      noise.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
+      noise.start();
+
+      // Subtle random LFO modulation
+      const lfo = audioCtx.createOscillator();
+      lfo.frequency.value = 0.03;
+      const lfoGain = audioCtx.createGain();
+      lfoGain.gain.value = 20;
+      lfo.connect(lfoGain).connect(hum.frequency);
+      lfo.start();
+
+      // Evolving gain fluctuation
+      function drift() {
+        const t = audioCtx.currentTime;
+        const target = 0.05 + Math.random() * 0.05;
+        humGain.gain.linearRampToValueAtTime(target, t + 5 + Math.random() * 10);
+        setTimeout(drift, 8000);
+      }
+      drift();
+    });
+  </script>
+</body>
+</html>

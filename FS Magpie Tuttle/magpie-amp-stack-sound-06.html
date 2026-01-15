@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM — v4</title>
+  <style>
+    html, body {
+      background: #000;
+      color: #fff;
+      height: 100%;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+    #start {
+      font-size: 1.2em;
+      border: 1px solid #fff;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">activate amp tower sound</div>
+
+  <script>
+  const startButton = document.getElementById('start');
+  startButton.addEventListener('click', () => {
+    startButton.remove();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    /* --- CONSTANT FUZZ BED --- */
+    // Base hum oscillator
+    const hum = ctx.createOscillator();
+    hum.type = 'sine';
+    hum.frequency.value = 65;
+
+    // Noise layer
+    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuf;
+    noise.loop = true;
+
+    // Lowpass filter for noise
+    const fuzzFilter = ctx.createBiquadFilter();
+    fuzzFilter.type = 'lowpass';
+    fuzzFilter.frequency.value = 1000;
+
+    // WaveShaper for analog-style distortion
+    const shaper = ctx.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; ++i) {
+      const x = (i / 512) - 1;
+      curve[i] = Math.tanh(2.5 * x);
+    }
+    shaper.curve = curve;
+
+    const fuzzGain = ctx.createGain();
+    fuzzGain.gain.value = 0.12;
+
+    hum.connect(fuzzGain);
+    noise.connect(fuzzFilter).connect(fuzzGain);
+    fuzzGain.connect(shaper);
+
+    // Slow modulation for movement
+    const mod = ctx.createOscillator();
+    mod.frequency.value = 0.01;
+    const modGain = ctx.createGain();
+    modGain.gain.value = 300;
+    mod.connect(modGain).connect(fuzzFilter.frequency);
+    mod.start();
+
+    shaper.connect(ctx.destination);
+    hum.start();
+    noise.start();
+
+    /* --- MID BLIP ENGINE --- */
+    const blipGain = ctx.createGain();
+    blipGain.gain.value = 0.09; // louder
+    blipGain.connect(ctx.destination);
+
+    function triggerBlip() {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 200 + Math.random() * 700;
+
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, ctx.currentTime);
+      env.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.01);
+      env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+
+      // Random stereo pan per blip
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = Math.random() * 1.6 - 0.8;
+
+      osc.connect(env).connect(pan).connect(blipGain);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+
+      const next = 150 + Math.random() * 700;
+      setTimeout(triggerBlip, next);
+    }
+    triggerBlip();
+
+    /* --- DIGITAL PROGRESSION ENGINE --- */
+    const progGain = ctx.createGain();
+    progGain.gain.value = 0.12; // louder and clearer
+    progGain.connect(ctx.destination);
+
+    const scale = [0, 3, 5, 7, 10]; // minor pentatonic
+    function playProgression() {
+      const root = 350 + Math.random() * 250;
+      const count = 3 + Math.floor(Math.random() * 4);
+      const interval = 80 + Math.random() * 100;
+
+      for (let i = 0; i < count; i++) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        const note = scale[Math.floor(Math.random() * scale.length)];
+        const freq = root * Math.pow(2, note / 12);
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + (i * interval / 1000));
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, ctx.currentTime + (i * interval / 1000));
+        env.gain.linearRampToValueAtTime(0.1, ctx.currentTime + (i * interval / 1000) + 0.01);
+        env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + (i * interval / 1000) + 0.18);
+
+        const pan = ctx.createStereoPanner();
+        pan.pan.value = Math.random() * 1.8 - 0.9;
+
+        osc.connect(env).connect(pan).connect(progGain);
+        osc.start(ctx.currentTime + (i * interval / 1000));
+        osc.stop(ctx.currentTime + (i * interval / 1000) + 0.2);
+      }
+
+      const wait = 1500 + Math.random() * 4000;
+      setTimeout(playProgression, wait);
+    }
+    playProgression();
+
+    /* --- SLOW OUTPUT MOVEMENT --- */
+    const masterPan = ctx.createStereoPanner();
+    const panLFO = ctx.createOscillator();
+    const panLFOGain = ctx.createGain();
+    panLFO.frequency.value = 0.006;
+    panLFOGain.gain.value = 0.5;
+    panLFO.connect(panLFOGain).connect(masterPan.pan);
+    panLFO.start();
+
+    fuzzGain.disconnect();
+    fuzzGain.connect(masterPan);
+    blipGain.disconnect();
+    blipGain.connect(masterPan);
+    progGain.disconnect();
+    progGain.connect(masterPan);
+    masterPan.connect(ctx.destination);
+  });
+  </script>
+</body>
+</html>

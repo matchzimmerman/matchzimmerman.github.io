@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM — v2</title>
+  <style>
+    html, body {
+      background: #000;
+      color: #fff;
+      height: 100%;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+    #start {
+      font-size: 1.2em;
+      border: 1px solid #fff;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">activate magpie hum</div>
+
+  <script>
+    const startButton = document.getElementById('start');
+    startButton.addEventListener('click', () => {
+      startButton.remove();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      /* --- LOW HUM --- */
+      const hum = audioCtx.createOscillator();
+      hum.type = 'sine';
+      hum.frequency.value = 65;
+      const humGain = audioCtx.createGain();
+      humGain.gain.value = 0.08;
+      hum.connect(humGain).connect(audioCtx.destination);
+      hum.start();
+
+      /* --- SLOW FILTERED NOISE --- */
+      const noise = audioCtx.createBufferSource();
+      const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 5, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      noise.buffer = buffer;
+      noise.loop = true;
+
+      const noiseFilter = audioCtx.createBiquadFilter();
+      noiseFilter.type = 'lowpass';
+      noiseFilter.frequency.value = 800;
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.value = 0.03;
+      noise.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
+      noise.start();
+
+      /* --- LFO FOR HUM DRIFT --- */
+      const lfo = audioCtx.createOscillator();
+      lfo.frequency.value = 0.03;
+      const lfoGain = audioCtx.createGain();
+      lfoGain.gain.value = 20;
+      lfo.connect(lfoGain).connect(hum.frequency);
+      lfo.start();
+
+      /* --- HUM AMPLITUDE DRIFT --- */
+      function drift() {
+        const t = audioCtx.currentTime;
+        const target = 0.05 + Math.random() * 0.05;
+        humGain.gain.linearRampToValueAtTime(target, t + 5 + Math.random() * 10);
+        setTimeout(drift, 8000);
+      }
+      drift();
+
+      /* --- MID-RANGE BLIP ENGINE --- */
+      const blipGain = audioCtx.createGain();
+      blipGain.gain.value = 0.04; // overall level
+      blipGain.connect(audioCtx.destination);
+
+      function triggerBlip() {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+
+        // choose a random pitch around mid-range (200–800 Hz)
+        const base = 220 * Math.pow(2, Math.floor(Math.random() * 4) / 12);
+        osc.frequency.setValueAtTime(base + Math.random() * 200, audioCtx.currentTime);
+
+        // short envelope
+        const env = audioCtx.createGain();
+        env.gain.setValueAtTime(0, audioCtx.currentTime);
+        env.gain.linearRampToValueAtTime(blipGain.gain.value * (0.3 + Math.random() * 0.5), audioCtx.currentTime + 0.02);
+        env.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3 + Math.random() * 0.5);
+
+        osc.connect(env).connect(blipGain);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5 + Math.random() * 0.3);
+
+        // schedule next blip (cluster bursts or single)
+        const next = 200 + Math.random() * 1200;
+        setTimeout(triggerBlip, next);
+      }
+      triggerBlip();
+
+      /* --- OPTIONAL STEREO MOTION --- */
+      const panNode = audioCtx.createStereoPanner();
+      const panLFO = audioCtx.createOscillator();
+      const panLFOGain = audioCtx.createGain();
+      panLFO.frequency.value = 0.01;
+      panLFOGain.gain.value = 0.8;
+      panLFO.connect(panLFOGain).connect(panNode.pan);
+      noiseGain.disconnect();
+      humGain.disconnect();
+      blipGain.disconnect();
+
+      noiseGain.connect(panNode);
+      humGain.connect(panNode);
+      blipGain.connect(panNode);
+      panNode.connect(audioCtx.destination);
+      panLFO.start();
+    });
+  </script>
+</body>
+</html>

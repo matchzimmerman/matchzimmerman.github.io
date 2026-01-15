@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM — v4</title>
+  <style>
+    html,body {
+      background:#000;color:#fff;height:100%;margin:0;
+      display:flex;align-items:center;justify-content:center;
+      font-family:monospace;
+    }
+    #start {
+      border:1px solid #fff;padding:10px 20px;font-size:1.2em;cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">activate magpie hum</div>
+  <script>
+  const startButton=document.getElementById('start');
+  startButton.addEventListener('click',()=>{
+    startButton.remove();
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+
+    /* --- LOW HUM ENGINE --- */
+    function startHum(){
+      const hum=ctx.createOscillator();
+      hum.type='sine';
+      hum.frequency.value=50+Math.random()*30; // subtle pitch variance
+      const gain=ctx.createGain();
+      gain.gain.value=0.05+Math.random()*0.03;
+      hum.connect(gain).connect(ctx.destination);
+      hum.start();
+      // random lifetime 8–20s, fade in/out
+      const now=ctx.currentTime;
+      gain.gain.setValueAtTime(0.0001,now);
+      gain.gain.linearRampToValueAtTime(0.05+Math.random()*0.05,now+3);
+      const dur=8+Math.random()*12;
+      gain.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+      hum.stop(now+dur+0.5);
+      setTimeout(startHum,(dur*1000)+(Math.random()*5000)); // next hum
+    }
+    startHum();
+
+    /* --- AIR / STATIC --- */
+    const noiseBuf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate);
+    const data=noiseBuf.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+    function makeNoise(){
+      const n=ctx.createBufferSource();
+      n.buffer=noiseBuf;n.loop=true;
+      const f=ctx.createBiquadFilter();f.type='lowpass';
+      f.frequency.value=400+Math.random()*800;
+      const g=ctx.createGain();g.gain.value=0.02+Math.random()*0.02;
+      n.connect(f).connect(g).connect(ctx.destination);
+      n.start();
+      const dur=10+Math.random()*15;
+      setTimeout(()=>{n.stop();},dur*1000);
+      setTimeout(makeNoise,(dur*1000)+(Math.random()*5000));
+    }
+    makeNoise();
+
+    /* --- RANDOM ARPEGGIO BURSTS --- */
+    const arpGain=ctx.createGain();arpGain.gain.value=0.04;arpGain.connect(ctx.destination);
+
+    function makeBlip(freq,dur,delay=0){
+      const o=ctx.createOscillator();o.type='sine';o.frequency.value=freq;
+      const g=ctx.createGain();g.gain.setValueAtTime(0.0001,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.07,ctx.currentTime+delay+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+delay+dur);
+      o.connect(g).connect(arpGain);
+      o.start(ctx.currentTime+delay);
+      o.stop(ctx.currentTime+delay+dur);
+    }
+
+    function arpBurst(){
+      const base=400+Math.random()*600; // mid-high band
+      const count=1+Math.floor(Math.random()*4); // 1–4 notes
+      for(let i=0;i<count;i++){
+        const note=base*Math.pow(2,Math.random()*0.25); // small pitch shifts
+        const dur=0.08+Math.random()*0.15;
+        const delay=i*(0.05+Math.random()*0.08);
+        makeBlip(note,dur,delay);
+      }
+      const next=500+Math.random()*3500;
+      setTimeout(arpBurst,next);
+    }
+    arpBurst();
+
+    /* --- SCANNER SWEEPS --- */
+    function scan(){
+      const o=ctx.createOscillator();o.type='sine';
+      const g=ctx.createGain();g.gain.value=0.015;
+      o.connect(g).connect(ctx.destination);
+      const startF=300+Math.random()*400,endF=1000+Math.random()*1200;
+      const dur=0.6+Math.random()*0.6;
+      o.frequency.setValueAtTime(startF,ctx.currentTime);
+      o.frequency.linearRampToValueAtTime(endF,ctx.currentTime+dur);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+dur);
+      o.start();o.stop(ctx.currentTime+dur);
+      setTimeout(scan,15000+Math.random()*15000);
+    }
+    scan();
+  });
+  </script>
+</body>
+</html>

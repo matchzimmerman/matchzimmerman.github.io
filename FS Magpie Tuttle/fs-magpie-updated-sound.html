@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Beacon Sonic — Audio Only</title>
+  <script src="https://cdn.jsdelivr.net/npm/tone@next/build/Tone.js"></script>
+  <style>
+    body {
+      background: #05060a;
+      color: #eaf1ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      font-family: sans-serif;
+    }
+    button {
+      padding: 14px 28px;
+      background: #2a2e40;
+      color: #fff;
+      font-size: 1.1em;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <button id="toggle">Play</button>
+
+  <script>
+  (async()=>{
+    const btn = document.getElementById('toggle');
+
+    const outComp = new Tone.MultibandCompressor({
+      low:{threshold:-30,ratio:2},
+      mid:{threshold:-28,ratio:2},
+      high:{threshold:-32,ratio:2.5}
+    }).toDestination();
+
+    const master = new Tone.Gain(0.9).connect(outComp);
+    const lowpass = new Tone.Filter({frequency:1000,type:'lowpass',Q:1}).connect(master);
+    const verb = new Tone.Reverb({decay:10,wet:0.25}).connect(lowpass);
+    const delay = new Tone.FeedbackDelay({delayTime:0.2,feedback:0.25,wet:0.2}).connect(lowpass);
+
+    const pad = new Tone.PolySynth(Tone.Synth,{
+      oscillator:{type:'sine'},
+      envelope:{attack:4,decay:3,sustain:0.7,release:10}
+    });
+    pad.connect(verb); pad.connect(delay);
+
+    const noise = new Tone.Noise('pink').start();
+    const noiseGain = new Tone.Gain(0.02).connect(verb);
+    noise.connect(noiseGain);
+
+    const frag = new Tone.MetalSynth({
+      frequency:160,
+      envelope:{attack:0.006,decay:1.2,release:0.16},
+      harmonicity:4,modulationIndex:26,resonance:380,octaves:1.1
+    });
+    const fragGain = new Tone.Gain(0.03).connect(lowpass);
+    frag.connect(fragGain); frag.connect(verb);
+
+    const spike = new Tone.MembraneSynth({
+      pitchDecay:0.01,octaves:3,
+      oscillator:{type:'sine'},
+      envelope:{attack:0.001,decay:0.18,sustain:0,release:0.05}
+    }).connect(delay);
+
+    const scale = ['C2','D#2','G2','A#1','F2'];
+    const pick = a => a[Math.floor(Math.random()*a.length)];
+
+    const padLoop = new Tone.Loop(t=>{
+      pad.triggerAttackRelease(pick(scale),'1m',t);
+    },"2m").start(0);
+
+    const fragLoop = new Tone.Loop(t=>{
+      if(Math.random()<0.25) frag.triggerAttackRelease('8n',t);
+    },'4n').start(0);
+
+    const spikeLoop = new Tone.Loop(t=>{
+      if(Math.random()<0.1) spike.triggerAttackRelease('C2','32n',t);
+    },'16n').start(0);
+
+    let playing = false;
+    btn.onclick = async () => {
+      await Tone.start();
+      if (!playing) {
+        Tone.Transport.start();
+        btn.textContent = "Pause";
+      } else {
+        Tone.Transport.pause();
+        btn.textContent = "Play";
+      }
+      playing = !playing;
+    };
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM — v3</title>
+  <style>
+    html, body {
+      background: #000;
+      color: #fff;
+      height: 100%;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+    #start {
+      font-size: 1.2em;
+      border: 1px solid #fff;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">activate magpie tower hum</div>
+
+  <script>
+    const startButton = document.getElementById('start');
+    startButton.addEventListener('click', () => {
+      startButton.remove();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      /* --- BASE HUM --- */
+      const hum = audioCtx.createOscillator();
+      hum.type = 'sine';
+      hum.frequency.value = 65;
+      const humGain = audioCtx.createGain();
+      humGain.gain.value = 0.07;
+      hum.connect(humGain);
+
+      /* --- NOISE TEXTURE --- */
+      const noise = audioCtx.createBufferSource();
+      const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 5, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      noise.buffer = buffer;
+      noise.loop = true;
+      const noiseFilter = audioCtx.createBiquadFilter();
+      noiseFilter.type = 'lowpass';
+      noiseFilter.frequency.value = 1000;
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.value = 0.03;
+      noise.connect(noiseFilter).connect(noiseGain);
+
+      /* --- HUM MODULATION --- */
+      const lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain();
+      lfo.frequency.value = 0.03;
+      lfoGain.gain.value = 15;
+      lfo.connect(lfoGain).connect(hum.frequency);
+      lfo.start();
+
+      function drift() {
+        const t = audioCtx.currentTime;
+        humGain.gain.linearRampToValueAtTime(0.04 + Math.random() * 0.04, t + 5 + Math.random() * 10);
+        setTimeout(drift, 9000);
+      }
+      drift();
+
+      /* --- MID BLIP ENGINE --- */
+      const blipGain = audioCtx.createGain();
+      blipGain.gain.value = 0.04;
+      function triggerBlip() {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 200 + Math.random() * 600;
+        const env = audioCtx.createGain();
+        env.gain.setValueAtTime(0, audioCtx.currentTime);
+        env.gain.linearRampToValueAtTime(0.05 + Math.random() * 0.05, audioCtx.currentTime + 0.02);
+        env.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3 + Math.random() * 0.4);
+        osc.connect(env).connect(blipGain);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+        setTimeout(triggerBlip, 200 + Math.random() * 1000);
+      }
+      triggerBlip();
+
+      /* --- DIGITAL PROGRESSION ENGINE --- */
+      const progGain = audioCtx.createGain();
+      progGain.gain.value = 0.06;
+
+      const scale = [0, 3, 5, 7, 10]; // minor pentatonic offsets
+      function playProgression() {
+        const root = 300 + Math.random() * 200; // base freq
+        const count = 3 + Math.floor(Math.random() * 4); // 3–6 notes
+        const interval = 80 + Math.random() * 120; // note spacing
+
+        for (let i = 0; i < count; i++) {
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sine';
+          const note = scale[Math.floor(Math.random() * scale.length)];
+          const freq = root * Math.pow(2, note / 12);
+          osc.frequency.setValueAtTime(freq, audioCtx.currentTime + (i * interval / 1000));
+
+          const env = audioCtx.createGain();
+          env.gain.setValueAtTime(0, audioCtx.currentTime + (i * interval / 1000));
+          env.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + (i * interval / 1000) + 0.01);
+          env.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + (i * interval / 1000) + 0.15);
+
+          osc.connect(env).connect(progGain);
+          osc.start(audioCtx.currentTime + (i * interval / 1000));
+          osc.stop(audioCtx.currentTime + (i * interval / 1000) + 0.2);
+        }
+
+        // random delay until next sequence
+        const wait = 1500 + Math.random() * 6000;
+        setTimeout(playProgression, wait);
+      }
+      playProgression();
+
+      /* --- OUTPUT / PANNING --- */
+      const pan = audioCtx.createStereoPanner();
+      const panLFO = audioCtx.createOscillator();
+      const panLFOGain = audioCtx.createGain();
+      panLFO.frequency.value = 0.008;
+      panLFOGain.gain.value = 0.9;
+      panLFO.connect(panLFOGain).connect(pan.pan);
+      panLFO.start();
+
+      humGain.connect(pan);
+      noiseGain.connect(pan);
+      blipGain.connect(pan);
+      progGain.connect(pan);
+      pan.connect(audioCtx.destination);
+
+      hum.start();
+      noise.start();
+    });
+  </script>
+</body>
+</html>

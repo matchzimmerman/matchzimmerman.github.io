@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM — v5</title>
+  <style>
+    html,body {
+      background:#000;color:#fff;height:100%;margin:0;
+      display:flex;align-items:center;justify-content:center;
+      font-family:monospace;
+    }
+    #start {
+      border:1px solid #fff;padding:10px 20px;font-size:1.2em;cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">activate magpie hum</div>
+  <script>
+  const startButton=document.getElementById('start');
+  startButton.addEventListener('click',()=>{
+    startButton.remove();
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+
+    /* === SUB-HUM LAYER === */
+    function startHum(){
+      const hum=ctx.createOscillator();
+      hum.type='sine';
+      hum.frequency.value=45+Math.random()*30;
+      const g=ctx.createGain();
+      const now=ctx.currentTime;
+      const fadeIn=2+Math.random()*3;
+      const dur=10+Math.random()*25;
+      g.gain.setValueAtTime(0.0001,now);
+      g.gain.linearRampToValueAtTime(0.05+Math.random()*0.05,now+fadeIn);
+      g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+      hum.connect(g).connect(ctx.destination);
+      hum.start();
+      hum.stop(now+dur+1);
+      setTimeout(startHum,(dur*1000)+(Math.random()*8000));
+    }
+    startHum();
+
+    /* === ATMOSPHERIC NOISE === */
+    const noiseBuf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate);
+    const d=noiseBuf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+
+    function makeNoise(){
+      const n=ctx.createBufferSource();
+      n.buffer=noiseBuf;n.loop=true;
+      const f=ctx.createBiquadFilter();
+      f.type='lowpass';
+      f.frequency.value=300+Math.random()*800;
+      const g=ctx.createGain();
+      g.gain.value=0.02+Math.random()*0.03;
+      n.connect(f).connect(g).connect(ctx.destination);
+      n.start();
+      const dur=20+Math.random()*30;
+      setTimeout(()=>{n.stop();},dur*1000);
+      setTimeout(makeNoise,(dur*1000)+(Math.random()*10000));
+    }
+    makeNoise();
+
+    /* === SIGNAL BLIPS (MID-HIGH) === */
+    const arpGain=ctx.createGain();arpGain.gain.value=0.03;
+    arpGain.connect(ctx.destination);
+
+    function makeBlip(freq,dur,delay=0){
+      const o=ctx.createOscillator();o.type='sine';o.frequency.value=freq;
+      const g=ctx.createGain();
+      g.gain.setValueAtTime(0.0001,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.05,ctx.currentTime+delay+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+delay+dur);
+      o.connect(g).connect(arpGain);
+      o.start(ctx.currentTime+delay);
+      o.stop(ctx.currentTime+delay+dur);
+    }
+
+    function arpBurst(){
+      const base=400+Math.random()*800;
+      const count=1+Math.floor(Math.random()*4);
+      for(let i=0;i<count;i++){
+        const note=base*Math.pow(2,(Math.random()*0.25));
+        const dur=0.07+Math.random()*0.15;
+        const delay=i*(0.06+Math.random()*0.1);
+        makeBlip(note,dur,delay);
+      }
+      // rare random “signal bursts”
+      const next=2000+Math.random()*12000; // much longer gaps
+      setTimeout(arpBurst,next);
+    }
+    arpBurst();
+
+    /* === INTERFERENCE BREAKUPS === */
+    function breakup(){
+      const now=ctx.currentTime;
+      const duration=0.15+Math.random()*0.25;
+      const startFreq=200+Math.random()*1000;
+      const endFreq=startFreq+(Math.random()*400-200);
+      const o=ctx.createOscillator();o.type='square';
+      const g=ctx.createGain();g.gain.value=0.02;
+      o.frequency.setValueAtTime(startFreq,now);
+      o.frequency.linearRampToValueAtTime(endFreq,now+duration);
+      g.gain.exponentialRampToValueAtTime(0.0001,now+duration);
+      o.connect(g).connect(ctx.destination);
+      o.start();o.stop(now+duration);
+      setTimeout(breakup,15000+Math.random()*45000); // very rare
+    }
+    breakup();
+
+    /* === RANDOM SWEEP === */
+    function scan(){
+      const o=ctx.createOscillator();o.type='sine';
+      const g=ctx.createGain();g.gain.value=0.012;
+      o.connect(g).connect(ctx.destination);
+      const s=300+Math.random()*400,e=1000+Math.random()*1000;
+      const dur=0.6+Math.random()*1.0;
+      o.frequency.setValueAtTime(s,ctx.currentTime);
+      o.frequency.linearRampToValueAtTime(e,ctx.currentTime+dur);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+dur);
+      o.start();o.stop(ctx.currentTime+dur);
+      setTimeout(scan,20000+Math.random()*30000);
+    }
+    scan();
+  });
+  </script>
+</body>
+</html>

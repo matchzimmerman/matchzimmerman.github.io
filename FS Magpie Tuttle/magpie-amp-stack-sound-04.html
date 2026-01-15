@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MAGPIE AMP HUM — v3</title>
+  <style>
+    html, body {
+      background: #000;
+      color: #fff;
+      height: 100%;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+    #start {
+      font-size: 1.2em;
+      border: 1px solid #fff;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="start">activate magpie hum</div>
+
+  <script>
+    const startButton = document.getElementById('start');
+    startButton.addEventListener('click', () => {
+      startButton.remove();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      /* === LOW HUM === */
+      const hum = ctx.createOscillator();
+      hum.type = 'sine';
+      hum.frequency.value = 65;
+      const humGain = ctx.createGain();
+      humGain.gain.value = 0.07;
+      hum.connect(humGain).connect(ctx.destination);
+      hum.start();
+
+      /* === FILTERED NOISE === */
+      const noise = ctx.createBufferSource();
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      noise.buffer = buf;
+      noise.loop = true;
+      const nf = ctx.createBiquadFilter();
+      nf.type = 'lowpass';
+      nf.frequency.value = 700;
+      const ng = ctx.createGain();
+      ng.gain.value = 0.03;
+      noise.connect(nf).connect(ng).connect(ctx.destination);
+      noise.start();
+
+      /* === LFO DRIFT === */
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.03;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 20;
+      lfo.connect(lfoGain).connect(hum.frequency);
+      lfo.start();
+
+      /* === MID/HIGH ARPEGGIO ENGINE === */
+      const arpGain = ctx.createGain();
+      arpGain.gain.value = 0.03;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = 1000;
+      filter.Q.value = 2;
+      arpGain.connect(filter).connect(ctx.destination);
+
+      function makeBlip(freq, dur) {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(freq, ctx.currentTime);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+        o.connect(g).connect(arpGain);
+        o.start();
+        o.stop(ctx.currentTime + dur);
+      }
+
+      function burst() {
+        const now = ctx.currentTime;
+        const notes = [0, 3, 5, 7, 10, 12];
+        const base = 300 + Math.random() * 400; // mid band
+        const count = 4 + Math.floor(Math.random() * 6);
+        for (let i = 0; i < count; i++) {
+          const pitch = base * Math.pow(2, notes[Math.floor(Math.random()*notes.length)]/12);
+          const t = now + i * (0.05 + Math.random() * 0.05);
+          setTimeout(() => makeBlip(pitch, 0.1 + Math.random() * 0.2), (t - now) * 1000);
+        }
+        // schedule next burst randomly
+        const next = 1000 + Math.random() * 4000;
+        setTimeout(burst, next);
+      }
+      burst();
+
+      /* === OCCASIONAL "SCANNER" RUN === */
+      function scanSweep() {
+        const o = ctx.createOscillator();
+        o.type = "sine";
+        const g = ctx.createGain();
+        g.gain.value = 0.015;
+        o.connect(g).connect(ctx.destination);
+        o.frequency.setValueAtTime(400, ctx.currentTime);
+        o.frequency.linearRampToValueAtTime(1600, ctx.currentTime + 0.8);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.0);
+        o.start();
+        o.stop(ctx.currentTime + 1.0);
+        setTimeout(scanSweep, 20000 + Math.random() * 15000);
+      }
+      scanSweep();
+    });
+  </script>
+</body>
+</html>
