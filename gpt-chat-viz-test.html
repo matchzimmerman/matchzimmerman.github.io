@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conversational Field</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0b0c0f;
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body>
+
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+/* ============================================================
+   BASIC SCENE SETUP
+   ============================================================ */
+
+document.body.style.margin = "0";
+document.body.style.background = "#0b0c0f";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0c0f);
+
+const camera = new THREE.PerspectiveCamera(
+  55,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  2000
+);
+camera.position.set(8, 6, 14);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio || 1);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.domElement.style.position = "fixed";
+renderer.domElement.style.top = "0";
+renderer.domElement.style.left = "0";
+renderer.domElement.style.zIndex = "0";
+document.body.appendChild(renderer.domElement);
+
+/* ============================================================
+   CONTROLS
+   ============================================================ */
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = true;
+controls.minDistance = 4;
+controls.maxDistance = 80;
+
+/* ============================================================
+   LIGHTING
+   ============================================================ */
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+dir.position.set(5, 10, 7);
+scene.add(dir);
+
+/* ============================================================
+   DATA (LATEST CSV — EMBEDDED)
+   ============================================================ */
+
+const DATA = window.DATA || []; 
+// ⬆️ If you paste the full DATA array above this line,
+// it will be picked up automatically.
+// For GitHub Pages, this is ideal.
+
+/* ============================================================
+   SCALES
+   ============================================================ */
+
+const xScale = 0.25;
+const yScale = 6;
+const zScale = 0.25;
+
+function getY(d) {
+  return (1 - d.repair_rate_20) * yScale;
+}
+
+function getZ(d) {
+  return d.compression_momentum_20 * zScale;
+}
+
+/* ============================================================
+   GEOMETRY GROUPS
+   ============================================================ */
+
+const nodeGroup = new THREE.Group();
+const edgeGroup = new THREE.Group();
+const surfaceGroup = new THREE.Group();
+
+scene.add(nodeGroup);
+scene.add(edgeGroup);
+scene.add(surfaceGroup);
+
+/* ============================================================
+   MATERIALS
+   ============================================================ */
+
+const matUser = new THREE.MeshStandardMaterial({ color: 0x7dd3fc });
+const matAssistant = new THREE.MeshStandardMaterial({ color: 0xa78bfa });
+const matRepair = new THREE.MeshStandardMaterial({ color: 0xfb7185 });
+const matResonance = new THREE.MeshStandardMaterial({ color: 0xfbbf24 });
+
+const surfaceMat = new THREE.MeshStandardMaterial({
+  color: 0x34d399,
+  transparent: true,
+  opacity: 0.22,
+  side: THREE.DoubleSide
+});
+
+/* ============================================================
+   BUILD NODES
+   ============================================================ */
+
+const nodeRadius = 0.08;
+const sphereGeo = new THREE.SphereGeometry(nodeRadius, 16, 16);
+
+const points = [];
+
+DATA.forEach(d => {
+  const x = d.interaction_index * xScale;
+  const y = getY(d);
+  const z = getZ(d);
+
+  const mat =
+    d.resonance_event ? matResonance :
+    d.repair ? matRepair :
+    d.role === "user" ? matUser :
+    matAssistant;
+
+  const mesh = new THREE.Mesh(sphereGeo, mat);
+  mesh.position.set(x, y, z);
+  mesh.userData = d;
+
+  nodeGroup.add(mesh);
+  points.push(mesh.position.clone());
+});
+
+/* ============================================================
+   BUILD SURFACE (QUADS → TRIANGLES)
+   ============================================================ */
+
+for (let i = 0; i < points.length - 3; i += 2) {
+  const p1 = points[i];
+  const p2 = points[i + 1];
+  const p3 = points[i + 3];
+  const p4 = points[i + 2];
+
+  const geo = new THREE.BufferGeometry();
+  const vertices = new Float32Array([
+    p1.x, p1.y, p1.z,
+    p2.x, p2.y, p2.z,
+    p3.x, p3.y, p3.z,
+
+    p1.x, p1.y, p1.z,
+    p3.x, p3.y, p3.z,
+    p4.x, p4.y, p4.z
+  ]);
+
+  geo.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+  geo.computeVertexNormals();
+
+  const mesh = new THREE.Mesh(geo, surfaceMat);
+  surfaceGroup.add(mesh);
+}
+
+/* ============================================================
+   RENDER LOOP
+   ============================================================ */
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+/* ============================================================
+   RESIZE
+   ============================================================ */
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+/* …rest of the JS exactly as sent… */
+
+</script>
+
+</body>
+</html>
