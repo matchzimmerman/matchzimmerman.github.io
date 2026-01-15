@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Emergent Humanity</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+(function () {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // --- Input state ---
+  const keys = {};
+  let pointerDown = false;
+  let pointerX = null;
+  let pointerY = null;
+
+  window.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    if (e.key === ' ') {
+      e.preventDefault();
+      togglePause();
+    }
+    if (paused && (e.key === 'e' || e.key === 'E')) {
+      exportImage();
+    }
+    if (gameOver && (e.key === 'r' || e.key === 'R')) {
+      resetGame();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    keys[e.key] = false;
+  });
+
+  function getPointerPos(evt) {
+    if (evt.touches && evt.touches.length > 0) {
+      return {
+        x: evt.touches[0].clientX,
+        y: evt.touches[0].clientY,
+      };
+    }
+    return { x: evt.clientX, y: evt.clientY };
+  }
+
+  // Undo button hit region (set during draw)
+  let undoRect = null;
+
+  canvas.addEventListener('mousedown', (e) => {
+    const p = getPointerPos(e);
+    // Check undo first
+    if (undoRect &&
+        p.x >= undoRect.x &&
+        p.x <= undoRect.x + undoRect.w &&
+        p.y >= undoRect.y &&
+        p.y <= undoRect.y + undoRect.h) {
+      attemptUndo();
+      pointerDown = false;
+      return;
+    }
+    pointerDown = true;
+    pointerX = p.x;
+    pointerY = p.y;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!pointerDown) return;
+    const p = getPointerPos(e);
+    pointerX = p.x;
+    pointerY = p.y;
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    pointerDown = false;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    pointerDown = false;
+  });
+
+  canvas.addEventListener('touchstart', (e) => {
+    const p = getPointerPos(e);
+    if (undoRect &&
+        p.x >= undoRect.x &&
+        p.x <= undoRect.x + undoRect.w &&
+        p.y >= undoRect.y &&
+        p.y <= undoRect.y + undoRect.h) {
+      attemptUndo();
+      pointerDown = false;
+      return;
+    }
+    pointerDown = true;
+    pointerX = p.x;
+    pointerY = p.y;
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (!pointerDown) return;
+    const p = getPointerPos(e);
+    pointerX = p.x;
+    pointerY = p.y;
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', () => {
+    pointerDown = false;
+  });
+
+  // --- Game / world state ---
+  let lastTime = performance.now();
+  let scrollSpeed = 60; // vertical pixels per second
+  let patterns = [];
+  let patternSpawnTimer = 0;
+  let patternSpawnInterval = 0.8;
+  let elapsedTime = 0;
+  let paused = false;
+  let gameOver = false;
+
+  // Camera & world
+  let cameraX = 0;
+  let cameraVelX = 0;
+  const cameraDamping = 0.9;
+  const cameraMaxSpeed = 600;
+  let worldWidth = canvas.width * 3;
+
+  // Color families
+  const families = ['R', 'Y', 'G', 'B', 'P'];
+  const familyHues = {
+    R: 0,
+    Y: 55,
+    G: 130,
+    B: 210,
+    P: 280
+  };
+
+  // Level system
+  const levels = [
+    { id: 1, targetCount: 5,  threshold: 60 },
+    { id: 2, targetCount: 10, threshold: 65 },
+    { id: 3, targetCount: 15, threshold: 70 },
+    { id: 4, targetCount: 20, threshold: 75 },
+    { id: 5, targetCount: 25, threshold: 80 }
+  ];
+
+  let currentLevelIndex = 0;
+  let patternsCollected = 0;
+  let patternsCollectedThisLevel = 0;
+  let lastAccuracy = null;
+  let undos = 3;
+
+  // Target sequence slots: [{family, hue}]
+  let targetSlots = [];
+
+  // Bands across world for spatial flavor
+  let bands = [];
+
+  // Humanity node (world coordinates)
+  const humanity = {
+    x: 0,
+    y: 0,
+    baseRadius: 18,
+    currentRadius: 18,
+    tailPoints: [],
+    tailMax: 80,
+    collectedSlots: [] // {family, hue}
+  };
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function averageHueFromSlots(slots) {
+    if (!slots.length) return null;
+    let sumX = 0;
+    let sumY = 0;
+    for (const s of slots) {
+      const h = s.hue;
+      const rad = h * Math.PI / 180;
+      sumX += Math.cos(rad);
+      sumY += Math.sin(rad);
+    }
+    const angle = Math.atan2(sumY, sumX);
+    let deg = angle * 180 / Math.PI;
+    if (deg < 0) deg += 360;
+    return deg;
+  }
+
+  function resetHumanityPosition() {
+    humanity.x = worldWidth / 2;
+    humanity.y = canvas.height * 0.65;
+    humanity.tailPoints = [];
+    humanity.collectedSlots = [];
+  }
+
+  function setupBands() {
+    bands = [];
+    const count = families.length;
+    for (let i = 0; i < count; i++) {
+      const family = families[i];
+      const startX = (worldWidth * i) / count;
+      const endX = (worldWidth * (i + 1)) / count;
+      bands.push({
+        family,
+        hue: familyHues[family],
+        centerX: (startX + endX) / 2,
+        width: endX - startX
+      });
+    }
+  }
+
+  function generateTargetSequence(level) {
+    targetSlots = [];
+    const n = level.targetCount;
+    for (let i = 0; i < n; i++) {
+      const family = families[Math.floor(Math.random() * families.length)];
+      const hue = familyHues[family];
+      targetSlots.push({ family, hue });
+    }
+  }
+
+  function resetLevel() {
+    const level = levels[currentLevelIndex];
+    worldWidth = canvas.width * 3;
+    setupBands();
+    patterns = [];
+    patternSpawnTimer = 0;
+    patternsCollectedThisLevel = 0;
+    lastAccuracy = null;
+    undos = 3;
+    elapsedTime = 0;
+    cameraX = Math.max(0, worldWidth / 2 - canvas.width / 2);
+    cameraVelX = 0;
+    resetHumanityPosition();
+    generateTargetSequence(level);
+
+    // Pre-populate some patterns so lateral moves aren't empty
+    for (let i = 0; i < level.targetCount * 3; i++) {
+      spawnPattern(true);
+    }
+  }
+
+  function resetGame() {
+    currentLevelIndex = 0;
+    patternsCollected = 0;
+    gameOver = false;
+    paused = false;
+    resetLevel();
+  }
+
+  function togglePause() {
+    if (gameOver) return;
+    paused = !paused;
+  }
+
+  // Spawn a pattern; if prepopulate is true, randomize y position
+  function spawnPattern(prepopulate = false) {
+    if (!bands.length) setupBands();
+    const band = bands[Math.floor(Math.random() * bands.length)];
+    const x = band.centerX + rand(-band.width * 0.4, band.width * 0.4);
+    const family = band.family;
+    const hue = familyHues[family] + rand(-10, 10);
+    const y = prepopulate ? rand(-canvas.height, canvas.height * 0.4) : -30;
+    const behaviorRand = Math.random();
+
+    patterns.push({
+      x,
+      y,
+      vy: scrollSpeed * rand(0.9, 1.2),
+      radius: rand(6, 12),
+      baseRadius: rand(6, 12),
+      hue,
+      family,
+      life: 0,
+      behaviorType: behaviorRand < 0.6 ? 'fall' : (behaviorRand < 0.85 ? 'sway' : 'cluster'),
+      offsetPhase: rand(0, Math.PI * 2)
+    });
+  }
+
+  function updatePatterns(dt) {
+    const h = canvas.height;
+
+    for (let i = 0; i < patterns.length; i++) {
+      const p = patterns[i];
+
+      if (p.behaviorType === 'sway') {
+        p.x += Math.sin(elapsedTime * 0.8 + p.offsetPhase) * 10 * dt;
+      } else if (p.behaviorType === 'cluster') {
+        const dx = humanity.x - p.x;
+        p.x += dx * 0.1 * dt;
+      }
+
+      p.y += p.vy * dt;
+      p.life = Math.min(1, (p.y + 50) / (h + 50));
+
+      // Merge overlapping patterns a bit
+      for (let j = i + 1; j < patterns.length; j++) {
+        const q = patterns[j];
+        const dx = q.x - p.x;
+        const dy = q.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < p.radius + q.radius) {
+          const areaP = Math.PI * p.radius * p.radius;
+          const areaQ = Math.PI * q.radius * q.radius;
+          const totalArea = areaP + areaQ;
+          p.x = (p.x * areaP + q.x * areaQ) / totalArea;
+          p.y = (p.y * areaP + q.y * areaQ) / totalArea;
+          p.radius = Math.sqrt(totalArea / Math.PI);
+          p.hue = (p.hue + q.hue) / 2;
+          patterns.splice(j, 1);
+          j--;
+        }
+      }
+    }
+
+    patterns = patterns.filter(p => p.y < h + 80);
+  }
+
+  function updateHumanity(dt) {
+    // Organic wobble
+    const wobble = Math.sin(elapsedTime * 3) * 4;
+    humanity.currentRadius = humanity.baseRadius + wobble;
+
+    if (pointerDown && pointerX !== null && pointerY !== null) {
+      const screenX = humanity.x - cameraX;
+      const targetScreenX = pointerX;
+      const targetScreenY = pointerY;
+      const dx = targetScreenX - screenX;
+      const dy = targetScreenY - humanity.y;
+      const followSpeed = 10;
+      humanity.x += dx * followSpeed * dt;
+      humanity.y += dy * followSpeed * dt;
+    }
+
+    // Clamp to world & vertical bounds
+    const minY = canvas.height * 0.3;
+    const maxY = canvas.height * 0.9;
+    humanity.y = Math.max(minY, Math.min(maxY, humanity.y));
+    humanity.x = Math.max(0, Math.min(worldWidth, humanity.x));
+
+    // Tail
+    humanity.tailPoints.push({
+      x: humanity.x,
+      y: humanity.y,
+      hue: humanity.collectedSlots.length
+        ? humanity.collectedSlots[humanity.collectedSlots.length - 1].hue
+        : null
+    });
+    if (humanity.tailPoints.length > humanity.tailMax) {
+      humanity.tailPoints.shift();
+    }
+
+    // Collisions
+    const level = levels[currentLevelIndex];
+    for (let i = patterns.length - 1; i >= 0; i--) {
+      const p = patterns[i];
+      const dx = p.x - humanity.x;
+      const dy = p.y - humanity.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < (p.radius + humanity.currentRadius * 0.7)) {
+        // Only collect if we still have slots to fill
+        if (patternsCollectedThisLevel < level.targetCount) {
+          humanity.collectedSlots.push({ family: p.family, hue: p.hue });
+          patternsCollected++;
+          patternsCollectedThisLevel++;
+        }
+        patterns.splice(i, 1);
+      }
+    }
+
+    // Evaluate when slots filled
+    if (!gameOver && patternsCollectedThisLevel >= level.targetCount) {
+      evaluateLevel();
+    }
+  }
+
+  function updateCamera(dt) {
+    if (pointerDown && pointerX !== null) {
+      const centerX = canvas.width / 2;
+      const delta = pointerX - centerX;
+      const deadzone = canvas.width * 0.08; // softer trigger
+      let accel = 0;
+
+      if (Math.abs(delta) > deadzone) {
+        const sign = delta > 0 ? 1 : -1;
+        const excess = Math.abs(delta) - deadzone;
+        const maxExcess = centerX - deadzone;
+        const norm = Math.min(1, excess / maxExcess);
+        const curved = norm * norm;
+        const maxAccel = 1200;
+        accel = sign * maxAccel * curved;
+      }
+
+      cameraVelX += accel * dt;
+    }
+
+    cameraVelX *= cameraDamping;
+
+    if (cameraVelX > cameraMaxSpeed) cameraVelX = cameraMaxSpeed;
+    if (cameraVelX < -cameraMaxSpeed) cameraVelX = -cameraMaxSpeed;
+
+    cameraX += cameraVelX * dt;
+
+    const maxCam = Math.max(0, worldWidth - canvas.width);
+    if (cameraX < 0) cameraX = 0;
+    if (cameraX > maxCam) cameraX = maxCam;
+  }
+
+  function drawBackgroundFade() {
+    const w = canvas.width;
+    const h = canvas.height;
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(0,0,0,0.98)');
+    grad.addColorStop(0.3, 'rgba(0,0,0,0.6)');
+    grad.addColorStop(0.7, 'rgba(0,0,0,0.7)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.98)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  function drawPatterns() {
+    for (const p of patterns) {
+      const life = p.life;
+      const alpha = 0.2 + life * 0.8;
+      const blur = (1 - life) * 18;
+      const sat = 80;
+      const light = 50;
+
+      const screenX = p.x - cameraX;
+      const screenY = p.y;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowBlur = blur;
+      ctx.shadowColor = `hsla(${p.hue}, ${sat}%, ${light}%, ${alpha})`;
+      ctx.fillStyle = `hsla(${p.hue}, ${sat}%, ${light}%, ${alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(screenX, screenY, p.baseRadius * 1.2, p.baseRadius, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawTail() {
+    const pts = humanity.tailPoints;
+    if (pts.length < 2) return;
+    ctx.save();
+    for (let i = 0; i < pts.length; i++) {
+      const t = i / pts.length;
+      const pt = pts[i];
+      const size = humanity.baseRadius * 0.2 + t * humanity.baseRadius * 0.6;
+      const alpha = t * 0.7;
+      const hue = pt.hue !== null ? pt.hue : (averageHueFromSlots(humanity.collectedSlots) || 200);
+      const screenX = pt.x - cameraX;
+      const screenY = pt.y;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = `hsla(${hue}, 70%, 55%, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawHumanity() {
+    const hue = averageHueFromSlots(humanity.collectedSlots) ?? 210;
+    const screenX = humanity.x - cameraX;
+    const screenY = humanity.y;
+
+    ctx.save();
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = `hsla(${hue}, 80%, 60%, 1)`;
+    ctx.fillStyle = `hsla(${hue}, 80%, 60%, 0.95)`;
+    ctx.beginPath();
+    ctx.ellipse(
+      screenX,
+      screenY,
+      humanity.currentRadius * 1.2,
+      humanity.currentRadius,
+      Math.sin(elapsedTime * 1.3) * 0.4,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Soft glow behind finger to indicate control
+    if (pointerDown && pointerX !== null && pointerY !== null) {
+      const glowGrad = ctx.createRadialGradient(
+        pointerX, pointerY, 0,
+        pointerX, pointerY, 80
+      );
+      glowGrad.addColorStop(0, `rgba(255,255,255,0.0)`);
+      glowGrad.addColorStop(1, `rgba(255,255,255,0.08)`);
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(pointerX, pointerY, 80, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawTopUI() {
+    const w = canvas.width;
+    const barWidth = Math.min(w * 0.8, 620);
+    const barHeight = 14;
+    const padding = 10;
+    const topY = padding + 4;
+    const liveY = topY + barHeight + 8;
+    const x = (w - barWidth) / 2;
+
+    ctx.save();
+    ctx.lineWidth = 1.5;
+
+    // Target spectrum (continuous)
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.strokeRect(x - 2, topY - 2, barWidth + 4, barHeight + 4);
+    if (targetSlots.length > 0) {
+      const gradTarget = ctx.createLinearGradient(x, topY, x + barWidth, topY);
+      const lenT = targetSlots.length;
+      for (let i = 0; i < lenT; i++) {
+        const t = lenT === 1 ? 0.5 : i / (lenT - 1);
+        const hue = targetSlots[i].hue;
+        gradTarget.addColorStop(t, `hsl(${hue}, 80%, 55%)`);
+      }
+      ctx.fillStyle = gradTarget;
+      ctx.fillRect(x, topY, barWidth, barHeight);
+    }
+
+    // Player spectrum (block slots)
+    ctx.strokeRect(x - 2, liveY - 2, barWidth + 4, barHeight + 4);
+    const level = levels[currentLevelIndex];
+    const slotCount = level.targetCount;
+    const slotWidth = barWidth / slotCount;
+
+    for (let i = 0; i < slotCount; i++) {
+      const sx = x + i * slotWidth;
+      const sy = liveY;
+      if (i < humanity.collectedSlots.length) {
+        const hue = humanity.collectedSlots[i].hue;
+        ctx.fillStyle = `hsl(${hue}, 80%, 55%)`;
+      } else {
+        ctx.fillStyle = 'rgba(60,60,70,0.6)';
+      }
+      ctx.fillRect(sx, sy, slotWidth, barHeight);
+
+      // Slot outlines
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.strokeRect(sx, sy, slotWidth, barHeight);
+    }
+
+    // Undo tokens (3)
+    const tokenSize = barHeight;
+    const tokenGap = 4;
+    const totalWidth = tokenSize * 3 + tokenGap * 2;
+    const tokensX = x + barWidth - totalWidth;
+    const tokensY = liveY + barHeight + 8;
+
+    for (let i = 0; i < 3; i++) {
+      const tx = tokensX + i * (tokenSize + tokenGap);
+      const ty = tokensY;
+      if (i < undos) {
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      } else {
+        ctx.fillStyle = 'rgba(80,80,90,0.5)';
+      }
+      ctx.fillRect(tx, ty, tokenSize, tokenSize);
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.strokeRect(tx, ty, tokenSize, tokenSize);
+
+      // Small minus sign
+      ctx.beginPath();
+      const midY = ty + tokenSize / 2;
+      ctx.moveTo(tx + tokenSize * 0.25, midY);
+      ctx.lineTo(tx + tokenSize * 0.75, midY);
+      ctx.stroke();
+    }
+
+    // Set undo hitbox
+    undoRect = {
+      x: tokensX - 4,
+      y: tokensY - 4,
+      w: totalWidth + 8,
+      h: tokenSize + 8
+    };
+
+    ctx.restore();
+  }
+
+  function drawPauseOverlay() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Just softly dim, keep core visuals visible
+    ctx.restore();
+  }
+
+  function drawGameOverOverlay() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const hue = averageHueFromSlots(humanity.collectedSlots) ?? 0;
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = `hsla(${hue}, 80%, 50%, 0.9)`;
+    ctx.fillStyle = `hsla(${hue}, 80%, 50%, 0.9)`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function exportImage() {
+    const dataURL = canvas.toDataURL('image/png');
+    const win = window.open();
+    if (win) {
+      win.document.write(
+        '<img src="' +
+          dataURL +
+          '" style="max-width:100%;height:auto;display:block;margin:0 auto;background:#000;" />'
+      );
+    }
+  }
+
+  function evaluateLevel() {
+    const level = levels[currentLevelIndex];
+    const slotCount = level.targetCount;
+    let matches = 0;
+
+    for (let i = 0; i < slotCount; i++) {
+      const t = targetSlots[i];
+      const u = humanity.collectedSlots[i];
+      if (t && u && t.family === u.family) {
+        matches++;
+      }
+    }
+
+    const percent = (matches / slotCount) * 100;
+    lastAccuracy = percent;
+
+    if (percent >= level.threshold) {
+      // Advance or end
+      if (currentLevelIndex < levels.length - 1) {
+        currentLevelIndex++;
+        resetLevel();
+      } else {
+        gameOver = true;
+      }
+    } else {
+      gameOver = true;
+    }
+  }
+
+  function attemptUndo() {
+    if (undos > 0 && humanity.collectedSlots.length > 0 && !gameOver) {
+      humanity.collectedSlots.pop();
+      undos--;
+      patternsCollected--;
+      patternsCollectedThisLevel--;
+      if (patternsCollectedThisLevel < 0) patternsCollectedThisLevel = 0;
+      if (patternsCollected < 0) patternsCollected = 0;
+    }
+  }
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+
+    if (!paused && !gameOver) {
+      elapsedTime += dt;
+      patternSpawnTimer += dt;
+      if (patternSpawnTimer >= patternSpawnInterval) {
+        patternSpawnTimer = 0;
+        spawnPattern(false);
+      }
+
+      updateCamera(dt);
+      updatePatterns(dt);
+      updateHumanity(dt);
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackgroundFade();
+    drawPatterns();
+    drawTail();
+    drawHumanity();
+    drawTopUI();
+
+    if (paused && !gameOver) {
+      drawPauseOverlay();
+    }
+
+    if (gameOver) {
+      drawGameOverOverlay();
+    }
+  }
+
+  resetGame();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
