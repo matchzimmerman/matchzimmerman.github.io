@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Simulated RCF · 55-pair Human–GPT Thread</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #ffffff; color: #111111; display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 0.6rem 0.9rem; border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 0.8rem; display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; }
+    header .title { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.75rem; }
+    header .meta { opacity: 0.65; font-size: 0.72rem; }
+    main { flex: 1; display: grid; grid-template-columns: 3.2fr 2.1fr; min-height: 0; }
+    #plot-container { min-width: 0; padding: 0.4rem; }
+    #plot { width: 100%; height: 100%; }
+    #side { border-left: 1px solid rgba(0,0,0,0.08); display: flex; flex-direction: column; min-width: 0; background: #fafafa; }
+    #controls { padding: 0.6rem 0.75rem 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.6rem; align-items: end; }
+    .ctrl { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+    .ctrl label { font-size: 0.68rem; opacity: 0.7; letter-spacing: 0.06em; text-transform: uppercase; }
+    .ctrl select { width: 100%; padding: 0.35rem 0.4rem; font-size: 0.78rem; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; background: white; }
+    #side-header { padding: 0.45rem 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.8rem; }
+    #side-header .label { opacity: 0.6; font-size: 0.7rem; }
+    #side-header .value { font-variant-numeric: tabular-nums; margin-top: 0.1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; }
+    .pill { display: inline-flex; gap: 0.35rem; align-items: center; border: 1px solid rgba(0,0,0,0.12); background: rgba(255,255,255,0.7); border-radius: 999px; padding: 0.2rem 0.45rem; font-size: 0.72rem; }
+    .pill b { font-weight: 600; }
+    #transcript { flex: 1; padding: 0.6rem 0.75rem; overflow-y: auto; font-size: 0.78rem; line-height: 1.45; }
+    .pr-block { margin-bottom: 0.75rem; padding-bottom: 0.6rem; border-bottom: 1px dashed rgba(0,0,0,0.1); }
+    .pr-label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; opacity: 0.7; margin-bottom: 0.18rem; }
+    .pr-id { font-weight: 700; }
+    .pr-text { white-space: pre-wrap; }
+    .hint { font-size: 0.68rem; opacity: 0.6; margin-top: 0.2rem; }
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; grid-template-rows: 1.1fr 0.9fr; }
+      #side { border-left: none; border-top: 1px solid rgba(0,0,0,0.08); }
+      #controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="title">Simulated RCF · 55-pair Human–GPT Thread</div>
+      <div class="meta">Simulation generated 2026-01-29T16:49:23.725682+00:00. Click any node. Filters apply to both prompt and response markers.</div>
+    </div>
+    <div class="meta">Drag: orbit · Right-drag: pan · Scroll: zoom</div>
+  </header>
+
+  <main>
+    <section id="plot-container"><div id="plot"></div></section>
+
+    <section id="side">
+      <div id="controls">
+        <div class="ctrl">
+          <label for="phaseFilter">Phase</label>
+          <select id="phaseFilter">
+            <option value="ALL">All</option>
+            <option value="Purpose">Purpose</option><option value="Inquiry">Inquiry</option><option value="Exploration">Exploration</option><option value="Compression">Compression</option><option value="Expansion">Expansion</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label for="orientationFilter">Orientation</label>
+          <select id="orientationFilter">
+            <option value="ALL">All</option>
+            <option value="forward">forward</option><option value="backward">backward</option><option value="recursive">recursive</option><option value="lateral">lateral</option><option value="ambiguous">ambiguous</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label for="roleFilter">GPT Role</label>
+          <select id="roleFilter">
+            <option value="ALL">All</option>
+            <option value="exploratory">exploratory</option><option value="structuring">structuring</option><option value="elaborative">elaborative</option><option value="compressive">compressive</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label for="structureFilter">Introduces Structure</label>
+          <select id="structureFilter">
+            <option value="ALL">All</option>
+            <option value="YES">Yes</option>
+            <option value="NO">No</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="side-header">
+        <div class="label">Selected Exchange</div>
+        <div class="value" id="sel-meta">
+          <span class="pill"><b>ID</b> <span id="sel-id">None</span></span>
+          <span class="pill"><b>Phase</b> <span id="sel-phase">—</span></span>
+          <span class="pill"><b>Orientation</b> <span id="sel-orient">—</span></span>
+          <span class="pill"><b>Conf</b> <span id="sel-conf">—</span></span>
+        </div>
+      </div>
+
+      <div id="transcript">
+        <div class="hint">Synthetic 55-pair conversation. Labels are heuristic to demonstrate parse → label → field.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const exchanges = [{"id": "001", "piece": "Purpose", "interaction_role": {"human": "reflective", "gpt": "exploratory", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[dataset shape] Human: Can we make this practical? [dataset shape] Human: Keep it minimal.", "x": 0.0, "y": 0.0, "tokens": 14}, "response": {"text": "[dataset shape] GPT: We can treat labels as observables. [dataset shape] GPT: Keep the archive read-only. [dataset shape] GPT: Version the schema. [dataset shape] GPT: We can treat labels as observables.", "x": 0.0, "y": 1.0, "tokens": 31}}, {"id": "002", "piece": "Purpose", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: Can we make this practical? [label taxonomy] Human: Keep it minimal.", "x": 1.0, "y": 0.0, "tokens": 14}, "response": {"text": "[label taxonomy] GPT: RCF can encode roles as color. [label taxonomy] GPT: Edges can represent references.", "x": 1.0, "y": 1.0, "tokens": 16}}, {"id": "003", "piece": "Purpose", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[goal definition] Human: Can we make this practical?", "x": 2.0, "y": 0.0, "tokens": 8}, "response": {"text": "[goal definition] GPT: RCF can encode roles as color. [goal definition] GPT: Edges can represent references. [goal definition] GPT: Filters should be fast.", "x": 2.0, "y": 1.0, "tokens": 23}}, {"id": "004", "piece": "Purpose", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.85}, "orientation": "lateral", "signals": {"introduces_structure": true, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: What would you measure first? [label taxonomy] Human: Where does it break?", "x": 3.0, "y": 0.0, "tokens": 15}, "response": {"text": "[label taxonomy] GPT: We can treat labels as observables. [label taxonomy] GPT: Keep the archive read-only. [label taxonomy] GPT: Version the schema. [label taxonomy] GPT: We can treat labels as observables.", "x": 3.0, "y": 1.0, "tokens": 31}}, {"id": "005", "piece": "Purpose", "interaction_role": {"human": "directive", "gpt": "elaborative", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[performance] Human: Can we make this practical? [performance] Human: Keep it minimal.", "x": 4.0, "y": 0.0, "tokens": 12}, "response": {"text": "[performance] GPT: We can treat labels as observables. [performance] GPT: Keep the archive read-only. [performance] GPT: Version the schema.", "x": 4.0, "y": 1.0, "tokens": 19}}, {"id": "006", "piece": "Inquiry", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[export contract] Human: Let\u2019s sanity-check the schema. [export contract] Human: Be strict about provenance. [export contract] Human: Don\u2019t overwrite history.", "x": 5.0, "y": 0.0, "tokens": 20}, "response": {"text": "[export contract] GPT: RCF can encode roles as color. [export contract] GPT: Edges can represent references. [export contract] GPT: Filters should be fast.", "x": 5.0, "y": 1.0, "tokens": 23}}, {"id": "007", "piece": "Inquiry", "interaction_role": {"human": "reflective", "gpt": "exploratory", "confidence": 0.55}, "orientation": "ambiguous", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[edge logic] Human: Let\u2019s sanity-check the schema.", "x": 6.0, "y": 0.0, "tokens": 7}, "response": {"text": "[edge logic] GPT: Use identity-based de-duplication. [edge logic] GPT: Log ingestion decisions. [edge logic] GPT: Export is a specimen.", "x": 6.0, "y": 1.0, "tokens": 19}}, {"id": "008", "piece": "Inquiry", "interaction_role": {"human": "evaluative", "gpt": "structuring", "confidence": 0.62}, "orientation": "ambiguous", "signals": {"introduces_structure": true, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[dataset shape] Human: I\u2019m thinking about lenses. [dataset shape] Human: I want to export a single conversation. [dataset shape] Human: Make it navigable.", "x": 7.0, "y": 0.0, "tokens": 23}, "response": {"text": "[dataset shape] GPT: Start with 3 core metrics. [dataset shape] GPT: Add confidence + ambiguity. [dataset shape] GPT: Separate data from lens.", "x": 7.0, "y": 1.0, "tokens": 22}}, {"id": "009", "piece": "Inquiry", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[export contract] Human: I\u2019m thinking about lenses. [export contract] Human: I want to export a single conversation.", "x": 8.0, "y": 0.0, "tokens": 17}, "response": {"text": "[export contract] GPT: RCF can encode roles as color. [export contract] GPT: Edges can represent references. [export contract] GPT: Filters should be fast.", "x": 8.0, "y": 1.0, "tokens": 23}}, {"id": "010", "piece": "Inquiry", "interaction_role": {"human": "reflective", "gpt": "compressive", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[dataset shape] Human: Let\u2019s sanity-check the schema.", "x": 9.0, "y": 0.0, "tokens": 7}, "response": {"text": "[dataset shape] GPT: Use identity-based de-duplication. [dataset shape] GPT: Log ingestion decisions. [dataset shape] GPT: Export is a specimen.", "x": 9.0, "y": 1.0, "tokens": 19}}, {"id": "011", "piece": "Inquiry", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[redundancy merge] Human: Let\u2019s sanity-check the schema. [redundancy merge] Human: Be strict about provenance.", "x": 10.0, "y": 0.0, "tokens": 14}, "response": {"text": "[redundancy merge] GPT: We can treat labels as observables. [redundancy merge] GPT: Keep the archive read-only.", "x": 10.0, "y": 1.0, "tokens": 16}}, {"id": "012", "piece": "Inquiry", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[confidence handling] Human: Can we make this practical? [confidence handling] Human: Keep it minimal. [confidence handling] Human: I want it to stay falsifiable.", "x": 11.0, "y": 0.0, "tokens": 23}, "response": {"text": "[confidence handling] GPT: Start with 3 core metrics. [confidence handling] GPT: Add confidence + ambiguity. [confidence handling] GPT: Separate data from lens. [confidence handling] GPT: Start with 3 core metrics.", "x": 11.0, "y": 1.0, "tokens": 30}}, {"id": "013", "piece": "Inquiry", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[UI lens filters] Human: Let\u2019s sanity-check the schema. [UI lens filters] Human: Be strict about provenance. [UI lens filters] Human: Don\u2019t overwrite history.", "x": 12.0, "y": 0.0, "tokens": 23}, "response": {"text": "[UI lens filters] GPT: Start with 3 core metrics. [UI lens filters] GPT: Add confidence + ambiguity. [UI lens filters] GPT: Separate data from lens.", "x": 12.0, "y": 1.0, "tokens": 25}}, {"id": "014", "piece": "Inquiry", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[edge logic] Human: What would you measure first?", "x": 13.0, "y": 0.0, "tokens": 8}, "response": {"text": "[edge logic] GPT: Use identity-based de-duplication. [edge logic] GPT: Log ingestion decisions. [edge logic] GPT: Export is a specimen. [edge logic] GPT: Use identity-based de-duplication.", "x": 13.0, "y": 1.0, "tokens": 25}}, {"id": "015", "piece": "Inquiry", "interaction_role": {"human": "reflective", "gpt": "elaborative", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[performance] Human: Can we make this practical? [performance] Human: Keep it minimal.", "x": 14.0, "y": 0.0, "tokens": 12}, "response": {"text": "[performance] GPT: RCF can encode roles as color. [performance] GPT: Edges can represent references. [performance] GPT: Filters should be fast.", "x": 14.0, "y": 1.0, "tokens": 20}}, {"id": "016", "piece": "Inquiry", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[confidence handling] Human: Let\u2019s sanity-check the schema. [confidence handling] Human: Be strict about provenance. [confidence handling] Human: Don\u2019t overwrite history.", "x": 15.0, "y": 0.0, "tokens": 20}, "response": {"text": "[confidence handling] GPT: We can treat labels as observables. [confidence handling] GPT: Keep the archive read-only. [confidence handling] GPT: Version the schema. [confidence handling] GPT: We can treat labels as observables.", "x": 15.0, "y": 1.0, "tokens": 31}}, {"id": "017", "piece": "Inquiry", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[RCF geometry] Human: I\u2019m thinking about lenses. [RCF geometry] Human: I want to export a single conversation.", "x": 16.0, "y": 0.0, "tokens": 17}, "response": {"text": "[RCF geometry] GPT: We can treat labels as observables. [RCF geometry] GPT: Keep the archive read-only.", "x": 16.0, "y": 1.0, "tokens": 16}}, {"id": "018", "piece": "Exploration", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[performance] Human: What would you measure first?", "x": 17.0, "y": 0.0, "tokens": 7}, "response": {"text": "[performance] GPT: RCF can encode roles as color. [performance] GPT: Edges can represent references.", "x": 17.0, "y": 1.0, "tokens": 14}}, {"id": "019", "piece": "Exploration", "interaction_role": {"human": "evaluative", "gpt": "structuring", "confidence": 0.85}, "orientation": "lateral", "signals": {"introduces_structure": true, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[redundancy merge] Human: Can we make this practical? [redundancy merge] Human: Keep it minimal. [redundancy merge] Human: I want it to stay falsifiable.", "x": 18.0, "y": 0.0, "tokens": 23}, "response": {"text": "[redundancy merge] GPT: RCF can encode roles as color. [redundancy merge] GPT: Edges can represent references.", "x": 18.0, "y": 1.0, "tokens": 16}}, {"id": "020", "piece": "Exploration", "interaction_role": {"human": "directive", "gpt": "exploratory", "confidence": 0.55}, "orientation": "ambiguous", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[dataset shape] Human: Let\u2019s sanity-check the schema. [dataset shape] Human: Be strict about provenance.", "x": 19.0, "y": 0.0, "tokens": 14}, "response": {"text": "[dataset shape] GPT: Start with 3 core metrics. [dataset shape] GPT: Add confidence + ambiguity. [dataset shape] GPT: Separate data from lens.", "x": 19.0, "y": 1.0, "tokens": 22}}, {"id": "021", "piece": "Exploration", "interaction_role": {"human": "directive", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[redundancy merge] Human: I\u2019m thinking about lenses. [redundancy merge] Human: I want to export a single conversation.", "x": 20.0, "y": 0.0, "tokens": 17}, "response": {"text": "[redundancy merge] GPT: We can treat labels as observables. [redundancy merge] GPT: Keep the archive read-only.", "x": 20.0, "y": 1.0, "tokens": 16}}, {"id": "022", "piece": "Exploration", "interaction_role": {"human": "directive", "gpt": "elaborative", "confidence": 0.78}, "orientation": "recursive", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": true, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: I\u2019m thinking about lenses. [label taxonomy] Human: I want to export a single conversation.", "x": 21.0, "y": 0.0, "tokens": 17}, "response": {"text": "[label taxonomy] GPT: Start with 3 core metrics. [label taxonomy] GPT: Add confidence + ambiguity. [label taxonomy] GPT: Separate data from lens.", "x": 21.0, "y": 1.0, "tokens": 22}}, {"id": "023", "piece": "Exploration", "interaction_role": {"human": "reflective", "gpt": "compressive", "confidence": 0.85}, "orientation": "recursive", "signals": {"introduces_structure": true, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[confidence handling] Human: Let\u2019s sanity-check the schema. [confidence handling] Human: Be strict about provenance.", "x": 22.0, "y": 0.0, "tokens": 14}, "response": {"text": "[confidence handling] GPT: Use identity-based de-duplication. [confidence handling] GPT: Log ingestion decisions. [confidence handling] GPT: Export is a specimen.", "x": 22.0, "y": 1.0, "tokens": 19}}, {"id": "024", "piece": "Exploration", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[redundancy merge] Human: I\u2019m thinking about lenses. [redundancy merge] Human: I want to export a single conversation. [redundancy merge] Human: Make it navigable.", "x": 23.0, "y": 0.0, "tokens": 23}, "response": {"text": "[redundancy merge] GPT: We can treat labels as observables. [redundancy merge] GPT: Keep the archive read-only. [redundancy merge] GPT: Version the schema.", "x": 23.0, "y": 1.0, "tokens": 22}}, {"id": "025", "piece": "Exploration", "interaction_role": {"human": "reflective", "gpt": "exploratory", "confidence": 0.78}, "orientation": "recursive", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[edge logic] Human: Let\u2019s sanity-check the schema. [edge logic] Human: Be strict about provenance. [edge logic] Human: Don\u2019t overwrite history.", "x": 24.0, "y": 0.0, "tokens": 20}, "response": {"text": "[edge logic] GPT: Use identity-based de-duplication. [edge logic] GPT: Log ingestion decisions.", "x": 24.0, "y": 1.0, "tokens": 12}}, {"id": "026", "piece": "Exploration", "interaction_role": {"human": "inquiry", "gpt": "compressive", "confidence": 0.85}, "orientation": "recursive", "signals": {"introduces_structure": true, "references_prior_turn": true, "references_earlier_conversation": true, "compresses_information": true}, "prompt": {"text": "[edge logic] Human: Let\u2019s sanity-check the schema. [edge logic] Human: Be strict about provenance. [edge logic] Human: Don\u2019t overwrite history.", "x": 25.0, "y": 0.0, "tokens": 20}, "response": {"text": "[edge logic] GPT: Use identity-based de-duplication. [edge logic] GPT: Log ingestion decisions. [edge logic] GPT: Export is a specimen.", "x": 25.0, "y": 1.0, "tokens": 19}}, {"id": "027", "piece": "Exploration", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.85}, "orientation": "recursive", "signals": {"introduces_structure": true, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: Can we make this practical? [label taxonomy] Human: Keep it minimal.", "x": 26.0, "y": 0.0, "tokens": 14}, "response": {"text": "[label taxonomy] GPT: Start with 3 core metrics. [label taxonomy] GPT: Add confidence + ambiguity. [label taxonomy] GPT: Separate data from lens.", "x": 26.0, "y": 1.0, "tokens": 22}}, {"id": "028", "piece": "Exploration", "interaction_role": {"human": "reflective", "gpt": "elaborative", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[redundancy merge] Human: Can we make this practical? [redundancy merge] Human: Keep it minimal.", "x": 27.0, "y": 0.0, "tokens": 14}, "response": {"text": "[redundancy merge] GPT: We can treat labels as observables. [redundancy merge] GPT: Keep the archive read-only. [redundancy merge] GPT: Version the schema.", "x": 27.0, "y": 1.0, "tokens": 22}}, {"id": "029", "piece": "Exploration", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: What would you measure first? [label taxonomy] Human: Where does it break? [label taxonomy] Human: How do we avoid overreach?", "x": 28.0, "y": 0.0, "tokens": 23}, "response": {"text": "[label taxonomy] GPT: We can treat labels as observables. [label taxonomy] GPT: Keep the archive read-only. [label taxonomy] GPT: Version the schema.", "x": 28.0, "y": 1.0, "tokens": 22}}, {"id": "030", "piece": "Exploration", "interaction_role": {"human": "inquiry", "gpt": "elaborative", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[performance] Human: Let\u2019s sanity-check the schema. [performance] Human: Be strict about provenance.", "x": 29.0, "y": 0.0, "tokens": 12}, "response": {"text": "[performance] GPT: Start with 3 core metrics. [performance] GPT: Add confidence + ambiguity. [performance] GPT: Separate data from lens.", "x": 29.0, "y": 1.0, "tokens": 19}}, {"id": "031", "piece": "Exploration", "interaction_role": {"human": "reflective", "gpt": "elaborative", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[export contract] Human: What would you measure first? [export contract] Human: Where does it break? [export contract] Human: How do we avoid overreach?", "x": 30.0, "y": 0.0, "tokens": 23}, "response": {"text": "[export contract] GPT: We can treat labels as observables. [export contract] GPT: Keep the archive read-only. [export contract] GPT: Version the schema.", "x": 30.0, "y": 1.0, "tokens": 22}}, {"id": "032", "piece": "Exploration", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.85}, "orientation": "lateral", "signals": {"introduces_structure": true, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: Let\u2019s sanity-check the schema. [label taxonomy] Human: Be strict about provenance.", "x": 31.0, "y": 0.0, "tokens": 14}, "response": {"text": "[label taxonomy] GPT: We can treat labels as observables. [label taxonomy] GPT: Keep the archive read-only. [label taxonomy] GPT: Version the schema.", "x": 31.0, "y": 1.0, "tokens": 22}}, {"id": "033", "piece": "Exploration", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[dataset shape] Human: What would you measure first?", "x": 32.0, "y": 0.0, "tokens": 8}, "response": {"text": "[dataset shape] GPT: Use identity-based de-duplication. [dataset shape] GPT: Log ingestion decisions. [dataset shape] GPT: Export is a specimen.", "x": 32.0, "y": 1.0, "tokens": 19}}, {"id": "034", "piece": "Compression", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.85}, "orientation": "backward", "signals": {"introduces_structure": true, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[goal definition] Human: I\u2019m thinking about lenses.", "x": 33.0, "y": 0.0, "tokens": 7}, "response": {"text": "[goal definition] GPT: Start with 3 core metrics. [goal definition] GPT: Add confidence + ambiguity. [goal definition] GPT: Separate data from lens. [goal definition] GPT: Start with 3 core metrics.", "x": 33.0, "y": 1.0, "tokens": 30}}, {"id": "035", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.78}, "orientation": "recursive", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": true, "compresses_information": true}, "prompt": {"text": "[export contract] Human: Let\u2019s sanity-check the schema. [export contract] Human: Be strict about provenance.", "x": 34.0, "y": 0.0, "tokens": 14}, "response": {"text": "[export contract] GPT: Start with 3 core metrics. [export contract] GPT: Add confidence + ambiguity. [export contract] GPT: Separate data from lens.", "x": 34.0, "y": 1.0, "tokens": 22}}, {"id": "036", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[UI lens filters] Human: I\u2019m thinking about lenses.", "x": 35.0, "y": 0.0, "tokens": 8}, "response": {"text": "[UI lens filters] GPT: Start with 3 core metrics. [UI lens filters] GPT: Add confidence + ambiguity. [UI lens filters] GPT: Separate data from lens.", "x": 35.0, "y": 1.0, "tokens": 25}}, {"id": "037", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.85}, "orientation": "backward", "signals": {"introduces_structure": true, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[dataset shape] Human: What would you measure first? [dataset shape] Human: Where does it break? [dataset shape] Human: How do we avoid overreach?", "x": 36.0, "y": 0.0, "tokens": 23}, "response": {"text": "[dataset shape] GPT: Start with 3 core metrics. [dataset shape] GPT: Add confidence + ambiguity. [dataset shape] GPT: Separate data from lens. [dataset shape] GPT: Start with 3 core metrics.", "x": 36.0, "y": 1.0, "tokens": 30}}, {"id": "038", "piece": "Compression", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.85}, "orientation": "recursive", "signals": {"introduces_structure": true, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[redundancy merge] Human: Can we make this practical?", "x": 37.0, "y": 0.0, "tokens": 8}, "response": {"text": "[redundancy merge] GPT: Use identity-based de-duplication. [redundancy merge] GPT: Log ingestion decisions. [redundancy merge] GPT: Export is a specimen.", "x": 37.0, "y": 1.0, "tokens": 19}}, {"id": "039", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[dataset shape] Human: Can we make this practical?", "x": 38.0, "y": 0.0, "tokens": 8}, "response": {"text": "[dataset shape] GPT: We can treat labels as observables. [dataset shape] GPT: Keep the archive read-only. [dataset shape] GPT: Version the schema.", "x": 38.0, "y": 1.0, "tokens": 22}}, {"id": "040", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "compressive", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[UI lens filters] Human: I\u2019m thinking about lenses. [UI lens filters] Human: I want to export a single conversation.", "x": 39.0, "y": 0.0, "tokens": 19}, "response": {"text": "[UI lens filters] GPT: RCF can encode roles as color. [UI lens filters] GPT: Edges can represent references. [UI lens filters] GPT: Filters should be fast. [UI lens filters] GPT: RCF can encode roles as color.", "x": 39.0, "y": 1.0, "tokens": 36}}, {"id": "041", "piece": "Compression", "interaction_role": {"human": "evaluative", "gpt": "elaborative", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[goal definition] Human: Can we make this practical? [goal definition] Human: Keep it minimal.", "x": 40.0, "y": 0.0, "tokens": 14}, "response": {"text": "[goal definition] GPT: Use identity-based de-duplication. [goal definition] GPT: Log ingestion decisions. [goal definition] GPT: Export is a specimen. [goal definition] GPT: Use identity-based de-duplication.", "x": 40.0, "y": 1.0, "tokens": 25}}, {"id": "042", "piece": "Compression", "interaction_role": {"human": "directive", "gpt": "structuring", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[dataset shape] Human: I\u2019m thinking about lenses. [dataset shape] Human: I want to export a single conversation.", "x": 41.0, "y": 0.0, "tokens": 17}, "response": {"text": "[dataset shape] GPT: We can treat labels as observables. [dataset shape] GPT: Keep the archive read-only.", "x": 41.0, "y": 1.0, "tokens": 16}}, {"id": "043", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.55}, "orientation": "ambiguous", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[label taxonomy] Human: Can we make this practical?", "x": 42.0, "y": 0.0, "tokens": 8}, "response": {"text": "[label taxonomy] GPT: Start with 3 core metrics. [label taxonomy] GPT: Add confidence + ambiguity. [label taxonomy] GPT: Separate data from lens.", "x": 42.0, "y": 1.0, "tokens": 22}}, {"id": "044", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "elaborative", "confidence": 0.55}, "orientation": "ambiguous", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[UI lens filters] Human: Let\u2019s sanity-check the schema. [UI lens filters] Human: Be strict about provenance.", "x": 43.0, "y": 0.0, "tokens": 16}, "response": {"text": "[UI lens filters] GPT: Start with 3 core metrics. [UI lens filters] GPT: Add confidence + ambiguity. [UI lens filters] GPT: Separate data from lens.", "x": 43.0, "y": 1.0, "tokens": 25}}, {"id": "045", "piece": "Compression", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.78}, "orientation": "backward", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[goal definition] Human: What would you measure first?", "x": 44.0, "y": 0.0, "tokens": 8}, "response": {"text": "[goal definition] GPT: RCF can encode roles as color. [goal definition] GPT: Edges can represent references.", "x": 44.0, "y": 1.0, "tokens": 16}}, {"id": "046", "piece": "Expansion", "interaction_role": {"human": "inquiry", "gpt": "elaborative", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[export contract] Human: What would you measure first? [export contract] Human: Where does it break? [export contract] Human: How do we avoid overreach?", "x": 45.0, "y": 0.0, "tokens": 23}, "response": {"text": "[export contract] GPT: Start with 3 core metrics. [export contract] GPT: Add confidence + ambiguity. [export contract] GPT: Separate data from lens.", "x": 45.0, "y": 1.0, "tokens": 22}}, {"id": "047", "piece": "Expansion", "interaction_role": {"human": "inquiry", "gpt": "elaborative", "confidence": 0.78}, "orientation": "recursive", "signals": {"introduces_structure": false, "references_prior_turn": true, "references_earlier_conversation": true, "compresses_information": false}, "prompt": {"text": "[label taxonomy] Human: Can we make this practical? [label taxonomy] Human: Keep it minimal. [label taxonomy] Human: I want it to stay falsifiable.", "x": 46.0, "y": 0.0, "tokens": 23}, "response": {"text": "[label taxonomy] GPT: Start with 3 core metrics. [label taxonomy] GPT: Add confidence + ambiguity. [label taxonomy] GPT: Separate data from lens.", "x": 46.0, "y": 1.0, "tokens": 22}}, {"id": "048", "piece": "Expansion", "interaction_role": {"human": "directive", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[confidence handling] Human: I\u2019m thinking about lenses. [confidence handling] Human: I want to export a single conversation.", "x": 47.0, "y": 0.0, "tokens": 17}, "response": {"text": "[confidence handling] GPT: We can treat labels as observables. [confidence handling] GPT: Keep the archive read-only. [confidence handling] GPT: Version the schema.", "x": 47.0, "y": 1.0, "tokens": 22}}, {"id": "049", "piece": "Expansion", "interaction_role": {"human": "inquiry", "gpt": "compressive", "confidence": 0.85}, "orientation": "forward", "signals": {"introduces_structure": true, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": true}, "prompt": {"text": "[UI lens filters] Human: I\u2019m thinking about lenses. [UI lens filters] Human: I want to export a single conversation.", "x": 48.0, "y": 0.0, "tokens": 19}, "response": {"text": "[UI lens filters] GPT: Start with 3 core metrics. [UI lens filters] GPT: Add confidence + ambiguity. [UI lens filters] GPT: Separate data from lens.", "x": 48.0, "y": 1.0, "tokens": 25}}, {"id": "050", "piece": "Expansion", "interaction_role": {"human": "directive", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[redundancy merge] Human: Let\u2019s sanity-check the schema. [redundancy merge] Human: Be strict about provenance. [redundancy merge] Human: Don\u2019t overwrite history.", "x": 49.0, "y": 0.0, "tokens": 20}, "response": {"text": "[redundancy merge] GPT: Use identity-based de-duplication. [redundancy merge] GPT: Log ingestion decisions.", "x": 49.0, "y": 1.0, "tokens": 12}}, {"id": "051", "piece": "Expansion", "interaction_role": {"human": "inquiry", "gpt": "exploratory", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[goal definition] Human: Can we make this practical?", "x": 50.0, "y": 0.0, "tokens": 8}, "response": {"text": "[goal definition] GPT: Start with 3 core metrics. [goal definition] GPT: Add confidence + ambiguity. [goal definition] GPT: Separate data from lens.", "x": 50.0, "y": 1.0, "tokens": 22}}, {"id": "052", "piece": "Expansion", "interaction_role": {"human": "reflective", "gpt": "elaborative", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[UI lens filters] Human: What would you measure first? [UI lens filters] Human: Where does it break?", "x": 51.0, "y": 0.0, "tokens": 17}, "response": {"text": "[UI lens filters] GPT: RCF can encode roles as color. [UI lens filters] GPT: Edges can represent references.", "x": 51.0, "y": 1.0, "tokens": 18}}, {"id": "053", "piece": "Expansion", "interaction_role": {"human": "evaluative", "gpt": "elaborative", "confidence": 0.78}, "orientation": "lateral", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[UI lens filters] Human: Let\u2019s sanity-check the schema. [UI lens filters] Human: Be strict about provenance.", "x": 52.0, "y": 0.0, "tokens": 16}, "response": {"text": "[UI lens filters] GPT: Start with 3 core metrics. [UI lens filters] GPT: Add confidence + ambiguity.", "x": 52.0, "y": 1.0, "tokens": 17}}, {"id": "054", "piece": "Expansion", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[goal definition] Human: Can we make this practical? [goal definition] Human: Keep it minimal.", "x": 53.0, "y": 0.0, "tokens": 14}, "response": {"text": "[goal definition] GPT: We can treat labels as observables. [goal definition] GPT: Keep the archive read-only.", "x": 53.0, "y": 1.0, "tokens": 16}}, {"id": "055", "piece": "Expansion", "interaction_role": {"human": "inquiry", "gpt": "structuring", "confidence": 0.78}, "orientation": "forward", "signals": {"introduces_structure": false, "references_prior_turn": false, "references_earlier_conversation": false, "compresses_information": false}, "prompt": {"text": "[export contract] Human: What would you measure first?", "x": 54.0, "y": 0.0, "tokens": 8}, "response": {"text": "[export contract] GPT: RCF can encode roles as color. [export contract] GPT: Edges can represent references.", "x": 54.0, "y": 1.0, "tokens": 16}}];
+    const minTokens = 7;
+    const maxTokens = 36;
+
+    function escapeHTML(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function sizeForTokens(t) {
+      if (maxTokens === minTokens) return 8;
+      const norm = (t - minTokens) / (maxTokens - minTokens);
+      return 5 + norm * 18;
+    }
+
+    function normalizeZ(t) {
+      if (maxTokens === minTokens) return 0.5;
+      const norm = (t - minTokens) / (maxTokens - minTokens);
+      return 0.2 + norm * 0.8;
+    }
+
+    function passesFilters(ex) {
+      const phase = document.getElementById("phaseFilter").value;
+      const orient = document.getElementById("orientationFilter").value;
+      const role = document.getElementById("roleFilter").value;
+      const struct = document.getElementById("structureFilter").value;
+
+      if (phase !== "ALL" && ex.piece !== phase) return false;
+      if (orient !== "ALL" && ex.orientation !== orient) return false;
+      if (role !== "ALL" && ex.interaction_role && ex.interaction_role.gpt !== role) return false;
+      if (struct !== "ALL") {
+        const yes = !!(ex.signals && ex.signals.introduces_structure);
+        if (struct === "YES" && !yes) return false;
+        if (struct === "NO" && yes) return false;
+      }
+      return true;
+    }
+
+    function buildTraces() {
+      const pX = [], pY = [], pZ = [], pSize = [], pCD = [];
+      const rX = [], rY = [], rZ = [], rSize = [], rCD = [];
+      const lineX = [], lineY = [], lineZ = [];
+
+      exchanges.forEach(ex => {
+        if (!passesFilters(ex)) return;
+
+        const p = ex.prompt;
+        const r = ex.response;
+        const pz = normalizeZ(p.tokens);
+        const rz = normalizeZ(r.tokens);
+
+        pX.push(p.x); pY.push(p.y); pZ.push(pz); pSize.push(sizeForTokens(p.tokens));
+        rX.push(r.x); rY.push(r.y); rZ.push(rz); rSize.push(sizeForTokens(r.tokens));
+
+        pCD.push({ id: ex.id, role: "P" });
+        rCD.push({ id: ex.id, role: "R" });
+
+        lineX.push(p.x, r.x, null);
+        lineY.push(p.y, r.y, null);
+        lineZ.push(pz, rz, null);
+      });
+
+      const lineTrace = {
+        x: lineX, y: lineY, z: lineZ,
+        mode: "lines", type: "scatter3d",
+        line: { color: "rgba(0,0,0,0.18)", width: 1.2 },
+        hoverinfo: "skip", showlegend: false
+      };
+
+      const promptTrace = {
+        x: pX, y: pY, z: pZ,
+        mode: "markers", type: "scatter3d",
+        marker: { color: "#1f77b4", size: pSize, opacity: 0.9, symbol: "circle" },
+        customdata: pCD,
+        hovertemplate: "P %{customdata.id}<extra></extra>",
+        showlegend: false
+      };
+
+      const responseTrace = {
+        x: rX, y: rY, z: rZ,
+        mode: "markers", type: "scatter3d",
+        marker: { color: "#ff7f0e", size: rSize, opacity: 0.9, symbol: "diamond" },
+        customdata: rCD,
+        hovertemplate: "R %{customdata.id}<extra></extra>",
+        showlegend: false
+      };
+
+      return [lineTrace, promptTrace, responseTrace];
+    }
+
+    const layout = {
+      margin: { l: 0, r: 0, t: 0, b: 0 },
+      paper_bgcolor: "#ffffff",
+      plot_bgcolor: "#ffffff",
+      scene: {
+        xaxis: { title: "Sequence (pair index)", color: "#333333", gridcolor: "rgba(0,0,0,0.05)", zerolinecolor: "rgba(0,0,0,0.2)" },
+        yaxis: { title: "Channel (0 = Human, 1 = GPT)", color: "#333333", gridcolor: "rgba(0,0,0,0.05)", zerolinecolor: "rgba(0,0,0,0.2)" },
+        zaxis: { title: "Relative Length / Intensity (words)", color: "#333333", gridcolor: "rgba(0,0,0,0.05)", zerolinecolor: "rgba(0,0,0,0.2)" },
+        camera: { eye: { x: 1.6, y: 1.4, z: 1.1 } }
+      },
+      showlegend: false
+    };
+
+    const plotDiv = document.getElementById("plot");
+    Plotly.newPlot(plotDiv, buildTraces(), layout, { responsive: true, displaylogo: false });
+
+    function rerender() {
+      Plotly.react(plotDiv, buildTraces(), layout, { responsive: true, displaylogo: false });
+    }
+
+    const transcriptEl = document.getElementById("transcript");
+    const selIdEl = document.getElementById("sel-id");
+    const selPhaseEl = document.getElementById("sel-phase");
+    const selOrientEl = document.getElementById("sel-orient");
+    const selConfEl = document.getElementById("sel-conf");
+
+    function renderExchange(id) {
+      const ex = exchanges.find(e => e.id === id);
+      if (!ex) return;
+
+      selIdEl.textContent = ex.id;
+      selPhaseEl.textContent = ex.piece || "—";
+      selOrientEl.textContent = ex.orientation || "—";
+      selConfEl.textContent = (ex.interaction_role && ex.interaction_role.confidence != null) ? ex.interaction_role.confidence : "—";
+
+      const pills = [];
+      if (ex.interaction_role) {
+        pills.push(`<span class="pill"><b>Human</b> ${escapeHTML(ex.interaction_role.human || "—")}</span>`);
+        pills.push(`<span class="pill"><b>GPT</b> ${escapeHTML(ex.interaction_role.gpt || "—")}</span>`);
+      }
+      if (ex.signals) {
+        const s = ex.signals;
+        const yesno = (b)=> b ? "yes" : "no";
+        pills.push(`<span class="pill"><b>Structure</b> ${yesno(!!s.introduces_structure)}</span>`);
+        pills.push(`<span class="pill"><b>Ref turn</b> ${yesno(!!s.references_prior_turn)}</span>`);
+        pills.push(`<span class="pill"><b>Compress</b> ${yesno(!!s.compresses_information)}</span>`);
+      }
+
+      transcriptEl.innerHTML = ""
+        + `<div class="hint">Marker sizes scale from ${minTokens}–${maxTokens} words. Use filters above to isolate a lens slice.</div>`
+        + `<div style="margin:0.5rem 0 0.6rem; display:flex; gap:0.4rem; flex-wrap:wrap;">${pills.join("")}</div>`
+        + `<div class="pr-block"><div class="pr-label"><span class="pr-id">P ${ex.id}</span> · Prompt</div><div class="pr-text">${escapeHTML(ex.prompt.text)}</div></div>`
+        + `<div class="pr-block"><div class="pr-label"><span class="pr-id">R ${ex.id}</span> · Response</div><div class="pr-text">${escapeHTML(ex.response.text)}</div></div>`;
+    }
+
+    plotDiv.on("plotly_click", function(ev) {
+      if (!ev || !ev.points || !ev.points.length) return;
+      const cd = ev.points[0].customdata;
+      if (!cd || !cd.id) return;
+      renderExchange(cd.id);
+    });
+
+    ["phaseFilter","orientationFilter","roleFilter","structureFilter"].forEach(id => {
+      document.getElementById(id).addEventListener("change", () => rerender());
+    });
+
+    if (exchanges.length > 0) renderExchange(exchanges[0].id);
+  </script>
+</body>
+</html>
