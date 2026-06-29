@@ -1,0 +1,62 @@
+name: Archive generator smoke test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'data/generators.json'
+      - 'scripts/archive_cycle.py'
+      - 'scripts/generators/**'
+      - '.github/workflows/magpie-archive-cycle.yml'
+      - '.github/workflows/archive-generator-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  animated-generator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pillow
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Render animated proof
+        run: |
+          mkdir -p /tmp/magpie-proof
+          python scripts/generators/field_station_signal_loop.py \
+            --seed 1701 \
+            --output /tmp/magpie-proof/field-station-signal-loop.mp4 \
+            --thumbnail /tmp/magpie-proof/field-station-signal-loop.jpg
+
+      - name: Verify outputs
+        run: |
+          test -s /tmp/magpie-proof/field-station-signal-loop.mp4
+          test -s /tmp/magpie-proof/field-station-signal-loop.jpg
+          ffprobe -v error \
+            -select_streams v:0 \
+            -show_entries stream=codec_name,width,height,pix_fmt \
+            -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 \
+            /tmp/magpie-proof/field-station-signal-loop.mp4
+          python - <<'PY'
+          from PIL import Image
+          image = Image.open('/tmp/magpie-proof/field-station-signal-loop.jpg')
+          assert image.size == (960, 720), image.size
+          print({'thumbnail_size': image.size, 'thumbnail_mode': image.mode})
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: field-station-signal-loop-proof
+          path: /tmp/magpie-proof/
+          retention-days: 7
