@@ -1,0 +1,28 @@
+name: Archive cycle guard smoke test
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/archive_cycle.py'
+      - '.github/workflows/magpie-archive-cycle.yml'
+      - '.github/workflows/archive-cycle-guard-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify recent archive entries are skipped
+        run: |
+          before=$(find archive/records -name '*.json' | wc -l)
+          python scripts/archive_cycle.py \
+            --timestamp 2026-06-29T10:20:00Z \
+            --minimum-age-minutes 50
+          after=$(find archive/records -name '*.json' | wc -l)
+          test "$before" = "$after"
