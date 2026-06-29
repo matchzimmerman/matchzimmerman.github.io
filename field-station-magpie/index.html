@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Field Station: MAGPIE — Living Archive</title>
+  <meta name="description" content="A continually expanding archive of procedural systems and iterative executions.">
+  <link rel="stylesheet" href="archive.css">
+</head>
+<body>
+  <header class="station-header">
+    <a class="home" href="../">MZCMG</a>
+    <div>
+      <p class="kicker">FIELD STATION: MAGPIE / M3RØ</p>
+      <h1>Living Archive</h1>
+    </div>
+    <div class="live-state"><i></i><span>archive process active</span></div>
+  </header>
+
+  <main>
+    <section class="definition">
+      <p>FIELD STATION: MAGPIE is a living archive of recovered information, procedural systems, and iterative executions.</p>
+      <p>Each run is retained as a distinct artifact with an immutable reference, generator version, seed, source lineage, and relation to the records around it. The archive does not separate a finished work from the process that produced it. It records systems continuing to operate.</p>
+    </section>
+
+    <section class="instrument" aria-label="Archive status">
+      <div class="stat"><span>executions retained</span><strong id="execution-count">—</strong></div>
+      <div class="stat"><span>system families</span><strong id="family-count">—</strong></div>
+      <div class="stat"><span>active generators</span><strong id="generator-count">—</strong></div>
+      <div class="stat"><span>latest execution</span><strong id="latest-time">—</strong></div>
+    </section>
+
+    <section class="controls" aria-label="Archive controls">
+      <div class="view-switch">
+        <button class="active" data-view="executions">executions</button>
+        <button data-view="families">system families</button>
+      </div>
+      <label>filter <input id="filter" type="search" autocomplete="off" placeholder="id / family / tag"></label>
+    </section>
+
+    <section id="archive" class="archive-grid" aria-live="polite"></section>
+  </main>
+
+  <dialog id="record-dialog">
+    <button class="dialog-close" type="button" aria-label="Close">×</button>
+    <div id="dialog-content"></div>
+  </dialog>
+
+  <footer>
+    <span>MZFS / public archive instrument</span>
+    <span id="index-time">index pending</span>
+  </footer>
+  <script src="archive.js"></script>
+</body>
+</html>
