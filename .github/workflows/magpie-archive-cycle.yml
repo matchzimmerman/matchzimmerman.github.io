@@ -1,0 +1,44 @@
+name: MAGPIE archive cycle
+
+on:
+  workflow_dispatch:
+    inputs:
+      generator:
+        description: Optional registered generator slug
+        required: false
+        type: string
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: magpie-archive-cycle
+  cancel-in-progress: false
+
+jobs:
+  execute-and-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate one immutable execution
+        env:
+          REQUESTED_GENERATOR: ${{ inputs.generator }}
+        run: |
+          if [ -n "$REQUESTED_GENERATOR" ]; then
+            python scripts/archive_cycle.py --generator "$REQUESTED_GENERATOR"
+          else
+            python scripts/archive_cycle.py
+          fi
+      - name: Commit archive growth
+        run: |
+          git config user.name "MZFS archive process"
+          git config user.email "actions@users.noreply.github.com"
+          git add archive/records archive/executions data/archive-index.json
+          git diff --cached --quiet && exit 0
+          git commit -m "archive: retain scheduled procedural execution"
+          git push
