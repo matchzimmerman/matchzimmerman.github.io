@@ -16,11 +16,33 @@ function shortDate(value) {
     year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
   });
 }
+function calendarDate(value) {
+  return new Date(value).toLocaleDateString([], {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+function clockDate(value) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  });
+}
 function matches(item) {
   const haystack = JSON.stringify(item).toLowerCase();
   return !state.filter || haystack.includes(state.filter.toLowerCase());
 }
 function thumbnailFor(record) { return record.thumbnail_uri || record.asset_uri; }
+function mediaKind(record) {
+  const type = record.media_type || '';
+  if (type.startsWith('video/')) return 'video';
+  if (type.startsWith('audio/')) return 'audio';
+  return 'still';
+}
+function mediaBadge(record) {
+  const kind = mediaKind(record);
+  const icon = kind === 'video' ? '▶' : kind === 'audio' ? '♪' : '▣';
+  const label = kind === 'video' ? 'Video iteration' : kind === 'audio' ? 'Audio iteration' : 'Still iteration';
+  return `<span class="media-badge media-badge-${kind}" aria-label="${label}" title="${label}"><b>${icon}</b><em>${kind}</em></span>`;
+}
 
 function renderExecutions() {
   const records = state.data.executions.filter(matches);
@@ -28,6 +50,7 @@ function renderExecutions() {
   return records.map(record => `<a class="record" href="#${escapeHtml(record.id)}" data-record="${escapeHtml(record.id)}">
     <div class="record-media">
       <img loading="lazy" src="${escapeHtml(thumbnailFor(record))}" alt="Thumbnail for ${escapeHtml(record.title)}">
+      ${mediaBadge(record)}
     </div>
     <div class="record-body">
       <span class="record-id">${escapeHtml(record.id)}</span>
@@ -80,9 +103,15 @@ function openExecution(id) {
     <div class="dialog-media">${executionMedia(record)}</div>
     <div class="dialog-info">
       <span class="record-id">${escapeHtml(record.id)}</span>
+      <p class="dialog-label">TITLE</p>
       <h2>${escapeHtml(record.title)}</h2>
+      <div class="archive-date">
+        <span>ARCHIVED</span>
+        <strong>${escapeHtml(calendarDate(record.generated_at))}</strong>
+        <small>${escapeHtml(clockDate(record.generated_at))}</small>
+      </div>
       <dl>
-        <dt>generated</dt><dd>${escapeHtml(shortDate(record.generated_at))}</dd>
+        <dt>media</dt><dd>${escapeHtml(mediaKind(record))}</dd>
         <dt>family</dt><dd>${escapeHtml(family?.title || record.family_id)}</dd>
         <dt>generator</dt><dd>${escapeHtml(generator?.title || record.generator_id)} / v${escapeHtml(record.generator_version)}</dd>
         <dt>seed</dt><dd>${record.seed}</dd>
@@ -102,6 +131,7 @@ function openFamily(id) {
   const executions = state.data.executions.filter(item => item.family_id === id).length;
   dialogContent.innerHTML = `<article class="dialog-info">
     <span class="record-id">${escapeHtml(family.id)}</span>
+    <p class="dialog-label">SYSTEM</p>
     <h2>${escapeHtml(family.title)}</h2>
     <p>${escapeHtml(family.summary)}</p>
     <dl><dt>canon status</dt><dd>${escapeHtml(family.status)}</dd><dt>retained iterations</dt><dd>${executions}</dd></dl>
