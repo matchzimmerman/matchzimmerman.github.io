@@ -1,4 +1,10 @@
-const state = { data: null, view: 'executions', filter: '', activeExecutionId: null };
+const state = {
+  data: null,
+  view: 'executions',
+  filter: '',
+  anomalyFilter: 'all',
+  activeExecutionId: null,
+};
 const archive = document.querySelector('#archive');
 const dialog = document.querySelector('#record-dialog');
 const dialogContent = document.querySelector('#dialog-content');
@@ -26,11 +32,80 @@ function clockDate(value) {
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
   });
 }
-function matches(item) {
+function textMatches(item) {
   const haystack = JSON.stringify(item).toLowerCase();
   return !state.filter || haystack.includes(state.filter.toLowerCase());
 }
-function visibleExecutions() { return state.data.executions.filter(matches); }
+function metricDelta(record, key) {
+  const before = record.metrics_before || {};
+  const after = record.metrics_after || {};
+  const value = Number(after[key] || 0) - Number(before[key] || 0);
+  return Number.isFinite(value) ? value : 0;
+}
+function directionReversal(record) {
+  const before = record.metrics_before?.field_direction || {};
+  const after = record.metrics_after?.field_direction || {};
+  const ax = Number(before.x || 0);
+  const ay = Number(before.y || 0);
+  const bx = Number(after.x || 0);
+  const by = Number(after.y || 0);
+  const firstMagnitude = Math.hypot(ax, ay);
+  const secondMagnitude = Math.hypot(bx, by);
+  if (firstMagnitude < 0.1 || secondMagnitude < 0.1) return null;
+  return (ax * bx + ay * by) / (firstMagnitude * secondMagnitude);
+}
+function anomalyAssessment(record) {
+  if (['potential', 'confirmed', 'none'].includes(record.anomaly_status)) {
+    return {
+      status: record.anomaly_status,
+      basis: record.anomaly_basis || null,
+      value: record.anomaly_signal_value ?? null,
+    };
+  }
+
+  const activeAnomalies = record.anomalies || [];
+  if (activeAnomalies.length || record.event_log_id) {
+    return {
+      status: 'confirmed',
+      basis: activeAnomalies.at(-1)?.type || 'event-log anomaly',
+      value: activeAnomalies.length,
+    };
+  }
+
+  if (!record.metrics_before || !record.metrics_after) {
+    return { status: 'none', basis: null, value: null };
+  }
+
+  const candidates = [
+    ['damage increase', metricDelta(record, 'damage'), 0.05, 90],
+    ['fragmentation shift', metricDelta(record, 'fragmentation'), 0.015, 85],
+    ['residue accumulation', metricDelta(record, 'residue'), 0.06, 75],
+    ['connectivity disruption', metricDelta(record, 'connectivity'), 0.012, 70],
+    ['symmetry disruption', metricDelta(record, 'symmetry'), 0.08, 65],
+    ['movement divergence', metricDelta(record, 'movement_speed'), 0.12, 60],
+    ['palette divergence', metricDelta(record, 'orange_ratio'), 0.07, 55],
+  ]
+    .filter(([, value, threshold]) => Math.abs(value) >= threshold)
+    .map(([basis, value, , score]) => ({ basis, value: Number(value.toFixed(4)), score: score + Math.abs(value) }));
+
+  const reversal = directionReversal(record);
+  if (reversal !== null && reversal <= -0.35) {
+    candidates.push({ basis: 'field-direction reversal', value: Number(reversal.toFixed(4)), score: 88 + Math.abs(reversal) });
+  }
+
+  if (!candidates.length) return { status: 'none', basis: null, value: null };
+  const strongest = candidates.sort((a, b) => b.score - a.score)[0];
+  return { status: 'potential', basis: strongest.basis, value: strongest.value };
+}
+function anomalyMatches(record) {
+  const status = anomalyAssessment(record).status;
+  if (state.anomalyFilter === 'all') return true;
+  if (state.anomalyFilter === 'any') return status === 'potential' || status === 'confirmed';
+  return status === state.anomalyFilter;
+}
+function visibleExecutions() {
+  return state.data.executions.filter(record => textMatches(record) && anomalyMatches(record));
+}
 function thumbnailFor(record) { return record.thumbnail_uri || record.asset_uri; }
 function mediaKind(record) {
   const type = record.media_type || '';
@@ -43,6 +118,27 @@ function mediaBadge(record) {
   const icon = kind === 'video' ? '▶' : kind === 'audio' ? '♪' : '▣';
   const label = kind === 'video' ? 'Video iteration' : kind === 'audio' ? 'Audio iteration' : 'Still iteration';
   return `<span class="media-badge media-badge-${kind}" aria-label="${label}" title="${label}"><b>${icon}</b><em>${kind}</em></span>`;
+}
+function anomalyBadge(record, location = 'card') {
+  const assessment = anomalyAssessment(record);
+  if (assessment.status === 'none') return '';
+  const label = assessment.status === 'confirmed' ? 'confirmed anomaly' : 'potential anomaly';
+  return `<span class="anomaly-badge anomaly-${assessment.status} anomaly-${location}" title="${escapeHtml(assessment.basis || label)}">${label}</span>`;
+}
+function anomalyBlock(record) {
+  const assessment = anomalyAssessment(record);
+  if (assessment.status === 'none') return '';
+  const confirmed = assessment.status === 'confirmed';
+  const heading = confirmed ? 'CONFIRMED ANOMALY' : 'POTENTIAL ANOMALY';
+  const explanation = confirmed
+    ? 'A persistent anomaly is present in this iteration’s retained genome.'
+    : `Automated comparison flagged ${assessment.basis || 'an irregular state change'} beyond the current anomaly threshold. Recovery Agent confirmation remains pending.`;
+  const value = assessment.value === null || assessment.value === undefined ? '' : `<small>signal value ${escapeHtml(assessment.value)}</small>`;
+  return `<section class="anomaly-report anomaly-report-${assessment.status}">
+    <span>${heading}</span>
+    <p>${escapeHtml(explanation)}</p>
+    ${value}
+  </section>`;
 }
 function evolutionBlock(record) {
   if (!record.key_change_text) return '';
@@ -86,11 +182,12 @@ function iterationNavigation(id) {
 
 function renderExecutions() {
   const records = visibleExecutions();
-  if (!records.length) return '<p class="empty">No retained iterations match this filter.</p>';
+  if (!records.length) return '<p class="empty">No retained iterations match the active filters.</p>';
   return records.map(record => `<a class="record" href="#${escapeHtml(record.id)}" data-record="${escapeHtml(record.id)}">
     <div class="record-media">
       <img loading="lazy" src="${escapeHtml(thumbnailFor(record))}" alt="Thumbnail for ${escapeHtml(record.title)}">
       ${mediaBadge(record)}
+      ${anomalyBadge(record)}
     </div>
     <div class="record-body">
       <span class="record-id">${escapeHtml(record.id)}</span>
@@ -100,7 +197,7 @@ function renderExecutions() {
 }
 
 function renderFamilies() {
-  const families = state.data.families.filter(matches);
+  const families = state.data.families.filter(textMatches);
   if (!families.length) return '<p class="empty">No systems match this filter.</p>';
   return families.map(family => `<button class="family-card" data-family="${escapeHtml(family.id)}">
     <span class="family-index">${escapeHtml(family.id)}</span>
@@ -144,6 +241,7 @@ function openExecution(id) {
   if (!record) return;
   const family = familyFor(record.family_id);
   const generator = generatorFor(record.generator_id);
+  const assessment = anomalyAssessment(record);
   state.activeExecutionId = id;
   history.replaceState(null, '', `#${id}`);
   dialogContent.innerHTML = `<article class="dialog-record">
@@ -152,10 +250,12 @@ function openExecution(id) {
       ${iterationNavigation(id)}
     </div>
     <div class="dialog-info">
+      <div class="record-flags">${anomalyBadge(record, 'dialog')}</div>
       <span class="record-id">${escapeHtml(record.id)}</span>
       <p class="dialog-label">TITLE</p>
       <h2>${escapeHtml(record.title)}</h2>
       ${lineageBlock(record)}
+      ${anomalyBlock(record)}
       ${evolutionBlock(record)}
       <div class="archive-date">
         <span>ARCHIVED</span>
@@ -166,6 +266,7 @@ function openExecution(id) {
         <dt>media</dt><dd>${escapeHtml(mediaKind(record))}</dd>
         <dt>family</dt><dd>${escapeHtml(family?.title || record.family_id)}</dd>
         <dt>generator</dt><dd>${escapeHtml(generator?.title || record.generator_id)} / v${escapeHtml(record.generator_version)}</dd>
+        <dt>anomaly</dt><dd>${escapeHtml(assessment.status)}</dd>
         <dt>nodes</dt><dd>${escapeHtml(record.node_count ?? '—')}</dd>
         <dt>tension</dt><dd>${escapeHtml(record.field_tension ?? '—')}</dd>
         <dt>damage</dt><dd>${escapeHtml(record.damage ?? '—')}</dd>
@@ -207,6 +308,10 @@ document.querySelector('#filter').addEventListener('input', event => {
   state.filter = event.target.value;
   render();
 });
+document.querySelector('#anomaly-filter').addEventListener('change', event => {
+  state.anomalyFilter = event.target.value;
+  render();
+});
 
 document.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
@@ -216,7 +321,7 @@ dialog.addEventListener('close', () => {
 });
 document.addEventListener('keydown', event => {
   if (!dialog.open || !state.activeExecutionId || event.metaKey || event.ctrlKey || event.altKey) return;
-  if (['INPUT', 'TEXTAREA', 'VIDEO', 'AUDIO'].includes(event.target.tagName)) return;
+  if (['INPUT', 'TEXTAREA', 'SELECT', 'VIDEO', 'AUDIO'].includes(event.target.tagName)) return;
   const { newer, older } = executionNeighbors(state.activeExecutionId);
   if (event.key === 'ArrowLeft' && newer) {
     event.preventDefault();
