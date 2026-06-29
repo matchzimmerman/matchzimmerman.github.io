@@ -1,4 +1,4 @@
-const state = { data: null, view: 'executions', filter: '' };
+const state = { data: null, view: 'executions', filter: '', activeExecutionId: null };
 const archive = document.querySelector('#archive');
 const dialog = document.querySelector('#record-dialog');
 const dialogContent = document.querySelector('#dialog-content');
@@ -30,6 +30,7 @@ function matches(item) {
   const haystack = JSON.stringify(item).toLowerCase();
   return !state.filter || haystack.includes(state.filter.toLowerCase());
 }
+function visibleExecutions() { return state.data.executions.filter(matches); }
 function thumbnailFor(record) { return record.thumbnail_uri || record.asset_uri; }
 function mediaKind(record) {
   const type = record.media_type || '';
@@ -59,9 +60,32 @@ function lineageBlock(record) {
     <div><span>PHASE</span><strong>${escapeHtml(record.developmental_phase || 'unclassified')}</strong></div>
   </section>`;
 }
+function executionNeighbors(id) {
+  const records = visibleExecutions();
+  const index = records.findIndex(item => item.id === id);
+  return {
+    records,
+    index,
+    newer: index > 0 ? records[index - 1] : null,
+    older: index >= 0 && index < records.length - 1 ? records[index + 1] : null,
+  };
+}
+function iterationNavigation(id) {
+  const { records, index, newer, older } = executionNeighbors(id);
+  if (index < 0) return '';
+  return `<nav class="iteration-nav" aria-label="Iteration navigation">
+    <button class="iteration-step iteration-step-newer" type="button" data-open-record="${escapeHtml(newer?.id || '')}" ${newer ? '' : 'disabled'} aria-label="Open newer iteration">
+      <b>‹</b><span>newer</span>
+    </button>
+    <span class="iteration-position">${index + 1} / ${records.length}</span>
+    <button class="iteration-step iteration-step-older" type="button" data-open-record="${escapeHtml(older?.id || '')}" ${older ? '' : 'disabled'} aria-label="Open older iteration">
+      <span>older</span><b>›</b>
+    </button>
+  </nav>`;
+}
 
 function renderExecutions() {
-  const records = state.data.executions.filter(matches);
+  const records = visibleExecutions();
   if (!records.length) return '<p class="empty">No retained iterations match this filter.</p>';
   return records.map(record => `<a class="record" href="#${escapeHtml(record.id)}" data-record="${escapeHtml(record.id)}">
     <div class="record-media">
@@ -108,14 +132,25 @@ function executionMedia(record) {
   return `<img src="${asset}" alt="${title}">`;
 }
 
+function bindDialogNavigation() {
+  dialogContent.querySelectorAll('[data-open-record]').forEach(button => button.addEventListener('click', () => {
+    const id = button.dataset.openRecord;
+    if (id) openExecution(id);
+  }));
+}
+
 function openExecution(id) {
   const record = state.data.executions.find(item => item.id === id);
   if (!record) return;
   const family = familyFor(record.family_id);
   const generator = generatorFor(record.generator_id);
+  state.activeExecutionId = id;
   history.replaceState(null, '', `#${id}`);
   dialogContent.innerHTML = `<article class="dialog-record">
-    <div class="dialog-media">${executionMedia(record)}</div>
+    <div class="dialog-media">
+      ${executionMedia(record)}
+      ${iterationNavigation(id)}
+    </div>
     <div class="dialog-info">
       <span class="record-id">${escapeHtml(record.id)}</span>
       <p class="dialog-label">TITLE</p>
@@ -143,12 +178,14 @@ function openExecution(id) {
       </dl>
     </div>
   </article>`;
-  dialog.showModal();
+  bindDialogNavigation();
+  if (!dialog.open) dialog.showModal();
 }
 
 function openFamily(id) {
   const family = familyFor(id);
   if (!family) return;
+  state.activeExecutionId = null;
   const executions = state.data.executions.filter(item => item.family_id === id).length;
   dialogContent.innerHTML = `<article class="dialog-info">
     <span class="record-id">${escapeHtml(family.id)}</span>
@@ -157,7 +194,7 @@ function openFamily(id) {
     <p>${escapeHtml(family.summary)}</p>
     <dl><dt>canon status</dt><dd>${escapeHtml(family.status)}</dd><dt>retained iterations</dt><dd>${executions}</dd></dl>
   </article>`;
-  dialog.showModal();
+  if (!dialog.open) dialog.showModal();
 }
 
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
@@ -173,7 +210,23 @@ document.querySelector('#filter').addEventListener('input', event => {
 
 document.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
-dialog.addEventListener('close', () => history.replaceState(null, '', location.pathname));
+dialog.addEventListener('close', () => {
+  state.activeExecutionId = null;
+  history.replaceState(null, '', location.pathname);
+});
+document.addEventListener('keydown', event => {
+  if (!dialog.open || !state.activeExecutionId || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (['INPUT', 'TEXTAREA', 'VIDEO', 'AUDIO'].includes(event.target.tagName)) return;
+  const { newer, older } = executionNeighbors(state.activeExecutionId);
+  if (event.key === 'ArrowLeft' && newer) {
+    event.preventDefault();
+    openExecution(newer.id);
+  }
+  if (event.key === 'ArrowRight' && older) {
+    event.preventDefault();
+    openExecution(older.id);
+  }
+});
 
 const archiveIndexUrl = new URL('../data/archive-index.json', window.location.href);
 archiveIndexUrl.searchParams.set('fresh', Date.now().toString());
