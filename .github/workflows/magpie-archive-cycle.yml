@@ -7,6 +7,11 @@ on:
         description: Optional registered generator slug
         required: false
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/magpie-archive-cycle.yml'
   schedule:
     - cron: '2,17,32,47 * * * *'
 
@@ -48,7 +53,7 @@ jobs:
         run: |
           git config user.name "MZFS archive process"
           git config user.email "actions@users.noreply.github.com"
-          git add archive/records archive/executions archive/states archive/events data/archive-index.json data/generator-state
+          git add -A
           git diff --cached --quiet && exit 0
           git commit -m "archive: retain inherited procedural execution"
           git push
