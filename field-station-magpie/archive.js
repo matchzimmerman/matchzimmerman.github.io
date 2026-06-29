@@ -154,7 +154,16 @@ document.querySelector('.dialog-close').addEventListener('click', () => dialog.c
 dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 dialog.addEventListener('close', () => history.replaceState(null, '', location.pathname));
 
-fetch('../data/archive-index.json', { cache: 'no-store' })
+const archiveIndexUrl = new URL('../data/archive-index.json', window.location.href);
+archiveIndexUrl.searchParams.set('fresh', Date.now().toString());
+
+fetch(archiveIndexUrl, {
+  cache: 'no-store',
+  headers: {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
+  }
+})
   .then(response => {
     if (!response.ok) throw new Error(`Archive index ${response.status}`);
     return response.json();
