@@ -1,27 +1,29 @@
-# MZCMG website + MAGPIE living archive
+# MZCMG website and MAGPIE living archive
 
-This site has one public index with two destinations:
+The public index has two destinations:
 
-- `field-station-magpie/` — continually expanding execution archive
-- `non-magpie/` — selected work outside MAGPIE
+- `field-station-magpie/` for the continually expanding iteration archive
+- `non-magpie/` for selected work outside MAGPIE
 
-## Archive model
+## Archive references
 
-The archive separates stable system families, versioned generators, and immutable executions:
+The archive separates system families, versioned generators, and individual retained runs:
 
-- `MZFS.FAM.*` — canonical interface/system lineage
-- `MZFS.GEN.*` — a specific procedural generator and version
-- `MZFS.EXE.YYYYMMDD.NNNNNN` — one retained execution
+- `MZFS.FAM.*` identifies a canonical system lineage
+- `MZFS.GEN.*` identifies a procedural generator and version
+- `MZFS.EXE.YYYYMMDD.NNNNNN` identifies one retained run
 
-`data/families.json` and `data/generators.json` define the systems. Every execution has an individual JSON record under `archive/records/`; generated media is placed under `archive/executions/`. `scripts/build_archive_index.py` compiles these into the browser-facing `data/archive-index.json`.
+Every run has a JSON record under `archive/records/`. Media and poster images live under `archive/executions/`. The index builder compiles these records into `data/archive-index.json`, which directly populates the public grid.
+
+Image runs may use the same file as both the artwork and poster. Animation generators export a lightweight poster for the grid and a full moving file for the lightbox.
 
 ## Automatic growth
 
-`.github/workflows/magpie-archive-cycle.yml` runs one enabled generator hourly. The workflow retains the output and execution record, rebuilds the public index, and commits the new archive state.
+The archive workflow runs one enabled generator hourly. It retains the output and poster, writes the record, rebuilds the public index, and commits the updated archive.
 
-The initial generator creates lightweight deterministic SVG relation fields. Video, audio, and large raster output should use external object storage while preserving the same execution records and stable IDs.
+The first generator creates deterministic SVG relation fields. Larger moving-image and audio files can later move to external storage without changing their archive references.
 
-## Run locally
+## Local run
 
 ```bash
 python scripts/archive_cycle.py --generator signal-field-svg --seed 1701
