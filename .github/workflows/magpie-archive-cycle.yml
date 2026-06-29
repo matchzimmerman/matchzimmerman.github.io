@@ -8,7 +8,7 @@ on:
         required: false
         type: string
   schedule:
-    - cron: '17 * * * *'
+    - cron: '2,17,32,47 * * * *'
 
 permissions:
   contents: write
@@ -41,7 +41,7 @@ jobs:
           if [ -n "$REQUESTED_GENERATOR" ]; then
             python scripts/archive_cycle.py --generator "$REQUESTED_GENERATOR"
           else
-            python scripts/archive_cycle.py
+            python scripts/archive_cycle.py --minimum-age-minutes 50
           fi
 
       - name: Commit archive growth

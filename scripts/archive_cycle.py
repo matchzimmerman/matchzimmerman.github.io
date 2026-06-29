@@ -24,6 +24,25 @@ def file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def parse_timestamp(value: str) -> dt.datetime:
+    return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
+
+
+def latest_generated_at() -> dt.datetime | None:
+    latest = None
+    if not RECORDS.exists():
+        return None
+    for path in RECORDS.glob("*.json"):
+        try:
+            record = load_json(path)
+            generated_at = parse_timestamp(record["generated_at"])
+        except (KeyError, ValueError, json.JSONDecodeError):
+            continue
+        if latest is None or generated_at > latest:
+            latest = generated_at
+    return latest
+
+
 def next_serial(day: str) -> int:
     prefix = f"MZFS.EXE.{day}."
     serials = []
@@ -59,10 +78,25 @@ def main() -> None:
     parser.add_argument("--generator")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--timestamp")
+    parser.add_argument(
+        "--minimum-age-minutes",
+        type=int,
+        default=0,
+        help="Skip generation when the newest retained execution is younger than this threshold.",
+    )
     args = parser.parse_args()
 
-    now = dt.datetime.fromisoformat(args.timestamp.replace("Z", "+00:00")) if args.timestamp else dt.datetime.now(dt.timezone.utc)
-    now = now.astimezone(dt.timezone.utc)
+    now = parse_timestamp(args.timestamp) if args.timestamp else dt.datetime.now(dt.timezone.utc)
+    latest = latest_generated_at()
+    if latest is not None and args.minimum_age_minutes > 0:
+        age_minutes = (now - latest).total_seconds() / 60
+        if age_minutes < args.minimum_age_minutes:
+            print(
+                f"Archive is current: newest execution is {age_minutes:.1f} minutes old; "
+                f"minimum age is {args.minimum_age_minutes} minutes."
+            )
+            return
+
     day = now.strftime("%Y%m%d")
     execution_id = f"MZFS.EXE.{day}.{next_serial(day):06d}"
     generator = select_generator(args.generator)
