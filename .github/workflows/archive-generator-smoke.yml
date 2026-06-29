@@ -7,6 +7,7 @@ on:
       - 'data/generators.json'
       - 'scripts/archive_cycle.py'
       - 'scripts/generators/**'
+      - 'field-station-magpie/**'
       - '.github/workflows/magpie-archive-cycle.yml'
       - '.github/workflows/archive-generator-smoke.yml'
 
@@ -30,33 +31,71 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Render animated proof
+      - name: Render two inherited generations
         run: |
           mkdir -p /tmp/magpie-proof
           python scripts/generators/field_station_signal_loop.py \
             --seed 1701 \
-            --output /tmp/magpie-proof/field-station-signal-loop.mp4 \
-            --thumbnail /tmp/magpie-proof/field-station-signal-loop.jpg
+            --output /tmp/magpie-proof/generation-1.mp4 \
+            --thumbnail /tmp/magpie-proof/generation-1.jpg \
+            --state-out /tmp/magpie-proof/state-1.json \
+            --metadata-out /tmp/magpie-proof/metadata-1.json \
+            --generation 1 \
+            --execution-id MZFS.TEST.000001
+          python scripts/generators/field_station_signal_loop.py \
+            --seed 1702 \
+            --output /tmp/magpie-proof/generation-2.mp4 \
+            --thumbnail /tmp/magpie-proof/generation-2.jpg \
+            --state-in /tmp/magpie-proof/state-1.json \
+            --state-out /tmp/magpie-proof/state-2.json \
+            --metadata-out /tmp/magpie-proof/metadata-2.json \
+            --generation 2 \
+            --execution-id MZFS.TEST.000002 \
+            --parent-id MZFS.TEST.000001 \
+            --parent-seed 1701
 
-      - name: Verify outputs
+      - name: Verify outputs and lineage
         run: |
-          test -s /tmp/magpie-proof/field-station-signal-loop.mp4
-          test -s /tmp/magpie-proof/field-station-signal-loop.jpg
+          test -s /tmp/magpie-proof/generation-1.mp4
+          test -s /tmp/magpie-proof/generation-2.mp4
+          test -s /tmp/magpie-proof/generation-1.jpg
+          test -s /tmp/magpie-proof/generation-2.jpg
           ffprobe -v error \
             -select_streams v:0 \
             -show_entries stream=codec_name,width,height,pix_fmt \
             -show_entries format=duration,size \
             -of default=noprint_wrappers=1 \
-            /tmp/magpie-proof/field-station-signal-loop.mp4
+            /tmp/magpie-proof/generation-2.mp4
           python - <<'PY'
+          import json
+          from pathlib import Path
           from PIL import Image
-          image = Image.open('/tmp/magpie-proof/field-station-signal-loop.jpg')
+
+          root = Path('/tmp/magpie-proof')
+          state_1 = json.loads((root / 'state-1.json').read_text())
+          state_2 = json.loads((root / 'state-2.json').read_text())
+          metadata_2 = json.loads((root / 'metadata-2.json').read_text())
+          assert state_2['generation'] == 2
+          assert state_2['parent_archive_id'] == 'MZFS.TEST.000001'
+          assert state_1['nodes'] != state_2['nodes']
+          assert metadata_2['lineage_generation'] == 2
+          assert metadata_2['parent_archive_id'] == 'MZFS.TEST.000001'
+          assert metadata_2['key_change_type']
+          assert metadata_2['key_change_certainty'] in {'confirmed', 'probable', 'speculative'}
+          assert metadata_2['key_change_text'].startswith('Recovery Agents')
+          image = Image.open(root / 'generation-2.jpg')
           assert image.size == (960, 720), image.size
-          print({'thumbnail_size': image.size, 'thumbnail_mode': image.mode})
+          print({
+              'generation': state_2['generation'],
+              'phase': state_2['developmental_phase'],
+              'nodes': len(state_2['nodes']),
+              'parent': metadata_2['parent_archive_id'],
+              'key_change': metadata_2['key_change_type'],
+          })
           PY
 
       - uses: actions/upload-artifact@v4
         with:
-          name: field-station-signal-loop-proof
+          name: field-station-lineage-proof
           path: /tmp/magpie-proof/
           retention-days: 7

@@ -43,6 +43,22 @@ function mediaBadge(record) {
   const label = kind === 'video' ? 'Video iteration' : kind === 'audio' ? 'Audio iteration' : 'Still iteration';
   return `<span class="media-badge media-badge-${kind}" aria-label="${label}" title="${label}"><b>${icon}</b><em>${kind}</em></span>`;
 }
+function evolutionBlock(record) {
+  if (!record.key_change_text) return '';
+  return `<section class="key-evolution">
+    <span>KEY EVOLUTION POINT</span>
+    <p>${escapeHtml(record.key_change_text)}</p>
+    <small>${escapeHtml(record.key_change_certainty || 'unclassified')} / ${escapeHtml(record.key_change_type || 'state change')}</small>
+  </section>`;
+}
+function lineageBlock(record) {
+  if (!record.lineage_generation) return '';
+  return `<section class="lineage-summary">
+    <div><span>GENERATION</span><strong>${escapeHtml(record.lineage_generation)}</strong></div>
+    <div><span>PARENT</span><strong>${escapeHtml(record.parent_archive_id || 'lineage origin')}</strong></div>
+    <div><span>PHASE</span><strong>${escapeHtml(record.developmental_phase || 'unclassified')}</strong></div>
+  </section>`;
+}
 
 function renderExecutions() {
   const records = state.data.executions.filter(matches);
@@ -83,7 +99,6 @@ function executionMedia(record) {
   const asset = escapeHtml(record.asset_uri);
   const thumbnail = escapeHtml(thumbnailFor(record));
   const title = escapeHtml(record.title);
-
   if (type.startsWith('video/')) {
     return `<video src="${asset}" poster="${thumbnail}" autoplay loop controls playsinline preload="metadata" aria-label="${title}"></video>`;
   }
@@ -105,6 +120,8 @@ function openExecution(id) {
       <span class="record-id">${escapeHtml(record.id)}</span>
       <p class="dialog-label">TITLE</p>
       <h2>${escapeHtml(record.title)}</h2>
+      ${lineageBlock(record)}
+      ${evolutionBlock(record)}
       <div class="archive-date">
         <span>ARCHIVED</span>
         <strong>${escapeHtml(calendarDate(record.generated_at))}</strong>
@@ -114,6 +131,10 @@ function openExecution(id) {
         <dt>media</dt><dd>${escapeHtml(mediaKind(record))}</dd>
         <dt>family</dt><dd>${escapeHtml(family?.title || record.family_id)}</dd>
         <dt>generator</dt><dd>${escapeHtml(generator?.title || record.generator_id)} / v${escapeHtml(record.generator_version)}</dd>
+        <dt>nodes</dt><dd>${escapeHtml(record.node_count ?? '—')}</dd>
+        <dt>tension</dt><dd>${escapeHtml(record.field_tension ?? '—')}</dd>
+        <dt>damage</dt><dd>${escapeHtml(record.damage ?? '—')}</dd>
+        <dt>residue</dt><dd>${escapeHtml(record.residue ?? '—')}</dd>
         <dt>seed</dt><dd>${record.seed}</dd>
         <dt>source</dt><dd>${escapeHtml(record.source_ref)}</dd>
         <dt>status</dt><dd>${escapeHtml(record.status)}</dd>
@@ -156,13 +177,9 @@ dialog.addEventListener('close', () => history.replaceState(null, '', location.p
 
 const archiveIndexUrl = new URL('../data/archive-index.json', window.location.href);
 archiveIndexUrl.searchParams.set('fresh', Date.now().toString());
-
 fetch(archiveIndexUrl, {
   cache: 'no-store',
-  headers: {
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache'
-  }
+  headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
 })
   .then(response => {
     if (!response.ok) throw new Error(`Archive index ${response.status}`);
@@ -173,9 +190,7 @@ fetch(archiveIndexUrl, {
     document.querySelector('#execution-count').textContent = data.counts.executions.toLocaleString();
     document.querySelector('#family-count').textContent = data.counts.families;
     document.querySelector('#generator-count').textContent = data.counts.active_generators;
-    document.querySelector('#latest-time').textContent = data.executions[0]
-      ? shortDate(data.executions[0].generated_at)
-      : 'awaiting first run';
+    document.querySelector('#latest-time').textContent = data.executions[0] ? shortDate(data.executions[0].generated_at) : 'awaiting first run';
     document.querySelector('#index-time').textContent = `index built ${shortDate(data.generated_at)}`;
     render();
     if (location.hash) openExecution(location.hash.slice(1));

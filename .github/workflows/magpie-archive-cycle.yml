@@ -48,7 +48,7 @@ jobs:
         run: |
           git config user.name "MZFS archive process"
           git config user.email "actions@users.noreply.github.com"
-          git add archive/records archive/executions data/archive-index.json
+          git add archive/records archive/executions archive/states archive/events data/archive-index.json data/generator-state
           git diff --cached --quiet && exit 0
-          git commit -m "archive: retain scheduled procedural execution"
+          git commit -m "archive: retain inherited procedural execution"
           git push
