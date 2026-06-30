@@ -1,0 +1,46 @@
+name: MAGPIE system intake
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'systems/**'
+      - 'schemas/magpie-system.schema.json'
+      - 'scripts/sync_magpie_systems.py'
+      - 'scripts/new_magpie_system.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: magpie-system-intake
+  cancel-in-progress: false
+
+jobs:
+  validate-and-register:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate and synchronize packages
+        run: |
+          python scripts/sync_magpie_systems.py
+          python scripts/build_archive_index.py
+
+      - name: Commit synchronized registries
+        run: |
+          git config user.name "MZFS system intake"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/families.json data/generators.json data/system-packages.json data/archive-index.json
+          git diff --cached --quiet && exit 0
+          git commit -m "systems: synchronize recovered interface registry"
+          git pull --rebase origin main
+          git push
