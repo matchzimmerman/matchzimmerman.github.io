@@ -47,21 +47,24 @@
 
     <section class="section-heading">
       <div><p class="kicker">AGENT HANDOFF</p><h2>Start Here</h2></div>
-      <p>Paste this instruction into any MAGPIE interface conversation before asking it to commit code or media.</p>
+      <p>Copy this instruction into any MAGPIE interface conversation before asking it to commit code or media.</p>
     </section>
     <section class="intake-command">
-      <pre><code>Work in the repository: matchzimmerman/matchzimmerman.github.io
+      <button id="copy-handoff" type="button">Copy handoff instruction</button>
+      <pre><code id="handoff-text">Work in the repository: matchzimmerman/matchzimmerman.github.io
 
 Before changing files:
 1. Read /AGENTS.md
 2. Read /systems/README.md
-3. Create one package at /systems/&lt;system-slug&gt;/
-4. Keep approved conversation renders in /systems/&lt;system-slug&gt;/reference/
-5. Put executable source in /systems/&lt;system-slug&gt;/src/
-6. Update that package's manifest.json
-7. Run: python scripts/sync_magpie_systems.py
-8. Run: python scripts/build_archive_index.py
-9. Commit the package, registries, and rebuilt index
+3. Check /systems/ for a reserved package matching this interface
+4. Update the existing package when one matches; do not create a duplicate family
+5. Only scaffold a new package when no registered family applies
+6. Keep approved conversation renders in the package's /reference/ directory
+7. Put executable source in the package's /src/ directory
+8. Update that package's manifest.json and provenance
+9. Run: python scripts/sync_magpie_systems.py
+10. Run: python scripts/build_archive_index.py
+11. Commit the package, registries, and rebuilt index
 
 Do not place source code inside archive/executions and do not overwrite another system's state.</code></pre>
     </section>
@@ -98,7 +101,7 @@ Do not place source code inside archive/executions and do not overwrite another 
 
     <section class="section-heading">
       <div><p class="kicker">PACKAGE REGISTRY</p><h2>Recovered Systems</h2></div>
-      <p>Packages appear here after their manifests are validated and synchronized.</p>
+      <p>Use the source path shown on each card. Packages appear here after their manifests are validated and synchronized.</p>
     </section>
     <section id="package-registry" class="package-registry" aria-live="polite"><p class="empty">Loading package registry…</p></section>
   </main>
