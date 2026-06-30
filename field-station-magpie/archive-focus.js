@@ -97,10 +97,10 @@ renderFamilies = function renderFamilies() {
   return families.map(family => {
     const records = familyExecutions(family.id);
     const latest = records[0];
-    const image = latest ? thumbnailFor(latest) : '';
-    const phase = latest?.developmental_phase || (latest ? 'retained study' : 'awaiting recovery');
+    const image = latest ? thumbnailFor(latest) : (family.preview_uri || '');
+    const phase = latest?.developmental_phase || family.autonomy_mode || (latest ? 'retained study' : 'awaiting recovery');
     return `<button class="family-card" data-family="${escapeHtml(family.id)}">
-      ${image ? `<div class="system-card-media"><img loading="lazy" src="${escapeHtml(image)}" alt="Latest retained output from ${escapeHtml(family.title)}"></div>` : ''}
+      ${image ? `<div class="system-card-media"><img loading="lazy" src="${escapeHtml(image)}" alt="System preview for ${escapeHtml(family.title)}"></div>` : ''}
       <span class="family-index">${escapeHtml(family.id)}</span>
       <div><h2>${escapeHtml(family.title)}</h2><p>${escapeHtml(family.summary)}</p></div>
       <div class="system-card-meta"><span>${records.length} iterations</span><span>${escapeHtml(phase)}</span></div>
@@ -119,7 +119,10 @@ openFamily = function openFamily(id) {
         <div class="record-media"><img src="${escapeHtml(thumbnailFor(record))}" alt="${escapeHtml(record.title)}">${mediaBadge(record)}${anomalyBadge(record)}</div>
         <div class="record-body"><span class="record-id">${escapeHtml(record.id)}</span><h2>${escapeHtml(record.title)}</h2></div>
       </button>`).join('')
-    : '<p class="empty">No retained iterations have been associated with this system yet.</p>';
+    : '<p class="empty">No autonomous iterations have been retained for this system yet. Approved reference media may still be available in its source package.</p>';
+  const manifestLink = family.manifest_uri
+    ? `<a href="${escapeHtml(family.manifest_uri)}">open system manifest</a>`
+    : 'legacy registry entry';
 
   dialogContent.innerHTML = `<article class="system-dialog">
     <section class="dialog-info system-overview">
@@ -129,9 +132,11 @@ openFamily = function openFamily(id) {
       <p>${escapeHtml(family.summary)}</p>
       <dl>
         <dt>canon status</dt><dd>${escapeHtml(family.status)}</dd>
+        <dt>autonomy</dt><dd>${escapeHtml(family.autonomy_mode || 'legacy / unclassified')}</dd>
         <dt>retained iterations</dt><dd>${records.length}</dd>
-        <dt>latest phase</dt><dd>${escapeHtml(latest?.developmental_phase || 'unclassified')}</dd>
+        <dt>latest phase</dt><dd>${escapeHtml(latest?.developmental_phase || family.autonomy_mode || 'unclassified')}</dd>
         <dt>latest activity</dt><dd>${latest ? escapeHtml(shortDate(latest.generated_at)) : 'none retained'}</dd>
+        <dt>source package</dt><dd>${manifestLink}</dd>
       </dl>
     </section>
     <section class="system-iterations">
