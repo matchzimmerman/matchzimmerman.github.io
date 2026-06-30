@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://matchzimmerman.com/schemas/magpie-system.schema.json",
+  "title": "MAGPIE recovered interface package",
+  "type": "object",
+  "required": ["schema_version", "mode", "family", "provenance"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "mode": {
+      "type": "string",
+      "enum": ["reference-only", "manual", "scheduled", "stateful-scheduled"]
+    },
+    "family": {
+      "type": "object",
+      "required": ["id", "slug", "title", "status", "summary"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^MZFS\\.FAM\\.[0-9]{4}$"},
+        "slug": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1},
+        "preview_uri": {"type": "string"},
+        "manifest_uri": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "generator": {
+      "type": "object",
+      "required": ["id", "slug", "title", "version", "enabled", "command", "media_type", "extension"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^MZFS\\.GEN\\.[0-9]{4}$"},
+        "slug": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "title": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "enabled": {"type": "boolean"},
+        "schedule_weight": {"type": "integer", "minimum": 1},
+        "command": {"type": "array", "minItems": 2, "items": {"type": "string"}},
+        "media_type": {"type": "string", "minLength": 1},
+        "extension": {"type": "string", "minLength": 1},
+        "thumbnail_extension": {"type": "string"},
+        "dimensions": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "storage_policy": {"type": "string"},
+        "stateful": {"type": "boolean"},
+        "state_path": {"type": "string"},
+        "state_snapshot_directory": {"type": "string"},
+        "event_log_directory": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["origin"],
+      "properties": {
+        "origin": {"type": "string"},
+        "conversation_title": {"type": "string"},
+        "source_notes": {"type": "string"},
+        "approved_reference_outputs": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
