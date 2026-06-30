@@ -1,5 +1,7 @@
 const registry = document.querySelector('#package-registry');
 const indexTime = document.querySelector('#package-index-time');
+const copyButton = document.querySelector('#copy-handoff');
+const handoffText = document.querySelector('#handoff-text');
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -8,6 +10,18 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+if (copyButton && handoffText) {
+  copyButton.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(handoffText.textContent.trim());
+      copyButton.textContent = 'Copied';
+      window.setTimeout(() => { copyButton.textContent = 'Copy handoff instruction'; }, 1800);
+    } catch (error) {
+      copyButton.textContent = 'Select and copy below';
+    }
+  });
 }
 
 const registryUrl = new URL('../data/system-packages.json', window.location.href);
@@ -30,7 +44,7 @@ fetch(registryUrl, { cache: 'no-store' })
       registry.innerHTML = `<article class="package-empty">
         <span>READY FOR INTAKE</span>
         <h3>No conversation packages have been synchronized yet.</h3>
-        <p>The existing archive systems remain available as legacy registry entries. New recovered conversations will appear here after they create a package and run the registry sync.</p>
+        <p>Reserved interface packages will appear here after the registry synchronization completes.</p>
       </article>`;
       return;
     }
