@@ -18,6 +18,7 @@ concurrency:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,11 +40,15 @@ jobs:
           python scripts/sync_magpie_systems.py
           python scripts/build_archive_index.py
 
-      - name: Generate three retained manual iterations
+      - name: Generate initial retained manual iterations
         run: |
-          python scripts/manual_archive_cycle.py --generator behavioral-cartography --seed 1701
-          python scripts/manual_archive_cycle.py --generator behavioral-cartography --seed 2307
-          python scripts/manual_archive_cycle.py --generator behavioral-cartography --seed 4812
+          if grep -R '"generator_id": "MZFS.GEN.0006"' archive/records >/dev/null 2>&1; then
+            echo "Behavioral cartography already has retained iterations; skipping seed run."
+          else
+            python scripts/manual_archive_cycle.py --generator behavioral-cartography --seed 1701
+            python scripts/manual_archive_cycle.py --generator behavioral-cartography --seed 2307
+            python scripts/manual_archive_cycle.py --generator behavioral-cartography --seed 4812
+          fi
 
       - name: Commit generated records and media
         run: |
