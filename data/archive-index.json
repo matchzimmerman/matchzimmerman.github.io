@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-06-30T14:41:50.084096Z",
+  "generated_at": "2026-06-30T14:42:06.785881Z",
   "counts": {
     "families": 10,
-    "generators": 3,
+    "generators": 4,
     "active_generators": 2,
     "executions": 17,
     "potential_anomalies": 0,
@@ -25,7 +25,10 @@
       "slug": "cassie-8bit",
       "title": "Cassie / MAGPIE 8-bit interface",
       "status": "KEEP",
-      "summary": "A 320x240 archive instrument with active maps, signal panels, humanized cursor motion, and event-linked typing and audio."
+      "summary": "A 320x240 archive instrument with active maps, signal panels, humanized cursor motion, and event-linked typing and audio.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/cassie-8bit",
+      "manifest_uri": "../systems/cassie-8bit/manifest.json"
     },
     {
       "id": "MZFS.FAM.0003",
@@ -152,6 +155,30 @@
       "stateful": false,
       "family_id": "MZFS.FAM.0001",
       "package_path": "systems/sys-03",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0004",
+      "slug": "cassie-8bit",
+      "title": "Cassie / MAGPIE 8-bit interface",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/cassie-8bit/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        320,
+        240
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0002",
+      "package_path": "systems/cassie-8bit",
       "autonomy_mode": "reference-only"
     }
   ],
