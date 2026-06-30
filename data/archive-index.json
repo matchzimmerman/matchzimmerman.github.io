@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-06-30T14:42:27.928345Z",
+  "generated_at": "2026-06-30T14:42:49.242990Z",
   "counts": {
     "families": 10,
-    "generators": 5,
+    "generators": 6,
     "active_generators": 2,
     "executions": 17,
     "potential_anomalies": 0,
@@ -45,7 +45,10 @@
       "slug": "behavioral-cartography",
       "title": "Thermal behavioral cartography",
       "status": "ACTIVE / CURRENT",
-      "summary": "A sensor engine tracking distinct moving presences, overlap complexity, residual paths, target locks, and camera-driven audio."
+      "summary": "A sensor engine tracking distinct moving presences, overlap complexity, residual paths, target locks, and camera-driven audio.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/behavioral-cartography",
+      "manifest_uri": "../systems/behavioral-cartography/manifest.json"
     },
     {
       "id": "MZFS.FAM.0005",
@@ -206,6 +209,30 @@
       "stateful": false,
       "family_id": "MZFS.FAM.0003",
       "package_path": "systems/hifi-dashboard",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0006",
+      "slug": "behavioral-cartography",
+      "title": "Thermal behavioral cartography",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/behavioral-cartography/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        960,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0004",
+      "package_path": "systems/behavioral-cartography",
       "autonomy_mode": "reference-only"
     }
   ],
