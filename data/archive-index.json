@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-06-30T14:41:16.736131Z",
+  "generated_at": "2026-06-30T14:41:50.084096Z",
   "counts": {
     "families": 10,
-    "generators": 2,
+    "generators": 3,
     "active_generators": 2,
     "executions": 17,
     "potential_anomalies": 0,
@@ -15,7 +15,10 @@
       "slug": "sys-03",
       "title": "MAGPIE SYS/03 / DOS operational interface",
       "status": "ROOT / KEEP",
-      "summary": "Low-resolution orange-on-charcoal operational systems: radar sweeps, routing paths, terminal fragments, and continuously changing state."
+      "summary": "Low-resolution orange-on-charcoal operational systems: radar sweeps, routing paths, terminal fragments, and continuously changing state.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/sys-03",
+      "manifest_uri": "../systems/sys-03/manifest.json"
     },
     {
       "id": "MZFS.FAM.0002",
@@ -126,6 +129,30 @@
       "state_path": "data/generator-state/field-station-signal-loop.json",
       "state_snapshot_directory": "archive/states/field-station-signal-loop",
       "event_log_directory": "archive/events"
+    },
+    {
+      "id": "MZFS.GEN.0003",
+      "slug": "sys-03",
+      "title": "MAGPIE SYS/03 / DOS operational interface",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/sys-03/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        960,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0001",
+      "package_path": "systems/sys-03",
+      "autonomy_mode": "reference-only"
     }
   ],
   "executions": [
