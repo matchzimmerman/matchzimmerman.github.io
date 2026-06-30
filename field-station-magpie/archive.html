@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Field Station: MAGPIE — The Archive</title>
+  <meta name="description" content="Recovered physical artifacts, interface systems, and digital documents from FIELD STATION: MAGPIE.">
+  <link rel="stylesheet" href="archive.css">
+  <link rel="stylesheet" href="lineage.css">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <header class="station-header">
+    <a class="home" href="../">MZCMG</a>
+    <div>
+      <a class="station-title-link" href="index.html"><p class="kicker">FIELD STATION: MAGPIE / M3RØ</p></a>
+      <h1>The Archive</h1>
+    </div>
+    <nav class="section-nav" aria-label="MAGPIE sections">
+      <a href="story.html">The Story</a>
+      <a href="system.html">The System</a>
+      <a href="archive.html" aria-current="page">The Archive</a>
+      <a href="artist.html">The Artist</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="definition">
+      <p>FIELD STATION: MAGPIE is a living collection of recovered physical artifacts, interface systems, digital documents, and incomplete records. As Recovery Agents document new material, the archive—and the story emerging through it—continues to expand.</p>
+      <p>The collection is organized by material type. Recovered interfaces are presented first as systems, then as the retained iterative outputs produced by those systems.</p>
+    </section>
+
+    <section class="collection-grid" aria-label="Archive collections">
+      <a class="collection-card" href="#physical-artifacts"><div><span>Collection 01</span><h2>Physical Artifacts</h2><p>Amplifier stacks, exhibition collections, tarps, painted interfaces, books, recovered equipment, and other material evidence.</p></div><strong>Collection records in preparation</strong></a>
+      <a class="collection-card" href="#recovered-interfaces"><div><span>Collection 02</span><h2>Recovered Interfaces</h2><p>Operational instruments and procedural systems organized by function, state, lineage, and retained iterative output.</p></div><strong>Active collection</strong></a>
+      <a class="collection-card" href="#digital-documents"><div><span>Collection 03</span><h2>Digital Documents</h2><p>Sound files, moving image, animation, field logs, maps, scans, code studies, and damaged or incomplete records.</p></div><strong>Collection records in preparation</strong></a>
+    </section>
+
+    <section class="instrument" aria-label="Archive status">
+      <div class="stat"><span>executions retained</span><strong id="execution-count">—</strong></div>
+      <div class="stat"><span>system families</span><strong id="family-count">—</strong></div>
+      <div class="stat"><span>active generators</span><strong id="generator-count">—</strong></div>
+      <div class="stat"><span>latest execution</span><strong id="latest-time">—</strong></div>
+    </section>
+
+    <section id="recovered-interfaces" class="archive-section-heading">
+      <div><p class="kicker">COLLECTION 02</p><h2>Recovered Interfaces</h2></div>
+      <p>Select <strong>systems</strong> to examine each recovered instrument and its function. Open a system to view all iterative outputs retained from that system.</p>
+    </section>
+
+    <section class="controls" aria-label="Archive controls">
+      <div class="view-switch">
+        <button data-view="executions">iterations</button>
+        <button class="active" data-view="families">systems</button>
+      </div>
+      <div class="archive-filters">
+        <label>anomaly
+          <select id="anomaly-filter">
+            <option value="all">all statuses</option>
+            <option value="any">any anomaly</option>
+            <option value="potential">potential anomaly</option>
+            <option value="confirmed">confirmed anomaly</option>
+            <option value="none">no anomaly tag</option>
+          </select>
+        </label>
+        <label>filter <input id="filter" type="search" autocomplete="off" placeholder="label / name / tag"></label>
+      </div>
+    </section>
+
+    <section id="archive" class="archive-grid" aria-live="polite"></section>
+
+    <section id="physical-artifacts" class="archive-section-heading"><div><p class="kicker">COLLECTION 01</p><h2>Physical Artifacts</h2></div><p>The AMP STACK, exhibition collections, tarps, painted interfaces, and related material records will be introduced here as they are catalogued.</p></section>
+    <section id="digital-documents" class="archive-section-heading"><div><p class="kicker">COLLECTION 03</p><h2>Digital Documents</h2></div><p>Sound, moving image, animation, maps, field logs, and other recovered files will be organized here as document records.</p></section>
+  </main>
+
+  <dialog id="record-dialog">
+    <button class="dialog-close" type="button" aria-label="Close">×</button>
+    <div id="dialog-content"></div>
+  </dialog>
+
+  <footer>
+    <span>MZFS / public archive instrument</span>
+    <span id="index-time">index pending</span>
+  </footer>
+  <script src="archive.js"></script>
+  <script src="archive-focus.js"></script>
+</body>
+</html>
