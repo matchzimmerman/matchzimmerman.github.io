@@ -1,0 +1,54 @@
+.system-references {
+  padding: 0 clamp(20px, 4vw, 54px) 10px;
+}
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.reference-card {
+  min-width: 0;
+  background: #050706;
+}
+.reference-media {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  padding: 18px;
+  background: #010201;
+  border-bottom: 1px solid var(--line);
+}
+.reference-media video,
+.reference-media img {
+  display: block;
+  width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  background: #000;
+}
+.reference-audio {
+  width: 100%;
+  display: grid;
+  gap: 14px;
+}
+.reference-audio audio { width: 100%; }
+.reference-copy { padding: 16px 18px 20px; }
+.reference-copy span {
+  color: var(--orange);
+  font-size: 8px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.reference-copy h3 {
+  margin: 10px 0 0;
+  font-size: clamp(20px, 2.6vw, 34px);
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: -.045em;
+}
+@media (max-width: 760px) {
+  .reference-grid { grid-template-columns: 1fr; }
+  .reference-media { min-height: 240px; }
+}
