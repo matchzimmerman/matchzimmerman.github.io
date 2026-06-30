@@ -18,6 +18,17 @@ ID_PATTERNS = {
     "generator": re.compile(r"^MZFS\.GEN\.(\d{4})$"),
 }
 VALID_MODES = {"reference-only", "manual", "scheduled", "stateful-scheduled"}
+MEDIA_TYPES = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+}
 
 
 def load(path: Path):
@@ -70,6 +81,26 @@ def id_sort(item: dict):
     return int(match.group(1)) if match else 999999
 
 
+def reference_outputs(package_dir: Path, provenance: dict, preview_uri: str | None) -> list[dict]:
+    outputs = []
+    for relative in provenance.get("approved_reference_outputs", []):
+        path = package_dir / relative
+        suffix = path.suffix.lower()
+        media_type = MEDIA_TYPES.get(suffix)
+        if not media_type or path.name.lower().startswith("preview"):
+            continue
+        outputs.append(
+            {
+                "title": path.stem.replace("-", " ").replace("_", " ").title(),
+                "uri": browser_uri(path),
+                "media_type": media_type,
+                "thumbnail_uri": preview_uri,
+                "status": "APPROVED REFERENCE",
+            }
+        )
+    return outputs
+
+
 def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
     package_dir = manifest_path.parent
     slug = package_dir.name
@@ -99,14 +130,21 @@ def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
     else:
         family.pop("preview_uri", None)
 
+    provenance = dict(manifest.get("provenance") or {})
+    provenance.setdefault("origin", "conversation recovery")
+    approved = reference_outputs(package_dir, provenance, family.get("preview_uri"))
+    if approved:
+        family["reference_outputs"] = approved
+    else:
+        family.pop("reference_outputs", None)
+
     generator_payload = manifest.get("generator")
     generator = None
     if generator_payload:
         generator = dict(generator_payload)
         generator_id = require(generator, "id", context)
         validate_id(generator_id, "generator", context)
-        if require(generator, "slug", context) != slug:
-            raise SystemExit(f"{context}: generator slug must match directory name {slug!r}")
+        require(generator, "slug", context)
         require(generator, "title", context)
         require(generator, "version", context)
         command = require(generator, "command", context)
@@ -138,8 +176,6 @@ def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
     if mode != "reference-only" and generator is None:
         raise SystemExit(f"{context}: mode {mode!r} requires a generator block")
 
-    provenance = dict(manifest.get("provenance") or {})
-    provenance.setdefault("origin", "conversation recovery")
     package_summary = {
         "slug": slug,
         "mode": mode,
@@ -152,7 +188,7 @@ def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
         "manifest_uri": family["manifest_uri"],
         "source_directory": family["source_directory"],
         "conversation_title": provenance.get("conversation_title", ""),
-        "approved_reference_outputs": provenance.get("approved_reference_outputs", []),
+        "approved_reference_outputs": approved,
     }
     return family, generator, package_summary
 
