@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-06-30T14:42:06.785881Z",
+  "generated_at": "2026-06-30T14:42:27.928345Z",
   "counts": {
     "families": 10,
-    "generators": 4,
+    "generators": 5,
     "active_generators": 2,
     "executions": 17,
     "potential_anomalies": 0,
@@ -35,7 +35,10 @@
       "slug": "hifi-dashboard",
       "title": "Hi-fi dashboard",
       "status": "KEEP / BRIDGE",
-      "summary": "A more detailed continuous work session built from embedded screens, archive routing, scanning, and spatially organized information."
+      "summary": "A more detailed continuous work session built from embedded screens, archive routing, scanning, and spatially organized information.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/hifi-dashboard",
+      "manifest_uri": "../systems/hifi-dashboard/manifest.json"
     },
     {
       "id": "MZFS.FAM.0004",
@@ -179,6 +182,30 @@
       "stateful": false,
       "family_id": "MZFS.FAM.0002",
       "package_path": "systems/cassie-8bit",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0005",
+      "slug": "hifi-dashboard",
+      "title": "Hi-fi dashboard",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/hifi-dashboard/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0003",
+      "package_path": "systems/hifi-dashboard",
       "autonomy_mode": "reference-only"
     }
   ],
