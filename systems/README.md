@@ -49,6 +49,8 @@ archive/events/
 
 9. Commit the package, both registry files, and the rebuilt archive index.
 
+When an agent can only commit the package, the `MAGPIE system intake` GitHub Action validates the manifest, synchronizes the registries, and rebuilds the public index automatically.
+
 ## Generator command-line contract
 
 Every autonomous generator must accept:
@@ -83,7 +85,7 @@ Stateful metadata may include the lineage fields already supported by `scripts/a
 Use one of these manifest modes:
 
 - `reference-only`: script and approved outputs are visible, but nothing runs automatically.
-- `manual`: registered generator can be invoked directly with `archive_cycle.py --generator <slug>`.
+- `manual`: registered generator is retained outside the schedule and can be run with `python scripts/manual_archive_cycle.py --generator <slug>`.
 - `scheduled`: generator is eligible for the recurring GitHub Actions archive cycle.
 - `stateful-scheduled`: scheduled and inherits persistent state across executions.
 
