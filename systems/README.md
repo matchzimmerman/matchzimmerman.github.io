@@ -26,28 +26,48 @@ archive/states/<system-slug>/
 archive/events/
 ```
 
+## Reserved recovery targets
+
+Use these existing packages instead of creating duplicate families:
+
+| Interface family | Package |
+|---|---|
+| MAGPIE SYS/03 | `systems/sys-03/` |
+| Cassie 8-bit interface | `systems/cassie-8bit/` |
+| Hi-fi dashboard | `systems/hifi-dashboard/` |
+| Thermal behavioral cartography | `systems/behavioral-cartography/` |
+| FIELD STATION operational instrument | `systems/field-station/` |
+| 32-bit CRT display protocol | `systems/crt-protocol/` |
+| Signal / conformal field instrument | `systems/signal-conformal/` |
+| P03B CHAMBER STATIC | `systems/chamber-static/` |
+| Modular MAGPIE workstation | `systems/modular-workstation/` |
+| Archive / HARIL visualization | `systems/archive-haril/` |
+
+Only scaffold a new package when the recovered work does not belong to one of these families.
+
 ## Required handoff procedure
 
 1. Fetch the latest `main` branch.
 2. Read `AGENTS.md` and this file.
-3. Create a new package from `systems/_template/` or run:
+3. Check the reserved recovery targets above and update the matching package when one exists.
+4. For genuinely new work, copy `systems/_template/` or run:
 
    ```bash
    python scripts/new_magpie_system.py --slug <slug> --title "<title>" --media-type video/mp4
    ```
 
-4. Put working source code in `systems/<slug>/src/`.
-5. Put one approved still or thumbnail at `systems/<slug>/reference/preview.jpg` whenever possible.
-6. Update `manifest.json` with accurate metadata.
-7. Test the generator locally using the required command-line contract below.
-8. Run:
+5. Put working source code in `systems/<slug>/src/`.
+6. Put one approved still or thumbnail at `systems/<slug>/reference/preview.jpg` whenever possible.
+7. Update `manifest.json` with accurate metadata.
+8. Test the generator locally using the required command-line contract below.
+9. Run:
 
    ```bash
    python scripts/sync_magpie_systems.py
    python scripts/build_archive_index.py
    ```
 
-9. Commit the package, both registry files, and the rebuilt archive index.
+10. Commit the package, both registry files, and the rebuilt archive index.
 
 When an agent can only commit the package, the `MAGPIE system intake` GitHub Action validates the manifest, synchronizes the registries, and rebuilds the public index automatically.
 
