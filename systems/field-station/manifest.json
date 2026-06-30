@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "stateful-scheduled",
+  "family": {
+    "id": "MZFS.FAM.0005",
+    "slug": "field-station",
+    "title": "FIELD STATION operational instrument",
+    "status": "KEEP / CANONICAL",
+    "summary": "The primary broadcast identity: operational header, rolling AB'S LOGS, shared procedural variables, and accumulated orange annotation."
+  },
+  "generator": {
+    "id": "MZFS.GEN.0002",
+    "slug": "field-station",
+    "title": "Field Station Signal Loop",
+    "version": "2.0.0",
+    "enabled": true,
+    "schedule_weight": 3,
+    "command": ["python", "scripts/generators/field_station_signal_loop.py"],
+    "media_type": "video/mp4",
+    "extension": "mp4",
+    "thumbnail_extension": "jpg",
+    "dimensions": [960, 720],
+    "storage_policy": "repository-under-50mb",
+    "stateful": true,
+    "state_path": "data/generator-state/field-station-signal-loop.json",
+    "state_snapshot_directory": "archive/states/field-station-signal-loop",
+    "event_log_directory": "archive/events"
+  },
+  "provenance": {
+    "origin": "existing autonomous MAGPIE generator",
+    "conversation_title": "",
+    "source_notes": "Canonical stateful system. Source remains in scripts/generators until a conversation recovery migrates it into this package.",
+    "approved_reference_outputs": []
+  }
+}
