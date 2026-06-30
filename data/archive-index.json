@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-06-30T14:42:49.242990Z",
+  "generated_at": "2026-06-30T14:51:06.801761Z",
   "counts": {
     "families": 10,
-    "generators": 6,
+    "generators": 10,
     "active_generators": 2,
     "executions": 17,
     "potential_anomalies": 0,
@@ -55,51 +55,68 @@
       "slug": "field-station",
       "title": "FIELD STATION operational instrument",
       "status": "KEEP / CANONICAL",
-      "summary": "The primary broadcast identity: operational header, rolling AB'S LOGS, shared procedural variables, and accumulated orange annotation."
+      "summary": "The primary broadcast identity: operational header, rolling AB'S LOGS, shared procedural variables, and accumulated orange annotation.",
+      "autonomy_mode": "stateful-scheduled",
+      "source_directory": "systems/field-station",
+      "manifest_uri": "../systems/field-station/manifest.json"
     },
     {
       "id": "MZFS.FAM.0006",
       "slug": "crt-protocol",
       "title": "32-bit CRT display protocol",
       "status": "KEEP / SUPPORT",
-      "summary": "A 4:3 low-resolution display layer with rounded-glass curvature, crisp bitmap typography, and a visible rolling exposure band."
+      "summary": "A 4:3 low-resolution display layer with rounded-glass curvature, crisp bitmap typography, and a visible rolling exposure band.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/crt-protocol",
+      "manifest_uri": "../systems/crt-protocol/manifest.json"
     },
     {
       "id": "MZFS.FAM.0007",
       "slug": "signal-conformal",
       "title": "Signal / conformal field instrument",
       "status": "KEEP",
-      "summary": "Flowing phosphor fields and orange relation lattices that measure, average, retain, and rebuild their own geometry."
+      "summary": "Flowing phosphor fields and orange relation lattices that measure, average, retain, and rebuild their own geometry.",
+      "autonomy_mode": "scheduled",
+      "source_directory": "systems/signal-conformal",
+      "manifest_uri": "../systems/signal-conformal/manifest.json"
     },
     {
       "id": "MZFS.FAM.0008",
       "slug": "chamber-static",
       "title": "P03B CHAMBER STATIC interface instrument",
       "status": "APPROVED",
-      "summary": "A full-frame diagnostic instrument whose pressure, displacement, residue, anomaly, contour, and log modules share chamber state."
+      "summary": "A full-frame diagnostic instrument whose pressure, displacement, residue, anomaly, contour, and log modules share chamber state.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/chamber-static",
+      "manifest_uri": "../systems/chamber-static/manifest.json"
     },
     {
       "id": "MZFS.FAM.0009",
       "slug": "modular-workstation",
       "title": "Modular MAGPIE workstation / painted-interface system",
       "status": "ACTIVE",
-      "summary": "Physical and digital interface windows arranged as reusable modules across installations, paintings, and gallery touch systems."
+      "summary": "Physical and digital interface windows arranged as reusable modules across installations, paintings, and gallery touch systems.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/modular-workstation",
+      "manifest_uri": "../systems/modular-workstation/manifest.json"
     },
     {
       "id": "MZFS.FAM.0010",
       "slug": "archive-haril",
       "title": "Archive / HARIL visualization interfaces",
       "status": "ACTIVE / CENTRAL",
-      "summary": "Topographies of conversational pressure, threaded networks, braided structures, archive weather, and orange resonance accumulation."
+      "summary": "Topographies of conversational pressure, threaded networks, braided structures, archive weather, and orange resonance accumulation.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/archive-haril",
+      "manifest_uri": "../systems/archive-haril/manifest.json"
     }
   ],
   "generators": [
     {
       "id": "MZFS.GEN.0001",
-      "slug": "signal-field-svg",
+      "slug": "signal-conformal",
       "title": "Signal Memory / Relation Field",
       "version": "1.0.0",
-      "family_id": "MZFS.FAM.0007",
       "enabled": true,
       "schedule_weight": 1,
       "command": [
@@ -112,14 +129,17 @@
         960,
         720
       ],
-      "storage_policy": "repository-under-250kb"
+      "storage_policy": "repository-under-250kb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0007",
+      "package_path": "systems/signal-conformal",
+      "autonomy_mode": "scheduled"
     },
     {
       "id": "MZFS.GEN.0002",
-      "slug": "field-station-signal-loop",
+      "slug": "field-station",
       "title": "Field Station Signal Loop",
       "version": "2.0.0",
-      "family_id": "MZFS.FAM.0005",
       "enabled": true,
       "schedule_weight": 3,
       "command": [
@@ -137,7 +157,10 @@
       "stateful": true,
       "state_path": "data/generator-state/field-station-signal-loop.json",
       "state_snapshot_directory": "archive/states/field-station-signal-loop",
-      "event_log_directory": "archive/events"
+      "event_log_directory": "archive/events",
+      "family_id": "MZFS.FAM.0005",
+      "package_path": "systems/field-station",
+      "autonomy_mode": "stateful-scheduled"
     },
     {
       "id": "MZFS.GEN.0003",
@@ -233,6 +256,102 @@
       "stateful": false,
       "family_id": "MZFS.FAM.0004",
       "package_path": "systems/behavioral-cartography",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0007",
+      "slug": "crt-protocol",
+      "title": "32-bit CRT display protocol",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/crt-protocol/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        960,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0006",
+      "package_path": "systems/crt-protocol",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0008",
+      "slug": "chamber-static",
+      "title": "P03B CHAMBER STATIC interface instrument",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/chamber-static/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        960,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0008",
+      "package_path": "systems/chamber-static",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0009",
+      "slug": "modular-workstation",
+      "title": "Modular MAGPIE workstation / painted-interface system",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/modular-workstation/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        960,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0009",
+      "package_path": "systems/modular-workstation",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0010",
+      "slug": "archive-haril",
+      "title": "Archive / HARIL visualization interfaces",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/archive-haril/src/generator.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        960,
+        720
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0010",
+      "package_path": "systems/archive-haril",
       "autonomy_mode": "reference-only"
     }
   ],
