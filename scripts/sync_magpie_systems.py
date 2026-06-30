@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate MAGPIE system packages and upsert them into the public registries."""
+"""Validate MAGPIE system packages and synchronize the public registries."""
 from __future__ import annotations
 
 import datetime as dt
@@ -96,8 +96,8 @@ def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
     preview_path = package_dir / "reference" / "preview.jpg"
     if preview_path.exists():
         family["preview_uri"] = browser_uri(preview_path)
-    elif family.get("preview_uri"):
-        family["preview_uri"] = family["preview_uri"]
+    else:
+        family.pop("preview_uri", None)
 
     generator_payload = manifest.get("generator")
     generator = None
@@ -114,15 +114,12 @@ def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
             raise SystemExit(f"{context}: generator command must contain an executable and source path")
         require(generator, "media_type", context)
         require(generator, "extension", context)
+
         generator["family_id"] = family_id
         generator["package_path"] = f"systems/{slug}"
         generator["autonomy_mode"] = mode
         generator["schedule_weight"] = max(1, int(generator.get("schedule_weight", 1)))
-
-        if mode in {"reference-only", "manual"}:
-            generator["enabled"] = False
-        else:
-            generator["enabled"] = True
+        generator["enabled"] = mode in {"scheduled", "stateful-scheduled"}
 
         if not str(generator["media_type"]).startswith("image/") and not generator.get("thumbnail_extension"):
             raise SystemExit(f"{context}: non-image generators require thumbnail_extension")
@@ -161,8 +158,14 @@ def normalize_package(manifest_path: Path) -> tuple[dict, dict | None, dict]:
 
 
 def main() -> None:
-    families = load(FAMILIES_PATH)
-    generators = load(GENERATORS_PATH)
+    families = [
+        item for item in load(FAMILIES_PATH)
+        if not str(item.get("source_directory", "")).startswith("systems/")
+    ]
+    generators = [
+        item for item in load(GENERATORS_PATH)
+        if not str(item.get("package_path", "")).startswith("systems/")
+    ]
     package_summaries = []
 
     manifests = sorted(
