@@ -1,9 +1,9 @@
 {
   "schema_version": "1.1.0",
-  "generated_at": "2026-07-28T12:12:15.722117Z",
+  "generated_at": "2026-07-28T12:13:09.329824Z",
   "counts": {
-    "families": 10,
-    "generators": 10,
+    "families": 11,
+    "generators": 11,
     "active_generators": 2,
     "executions": 379,
     "potential_anomalies": 1,
@@ -119,6 +119,16 @@
       "autonomy_mode": "reference-only",
       "source_directory": "systems/archive-haril",
       "manifest_uri": "../systems/archive-haril/manifest.json"
+    },
+    {
+      "id": "MZFS.FAM.0011",
+      "slug": "quartz-transmission",
+      "title": "Quartz Transmission",
+      "status": "EXPERIMENTAL / KEEP",
+      "summary": "A long-form 1-bit faceted mineral study that moves from rotating monolith through optical bloom, rupture, helical shard capture, and cubic reassembly.",
+      "autonomy_mode": "reference-only",
+      "source_directory": "systems/quartz-transmission",
+      "manifest_uri": "../systems/quartz-transmission/manifest.json"
     }
   ],
   "generators": [
@@ -365,6 +375,30 @@
       "stateful": false,
       "family_id": "MZFS.FAM.0010",
       "package_path": "systems/archive-haril",
+      "autonomy_mode": "reference-only"
+    },
+    {
+      "id": "MZFS.GEN.0011",
+      "slug": "quartz-transmission",
+      "title": "Quartz Transmission / 1-bit mineral evolution",
+      "version": "0.1.0",
+      "enabled": false,
+      "schedule_weight": 1,
+      "command": [
+        "python",
+        "systems/quartz-transmission/src/render.py"
+      ],
+      "media_type": "video/mp4",
+      "extension": "mp4",
+      "thumbnail_extension": "jpg",
+      "dimensions": [
+        640,
+        360
+      ],
+      "storage_policy": "repository-under-50mb",
+      "stateful": false,
+      "family_id": "MZFS.FAM.0011",
+      "package_path": "systems/quartz-transmission",
       "autonomy_mode": "reference-only"
     }
   ],
