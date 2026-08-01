@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ff2aa1" />
+  <meta name="description" content="An endless public counter measuring the seconds since launch." />
+  <meta property="og:title" content="INFINITE SECONDS" />
+  <meta property="og:description" content="The age of this page, measured in seconds." />
+  <meta property="og:type" content="website" />
+  <title>0 — INFINITE SECONDS</title>
+  <style>
+    :root {
+      color-scheme: only light;
+      --background: #ff2aa1;
+      --foreground: #d8ff00;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--background);
+      overscroll-behavior: none;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      transition: background-color 100ms steps(1, end);
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100dvh;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      touch-action: none;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="counter" aria-hidden="true"></canvas>
+  <output id="accessible-counter" class="sr-only" aria-live="off">0 seconds since launch</output>
+
+  <script>
+    (() => {
+      'use strict';
+
+      // The shared origin point for every visitor.
+      const LAUNCH_MS = Date.parse('2026-08-01T04:28:33.000Z');
+      const PALETTE_INTERVAL_SECONDS = 10;
+
+      const palettes = [
+        { background: '#ff2aa1', foreground: '#d8ff00' },
+        { background: '#00e5ff', foreground: '#ff3d00' },
+        { background: '#fff000', foreground: '#5b00ff' },
+        { background: '#6a00ff', foreground: '#ff8a00' },
+        { background: '#00f08a', foreground: '#ff176b' }
+      ];
+
+      const glyphs = {
+        '0': ['111', '101', '101', '101', '101', '101', '111'],
+        '1': ['010', '110', '010', '010', '010', '010', '111'],
+        '2': ['111', '001', '001', '111', '100', '100', '111'],
+        '3': ['111', '001', '001', '111', '001', '001', '111'],
+        '4': ['101', '101', '101', '111', '001', '001', '001'],
+        '5': ['111', '100', '100', '111', '001', '001', '111'],
+        '6': ['111', '100', '100', '111', '101', '101', '111'],
+        '7': ['111', '001', '001', '001', '001', '001', '001'],
+        '8': ['111', '101', '101', '111', '101', '101', '111'],
+        '9': ['111', '101', '101', '111', '001', '001', '111']
+      };
+
+      const canvas = document.getElementById('counter');
+      const accessibleCounter = document.getElementById('accessible-counter');
+      const context = canvas.getContext('2d', { alpha: false });
+      const root = document.documentElement;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+      let previousSecond = -1;
+      let previousPalette = -1;
+      let viewportWidth = 0;
+      let viewportHeight = 0;
+
+      const secondsSinceLaunch = () => Math.max(0, Math.floor((Date.now() - LAUNCH_MS) / 1000));
+
+      function resizeCanvas() {
+        viewportWidth = window.innerWidth;
+        viewportHeight = window.innerHeight;
+
+        const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(viewportWidth * deviceScale);
+        canvas.height = Math.round(viewportHeight * deviceScale);
+        canvas.style.width = `${viewportWidth}px`;
+        canvas.style.height = `${viewportHeight}px`;
+        context.setTransform(deviceScale, 0, 0, deviceScale, 0, 0);
+        context.imageSmoothingEnabled = false;
+      }
+
+      function paletteFor(second) {
+        const interval = reducedMotion.matches ? 60 : PALETTE_INTERVAL_SECONDS;
+        return Math.floor(second / interval) % palettes.length;
+      }
+
+      function draw(second) {
+        const value = String(second);
+        const paletteIndex = paletteFor(second);
+        const palette = palettes[paletteIndex];
+
+        if (paletteIndex !== previousPalette) {
+          root.style.setProperty('--background', palette.background);
+          root.style.setProperty('--foreground', palette.foreground);
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', palette.background);
+          previousPalette = paletteIndex;
+        }
+
+        context.fillStyle = palette.background;
+        context.fillRect(0, 0, viewportWidth, viewportHeight);
+
+        const digitColumns = 3;
+        const digitRows = 7;
+        const columnGap = 1;
+        const rowRatio = 1.55;
+        const totalColumns = value.length * digitColumns + Math.max(0, value.length - 1) * columnGap;
+        const horizontalMargin = Math.max(18, viewportWidth * 0.055);
+        const verticalMargin = Math.max(18, viewportHeight * 0.09);
+
+        const blockWidthFromWidth = (viewportWidth - horizontalMargin * 2) / totalColumns;
+        const blockWidthFromHeight = (viewportHeight - verticalMargin * 2) / (digitRows * rowRatio);
+        const blockWidth = Math.max(1, Math.floor(Math.min(blockWidthFromWidth, blockWidthFromHeight)));
+        const blockHeight = Math.max(1, Math.floor(blockWidth * rowRatio));
+        const digitWidth = digitColumns * blockWidth;
+        const gapWidth = columnGap * blockWidth;
+        const totalWidth = value.length * digitWidth + Math.max(0, value.length - 1) * gapWidth;
+        const totalHeight = digitRows * blockHeight;
+        const startX = Math.floor((viewportWidth - totalWidth) / 2);
+        const startY = Math.floor((viewportHeight - totalHeight) / 2);
+
+        context.fillStyle = palette.foreground;
+
+        for (let digitIndex = 0; digitIndex < value.length; digitIndex += 1) {
+          const glyph = glyphs[value[digitIndex]];
+          const digitX = startX + digitIndex * (digitWidth + gapWidth);
+
+          for (let row = 0; row < digitRows; row += 1) {
+            for (let column = 0; column < digitColumns; column += 1) {
+              if (glyph[row][column] === '1') {
+                context.fillRect(
+                  digitX + column * blockWidth,
+                  startY + row * blockHeight,
+                  blockWidth,
+                  blockHeight
+                );
+              }
+            }
+          }
+        }
+
+        document.title = `${value} — INFINITE SECONDS`;
+        accessibleCounter.value = `${value} seconds since launch`;
+      }
+
+      function tick() {
+        const currentSecond = secondsSinceLaunch();
+
+        if (currentSecond !== previousSecond) {
+          draw(currentSecond);
+          previousSecond = currentSecond;
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      function redraw() {
+        resizeCanvas();
+        previousSecond = -1;
+        draw(secondsSinceLaunch());
+      }
+
+      window.addEventListener('resize', redraw, { passive: true });
+      window.addEventListener('orientationchange', redraw, { passive: true });
+      reducedMotion.addEventListener?.('change', () => {
+        previousPalette = -1;
+        previousSecond = -1;
+      });
+
+      resizeCanvas();
+      tick();
+    })();
+  </script>
+</body>
+</html>
