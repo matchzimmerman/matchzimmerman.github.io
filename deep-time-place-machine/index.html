@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep-Time Place Machine // 001</title>
+<style>
+:root{--ink:#0a0a0a;--paper:#f2f0e8;--acid:#dfff00;--hot:#ff5b35;--cyan:#63e8ff;--dim:#9f9d95;--line:rgba(242,240,232,.22)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--ink);color:var(--paper);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.018) 3px 4px);mix-blend-mode:screen;z-index:99}
+.shell{width:min(1800px,100%);margin:0 auto;padding:22px}.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;border-top:10px solid var(--acid);padding-top:14px;margin-bottom:18px}
+.eyebrow,.micro{margin:0 0 8px;font-size:11px;letter-spacing:.12em;color:var(--acid);text-transform:uppercase}h1{font-family:Arial Black,Impact,sans-serif;font-size:clamp(42px,7vw,104px);line-height:.78;letter-spacing:-.055em;margin:0}
+.status-stack{display:flex;flex-direction:column;gap:6px;align-items:flex-end}.status{border:1px solid var(--acid);color:var(--acid);padding:5px 7px;font-size:10px;letter-spacing:.08em}.status.muted{border-color:var(--line);color:var(--dim)}
+.stage-grid{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(300px,.75fr);gap:14px}.panel{border:1px solid var(--line);background:rgba(255,255,255,.025)}.map-panel{padding:14px;min-width:0}
+.map-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}.map-head strong{font-size:13px}.time-readout{font-family:Arial Black,Impact,sans-serif;font-size:56px;line-height:.8;color:var(--acid)}.time-readout small{font:12px ui-monospace,monospace;margin-left:4px;color:var(--paper)}
+.canvas-wrap{position:relative;aspect-ratio:1.89/1;min-height:360px;overflow:hidden;border:1px solid var(--line);background:#111}canvas{width:100%;height:100%;display:block}
+.map-key{position:absolute;left:9px;bottom:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:9px;text-transform:uppercase;background:rgba(0,0,0,.75);padding:6px}.map-key span{display:flex;gap:5px;align-items:center}
+.key-line,.key-link{width:18px;height:2px;background:var(--paper);display:inline-block}.key-link{background:var(--hot)}.key-dot{width:7px;height:7px;border-radius:50%;background:var(--acid);display:inline-block}
+.timeline{margin-top:12px}.timeline-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--dim)}input[type=range]{width:100%;accent-color:var(--acid)}.snap-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.snap{background:transparent;color:var(--paper);border:1px solid var(--line);font:10px ui-monospace,monospace;padding:5px 7px;cursor:pointer}.snap:hover,.snap.active{border-color:var(--acid);color:var(--acid)}
+.side-panel{display:grid;gap:14px;align-content:start}.story-panel,.compare-panel,.geology-panel{padding:16px}.story-panel h2{font-family:Arial Black,Impact,sans-serif;font-size:clamp(26px,3vw,48px);line-height:.9;margin:10px 0 16px}
+.story-panel p:not(.micro){font-size:13px;line-height:1.55}.caveat{color:var(--dim);font-size:10px!important;line-height:1.45!important}.compare-value{font-family:Arial Black,Impact,sans-serif;color:var(--hot);font-size:52px;line-height:1;margin:12px 0 4px}
+.compare-value small{font:12px ui-monospace,monospace;color:var(--paper)}.compare-label{font-size:11px;line-height:1.4;text-transform:uppercase}.geology-head{display:flex;justify-content:space-between;gap:8px;align-items:start}.geology-head h3{margin:0;font-size:18px}
+select{background:var(--ink);color:var(--paper);border:1px solid var(--line);max-width:140px;padding:5px;font:10px ui-monospace,monospace}.geology-data{margin-top:16px;display:grid;gap:8px;font-size:11px;line-height:1.4}
+.geo-row{border-top:1px solid var(--line);padding-top:7px}.geo-row b{display:block;color:var(--acid);font-size:9px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}.places-panel{margin-top:14px;padding:12px 14px}
+.places-head{display:flex;justify-content:space-between;gap:12px;font-size:9px;color:var(--dim)}.place-chips{display:flex;flex-wrap:wrap;gap:7px}.place-chip{border:1px solid var(--line);background:transparent;color:var(--paper);padding:7px 9px;font:10px ui-monospace,monospace;cursor:pointer;text-align:left}
+.place-chip:hover,.place-chip.active{color:var(--ink);background:var(--acid);border-color:var(--acid)}footer{display:flex;justify-content:space-between;gap:20px;margin-top:12px;color:var(--dim);font-size:9px;text-transform:uppercase}
+@media(max-width:980px){.stage-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.status-stack{align-items:flex-start}.canvas-wrap{min-height:300px}footer{flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="topbar">
+<div><p class="eyebrow">MZ R+D // GEOLOGIC TIME INSTRUMENT</p><h1>DEEP-TIME<br>PLACE MACHINE</h1></div>
+<div class="status-stack" aria-live="polite"><span id="gwsStatus" class="status">GPLATES: CONNECTING</span><span id="macroStatus" class="status muted">MACROSTRAT: READY</span></div>
+</header>
+<section class="stage-grid">
+<section class="map-panel panel">
+<div class="map-head"><div><span class="micro">RECONSTRUCTION MODEL</span><strong>CAO2024 // 0–1800 Ma</strong></div><div class="time-readout"><span id="timeValue">200</span><small>Ma</small></div></div>
+<div class="canvas-wrap"><canvas id="mapCanvas" width="1440" height="760" aria-label="Plate reconstruction map"></canvas>
+<div class="map-key"><span><i class="key-line"></i> reconstructed coastlines</span><span><i class="key-dot"></i> place on reconstructed crust</span><span><i class="key-link"></i> Maine ↔ Ireland comparison</span></div></div>
+<div class="timeline"><div class="timeline-labels"><span>NOW</span><span>1.2 BILLION YEARS AGO</span></div><input id="timeSlider" type="range" min="0" max="1200" step="5" value="200" aria-label="Geologic time in millions of years ago" /><div class="snap-row" id="snapRow"></div></div>
+</section>
+<aside class="side-panel">
+<section class="panel story-panel"><p class="micro">NEAREST STORY MARKER</p><h2 id="storyTitle">PANGAEA STARTS TO RIP</h2><p id="storyText"></p><p id="storyCaveat" class="caveat"></p></section>
+<section class="panel compare-panel"><p class="micro">COAST-TO-COAST HYPOTHESIS</p><div class="compare-value"><span id="separationValue">—</span><small> km</small></div><p class="compare-label">modeled separation: Cape Elizabeth, Maine ↔ County Clare, Ireland</p><p class="caveat">This tracks two modern reference points backward with a plate model. It does not imply that today’s exact shorelines fit together.</p></section>
+<section class="panel geology-panel"><div class="geology-head"><div><p class="micro">PRESENT-DAY GEOLOGY // MACROSTRAT</p><h3 id="placeTitle">Dinosaur State Park</h3></div><select id="placeSelect" aria-label="Choose a place"></select></div><div id="geologyData" class="geology-data">Choose a place to inspect its mapped surface geology.</div></section>
+</aside></section>
+<section class="places-panel panel"><div class="places-head"><p class="micro">PLACES PINNED TO THIS TRIP / INQUIRY</p><span>click to inspect</span></div><div id="placeChips" class="place-chips"></div></section>
+<footer><p>LIVE DATA: GPlates Web Service + Macrostrat API. Story markers are interpretive annotations layered over scientific reconstruction data.</p><p>PROTOTYPE 001 // LIVE GITHUB PAGES BUILD</p></footer>
+</main>
+<script>
+const GWS='https://gws.gplates.org',MACRO='https://macrostrat.org/api/v2',MODEL='CAO2024';
+const places=[
+{id:'rocky-hill',name:'Dinosaur State Park',short:'ROCKY HILL, CT',lat:41.6526,lon:-72.6562},
+{id:'east-windsor',name:'East Windsor',short:'EAST WINDSOR, CT',lat:41.9168,lon:-72.5570},
+{id:'artists-rock',name:"Artist's Rock / Catskills",short:"ARTIST'S ROCK, NY",lat:42.1986,lon:-74.0466},
+{id:'storm-king',name:'Storm King Art Center',short:'STORM KING, NY',lat:41.4256,lon:-74.0590},
+{id:'maine',name:'Cape Elizabeth / Maine Coast',short:'CAPE ELIZABETH, ME',lat:43.5637,lon:-70.2001},
+{id:'ireland',name:'County Clare / Irish Coast',short:'COUNTY CLARE, IE',lat:52.9715,lon:-9.4309}];
+const story=[
+{time:0,title:'THE PRESENT SURFACE',text:'The landscape we see now is the latest frame: eroded Appalachians, glacially modified coasts, exposed Catskill plateau, and ancient Hudson Highlands basement at the surface.'},
+{time:100,title:'THE ATLANTIC WIDENS',text:'North America and Europe are already well separated. The Atlantic is expanding along the Mid-Atlantic Ridge while erosion keeps reducing the Appalachians.'},
+{time:200,title:'PANGAEA STARTS TO RIP',text:'Rifting opens basins across eastern North America. The future Connecticut River Valley becomes a fault-bounded sediment trap — exactly the kind of place that can preserve dinosaur track surfaces.'},
+{time:300,title:'PANGAEA ASSEMBLES',text:'Africa and North America converge during the late stages of Appalachian mountain building. The pieces that will become Maine and Ireland occupy the same broad continental system.'},
+{time:380,title:'THE CATSKILLS ARE SEDIMENT',text:'Acadian highlands to the east shed enormous volumes of sand, silt, mud, and gravel westward. Those deposits harden into much of the rock that will later be carved into the Catskills.'},
+{time:450,title:'IAPETUS IS CLOSING',text:'An older ocean is being consumed as terranes and continents converge. This long collision history helps build the connected Appalachian–Caledonian mountain system across what are now separate Atlantic shores.'},
+{time:600,title:'BETWEEN SUPERCONTINENTS',text:'Rodinia has broken apart. Ocean basins and continental margins are reorganizing before the later Paleozoic collisions that build the Appalachians.'},
+{time:1000,title:'GRENVILLE / RODINIA',text:'A billion-year-scale mountain-building world. Rocks now exposed in the Hudson Highlands record deep crustal conditions associated with the Grenville orogeny and the assembly of Rodinia.'},
+{time:1200,title:'DEEP BASEMENT TIME',text:'We are approaching the age range recorded by some of the oldest crystalline rocks in the region. Modern coastlines and mountain ranges are meaningless here; only the crustal ancestry remains useful.'}];
+const canvas=document.querySelector('#mapCanvas'),ctx=canvas.getContext('2d'),slider=document.querySelector('#timeSlider'),timeValue=document.querySelector('#timeValue'),storyTitle=document.querySelector('#storyTitle'),storyText=document.querySelector('#storyText'),storyCaveat=document.querySelector('#storyCaveat'),separationValue=document.querySelector('#separationValue'),gwsStatus=document.querySelector('#gwsStatus'),macroStatus=document.querySelector('#macroStatus'),placeSelect=document.querySelector('#placeSelect'),placeTitle=document.querySelector('#placeTitle'),geologyData=document.querySelector('#geologyData'),placeChips=document.querySelector('#placeChips'),snapRow=document.querySelector('#snapRow');
+let selectedPlace=places[0],coastlineData=null,reconstructedPoints=null,requestToken=0,debounceTimer=null;const coastCache=new Map(),pointsCache=new Map();
+const fallbackPresent={type:'FeatureCollection',features:[
+{geometry:{type:'Polygon',coordinates:[[[-168,72],[-140,70],[-125,50],[-116,33],[-100,20],[-82,25],[-65,47],[-53,55],[-62,70],[-100,78],[-168,72]]]}},
+{geometry:{type:'Polygon',coordinates:[[[-82,12],[-72,-12],[-68,-35],[-58,-55],[-40,-20],[-50,5],[-82,12]]]}},
+{geometry:{type:'Polygon',coordinates:[[[-18,36],[0,36],[32,31],[50,12],[40,-35],[18,-35],[-5,5],[-18,36]]]}},
+{geometry:{type:'Polygon',coordinates:[[[-10,36],[20,60],[60,70],[120,65],[160,50],[140,15],[105,5],[75,20],[45,40],[-10,36]]]}},
+{geometry:{type:'Polygon',coordinates:[[[112,-10],[153,-10],[150,-40],[115,-35],[112,-10]]]}},
+{geometry:{type:'Polygon',coordinates:[[[-180,-70],[-90,-72],[0,-68],[90,-72],[180,-70],[180,-90],[-180,-90],[-180,-70]]]}}]};
+function nearestStory(t){return story.reduce((a,b)=>Math.abs(b.time-t)<Math.abs(a.time-t)?b:a)}
+function updateStory(t){const s=nearestStory(t);storyTitle.textContent=s.title;storyText.textContent=s.text;storyCaveat.textContent=t===s.time?`Story marker: ${s.time} Ma.`:`Nearest interpretive marker: ${s.time} Ma. The map itself is requested at ${t} Ma.`;document.querySelectorAll('.snap').forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.time)===s.time))}
+function project(lon,lat){return [((lon+180)/360)*canvas.width,((90-lat)/180)*canvas.height]}
+function drawGrid(){ctx.save();ctx.strokeStyle='rgba(242,240,232,.10)';ctx.lineWidth=1;for(let lon=-180;lon<=180;lon+=30){const[x]=project(lon,0);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke()}for(let lat=-60;lat<=60;lat+=30){const[,y]=project(0,lat);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke()}ctx.restore()}
+function drawRing(lon,lat,r=7,color='#dfff00'){if(!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lon)>180||Math.abs(lat)>90)return;const[x,y]=project(lon,lat);ctx.save();ctx.strokeStyle=color;ctx.fillStyle='#0a0a0a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore()}
+function drawGeometry(geom){if(!geom)return;const drawLine=coords=>{if(!coords?.length)return;ctx.beginPath();let lastLon=null;coords.forEach(([lon,lat],i)=>{if(!Number.isFinite(lon)||!Number.isFinite(lat))return;const[x,y]=project(lon,lat),wrap=lastLon!==null&&Math.abs(lon-lastLon)>180;if(i===0||wrap)ctx.moveTo(x,y);else ctx.lineTo(x,y);lastLon=lon});ctx.stroke()};if(geom.type==='LineString')drawLine(geom.coordinates);if(geom.type==='MultiLineString')geom.coordinates.forEach(drawLine);if(geom.type==='Polygon')geom.coordinates.forEach(drawLine);if(geom.type==='MultiPolygon')geom.coordinates.forEach(poly=>poly.forEach(drawLine))}
+function normalizePointResponse(data){if(!data)return[];const features=data.features||data?.success?.data?.features||[];return features.map(f=>{const c=f?.geometry?.coordinates;return Array.isArray(c)&&c.length>=2?{lon:Number(c[0]),lat:Number(c[1])}:null})}
+function haversine(lat1,lon1,lat2,lon2){const R=6371,rad=x=>x*Math.PI/180,dLat=rad(lat2-lat1),dLon=rad(lon2-lon1),a=Math.sin(dLat/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(a))}
+function drawMap(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#101010';ctx.fillRect(0,0,canvas.width,canvas.height);drawGrid();ctx.save();ctx.strokeStyle='#f2f0e8';ctx.lineWidth=1.6;ctx.globalAlpha=.82;const fc=coastlineData||fallbackPresent;(fc.features||[]).forEach(f=>drawGeometry(f.geometry));ctx.restore();if(reconstructedPoints){const pts=normalizePointResponse(reconstructedPoints),maine=pts[4],ireland=pts[5];if(maine&&ireland){const a=project(maine.lon,maine.lat),b=project(ireland.lon,ireland.lat);ctx.save();ctx.strokeStyle='#ff5b35';ctx.lineWidth=2.5;ctx.setLineDash([10,8]);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.restore();separationValue.textContent=Math.round(haversine(maine.lat,maine.lon,ireland.lat,ireland.lon)).toLocaleString()}else separationValue.textContent='—';pts.forEach((p,i)=>{if(!p)return;drawRing(p.lon,p.lat,i===places.findIndex(x=>x.id===selectedPlace.id)?9:6,i===places.findIndex(x=>x.id===selectedPlace.id)?'#dfff00':'#63e8ff')})}ctx.save();ctx.fillStyle='rgba(242,240,232,.5)';ctx.font='16px ui-monospace, monospace';ctx.fillText(`${slider.value} Ma // ${MODEL}`,20,30);ctx.restore()}
+async function fetchJSON(url){const res=await fetch(url,{headers:{Accept:'application/json'}});if(!res.ok)throw new Error(`${res.status} ${res.statusText}`);return res.json()}
+async function loadReconstruction(t){const token=++requestToken;gwsStatus.textContent='GPLATES: REQUESTING';gwsStatus.classList.remove('muted');const key=String(t);try{const coastPromise=coastCache.has(key)?Promise.resolve(coastCache.get(key)):fetchJSON(`${GWS}/reconstruct/coastlines/?time=${t}&model=${MODEL}&wrap=true`).then(d=>(coastCache.set(key,d),d));const lats=places.map(p=>p.lat).join(','),lons=places.map(p=>p.lon).join(',');const pointsPromise=pointsCache.has(key)?Promise.resolve(pointsCache.get(key)):fetchJSON(`${GWS}/reconstruct/reconstruct_points/?lats=${lats}&lons=${lons}&time=${t}&model=${MODEL}&fc`).then(d=>(pointsCache.set(key,d),d));const[coasts,points]=await Promise.all([coastPromise,pointsPromise]);if(token!==requestToken)return;coastlineData=coasts;reconstructedPoints=points;gwsStatus.textContent='GPLATES: LIVE';drawMap()}catch(err){console.error(err);if(token!==requestToken)return;coastlineData=t===0?fallbackPresent:coastlineData;reconstructedPoints=null;gwsStatus.textContent='GPLATES: UNAVAILABLE';gwsStatus.classList.add('muted');separationValue.textContent='—';drawMap()}}
+function scheduleReconstruction(t){clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>loadReconstruction(t),220)}
+function unpackMacro(data){const rows=data?.success?.data||data?.success||data?.data||[];return Array.isArray(rows)?rows:[]}
+function escapeHTML(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+async function loadGeology(place){placeTitle.textContent=place.name;macroStatus.textContent='MACROSTRAT: REQUESTING';geologyData.textContent='Looking up present-day mapped geology…';try{const data=await fetchJSON(`${MACRO}/geologic_units/map?lat=${place.lat}&lng=${place.lon}`),rows=unpackMacro(data),unit=rows[0];if(!unit)throw new Error('No mapped unit returned');const ageTop=unit.t_int_age??unit.best_t_age,ageBase=unit.b_int_age??unit.best_b_age;geologyData.innerHTML=`<div class="geo-row"><b>Mapped unit</b>${escapeHTML(unit.name||unit.strat_name||'Unnamed map unit')}</div><div class="geo-row"><b>Lithology</b>${escapeHTML(unit.lith||'Not specified')}</div><div class="geo-row"><b>Age</b>${escapeHTML(unit.t_int_name||'')}${unit.b_int_name&&unit.b_int_name!==unit.t_int_name?` → ${escapeHTML(unit.b_int_name)}`:''}${Number.isFinite(Number(ageTop))&&Number.isFinite(Number(ageBase))?` // ${Number(ageTop).toFixed(1)}–${Number(ageBase).toFixed(1)} Ma`:''}</div><div class="geo-row"><b>Description</b>${escapeHTML(unit.descrip||'No description returned.')}</div><div class="geo-row"><b>Source ID</b>${escapeHTML(String(unit.source_id??'—'))} // Macrostrat CC BY 4.0</div>`;macroStatus.textContent='MACROSTRAT: LIVE'}catch(err){console.error(err);macroStatus.textContent='MACROSTRAT: UNAVAILABLE';geologyData.textContent='No live geology response. The plate reconstruction can still be explored independently.'}}
+function selectPlace(id){selectedPlace=places.find(p=>p.id===id)||places[0];placeSelect.value=selectedPlace.id;document.querySelectorAll('.place-chip').forEach(b=>b.classList.toggle('active',b.dataset.id===selectedPlace.id));loadGeology(selectedPlace);drawMap()}
+function buildUI(){places.forEach(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=p.short;placeSelect.append(option);const chip=document.createElement('button');chip.className='place-chip';chip.dataset.id=p.id;chip.textContent=p.short;chip.addEventListener('click',()=>selectPlace(p.id));placeChips.append(chip)});story.forEach(s=>{const btn=document.createElement('button');btn.className='snap';btn.dataset.time=s.time;btn.textContent=`${s.time} Ma`;btn.title=s.title;btn.addEventListener('click',()=>{slider.value=s.time;handleTime()});snapRow.append(btn)});placeSelect.addEventListener('change',e=>selectPlace(e.target.value));selectPlace(selectedPlace.id)}
+function handleTime(){const t=Number(slider.value);timeValue.textContent=t.toLocaleString();updateStory(t);scheduleReconstruction(t)}
+slider.addEventListener('input',handleTime);window.addEventListener('resize',drawMap);buildUI();updateStory(Number(slider.value));drawMap();loadReconstruction(Number(slider.value));
+</script>
+</body></html>
