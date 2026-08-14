@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#18221d" />
+  <title>Wildlife Activity — Trail Prototype</title>
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynJb+8MGmyn7tZijW6HzMf+4lZB0=" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">FIELD PROTOTYPE · LIVE DATA</div>
+      <h1>WILDLIFE ACTIVITY</h1>
+      <p>Recent animal observations around a trail, pin, or current location.</p>
+    </div>
+    <div class="status-pill" id="globalStatus">Ready</div>
+  </header>
+
+  <main class="layout">
+    <section class="controls card" aria-label="Search controls">
+      <div class="control-grid">
+        <label>
+          <span>Animal</span>
+          <select id="speciesSelect">
+            <option value="Ursus americanus">Black bear</option>
+            <option value="Lynx rufus">Bobcat</option>
+            <option value="Canis latrans">Coyote</option>
+            <option value="Cervus canadensis">Elk</option>
+            <option value="Alces alces">Moose</option>
+            <option value="Puma concolor">Mountain lion</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Time window</span>
+          <select id="windowSelect">
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">3 months</option>
+            <option value="180">6 months</option>
+            <option value="365">1 year</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Radius</span>
+          <select id="radiusSelect">
+            <option value="1.60934">1 mile</option>
+            <option value="4.82802">3 miles</option>
+            <option value="8.0467" selected>5 miles</option>
+            <option value="16.0934">10 miles</option>
+            <option value="40.2335">25 miles</option>
+          </select>
+        </label>
+
+        <div class="button-group">
+          <button class="secondary" id="locateBtn" type="button">Use my location</button>
+          <button class="primary" id="searchBtn" type="button">Search this area</button>
+        </div>
+      </div>
+      <p class="hint">Click anywhere on the map to move the search point. The outlined circle is the selected radius.</p>
+    </section>
+
+    <section class="map-card card">
+      <div id="map" aria-label="Wildlife observation map"></div>
+      <div class="map-legend">
+        <span><i class="dot inat"></i> iNaturalist</span>
+        <span><i class="dot gbif"></i> GBIF</span>
+        <span><i class="dot center"></i> Search point</span>
+      </div>
+    </section>
+
+    <section class="summary-grid" aria-label="Activity summary">
+      <article class="metric card">
+        <div class="metric-label">iNaturalist</div>
+        <div class="metric-value" id="inatCount">—</div>
+        <div class="metric-sub" id="inatSub">Recent observations</div>
+      </article>
+      <article class="metric card">
+        <div class="metric-label">GBIF</div>
+        <div class="metric-value" id="gbifCount">—</div>
+        <div class="metric-sub" id="gbifSub">Occurrence records</div>
+      </article>
+      <article class="metric card">
+        <div class="metric-label">Official NPS</div>
+        <div class="metric-value" id="npsCount">OFF</div>
+        <div class="metric-sub" id="npsSub">Optional alerts layer</div>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="card activity-panel">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">OBSERVATION FEED</div>
+            <h2 id="feedTitle">Recent reports</h2>
+          </div>
+          <div class="source-toggle" role="group" aria-label="Map source display">
+            <label><input type="checkbox" id="showInat" checked /> iNat</label>
+            <label><input type="checkbox" id="showGbif" checked /> GBIF</label>
+          </div>
+        </div>
+        <div class="notice" id="activityNotice">Choose a location and run a search.</div>
+        <div id="observationList" class="observation-list"></div>
+      </article>
+
+      <aside class="card official-panel">
+        <div class="eyebrow">OFFICIAL LAYER</div>
+        <h2>NPS alerts</h2>
+        <p class="small">NPS requires a free API key. Add one here to check alerts for nearby National Park Service units.</p>
+        <label class="api-key-label">
+          <span>NPS API key</span>
+          <input id="npsKey" type="password" autocomplete="off" placeholder="Paste key (optional)" />
+        </label>
+        <div class="button-row">
+          <button class="secondary" id="saveKeyBtn" type="button">Save in this browser</button>
+          <button class="secondary" id="clearKeyBtn" type="button">Clear</button>
+        </div>
+        <div id="npsAlerts" class="alerts-list">
+          <div class="empty-state">No NPS query run yet.</div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="card methodology">
+      <div class="eyebrow">READ THIS CORRECTLY</div>
+      <h2>Reports are not a risk score.</h2>
+      <p><strong>No recent reports found</strong> does not mean no animals are present. Citizen-science observations are uneven, some locations are obscured, records can arrive late, and GBIF may contain records also sourced from iNaturalist. This prototype therefore keeps sources separate and treats official alerts as a distinct layer.</p>
+      <div class="source-notes">
+        <div><strong>iNaturalist</strong><span>Best live-ish public observation layer.</span></div>
+        <div><strong>GBIF</strong><span>Broader occurrence history; useful for context.</span></div>
+        <div><strong>NPS</strong><span>Authoritative alerts; not a sightings feed.</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Prototype · Not a substitute for ranger guidance, posted closures, or wildlife safety practices.
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
