@@ -6,7 +6,88 @@
   <meta name="theme-color" content="#18221d" />
   <title>Wildlife Activity — Trail Prototype</title>
   <link rel="preconnect" href="https://unpkg.com" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynJb+8MGmyn7tZijW6HzMf+4lZB0=" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynb+8MGmyn7tZijW6HzMf+4lZB0=" crossorigin="" />
+
+  <!--
+    Leaflet core-layout fallback.
+    Some iOS/in-app browsers were loading tile images while failing to apply the
+    remote Leaflet stylesheet, leaving 256px tiles in normal document flow.
+    Keep the CDN stylesheet for full control styling, but guarantee the map's
+    positioning rules locally so tiles always form a continuous map.
+  -->
+  <style>
+    .leaflet-container {
+      position: relative;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      background: #ddd;
+      outline-offset: 1px;
+    }
+    .leaflet-container .leaflet-pane,
+    .leaflet-container .leaflet-tile,
+    .leaflet-container .leaflet-marker-icon,
+    .leaflet-container .leaflet-marker-shadow,
+    .leaflet-container .leaflet-tile-container,
+    .leaflet-container .leaflet-pane > svg,
+    .leaflet-container .leaflet-pane > canvas,
+    .leaflet-container .leaflet-zoom-box,
+    .leaflet-container .leaflet-image-layer,
+    .leaflet-container .leaflet-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+    .leaflet-container .leaflet-tile {
+      visibility: hidden;
+      max-width: none !important;
+      max-height: none !important;
+      width: 256px;
+      height: 256px;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    .leaflet-container .leaflet-tile-loaded { visibility: inherit; }
+    .leaflet-zoom-animated { transform-origin: 0 0; }
+    .leaflet-container .leaflet-pane { z-index: 400; }
+    .leaflet-container .leaflet-tile-pane { z-index: 200; }
+    .leaflet-container .leaflet-overlay-pane { z-index: 400; }
+    .leaflet-container .leaflet-shadow-pane { z-index: 500; }
+    .leaflet-container .leaflet-marker-pane { z-index: 600; }
+    .leaflet-container .leaflet-tooltip-pane { z-index: 650; }
+    .leaflet-container .leaflet-popup-pane { z-index: 700; }
+    .leaflet-container .leaflet-map-pane canvas { z-index: 100; }
+    .leaflet-container .leaflet-map-pane svg { z-index: 200; }
+    .leaflet-control { position: relative; z-index: 800; pointer-events: auto; }
+    .leaflet-top, .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; }
+    .leaflet-top { top: 0; }
+    .leaflet-right { right: 0; }
+    .leaflet-bottom { bottom: 0; }
+    .leaflet-left { left: 0; }
+    .leaflet-control { float: left; clear: both; }
+    .leaflet-right .leaflet-control { float: right; }
+    .leaflet-top .leaflet-control { margin-top: 10px; }
+    .leaflet-bottom .leaflet-control { margin-bottom: 10px; }
+    .leaflet-left .leaflet-control { margin-left: 10px; }
+    .leaflet-right .leaflet-control { margin-right: 10px; }
+    .leaflet-control-zoom a {
+      display: block;
+      width: 30px;
+      height: 30px;
+      line-height: 30px;
+      text-align: center;
+      text-decoration: none;
+      background: #fff;
+      color: #18221d;
+      border-bottom: 1px solid #ccc;
+      font: bold 18px/30px system-ui, sans-serif;
+    }
+    .leaflet-control-zoom a:first-child { border-radius: 4px 4px 0 0; }
+    .leaflet-control-zoom a:last-child { border-radius: 0 0 4px 4px; border-bottom: 0; }
+  </style>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -143,5 +224,29 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="app.js"></script>
+  <script>
+    // iOS browsers can report a stale map size while the address bar/viewport is settling.
+    // Re-measure after layout, orientation changes, and viewport resizes.
+    (() => {
+      const repairMapSize = () => {
+        try {
+          if (typeof map !== 'undefined' && map && typeof map.invalidateSize === 'function') {
+            map.invalidateSize({ pan: false, animate: false });
+          }
+        } catch (_) {}
+      };
+
+      window.addEventListener('load', () => {
+        requestAnimationFrame(repairMapSize);
+        setTimeout(repairMapSize, 250);
+        setTimeout(repairMapSize, 1000);
+      });
+      window.addEventListener('resize', repairMapSize, { passive: true });
+      window.addEventListener('orientationchange', () => setTimeout(repairMapSize, 250), { passive: true });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', repairMapSize, { passive: true });
+      }
+    })();
+  </script>
 </body>
 </html>
