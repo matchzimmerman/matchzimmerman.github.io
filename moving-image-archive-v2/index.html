@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Public moving-image index of work by Match Zimmerman.">
+  <title>Video Index — Match Zimmerman</title>
+  <style>
+    :root{--bg:#f4ff00;--ink:#090909;--paper:#fff;--muted:rgba(9,9,9,.62)}
+    *{box-sizing:border-box}
+    html{background:var(--bg)}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+    button,a{font:inherit}
+    header{padding:28px 24px 20px;border-bottom:2px solid var(--ink);display:grid;grid-template-columns:1fr auto;gap:20px;align-items:end}
+    .eyebrow{margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+    h1{margin:0;max-width:900px;font-size:clamp(38px,8vw,92px);line-height:.86;letter-spacing:-.06em;text-transform:uppercase}
+    .meta{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .pill{border:1.5px solid var(--ink);border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+    .controls{padding:14px 24px;border-bottom:1.5px solid var(--ink);display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+    .filters{display:flex;gap:8px;flex-wrap:wrap}
+    .filter{appearance:none;border:1.5px solid var(--ink);border-radius:999px;background:transparent;color:var(--ink);padding:8px 12px;cursor:pointer;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+    .filter[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+    .sort{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+    main{padding:24px}
+    #grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+    .card{min-width:0;border-top:2px solid var(--ink);padding-top:8px}
+    .card-button{display:block;width:100%;border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+    .thumb{position:relative;aspect-ratio:1/1;background:#111;overflow:hidden}
+    .thumb img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .22s ease,opacity .22s ease}
+    .card-button:hover img,.card-button:focus-visible img{transform:scale(1.025);opacity:.84}
+    .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:50%;border:2px solid var(--ink);background:var(--bg);display:grid;place-items:center;font-size:18px;font-weight:900;pointer-events:none}
+    .play::before{content:'▶';transform:translateX(1px)}
+    .info{padding:10px 0 4px}
+    .kicker{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .card h2{margin:0;font-size:18px;line-height:1.05;letter-spacing:-.025em}
+    dialog{width:min(1120px,calc(100vw - 26px));max-height:calc(100vh - 26px);border:2px solid var(--ink);padding:0;background:var(--paper);color:var(--ink);box-shadow:0 18px 70px rgba(0,0,0,.28)}
+    dialog::backdrop{background:rgba(0,0,0,.82)}
+    .modal-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:12px 14px;border-bottom:2px solid var(--ink);background:var(--bg);position:sticky;top:0;z-index:4}
+    .modal-heading{min-width:0}
+    #modalTitle{margin:0;font-size:clamp(18px,3vw,30px);line-height:1;letter-spacing:-.035em}
+    #modalMeta{margin:5px 0 0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+    .modal-actions{display:flex;gap:7px;flex:0 0 auto}
+    .icon-button{height:42px;min-width:42px;border:2px solid var(--ink);background:transparent;color:var(--ink);padding:0 10px;cursor:pointer;font-weight:900;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
+    .close{font-size:25px;line-height:1;padding:0;width:42px}
+    .player-shell{background:#000}
+    .player-wrap{aspect-ratio:16/9;background:#000}
+    .player-wrap iframe{width:100%;height:100%;border:0;display:block}
+    .player-shell:fullscreen,.player-shell:-webkit-full-screen{width:100%;height:100%;display:grid;place-items:center;background:#000}
+    .player-shell:fullscreen .player-wrap,.player-shell:-webkit-full-screen .player-wrap{width:100%;max-height:100vh;aspect-ratio:16/9}
+    .copy{padding:18px 18px 24px}
+    #modalDescription{margin:0;max-width:850px;white-space:pre-line;font-size:16px;line-height:1.48}
+    .source-link{display:inline-block;margin-top:18px;color:var(--ink);font-weight:800;text-underline-offset:3px}
+    footer{padding:24px;border-top:2px solid var(--ink);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+    footer p{margin:0;max-width:760px}
+    footer a{color:inherit}
+    @media(max-width:760px){header{grid-template-columns:1fr}.meta{justify-content:flex-start}main,header,.controls,footer{padding-left:14px;padding-right:14px}#grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}}
+    @media(max-width:430px){#grid{grid-template-columns:1fr}.icon-button.fullscreen{font-size:0}.icon-button.fullscreen::after{content:'⛶';font-size:20px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">Match Zimmerman / Public Video Index / Iteration 02</p>
+      <h1>Video Index</h1>
+    </div>
+    <div class="meta" aria-label="Archive summary">
+      <span class="pill"><span id="count">23</span> indexed</span>
+      <span class="pill">Newest first</span>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="Archive controls">
+    <div class="filters" role="group" aria-label="Filter by platform">
+      <button class="filter" type="button" data-filter="all" aria-pressed="true">All</button>
+      <button class="filter" type="button" data-filter="vimeo" aria-pressed="false">Vimeo</button>
+      <button class="filter" type="button" data-filter="youtube" aria-pressed="false">YouTube</button>
+    </div>
+    <div class="sort">Newest → oldest</div>
+  </section>
+
+  <main><div id="grid" aria-live="polite"></div></main>
+
+  <dialog id="lightbox" aria-labelledby="modalTitle">
+    <div class="modal-top">
+      <div class="modal-heading">
+        <h2 id="modalTitle"></h2>
+        <p id="modalMeta"></p>
+      </div>
+      <div class="modal-actions">
+        <button class="icon-button fullscreen" id="fullscreenButton" type="button">Fullscreen</button>
+        <button class="icon-button close" type="button" aria-label="Close video">×</button>
+      </div>
+    </div>
+    <div class="player-shell" id="playerShell"><div class="player-wrap" id="playerWrap"></div></div>
+    <div class="copy">
+      <p id="modalDescription"></p>
+      <a class="source-link" id="sourceLink" href="#" target="_blank" rel="noopener">Open original ↗</a>
+    </div>
+  </dialog>
+
+  <footer>
+    <p>Recovered public YouTube + Vimeo index. This iteration keeps the original archive intact while testing a square, image-forward index. Vimeo titles, descriptions, thumbnails and upload dates refresh from public oEmbed when available.</p>
+    <p><a href="../moving-image-archive/">Iteration 01</a> · © Match Zimmerman</p>
+  </footer>
+
+  <script>
+    const videos = [
+      {platform:'vimeo',id:'1177786005',date:'2026-07-01',year:2026,title:'Field Station: Magpie | Tuttle Gallery Exhibition | Walkthrough with Voice Over',description:'Documentation of the first FIELD STATION: MAGPIE exhibition at Tuttle Gallery: a fragmentary future world presented through recovered artifacts, paintings, archival documents, portraits, signal-based sculptural elements and spatial sound.'},
+      {platform:'youtube',id:'LPYdD-mhkCs',date:'2026-01-01',year:2026,title:'Lost in Transmission | Interactive Found Object Sound Sculpture',description:'Documentation of an interactive found-object sound sculpture by Match Zimmerman.'},
+      {platform:'youtube',id:'q5Oj6oJRccI',date:'2025-12-01',year:2025,title:'Project: Magpie | FS-MP-01 / HQ | Process Artifact 007',description:'Process Artifact 007 from Project: Magpie / Field Station MP-01 HQ.'},
+      {platform:'youtube',id:'s7Lrb7Rfj0E',date:'2025-11-01',year:2025,title:'FS: Magpie | Live Action | Parts 1–3',description:'Live-action material from FIELD STATION: MAGPIE, presented as Parts 1–3.'},
+      {platform:'vimeo',id:'871499148',date:'2023-09-15',year:2023,title:'09-15-2023-loop-mz-installation-virtual-tour',description:'Virtual-tour documentation of a Match Zimmerman installation, uploaded in 2023.'},
+      {platform:'vimeo',id:'123541585',date:'2015-03-01',year:2015,title:'Impression / Vision Performance | Kinect + Max/MSP/Jitter + Dance',description:'Kara Senich Zimmerman and Match Zimmerman perform Impression / Vision at Muhlenberg College’s 20th Anniversary Dance Concert. Visuals by Match Zimmerman using Kinect and Max/MSP/Jitter; choreography by Kara Senich Zimmerman.'},
+      {platform:'youtube',id:'h3ZVbeXWq7g',date:'2015-03-01',year:2015,title:'Impression / Vision Performance | Kinect + Max/MSP/Jitter + Dance',description:'Legacy YouTube upload of Impression / Vision: dance by Kara Senich Zimmerman with Kinect and Max/MSP/Jitter visuals by Match Zimmerman.'},
+      {platform:'vimeo',id:'70642402',date:'2013-07-01',year:2013,title:'Max / MSP / Jitter | Rollie “Solitude” | Audio Visualizer',description:'Audio-reactive Max/MSP/Jitter visualization created around Rollie’s “Solitude.”'},
+      {platform:'vimeo',id:'62636945',date:'2013-03-01',year:2013,title:'Impression / Vision Rehearsal | Kara Senich Zimmerman + Match Zimmerman',description:'Rehearsal documentation for Impression / Vision, combining dance, Kinect capture and responsive Max/MSP/Jitter visuals.'},
+      {platform:'vimeo',id:'60593490',date:'2013-02-01',year:2013,title:'Abstract Tidal Study 01 (Chroma Key Effect)',description:'Study of tidal motion. Original footage by Adam Reynolds.'},
+      {platform:'vimeo',id:'60329277',date:'2013-02-01',year:2013,title:'Kinect + Max/MSP/Jitter (Wireframe Datamosh Delay)',description:'Live Kinect / Max/MSP/Jitter study combining wireframe rendering, delayed imagery and datamosh-like visual feedback.'},
+      {platform:'vimeo',id:'59443590',date:'2013-02-01',year:2013,title:'Kinect + Max/MSP/Jitter (Kinect Cat)',description:'Kinect and Max/MSP/Jitter experiment using depth-camera input as live visual material.'},
+      {platform:'vimeo',id:'58650683',date:'2013-01-01',year:2013,title:'Max/MSP/Jitter (Bouncing Vocals)',description:'Max/MSP/Jitter audiovisual experiment connecting vocal sound and animated movement.'},
+      {platform:'vimeo',id:'58035983',date:'2013-01-01',year:2013,title:'Kinect + Max/MSP/Jitter (Multicolor Wireframe Effect)',description:'Experimenting with live video effects within Max/MSP/Jitter. The Kinect records imagery and depth; the closer the user gets to the Kinect, the faster the colors flash.'},
+      {platform:'vimeo',id:'12112814',date:'2010-05-01',year:2010,title:'Empty Used Car Lot // A Video Loop',description:'A repeating moving-image study centered on the visual rhythm and vacancy of an empty used-car lot.'},
+      {platform:'vimeo',id:'4798039',date:'2009-05-01',year:2009,title:'Navigating a Forest by Moonlight (Proof 01) // A Processing Sketch Video Loop',description:'Processing-based sketch and video loop exploring simulated navigation through a forest-like field at night.'},
+      {platform:'vimeo',id:'4686435',date:'2009-05-01',year:2009,title:'Up For Air // A Video Loop',description:'Short-form video loop exploring repetition, duration and cyclical motion.'},
+      {platform:'vimeo',id:'3337007',date:'2009-02-01',year:2009,title:'Post/Pre Video Promo 01 (No and the Big Deals)',description:'Animated orb experiments developed into an online video promo for No and the Big Deals’ debut album.'},
+      {platform:'vimeo',id:'2162048',date:'2008-11-01',year:2008,title:'Irish Mass Lights // A Video Loop',description:'An early video loop built from recorded light, repetition and ambient movement.'},
+      {platform:'vimeo',id:'2162033',date:'2008-11-01',year:2008,title:'Talking Heads Projection // A Video Installation',description:'Video-installation version of the Talking Heads material, presented as projected moving image.'},
+      {platform:'vimeo',id:'2162022',date:'2008-11-01',year:2008,title:'Talking Heads // A Video Loop',description:'An early repeating moving-image work using talking heads as looped visual material.'},
+      {platform:'vimeo',id:'1681084',date:'2008-09-01',year:2008,title:'Outback Sunrise // A Video Loop',description:'Digital video shot in the Australian Outback and presented as a repeating moving-image study.'},
+      {platform:'vimeo',id:'1680746',date:'2008-09-01',year:2008,title:'Sink Double // A Video Loop',description:'Early video-loop work by Match Zimmerman using a doubled sink image as repeating visual material.'}
+    ];
+
+    let activeFilter='all';
+    const grid=document.getElementById('grid');
+    const count=document.getElementById('count');
+    const dialog=document.getElementById('lightbox');
+    const playerShell=document.getElementById('playerShell');
+    const playerWrap=document.getElementById('playerWrap');
+    const modalTitle=document.getElementById('modalTitle');
+    const modalMeta=document.getElementById('modalMeta');
+    const modalDescription=document.getElementById('modalDescription');
+    const sourceLink=document.getElementById('sourceLink');
+    const fullscreenButton=document.getElementById('fullscreenButton');
+
+    const sourceUrl=v=>v.platform==='youtube'?`https://www.youtube.com/watch?v=${v.id}`:`https://vimeo.com/${v.id}`;
+    const thumbUrl=v=>v.platform==='youtube'?`https://i.ytimg.com/vi/${v.id}/maxresdefault.jpg`:`https://vumbnail.com/${v.id}.jpg`;
+    const thumbFallback=v=>v.platform==='youtube'?`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`:`https://vumbnail.com/${v.id}.jpg`;
+    const embedUrl=v=>v.platform==='youtube'?`https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0`:`https://player.vimeo.com/video/${v.id}?autoplay=1&title=0&byline=0&portrait=0`;
+    const sortVideos=list=>[...list].sort((a,b)=>b.date.localeCompare(a.date)||a.title.localeCompare(b.title));
+
+    function render(){
+      const visible=sortVideos(videos.filter(v=>activeFilter==='all'||v.platform===activeFilter));
+      count.textContent=visible.length;
+      grid.innerHTML='';
+      visible.forEach(video=>{
+        const article=document.createElement('article'); article.className='card';
+        const button=document.createElement('button'); button.type='button'; button.className='card-button'; button.setAttribute('aria-label',`Play ${video.title}`);
+        const thumb=document.createElement('div'); thumb.className='thumb';
+        const img=document.createElement('img'); img.loading='lazy'; img.decoding='async'; img.src=video.thumbnail||thumbUrl(video); img.alt=`Thumbnail for ${video.title}`; img.addEventListener('error',()=>{if(img.src!==thumbFallback(video)) img.src=thumbFallback(video)});
+        const play=document.createElement('span'); play.className='play'; play.setAttribute('aria-hidden','true');
+        const info=document.createElement('div'); info.className='info';
+        const kicker=document.createElement('div'); kicker.className='kicker'; kicker.innerHTML=`<span>${video.year}</span><span>${video.platform}</span>`;
+        const title=document.createElement('h2'); title.textContent=video.title;
+        info.append(kicker,title); thumb.append(img,play); button.append(thumb,info); button.addEventListener('click',()=>openVideo(video)); article.append(button); grid.append(article);
+      });
+    }
+
+    function openVideo(video){
+      modalTitle.textContent=video.title;
+      modalMeta.textContent=`${video.year} / ${video.platform}`;
+      modalDescription.textContent=video.description||'Public video by Match Zimmerman.';
+      sourceLink.href=sourceUrl(video);
+      sourceLink.textContent=`Open original on ${video.platform==='youtube'?'YouTube':'Vimeo'} ↗`;
+      const iframe=document.createElement('iframe'); iframe.src=embedUrl(video); iframe.title=video.title; iframe.allow='autoplay; fullscreen; picture-in-picture; encrypted-media'; iframe.allowFullscreen=true; iframe.referrerPolicy='strict-origin-when-cross-origin';
+      playerWrap.replaceChildren(iframe); dialog.showModal();
+    }
+
+    function closeVideo(){
+      if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+      playerWrap.replaceChildren(); dialog.close();
+    }
+
+    fullscreenButton.addEventListener('click',async()=>{
+      try{
+        if(document.fullscreenElement) await document.exitFullscreen();
+        else if(playerShell.requestFullscreen) await playerShell.requestFullscreen();
+        else if(playerShell.webkitRequestFullscreen) playerShell.webkitRequestFullscreen();
+      }catch(_){ }
+    });
+
+    document.addEventListener('fullscreenchange',()=>{fullscreenButton.textContent=document.fullscreenElement?'Exit full':'Fullscreen'});
+    document.querySelector('.close').addEventListener('click',closeVideo);
+    dialog.addEventListener('click',event=>{if(event.target===dialog) closeVideo()});
+    dialog.addEventListener('close',()=>playerWrap.replaceChildren());
+    document.querySelectorAll('.filter').forEach(button=>button.addEventListener('click',()=>{activeFilter=button.dataset.filter;document.querySelectorAll('.filter').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render()}));
+
+    async function enrichVimeo(video){
+      const endpoint=`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(sourceUrl(video))}&width=1280`;
+      try{
+        const response=await fetch(endpoint,{mode:'cors'}); if(!response.ok)return;
+        const data=await response.json();
+        if(data.title)video.title=data.title;
+        if(data.description&&data.description.trim())video.description=data.description.trim();
+        if(data.thumbnail_url)video.thumbnail=data.thumbnail_url;
+        if(data.upload_date){const parsed=new Date(data.upload_date);if(!Number.isNaN(parsed.getTime())){video.date=parsed.toISOString().slice(0,10);video.year=parsed.getUTCFullYear()}}
+      }catch(_){ }
+    }
+
+    render();
+    Promise.all(videos.filter(v=>v.platform==='vimeo').map(enrichVimeo)).then(render);
+  </script>
+</body>
+</html>
