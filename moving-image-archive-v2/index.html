@@ -2,59 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="Public moving-image index of work by Match Zimmerman.">
   <title>Video Index — Match Zimmerman</title>
   <style>
-    :root{--bg:#f4ff00;--ink:#090909;--paper:#fff;--muted:rgba(9,9,9,.62)}
+    :root{--bg:#f4ff00;--ink:#090909;--paper:#fff}
     *{box-sizing:border-box}
     html{background:var(--bg)}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+    body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
     button,a{font:inherit}
-    header{padding:28px 24px 20px;border-bottom:2px solid var(--ink);display:grid;grid-template-columns:1fr auto;gap:20px;align-items:end}
-    .eyebrow{margin:0 0 6px;font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
-    h1{margin:0;max-width:900px;font-size:clamp(38px,8vw,92px);line-height:.86;letter-spacing:-.06em;text-transform:uppercase}
-    .meta{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .pill{border:1.5px solid var(--ink);border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
-    .controls{padding:14px 24px;border-bottom:1.5px solid var(--ink);display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
-    .filters{display:flex;gap:8px;flex-wrap:wrap}
-    .filter{appearance:none;border:1.5px solid var(--ink);border-radius:999px;background:transparent;color:var(--ink);padding:8px 12px;cursor:pointer;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+    header{padding:20px 16px 14px;border-bottom:2px solid var(--ink);display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+    .eyebrow{margin:0 0 4px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+    h1{margin:0;font-size:clamp(34px,8vw,74px);line-height:.88;letter-spacing:-.055em;text-transform:uppercase}
+    .header-meta{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;text-align:right;white-space:nowrap}
+    .controls{padding:10px 16px;border-bottom:1.5px solid var(--ink);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .filters{display:flex;gap:6px}
+    .filter{appearance:none;border:1.5px solid var(--ink);border-radius:999px;background:transparent;color:var(--ink);padding:6px 9px;cursor:pointer;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
     .filter[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
-    .sort{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
-    main{padding:24px}
-    #grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-    .card{min-width:0;border-top:2px solid var(--ink);padding-top:8px}
-    .card-button{display:block;width:100%;border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
-    .thumb{position:relative;aspect-ratio:1/1;background:#111;overflow:hidden}
-    .thumb img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .22s ease,opacity .22s ease}
-    .card-button:hover img,.card-button:focus-visible img{transform:scale(1.025);opacity:.84}
-    .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:50%;border:2px solid var(--ink);background:var(--bg);display:grid;place-items:center;font-size:18px;font-weight:900;pointer-events:none}
-    .play::before{content:'▶';transform:translateX(1px)}
-    .info{padding:10px 0 4px}
-    .kicker{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
-    .card h2{margin:0;font-size:18px;line-height:1.05;letter-spacing:-.025em}
-    dialog{width:min(1120px,calc(100vw - 26px));max-height:calc(100vh - 26px);border:2px solid var(--ink);padding:0;background:var(--paper);color:var(--ink);box-shadow:0 18px 70px rgba(0,0,0,.28)}
-    dialog::backdrop{background:rgba(0,0,0,.82)}
-    .modal-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:12px 14px;border-bottom:2px solid var(--ink);background:var(--bg);position:sticky;top:0;z-index:4}
+    .sort{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}
+    main{padding:12px 12px 22px}
+    #grid{width:min(100%,960px);margin:0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .thumb-button{display:block;width:100%;aspect-ratio:1/1;border:0;padding:0;margin:0;background:#111;overflow:hidden;cursor:pointer;position:relative}
+    .thumb-button img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .18s ease,opacity .18s ease}
+    .thumb-button:hover img,.thumb-button:focus-visible img{transform:scale(1.035);opacity:.82}
+    .thumb-button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+    .thumb-button::after{content:'';position:absolute;inset:0;border:1px solid rgba(0,0,0,.14);pointer-events:none}
+    dialog{width:min(1120px,calc(100vw - 18px));max-height:calc(100dvh - 18px);border:2px solid var(--ink);padding:0;background:var(--paper);color:var(--ink);box-shadow:0 18px 70px rgba(0,0,0,.3)}
+    dialog::backdrop{background:rgba(0,0,0,.88)}
+    .modal-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:10px 11px;border-bottom:2px solid var(--ink);background:var(--bg);position:sticky;top:0;z-index:5}
     .modal-heading{min-width:0}
-    #modalTitle{margin:0;font-size:clamp(18px,3vw,30px);line-height:1;letter-spacing:-.035em}
-    #modalMeta{margin:5px 0 0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
-    .modal-actions{display:flex;gap:7px;flex:0 0 auto}
-    .icon-button{height:42px;min-width:42px;border:2px solid var(--ink);background:transparent;color:var(--ink);padding:0 10px;cursor:pointer;font-weight:900;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
-    .close{font-size:25px;line-height:1;padding:0;width:42px}
+    #modalTitle{margin:0;font-size:clamp(16px,3vw,27px);line-height:1;letter-spacing:-.03em}
+    #modalMeta{margin:4px 0 0;font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+    .modal-actions{display:flex;gap:6px;flex:0 0 auto}
+    .icon-button{height:38px;border:2px solid var(--ink);background:transparent;color:var(--ink);padding:0 9px;cursor:pointer;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+    .close{width:38px;padding:0;font-size:23px;line-height:1}
     .player-shell{background:#000}
     .player-wrap{aspect-ratio:16/9;background:#000}
-    .player-wrap iframe{width:100%;height:100%;border:0;display:block}
+    .player-wrap iframe{display:block;width:100%;height:100%;border:0}
     .player-shell:fullscreen,.player-shell:-webkit-full-screen{width:100%;height:100%;display:grid;place-items:center;background:#000}
     .player-shell:fullscreen .player-wrap,.player-shell:-webkit-full-screen .player-wrap{width:100%;max-height:100vh;aspect-ratio:16/9}
-    .copy{padding:18px 18px 24px}
-    #modalDescription{margin:0;max-width:850px;white-space:pre-line;font-size:16px;line-height:1.48}
-    .source-link{display:inline-block;margin-top:18px;color:var(--ink);font-weight:800;text-underline-offset:3px}
-    footer{padding:24px;border-top:2px solid var(--ink);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
-    footer p{margin:0;max-width:760px}
-    footer a{color:inherit}
-    @media(max-width:760px){header{grid-template-columns:1fr}.meta{justify-content:flex-start}main,header,.controls,footer{padding-left:14px;padding-right:14px}#grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}}
-    @media(max-width:430px){#grid{grid-template-columns:1fr}.icon-button.fullscreen{font-size:0}.icon-button.fullscreen::after{content:'⛶';font-size:20px}}
+    .copy{padding:16px 16px 22px}
+    #modalDescription{margin:0;max-width:850px;white-space:pre-line;font-size:15px;line-height:1.48}
+    .source-link{display:inline-block;margin-top:16px;color:var(--ink);font-weight:800;text-underline-offset:3px}
+    footer{padding:15px 16px 18px;border-top:2px solid var(--ink);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+    footer p{margin:0} footer a{color:inherit}
+    @media(max-width:620px){
+      header{padding:16px 10px 11px}.header-meta{display:none}.controls{padding:8px 10px}main{padding:8px 6px 18px}#grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.filter{padding:5px 8px}.sort{font-size:9px}.icon-button.fullscreen{font-size:0;width:38px;padding:0}.icon-button.fullscreen::after{content:'⛶';font-size:19px}dialog{width:calc(100vw - 8px);max-height:calc(100dvh - 8px)}.copy{padding:14px 12px 20px}}
   </style>
 </head>
 <body>
@@ -63,10 +56,7 @@
       <p class="eyebrow">Match Zimmerman / Public Video Index / Iteration 02</p>
       <h1>Video Index</h1>
     </div>
-    <div class="meta" aria-label="Archive summary">
-      <span class="pill"><span id="count">23</span> indexed</span>
-      <span class="pill">Newest first</span>
-    </div>
+    <div class="header-meta"><span id="count">23</span> indexed<br>newest first</div>
   </header>
 
   <section class="controls" aria-label="Archive controls">
@@ -99,12 +89,12 @@
   </dialog>
 
   <footer>
-    <p>Recovered public YouTube + Vimeo index. This iteration keeps the original archive intact while testing a square, image-forward index. Vimeo titles, descriptions, thumbnails and upload dates refresh from public oEmbed when available.</p>
+    <p>Thumbnail contact sheet. Video players load only after selection.</p>
     <p><a href="../moving-image-archive/">Iteration 01</a> · © Match Zimmerman</p>
   </footer>
 
   <script>
-    const videos = [
+    const videos=[
       {platform:'vimeo',id:'1177786005',date:'2026-07-01',year:2026,title:'Field Station: Magpie | Tuttle Gallery Exhibition | Walkthrough with Voice Over',description:'Documentation of the first FIELD STATION: MAGPIE exhibition at Tuttle Gallery: a fragmentary future world presented through recovered artifacts, paintings, archival documents, portraits, signal-based sculptural elements and spatial sound.'},
       {platform:'youtube',id:'LPYdD-mhkCs',date:'2026-01-01',year:2026,title:'Lost in Transmission | Interactive Found Object Sound Sculpture',description:'Documentation of an interactive found-object sound sculpture by Match Zimmerman.'},
       {platform:'youtube',id:'q5Oj6oJRccI',date:'2025-12-01',year:2025,title:'Project: Magpie | FS-MP-01 / HQ | Process Artifact 007',description:'Process Artifact 007 from Project: Magpie / Field Station MP-01 HQ.'},
@@ -143,25 +133,36 @@
     const fullscreenButton=document.getElementById('fullscreenButton');
 
     const sourceUrl=v=>v.platform==='youtube'?`https://www.youtube.com/watch?v=${v.id}`:`https://vimeo.com/${v.id}`;
-    const thumbUrl=v=>v.platform==='youtube'?`https://i.ytimg.com/vi/${v.id}/maxresdefault.jpg`:`https://vumbnail.com/${v.id}.jpg`;
-    const thumbFallback=v=>v.platform==='youtube'?`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`:`https://vumbnail.com/${v.id}.jpg`;
-    const embedUrl=v=>v.platform==='youtube'?`https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0`:`https://player.vimeo.com/video/${v.id}?autoplay=1&title=0&byline=0&portrait=0`;
-    const sortVideos=list=>[...list].sort((a,b)=>b.date.localeCompare(a.date)||a.title.localeCompare(b.title));
+    const fallbackThumb=v=>v.platform==='youtube'?`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`:`https://vumbnail.com/${v.id}.jpg`;
+    const embedUrl=v=>v.platform==='youtube'?`https://www.youtube.com/embed/${v.id}?autoplay=1&rel=0`:`https://player.vimeo.com/video/${v.id}?autoplay=1&title=0&byline=0&portrait=0`;
+
+    function sortedVisible(){
+      return videos
+        .filter(v=>activeFilter==='all'||v.platform===activeFilter)
+        .sort((a,b)=>b.date.localeCompare(a.date)||a.title.localeCompare(b.title));
+    }
 
     function render(){
-      const visible=sortVideos(videos.filter(v=>activeFilter==='all'||v.platform===activeFilter));
+      const visible=sortedVisible();
       count.textContent=visible.length;
-      grid.innerHTML='';
+      grid.replaceChildren();
       visible.forEach(video=>{
-        const article=document.createElement('article'); article.className='card';
-        const button=document.createElement('button'); button.type='button'; button.className='card-button'; button.setAttribute('aria-label',`Play ${video.title}`);
-        const thumb=document.createElement('div'); thumb.className='thumb';
-        const img=document.createElement('img'); img.loading='lazy'; img.decoding='async'; img.src=video.thumbnail||thumbUrl(video); img.alt=`Thumbnail for ${video.title}`; img.addEventListener('error',()=>{if(img.src!==thumbFallback(video)) img.src=thumbFallback(video)});
-        const play=document.createElement('span'); play.className='play'; play.setAttribute('aria-hidden','true');
-        const info=document.createElement('div'); info.className='info';
-        const kicker=document.createElement('div'); kicker.className='kicker'; kicker.innerHTML=`<span>${video.year}</span><span>${video.platform}</span>`;
-        const title=document.createElement('h2'); title.textContent=video.title;
-        info.append(kicker,title); thumb.append(img,play); button.append(thumb,info); button.addEventListener('click',()=>openVideo(video)); article.append(button); grid.append(article);
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='thumb-button';
+        button.setAttribute('aria-label',`${video.title}, ${video.year}, ${video.platform}`);
+
+        const img=document.createElement('img');
+        img.loading='lazy';
+        img.decoding='async';
+        img.src=video.thumbnail||fallbackThumb(video);
+        img.alt='';
+        img.width=480;
+        img.height=480;
+
+        button.append(img);
+        button.addEventListener('click',()=>openVideo(video));
+        grid.append(button);
       });
     }
 
@@ -171,39 +172,63 @@
       modalDescription.textContent=video.description||'Public video by Match Zimmerman.';
       sourceLink.href=sourceUrl(video);
       sourceLink.textContent=`Open original on ${video.platform==='youtube'?'YouTube':'Vimeo'} ↗`;
-      const iframe=document.createElement('iframe'); iframe.src=embedUrl(video); iframe.title=video.title; iframe.allow='autoplay; fullscreen; picture-in-picture; encrypted-media'; iframe.allowFullscreen=true; iframe.referrerPolicy='strict-origin-when-cross-origin';
-      playerWrap.replaceChildren(iframe); dialog.showModal();
+
+      // No player exists anywhere in the page until this exact moment.
+      const iframe=document.createElement('iframe');
+      iframe.src=embedUrl(video);
+      iframe.title=video.title;
+      iframe.loading='eager';
+      iframe.allow='autoplay; fullscreen; picture-in-picture; encrypted-media';
+      iframe.allowFullscreen=true;
+      iframe.referrerPolicy='strict-origin-when-cross-origin';
+      playerWrap.replaceChildren(iframe);
+      dialog.showModal();
     }
 
     function closeVideo(){
+      playerWrap.replaceChildren();
       if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-      playerWrap.replaceChildren(); dialog.close();
+      if(dialog.open) dialog.close();
     }
+
+    document.querySelector('.close').addEventListener('click',closeVideo);
+    dialog.addEventListener('click',event=>{if(event.target===dialog)closeVideo()});
+    dialog.addEventListener('close',()=>playerWrap.replaceChildren());
 
     fullscreenButton.addEventListener('click',async()=>{
       try{
-        if(document.fullscreenElement) await document.exitFullscreen();
-        else if(playerShell.requestFullscreen) await playerShell.requestFullscreen();
-        else if(playerShell.webkitRequestFullscreen) playerShell.webkitRequestFullscreen();
-      }catch(_){ }
+        if(!document.fullscreenElement){
+          const request=playerShell.requestFullscreen||playerShell.webkitRequestFullscreen;
+          if(request) await request.call(playerShell);
+        }else{
+          const exit=document.exitFullscreen||document.webkitExitFullscreen;
+          if(exit) await exit.call(document);
+        }
+      }catch(_){/* native player controls remain available */}
     });
 
-    document.addEventListener('fullscreenchange',()=>{fullscreenButton.textContent=document.fullscreenElement?'Exit full':'Fullscreen'});
-    document.querySelector('.close').addEventListener('click',closeVideo);
-    dialog.addEventListener('click',event=>{if(event.target===dialog) closeVideo()});
-    dialog.addEventListener('close',()=>playerWrap.replaceChildren());
-    document.querySelectorAll('.filter').forEach(button=>button.addEventListener('click',()=>{activeFilter=button.dataset.filter;document.querySelectorAll('.filter').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render()}));
+    document.querySelectorAll('.filter').forEach(button=>{
+      button.addEventListener('click',()=>{
+        activeFilter=button.dataset.filter;
+        document.querySelectorAll('.filter').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+        render();
+      });
+    });
 
     async function enrichVimeo(video){
-      const endpoint=`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(sourceUrl(video))}&width=1280`;
+      const endpoint=`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(sourceUrl(video))}&width=640`;
       try{
-        const response=await fetch(endpoint,{mode:'cors'}); if(!response.ok)return;
+        const response=await fetch(endpoint,{mode:'cors'});
+        if(!response.ok)return;
         const data=await response.json();
+        if(data.thumbnail_url)video.thumbnail=data.thumbnail_url;
         if(data.title)video.title=data.title;
         if(data.description&&data.description.trim())video.description=data.description.trim();
-        if(data.thumbnail_url)video.thumbnail=data.thumbnail_url;
-        if(data.upload_date){const parsed=new Date(data.upload_date);if(!Number.isNaN(parsed.getTime())){video.date=parsed.toISOString().slice(0,10);video.year=parsed.getUTCFullYear()}}
-      }catch(_){ }
+        if(data.upload_date){
+          const parsed=new Date(data.upload_date);
+          if(!Number.isNaN(parsed.getTime())){video.date=parsed.toISOString().slice(0,10);video.year=parsed.getUTCFullYear()}
+        }
+      }catch(_){/* image fallback remains */}
     }
 
     render();
