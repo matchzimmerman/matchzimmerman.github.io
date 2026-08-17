@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f4ff00" />
+  <title>Archival Retrieval Engine v0.1 — MZCMG</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">MZCMG / ARCHIVAL INTERPRETATION SYSTEM</div>
+      <h1>ARCHIVAL<br>RETRIEVAL<br>ENGINE <span>v0.1</span></h1>
+    </div>
+    <div class="system-state">
+      <div class="pulse"></div>
+      <div><b id="systemLabel">READY</b><small>ARCHIVE.ORG + WIKIMEDIA COMMONS</small></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="query-panel">
+      <label for="query">WHAT DO YOU WANT TO UNDERSTAND?</label>
+      <textarea id="query" rows="3" spellcheck="true">I want to learn about the fishing culture in western Ireland.</textarea>
+      <div class="query-actions">
+        <button id="retrieveBtn" class="primary">RETRIEVE ARCHIVE</button>
+        <button id="clearBtn" class="ghost">CLEAR</button>
+      </div>
+    </section>
+
+    <section id="planPanel" class="plan-panel hidden" aria-live="polite">
+      <div class="section-head"><span>01</span><h2>INQUIRY FIELD</h2><p>The query is expanded into multiple retrieval pathways.</p></div>
+      <div id="planSummary" class="plan-summary"></div>
+      <div id="planBranches" class="branches"></div>
+    </section>
+
+    <section id="resultsPanel" class="results-panel hidden">
+      <div class="section-head"><span>02</span><h2>ARCHIVAL CANDIDATES</h2><p>Ranked by inquiry relevance, metadata evidence, and rights clarity.</p></div>
+
+      <div class="toolbar">
+        <div id="stats" class="stats"></div>
+        <div class="filters" role="group" aria-label="Result filters">
+          <button class="filter active" data-filter="all">ALL</button>
+          <button class="filter" data-filter="pd">PUBLIC DOMAIN</button>
+          <button class="filter" data-filter="open">OPEN LICENSE</button>
+          <button class="filter" data-filter="review">NEEDS REVIEW</button>
+        </div>
+        <button id="exportBtn" class="ghost">EXPORT JSON</button>
+      </div>
+
+      <div id="providerStatus" class="provider-status"></div>
+      <div id="results" class="results-grid"></div>
+      <div id="empty" class="empty hidden"></div>
+    </section>
+  </main>
+
+  <footer>
+    <b>MZCMG</b> / MATCH ZIMMERMAN CREATIVE MEDIA GROUP
+    <span>RETRIEVAL ≠ RIGHTS CLEARANCE — VERIFY ORIGINAL SOURCE METADATA BEFORE PUBLICATION.</span>
+  </footer>
+
+  <template id="cardTemplate">
+    <article class="result-card">
+      <div class="media-wrap">
+        <img class="thumb" alt="" loading="lazy" />
+        <div class="thumb-fallback"></div>
+        <div class="source-badge"></div>
+        <div class="score"></div>
+      </div>
+      <div class="card-body">
+        <div class="meta-line"></div>
+        <h3></h3>
+        <p class="description"></p>
+        <div class="why"><b>WHY IT BELONGS</b><span></span></div>
+        <div class="chips"></div>
+        <div class="rights"></div>
+        <div class="card-actions">
+          <a class="open-source" target="_blank" rel="noopener noreferrer">OPEN SOURCE ↗</a>
+          <button class="copy-json ghost">COPY FRAGMENT JSON</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
