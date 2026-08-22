@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "code": "CORPUS-001",
+  "slug": "colbert-daily-show",
+  "title": "Stephen Colbert appearances on The Daily Show",
+  "description": "A duplicate-preserving retrieval corpus of YouTube uploads containing Stephen Colbert appearances, segments, guest-host episodes, tosses, returns, and excerpts connected to The Daily Show.",
+  "capture_condition": "public YouTube upload plausibly containing a Stephen Colbert Daily Show appearance or excerpt",
+  "search": {
+    "queries": ["\"Stephen Colbert\" \"Daily Show\"", "\"Stephen Colbert\" \"The Daily Show\"", "\"Colbert\" \"Jon Stewart\" \"Daily Show\"", "\"Stephen Colbert\" correspondent", "\"Stephen Colbert\" \"Daily Show\" interview", "\"Stephen Colbert\" \"Daily Show\" guest host", "\"Stephen Colbert\" \"Daily Show\" toss", "\"Colbert Report\" \"Daily Show\" toss"],
+    "order": "date",
+    "safe_search": "none",
+    "max_pages_per_job": 10,
+    "date_slicing": {"start": "2005-04-23", "end": null, "unit": "month"}
+  },
+  "filter": {},
+  "verification": {
+    "strong_metadata_terms": ["stephen colbert", "daily show", "jon stewart", "colbert report"],
+    "weak_metadata_terms": ["colbert", "correspondent"],
+    "default": "uncertain"
+  }
+}
