@@ -1,0 +1,26 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"MZ YouTube Corpus Video Record",
+  "type":"object",
+  "required":["video_id","captured_at","view_count_at_capture","verification","availability"],
+  "properties":{
+    "video_id":{"type":"string"},
+    "url":{"type":"string"},
+    "title":{"type":["string","null"]},
+    "channel_id":{"type":["string","null"]},
+    "channel_title":{"type":["string","null"]},
+    "published_at":{"type":["string","null"]},
+    "captured_at":{"type":"string"},
+    "view_count_at_capture":{"type":["integer","null"]},
+    "duration":{"type":["string","null"]},
+    "thumbnail":{"type":["string","null"]},
+    "verification":{"type":"string","enum":["verified","likely","uncertain","rejected"]},
+    "availability":{"type":"string","enum":["public","private","removed","unknown"]},
+    "source_event_id":{"type":["string","null"]},
+    "duplicate_cluster_id":{"type":["string","null"]},
+    "discovery_queries":{"type":"array","items":{"type":"string"}},
+    "collection_ids":{"type":"array","items":{"type":"string"}},
+    "notes":{"type":["string","null"]}
+  },
+  "additionalProperties":true
+}
