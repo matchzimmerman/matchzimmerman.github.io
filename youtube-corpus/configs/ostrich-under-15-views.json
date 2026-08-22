@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "code": "CORPUS-002",
+  "slug": "ostrich-under-15-views",
+  "title": "Ostrich videos under 15 views",
+  "description": "A long-tail YouTube retrieval corpus for public videos discovered while displaying fewer than 15 views and plausibly containing an ostrich.",
+  "capture_condition": "view_count_at_capture < 15",
+  "search": {
+    "queries": ["ostrich", "\"ostrich\"", "ostrich bird", "ostrich zoo", "ostrich farm", "ostrich chick", "ostrich running", "Struthio camelus", "avestruz", "autruche", "Strauß Vogel", "struisvogel", "struzzo", "struś"],
+    "order": "date",
+    "safe_search": "none",
+    "max_pages_per_job": 10,
+    "date_slicing": {"start": "2005-04-23", "end": null, "unit": "month"}
+  },
+  "filter": {"view_count_max_exclusive": 15},
+  "verification": {
+    "strong_metadata_terms": ["ostrich", "struthio camelus", "avestruz", "autruche", "struisvogel", "struzzo"],
+    "weak_metadata_terms": ["bird", "zoo", "farm", "safari"],
+    "default": "uncertain"
+  }
+}
