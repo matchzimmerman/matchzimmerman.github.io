@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MZ YouTube Corpus Log</title>
+  <meta name="description" content="A public, duplicate-preserving log of retrieved YouTube video collections.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">MZ // YOUTUBE CORPUS LOG</a>
+    <div class="status"><span class="dot"></span><span id="globalStatus">PUBLIC INDEX</span></div>
+  </header>
+
+  <main id="app" class="shell">
+    <section id="homeView">
+      <div class="hero">
+        <p class="kicker">RETRIEVAL ARCHIVE / PUBLIC LOG</p>
+        <h1>Every upload<br>is evidence.</h1>
+        <p class="intro">A growing index of deliberately over-retrieved YouTube collections. Separate uploads of the same source footage remain separate records. View counts are preserved at the moment of capture.</p>
+      </div>
+
+      <div class="rulebar">
+        <span>SAME VIDEO ID → ONE RECORD</span>
+        <span>DIFFERENT UPLOAD → KEEP IT</span>
+        <span>DISCOVERY STATE → PRESERVE IT</span>
+      </div>
+
+      <section class="section">
+        <div class="section-head">
+          <div><p class="kicker">COLLECTIONS</p><h2>Active corpora</h2></div>
+          <div id="collectionTotals" class="mini-stat"></div>
+        </div>
+        <div id="collectionGrid" class="collection-grid"></div>
+      </section>
+    </section>
+
+    <section id="collectionView" hidden>
+      <button id="backBtn" class="back">← ALL COLLECTIONS</button>
+      <div class="collection-hero">
+        <p id="collectionCode" class="kicker"></p>
+        <h1 id="collectionTitle"></h1>
+        <p id="collectionDescription" class="intro"></p>
+        <div id="collectionStats" class="stats"></div>
+      </div>
+
+      <div class="toolbar">
+        <input id="searchInput" type="search" placeholder="Search title, channel, ID, event, notes…" autocomplete="off">
+        <select id="sortSelect" aria-label="Sort videos">
+          <option value="captured_desc">Newest capture</option>
+          <option value="published_asc">Oldest upload</option>
+          <option value="published_desc">Newest upload</option>
+          <option value="views_asc">Fewest views at capture</option>
+          <option value="views_desc">Most views at capture</option>
+        </select>
+      </div>
+
+      <div id="emptyState" class="empty" hidden></div>
+      <div id="videoGrid" class="video-grid"></div>
+      <button id="loadMoreBtn" class="load-more" hidden>LOAD NEXT LOG SHARD</button>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>MZCMG / PUBLIC RESEARCH INFRASTRUCTURE</span>
+    <span id="footerClock"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
