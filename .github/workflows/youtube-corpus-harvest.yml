@@ -1,0 +1,58 @@
+name: YouTube Corpus Harvest
+
+on:
+  workflow_dispatch:
+    inputs:
+      collection:
+        description: Collection to harvest
+        required: true
+        type: choice
+        options:
+          - ostrich-under-15-views
+          - colbert-daily-show
+      search_budget:
+        description: search.list calls this run (100 quota units each)
+        required: true
+        default: "70"
+      reset_sweep:
+        description: Begin a new complete retrieval sweep
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: youtube-corpus-harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out archive
+        uses: actions/checkout@v4
+      - name: Verify API credential
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          if [ -z "$YOUTUBE_API_KEY" ]; then
+            echo "::error::Repository secret YOUTUBE_API_KEY is not configured."
+            exit 1
+          fi
+      - name: Harvest
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          ARGS=("${{ inputs.collection }}" "--search-budget" "${{ inputs.search_budget }}")
+          if [ "${{ inputs.reset_sweep }}" = "true" ]; then ARGS+=("--reset-sweep"); fi
+          python youtube-corpus/tools/harvest.py "${ARGS[@]}"
+      - name: Commit corpus state
+        run: |
+          if git diff --quiet -- youtube-corpus/data; then echo "No corpus changes."; exit 0; fi
+          git config user.name "MZ YouTube Corpus"
+          git config user.email "actions@users.noreply.github.com"
+          git add youtube-corpus/data
+          git commit -m "corpus: harvest ${{ inputs.collection }}"
+          git push
