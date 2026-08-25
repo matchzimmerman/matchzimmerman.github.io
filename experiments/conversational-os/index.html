@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#f2ff00" />
+<title>Conversational OS / Organic Bit Voice Field</title>
+<style>
+:root{--ink:#111;--paper:#f5f4ec;--acid:#f2ff00;--line:#bdbdb5;--muted:#6a6a64;--card:#fff;--r:24px}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+body{overflow-x:hidden}button,input{font:inherit;color:inherit}button{cursor:pointer}
+#field{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;background:var(--paper)}
+.veil{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(245,244,236,.12),rgba(245,244,236,.02) 55%,rgba(245,244,236,.48))}
+.shell{position:relative;z-index:2;min-height:100vh;display:grid;grid-template-rows:auto 1fr auto}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:18px 20px;position:sticky;top:0;z-index:10;background:linear-gradient(rgba(245,244,236,.94),rgba(245,244,236,.52),transparent)}
+.brand{display:flex;gap:10px;align-items:center}.dot{width:14px;height:14px;border-radius:50%;background:var(--acid);border:1px solid #111;box-shadow:0 0 0 4px rgba(242,255,0,.24)}
+.brand b{font-size:13px;letter-spacing:.09em;text-transform:uppercase}.brand small{font-size:11px;color:var(--muted)}
+.state{font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:#fff;border:1px solid #111;border-radius:999px;padding:8px 10px;white-space:nowrap}.state.hearing{background:#ff8f78}.state.interpreting{background:#83f3ff}.state.materializing{background:var(--acid)}
+main{width:min(1120px,100%);margin:auto;padding:7vh 20px 190px;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:24px;align-items:start}
+.hero{min-height:44vh;display:flex;flex-direction:column;justify-content:center}.kicker{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:12px}.hero h1{margin:0;font-size:clamp(46px,9vw,112px);line-height:.82;letter-spacing:-.065em;max-width:860px;font-weight:760}.hero p{font-size:17px;line-height:1.45;max-width:700px;margin:20px 0 0}.hero p strong{background:var(--acid);font-weight:650}
+#liveTranscript{margin-top:24px;max-width:720px;font-size:clamp(22px,4vw,46px);line-height:1.05;letter-spacing:-.035em;min-height:1.2em}.ghost{opacity:.28}
+#artifactStack{display:flex;flex-direction:column;gap:14px;margin-top:30px}.artifact{border:1.5px solid #111;border-radius:var(--r);background:rgba(255,255,255,.96);overflow:hidden;box-shadow:0 8px 0 rgba(0,0,0,.06);transform-origin:50% 0;animation:materialize .48s cubic-bezier(.2,.9,.2,1)}
+@keyframes materialize{0%{opacity:0;transform:scale(.82) translateY(-20px);filter:blur(9px)}100%{opacity:1;transform:none;filter:none}}
+.ahead{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:13px 15px;font-size:11px;letter-spacing:.08em;text-transform:uppercase}.abody{padding:16px}.note{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f4ee;border-radius:14px;padding:14px;white-space:pre-wrap;line-height:1.45;font-size:13px}.doc h2{font-size:28px;line-height:1;margin:0 0 12px;letter-spacing:-.035em}.doc p{font-size:15px;line-height:1.5;margin:0 0 10px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.ph{aspect-ratio:1;border-radius:14px;overflow:hidden;background:linear-gradient(135deg,#f3ff6a,#fa7e73 48%,#62e4f4);position:relative}.ph img{width:100%;height:100%;object-fit:cover}.ph span{position:absolute;left:7px;bottom:7px;background:rgba(255,255,255,.82);border-radius:7px;padding:3px 6px;font-size:9px}.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #e8e8e2}.row:last-child{border:0}.file{width:34px;height:40px;border:1px solid #111;border-radius:6px;display:grid;place-items:center;font-size:8px;background:#fafaf5}.row b{display:block;font-size:13px}.row small{color:var(--muted)}
+aside{position:sticky;top:84px;background:rgba(255,255,255,.9);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:22px;overflow:hidden}.side{padding:15px;border-bottom:1px solid #e7e7e1}.side:last-child{border:0}.side h3{font-size:11px;margin:0 0 7px;text-transform:uppercase;letter-spacing:.09em}.side p{margin:0;color:var(--muted);font-size:12px;line-height:1.42}.legend{display:grid;gap:8px;margin-top:10px}.legend div{display:flex;align-items:center;gap:8px;font-size:11px}.sw{width:13px;height:13px;border:1px solid #111;border-radius:50%}.sw.idle{background:#f2ff00}.sw.hear{background:#ff8f78}.sw.think{background:#83f3ff}.sw.make{background:#9bff79}
+.composerWrap{position:fixed;z-index:20;left:0;right:0;bottom:0;padding:34px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(245,244,236,.93) 34%,var(--paper) 62%)}.composer{max-width:870px;margin:auto;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:#fff;border:1.5px solid #111;border-radius:28px;padding:8px;box-shadow:0 14px 40px rgba(0,0,0,.13)}.composer input{min-width:0;border:0;outline:0;background:transparent;padding:12px 8px;font-size:16px}.round{width:46px;height:46px;border:1px solid #111;border-radius:50%;display:grid;place-items:center;background:#fff;font-weight:700}.mic{background:var(--acid)}.mic.on{background:#ff8f78;animation:pulse 1.05s infinite}@keyframes pulse{50%{box-shadow:0 0 0 10px rgba(255,143,120,.18)}}.fine{font-size:10px;color:var(--muted);text-align:center;margin:7px auto 0;max-width:860px}.try{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px}.try button{background:rgba(255,255,255,.86);border:1px solid var(--line);border-radius:999px;padding:8px 10px;font-size:11px}.try button:hover{border-color:#111}
+#fileInput{display:none}.drop{position:fixed;z-index:100;inset:0;background:rgba(242,255,0,.92);display:none;place-items:center;text-align:center;font-size:clamp(34px,8vw,90px);font-weight:760;letter-spacing:-.05em;padding:30px}.drop.show{display:grid}
+@media(max-width:820px){main{display:block;padding-top:4vh}.hero{min-height:50vh}aside{display:none}.brand small{display:none}.grid{grid-template-columns:repeat(2,1fr)}.hero h1{font-size:clamp(52px,17vw,92px)}#liveTranscript{font-size:30px}}
+</style>
+</head>
+<body>
+<canvas id="field"></canvas><div class="veil"></div>
+<div class="shell">
+<header><div class="brand"><div class="dot"></div><div><b>Conversational OS</b> <small>/ Organic Bit Voice Field</small></div></div><div id="state" class="state">idle / available</div></header>
+<main>
+<section>
+  <div class="hero">
+    <div class="kicker">MZCMG / experimental research + design / prototype 0.1</div>
+    <h1>The system should show that it hears you.</h1>
+    <p>The Organic Bit field is not a logo. It is <strong>perceptual evidence</strong>: voice energy deforms it, interpretation reorganizes it, and intent causes it to materialize files, notes, images, and documents inside the same conversational space.</p>
+    <div class="try">
+      <button data-q="Make a note: conversation is the operating system">make a note</button>
+      <button data-q="Create a document about why voice becomes the interface">create a document</button>
+      <button data-q="Show me my photos">show photos</button>
+      <button data-q="Open my library">open library</button>
+    </div>
+    <div id="liveTranscript" class="ghost">Say something, or type below.</div>
+  </div>
+  <div id="artifactStack"></div>
+</section>
+<aside>
+  <div class="side"><h3>Prototype thesis</h3><p>Conversation is the organizing layer. Apps become capabilities that surface only when intent requires them.</p></div>
+  <div class="side"><h3>Organic Bit states</h3><div class="legend"><div><i class="sw idle"></i> idle / ambient</div><div><i class="sw hear"></i> hearing / audio-reactive</div><div><i class="sw think"></i> interpreting / re-forming</div><div><i class="sw make"></i> materializing / artifact</div></div></div>
+  <div class="side"><h3>What is real</h3><p>Microphone amplitude, browser speech recognition where available, local file/image drops, local note persistence, and the visual state machine.</p></div>
+  <div class="side"><h3>What is speculative</h3><p>Cloud Photos, Drive, Calendar, messages, and other service connections are mocked. No external account access is implied.</p></div>
+</aside>
+</main>
+<div class="composerWrap">
+  <div class="composer"><button id="attach" class="round" title="add local file">＋</button><input id="input" autocomplete="off" placeholder="Talk to the system…"><button id="mic" class="round mic" title="voice input">●</button></div>
+  <div class="fine">Mic audio drives the field locally in your browser. Service cards are speculative. Dropped files are not uploaded.</div>
+</div>
+<input id="fileInput" type="file" multiple accept="image/*,.pdf,.txt,.md,.csv,.json,.doc,.docx">
+<div id="drop" class="drop">Drop it into the conversation.</div>
+</div>
+<script>
+const canvas=document.querySelector('#field'),ctx=canvas.getContext('2d');
+const stateEl=document.querySelector('#state'),micBtn=document.querySelector('#mic'),input=document.querySelector('#input'),live=document.querySelector('#liveTranscript'),stack=document.querySelector('#artifactStack'),fileInput=document.querySelector('#fileInput'),attach=document.querySelector('#attach'),drop=document.querySelector('#drop');
+let DPR=1,W=0,H=0,t=0,amp=0,targetAmp=0,mode='idle',stream=null,audioCtx=null,analyser=null,data=null,recognition=null,listening=false,localFiles=[],notes=JSON.parse(localStorage.getItem('cos-obas-notes')||'[]');
+const palette=['#f2ff00','#ff8f78','#83f3ff','#9bff79','#ffca68','#d8a8ff','#111111'];
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*DPR;canvas.height=H*DPR;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}addEventListener('resize',resize);resize();
+function setMode(m,label){mode=m;stateEl.className='state '+(m==='idle'?'':m);stateEl.textContent=label||m;}
+function field(){t+=.012;amp+=(targetAmp-amp)*.14;ctx.clearRect(0,0,W,H);ctx.fillStyle='#f5f4ec';ctx.fillRect(0,0,W,H);
+  const step=Math.max(16,Math.min(28,W/34));const energy=amp*2.3;const cx=W*.53,cy=H*.48;
+  for(let y=-step;y<H+step;y+=step){for(let x=-step;x<W+step;x+=step){const dx=x-cx,dy=y-cy,d=Math.sqrt(dx*dx+dy*dy);const a=Math.atan2(dy,dx);let wave=Math.sin(d*.018-t*2.1+a*2)+Math.cos(x*.012+y*.009+t*1.35);let influence=Math.max(0,1-d/Math.max(W,H));let m=(wave*.5+.5)*(.25+energy*1.7)+influence*energy;
+    if(mode==='interpreting')m+=.42*Math.sin(a*7+t*6+d*.01);if(mode==='materializing')m+=.75*Math.max(0,1-d/420);
+    const threshold=mode==='idle'?.70:.46;if(m>threshold){let s=step*(.18+Math.min(1,m)*.72);let bend=Math.sin(a*3+t*3+d*.02)*step*(mode==='hearing'?energy:.18);let px=x+Math.cos(a+Math.PI/2)*bend,py=y+Math.sin(a+Math.PI/2)*bend;let idx=Math.abs(Math.floor((Math.sin(a*2+t)+m*3+d*.004)*3))%palette.length;ctx.fillStyle=palette[idx];ctx.beginPath();ctx.ellipse(px,py,s*.72,s*(.36+.45*Math.abs(Math.sin(a+t))),a+t*.2,0,Math.PI*2);ctx.fill();if(m>.95){ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.stroke();}}
+  }}requestAnimationFrame(field)}field();
+async function startAudio(){if(stream)return;stream=await navigator.mediaDevices.getUserMedia({audio:true});audioCtx=new (window.AudioContext||window.webkitAudioContext)();const src=audioCtx.createMediaStreamSource(stream);analyser=audioCtx.createAnalyser();analyser.fftSize=256;data=new Uint8Array(analyser.frequencyBinCount);src.connect(analyser)}
+function meter(){if(analyser){analyser.getByteFrequencyData(data);let sum=0;for(const v of data)sum+=v*v;targetAmp=Math.min(1,Math.sqrt(sum/data.length)/110);}else targetAmp*=.9;requestAnimationFrame(meter)}meter();
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){recognition=new SR();recognition.continuous=true;recognition.interimResults=true;recognition.lang='en-US';recognition.onresult=e=>{let interim='',final='';for(let i=e.resultIndex;i<e.results.length;i++){const tx=e.results[i][0].transcript;if(e.results[i].isFinal)final+=tx;else interim+=tx}live.classList.remove('ghost');live.textContent=final||interim||'…';if(final.trim()){input.value=final.trim();setTimeout(()=>submit(final.trim()),320)}};recognition.onend=()=>{if(listening){try{recognition.start()}catch(e){}}};recognition.onerror=()=>{};}
+async function toggleMic(){if(listening){listening=false;micBtn.classList.remove('on');setMode('idle','idle / available');targetAmp=.05;try{recognition&&recognition.stop()}catch(e){};return}try{await startAudio();listening=true;micBtn.classList.add('on');setMode('hearing','hearing / voice');live.classList.remove('ghost');live.textContent='Listening…';try{recognition&&recognition.start()}catch(e){}}catch(e){live.classList.remove('ghost');live.textContent='Microphone permission was not available. Type below instead.'}}
+micBtn.addEventListener('click',toggleMic);
+function artifact(title,tag,body){setMode('materializing','materializing / artifact');targetAmp=.85;const el=document.createElement('article');el.className='artifact';el.innerHTML=`<div class="ahead"><b>${esc(title)}</b><span>${esc(tag)}</span></div><div class="abody">${body}</div>`;stack.prepend(el);setTimeout(()=>{if(listening)setMode('hearing','hearing / voice');else setMode('idle','idle / available');targetAmp=listening?.18:.04},900)}
+function makeNote(q){let txt=q.replace(/^.*?(note|remember|capture)(\s+that)?\s*:?/i,'').trim()||q;notes.unshift({text:txt,date:new Date().toISOString()});notes=notes.slice(0,40);localStorage.setItem('cos-obas-notes',JSON.stringify(notes));artifact('Note','saved locally',`<div class="note">${esc(txt)}</div>`)}
+function makeDoc(q){let topic=q.replace(/^.*?(document|article|page|write)(\s+about|\s+on|\s+that)?\s*/i,'').trim()||'Conversational operating systems';artifact('Generated document','speculative output',`<div class="doc"><h2>${esc(topic.charAt(0).toUpperCase()+topic.slice(1))}</h2><p>This prototype treats conversation as the system-level interface rather than one application among many.</p><p>The Organic Bit field provides continuous evidence of listening and interpretation, then becomes the transition mechanism through which requested artifacts materialize.</p><p><strong>Research question:</strong> what happens when the perceptual feedback, the assistant, and the artifact surface are all experienced as one continuous organism?</p></div>`)}
+function photoCard(){let imgs=localFiles.filter(f=>f.type.startsWith('image/')).slice(-6);let cells=imgs.length?imgs.map(f=>`<div class="ph"><img src="${f.url}" alt=""><span>${esc(f.name)}</span></div>`).join(''):['field_01','artifact_02','voice_03','motion_04','image_05','archive_06'].map((n,i)=>`<div class="ph" style="filter:hue-rotate(${i*31}deg)"><span>${n}</span></div>`).join('');artifact('Photos',imgs.length?'local session':'speculative service',`<div class="grid">${cells}</div>`)}
+function libraryCard(){let fs=localFiles.length?localFiles.slice(-6).reverse():[{name:'voice-field-study.md',type:'text/markdown',size:7042},{name:'interaction-map.pdf',type:'application/pdf',size:148302},{name:'organic-bit-state-test.mov',type:'video/quicktime',size:3940302}];artifact('Library',localFiles.length?'local session':'speculative service',fs.map(f=>`<div class="row"><div class="file">${esc((f.name.split('.').pop()||'file').toUpperCase().slice(0,4))}</div><div><b>${esc(f.name)}</b><small>${esc(f.type||'file')} · ${Math.max(1,Math.round((f.size||1000)/1024))} KB</small></div></div>`).join(''))}
+function services(){artifact('Capabilities','speculative layer',`<div class="grid">${['Photos','Drive','Calendar','Browser','Messages','Music'].map(x=>`<div class="ph" style="display:grid;place-items:center;background:#fff;border:1px solid #111"><b>${x}</b></div>`).join('')}</div>`)}
+function interpret(q){let s=q.toLowerCase();if(/photo|image|picture/.test(s))photoCard();else if(/library|file|pdf|artifact/.test(s))libraryCard();else if(/note|remember|capture/.test(s))makeNote(q);else if(/document|article|page|write/.test(s))makeDoc(q);else if(/service|connect|capabilit|app|tool/.test(s))services();else artifact('Conversation','system response',`<div class="doc"><p>${esc('Heard: “'+q+'”')}</p><p>The prototype currently recognizes a small set of intents—notes, documents, photos, library, and services—but the interaction model is the point: the field hears, reorganizes, and becomes the requested object.</p></div>`)}
+function submit(q){q=(q||input.value).trim();if(!q)return;input.value='';live.classList.remove('ghost');live.textContent=q;setMode('interpreting','interpreting / intent');targetAmp=.62;setTimeout(()=>interpret(q),560)}
+input.addEventListener('keydown',e=>{if(e.key==='Enter')submit()});document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>submit(b.dataset.q)));
+function addFiles(files){[...files].forEach(f=>localFiles.push({name:f.name,type:f.type,size:f.size,url:f.type.startsWith('image/')?URL.createObjectURL(f):''}));libraryCard()}
+attach.addEventListener('click',()=>fileInput.click());fileInput.addEventListener('change',e=>addFiles(e.target.files));['dragenter','dragover'].forEach(n=>addEventListener(n,e=>{e.preventDefault();drop.classList.add('show')}));['dragleave','drop'].forEach(n=>addEventListener(n,e=>{e.preventDefault();drop.classList.remove('show')}));addEventListener('drop',e=>{if(e.dataTransfer.files.length)addFiles(e.dataTransfer.files)});
+</script>
+</body></html>
