@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#e9e4d9" />
+  <title>DESPACITO — Digital Vinyl Toy</title>
+  <style>
+    :root{
+      --paper:#e9e4d9;
+      --ink:#283474;
+      --cream:#eee8d9;
+      --muted:#77746c;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    #app{position:fixed;inset:0}
+    canvas{display:block;width:100%;height:100%;touch-action:none}
+    .hud{position:fixed;inset:0;pointer-events:none;padding:max(18px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));display:flex;flex-direction:column;justify-content:space-between}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+    .title{font-size:clamp(22px,5vw,54px);font-weight:900;letter-spacing:.03em;line-height:.85;text-transform:uppercase;text-shadow:.02em .02em 0 rgba(40,52,116,.08);transform:rotate(-1deg)}
+    .sub{font-size:10px;letter-spacing:.22em;text-transform:uppercase;margin-top:10px;color:#4f547a}
+    .tag{font-size:10px;letter-spacing:.12em;text-align:right;line-height:1.5;color:#62647a;max-width:160px}
+    .bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+    .help{font-size:10px;letter-spacing:.08em;line-height:1.65;color:#66636a}
+    .controls{pointer-events:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    button{appearance:none;border:1px solid rgba(40,52,116,.35);background:rgba(238,232,217,.76);backdrop-filter:blur(12px);color:var(--ink);font:700 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:11px 13px;border-radius:999px;cursor:pointer}
+    button:active{transform:scale(.97)}
+    .stamp{position:fixed;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);font-size:8px;letter-spacing:.17em;color:rgba(40,52,116,.45);white-space:nowrap;pointer-events:none}
+    @media (max-width:640px){.tag{display:none}.hud{padding:18px 14px 22px}.help{max-width:160px}.controls{max-width:180px}.stamp{display:none}}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<div class="hud">
+  <div class="top">
+    <div>
+      <div class="title">Despacito</div>
+      <div class="sub">digital vinyl toy / prototype 001</div>
+    </div>
+    <div class="tag">FROM A NOTEBOOK DOODLE<br>TO A ROTATABLE OBJECT</div>
+  </div>
+  <div class="bottom">
+    <div class="help">DRAG → ROTATE<br>PINCH / WHEEL → ZOOM<br>DOUBLE TAP → RESET</div>
+    <div class="controls">
+      <button id="spin">Auto spin</button>
+      <button id="wire">Wireframe</button>
+      <button id="reset">Reset</button>
+    </div>
+  </div>
+</div>
+<div class="stamp">PROCEDURAL WEB SCULPT · THREE.JS · NO 3D MODEL FILE</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const app = document.getElementById('app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe9e4d9);
+scene.fog = new THREE.Fog(0xe9e4d9, 11, 22);
+
+const camera = new THREE.PerspectiveCamera(32, innerWidth/innerHeight, .1, 100);
+camera.position.set(0.2, 2.75, 10.4);
+
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = .06;
+controls.target.set(0, 2.45, 0);
+controls.minDistance = 6.1;
+controls.maxDistance = 14;
+controls.maxPolarAngle = Math.PI * .79;
+controls.minPolarAngle = Math.PI * .16;
+controls.autoRotateSpeed = 1.05;
+
+const cream = new THREE.MeshStandardMaterial({color:0xeee8d9, roughness:.48, metalness:.02});
+const blue = new THREE.MeshStandardMaterial({color:0x263272, roughness:.4, metalness:.02});
+const dark = new THREE.MeshStandardMaterial({color:0x14172c, roughness:.38, metalness:.03});
+const eyeWhite = new THREE.MeshStandardMaterial({color:0xf6f0df, roughness:.3});
+const pupil = new THREE.MeshStandardMaterial({color:0x1d2864, roughness:.22, metalness:.08});
+const allMats = [cream, blue, dark, eyeWhite, pupil];
+
+const toy = new THREE.Group();
+toy.position.y = -1.62;
+scene.add(toy);
+
+function mesh(geo, mat, pos=[0,0,0], scale=[1,1,1], rot=[0,0,0], parent=toy){
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(...pos); m.scale.set(...scale); m.rotation.set(...rot);
+  m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+}
+function sphere(r, mat, pos, scale=[1,1,1], parent=toy){return mesh(new THREE.SphereGeometry(r,48,32),mat,pos,scale,[0,0,0],parent)}
+function cyl(rt, rb, h, mat, pos, rot=[0,0,0], parent=toy){return mesh(new THREE.CylinderGeometry(rt,rb,h,24),mat,pos,[1,1,1],rot,parent)}
+function capsuleBetween(a,b,r,mat,parent=toy){
+  const va=new THREE.Vector3(...a), vb=new THREE.Vector3(...b), mid=va.clone().add(vb).multiplyScalar(.5);
+  const d=va.distanceTo(vb); const g=new THREE.Group(); g.position.copy(mid); parent.add(g);
+  const body=mesh(new THREE.CylinderGeometry(r,r,d,16),mat,[0,0,0],[1,1,1],[0,0,0],g);
+  body.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),vb.clone().sub(va).normalize());
+  sphere(r,mat,a,[1,1,1],parent); sphere(r,mat,b,[1,1,1],parent); return g;
+}
+
+// HEAD — oversized, subtly asymmetric vinyl form.
+const head = sphere(1.63, cream, [0,4.82,0], [1.07,.98,.93]);
+head.rotation.z = -.035;
+
+// blue ballpoint "cap" on crown
+const crown = sphere(1.635, blue, [-.18,5.48,-.02],[.88,.34,.88]);
+crown.rotation.z = -.08;
+
+// ears
+sphere(.38, cream, [-1.75,4.85,.03],[.68,1,.48]);
+sphere(.38, cream, [ 1.75,4.72,.03],[.68,1,.48]);
+const earInMat = new THREE.MeshStandardMaterial({color:0x9b99a5,roughness:.58}); allMats.push(earInMat);
+sphere(.22, earInMat, [-1.80,4.84,.19],[.5,.8,.28]);
+sphere(.22, earInMat, [ 1.80,4.72,.19],[.5,.8,.28]);
+
+// stitched patch — a slightly raised blue organic disk on the face
+const patch = sphere(1.04, blue, [-.69,4.86,.97],[.88,1.03,.095]);
+patch.rotation.z = -.11;
+
+// left spiral / target eye
+sphere(.53, eyeWhite, [-.62,4.97,1.58],[1,1,.35]);
+const ring1=mesh(new THREE.TorusGeometry(.34,.055,16,48),blue,[-.62,4.97,1.77],[1,1,1]);
+const ring2=mesh(new THREE.TorusGeometry(.19,.043,16,48),blue,[-.62,4.97,1.79],[1,1,1]);
+sphere(.075,pupil,[-.62,4.97,1.83]);
+
+// large worried eye
+sphere(.69, eyeWhite, [.71,4.89,1.34],[1.05,1.1,.48]);
+sphere(.12,pupil,[.62,4.90,1.70]);
+
+// eyebrows
+capsuleBetween([.38,5.73,1.31],[.82,5.84,1.26],.055,blue);
+capsuleBetween([-.96,5.67,1.40],[-.63,5.79,1.42],.052,blue);
+
+// forehead seam + raised stitch bars
+const seamPts = [];
+for(let i=0;i<=30;i++){
+  const x=-1.42+i*(2.84/30); const y=5.78 + .11*Math.cos((x/1.42)*Math.PI*.72); const z=1.13;
+  seamPts.push(new THREE.Vector3(x,y,z));
+}
+const seamGeo=new THREE.BufferGeometry().setFromPoints(seamPts);
+const seamMat=new THREE.LineBasicMaterial({color:0x263272});
+const seam=new THREE.Line(seamGeo,seamMat); toy.add(seam);
+for(let i=2;i<29;i+=3){
+  const p=seamPts[i];
+  capsuleBetween([p.x,p.y-.105,1.14],[p.x,p.y+.11,1.16],.028,blue);
+}
+
+// stitches around patch perimeter
+for(let i=0;i<17;i++){
+  const a=i/17*Math.PI*2;
+  const cx=-.69, cy=4.86, rx=.97, ry=1.04;
+  const x=cx+Math.cos(a)*rx, y=cy+Math.sin(a)*ry;
+  const nx=Math.cos(a)*.12, ny=Math.sin(a)*.12;
+  capsuleBetween([x-nx,y-ny,1.31],[x+nx,y+ny,1.36],.026,blue);
+}
+
+// worried mouth: shallow dark arc
+const mouth = mesh(new THREE.TorusGeometry(.22,.055,12,36,Math.PI*1.18),dark,[.10,4.08,1.38],[1,1,1],[0,0,.92]);
+
+// tiny neck
+cyl(.18,.25,.72,cream,[0,3.43,0]);
+
+// torso — soft tapered vinyl body
+const torso=sphere(1.03,cream,[0,2.64,0],[.82,1.2,.52]);
+// horizontal blue sweater stripes as thin overlay bands
+cyl(.87,.87,.44,blue,[0,3.08,0]);
+cyl(.86,.86,.44,blue,[0,2.26,0]);
+// flatten torso bands a little front/back to follow toy silhouette
+for(const c of [toy.children[toy.children.length-2],toy.children[toy.children.length-1]]) c.scale.z=.56;
+
+// pointed collar, two stylized triangular fins
+function triangle(points,mat,pos=[0,0,0],rot=[0,0,0]){
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(points.flat(),3));
+  g.setIndex([0,1,2]); g.computeVertexNormals();
+  return mesh(g,mat,pos,[1,1,1],rot);
+}
+const colL=triangle([[0,0,0],[-1.02,.15,.05],[-.34,-.42,.18]],blue,[-.03,3.40,.25],[-.2,0,-.06]);
+const colR=triangle([[0,0,0],[1.02,.15,.05],[.34,-.42,.18]],blue,[.03,3.40,.25],[-.2,0,.06]);
+
+// arms
+capsuleBetween([- .72,3.06,.03],[-1.08,1.86,.10],.13,cream);
+capsuleBetween([  .72,3.06,.03],[ 1.08,1.86,.10],.13,cream);
+// sleeve stripes + cuffs
+cyl(.15,.15,.48,blue,[-.92,2.40,.07],[0,0,-.26]);
+cyl(.15,.15,.48,blue,[ .92,2.40,.07],[0,0, .26]);
+cyl(.23,.21,.24,blue,[-1.11,1.79,.10],[0,0,-.26]);
+cyl(.23,.21,.24,blue,[ 1.11,1.79,.10],[0,0, .26]);
+
+// hands + chunky little fingers
+sphere(.26,cream,[-1.18,1.50,.12],[.85,1.15,.65]);
+sphere(.26,cream,[ 1.18,1.50,.12],[.85,1.15,.65]);
+for(const side of [-1,1]){
+  for(let i=0;i<3;i++){
+    const x=side*(1.12 + i*.06), y=1.29-i*.015;
+    capsuleBetween([x,y,.12],[x+side*.035,y-.22,.16],.055,cream);
+  }
+}
+
+// legs
+capsuleBetween([-.43,1.68,0],[-.47,.27,0],.16,cream);
+capsuleBetween([ .43,1.68,0],[ .47,.27,0],.16,cream);
+// blue sock segments
+cyl(.18,.18,.42,blue,[-.46,.92,0],[0,0,.02]);
+cyl(.18,.18,.42,blue,[ .46,.92,0],[0,0,-.02]);
+
+// pointed shoes using stretched spheres + pointed cone noses
+sphere(.34,blue,[-.49,.06,.26],[.82,.52,1.25]);
+sphere(.34,blue,[ .49,.06,.26],[.82,.52,1.25]);
+mesh(new THREE.ConeGeometry(.28,.86,20),blue,[-.66,.02,.72],[1,1,1],[Math.PI/2,0,-.12]);
+mesh(new THREE.ConeGeometry(.28,.86,20),blue,[ .66,.02,.72],[1,1,1],[Math.PI/2,0,.12]);
+
+// subtle pen-scratch hatch lines floating just above some blue surfaces
+const hatchMat = new THREE.LineBasicMaterial({color:0x6970a0,transparent:true,opacity:.34});
+function hatchArea(cx,cy,z,w,h,count,angle=.5){
+  for(let i=0;i<count;i++){
+    const yy=cy-h/2+(i/(count-1))*h;
+    const dx=Math.cos(angle)*w*.35, dy=Math.sin(angle)*w*.35;
+    const pts=[new THREE.Vector3(cx-dx,yy-dy,z),new THREE.Vector3(cx+dx,yy+dy,z)];
+    const g=new THREE.BufferGeometry().setFromPoints(pts); toy.add(new THREE.Line(g,hatchMat));
+  }
+}
+hatchArea(-.69,4.85,1.40,1.2,1.3,11,.55);
+hatchArea(0,3.08,.59,1.2,.28,5,.35);
+hatchArea(0,2.26,.59,1.2,.28,5,-.35);
+
+// floor
+const floorMat=new THREE.MeshStandardMaterial({color:0xe3ddd2,roughness:.9});
+const floor=mesh(new THREE.CircleGeometry(7,96),floorMat,[0,-1.62,0],[1,1,1],[-Math.PI/2,0,0],scene);
+floor.receiveShadow=true; floor.castShadow=false;
+
+// lighting
+scene.add(new THREE.HemisphereLight(0xf8f3e8,0x6b6883,2.2));
+const key=new THREE.DirectionalLight(0xffffff,4.0); key.position.set(-4,8,7); key.castShadow=true; key.shadow.mapSize.set(2048,2048); key.shadow.camera.left=-5; key.shadow.camera.right=5; key.shadow.camera.top=9; key.shadow.camera.bottom=-3; scene.add(key);
+const rim=new THREE.DirectionalLight(0x91a1ff,1.35); rim.position.set(5,5,-5); scene.add(rim);
+const fill=new THREE.PointLight(0xfff2dc,16,14); fill.position.set(3,2,5); scene.add(fill);
+
+// animation / controls
+let t=0, wire=false;
+function reset(){ camera.position.set(.2,2.75,10.4); controls.target.set(0,2.45,0); controls.update(); }
+document.getElementById('spin').onclick=()=>{controls.autoRotate=!controls.autoRotate; document.getElementById('spin').textContent=controls.autoRotate?'Stop spin':'Auto spin'};
+document.getElementById('wire').onclick=()=>{wire=!wire; allMats.forEach(m=>m.wireframe=wire); document.getElementById('wire').textContent=wire?'Solid':'Wireframe'};
+document.getElementById('reset').onclick=reset;
+renderer.domElement.addEventListener('dblclick',reset);
+let lastTap=0; renderer.domElement.addEventListener('touchend',()=>{const n=performance.now(); if(n-lastTap<320) reset(); lastTap=n},{passive:true});
+
+function animate(){
+  requestAnimationFrame(animate); t+=.012;
+  // tiny toy-like idle — almost imperceptible
+  head.rotation.y=Math.sin(t*.55)*.015;
+  controls.update();
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+});
+</script>
+</body>
+</html>
