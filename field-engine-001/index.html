@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f1f3ee" />
+    <meta name="description" content="FIELD ENGINE 001 — Procedural OBAS Spatial Instrument. An evolving field of line, pressure, and rupture. Touch to shape the material." />
+    <title>FIELD ENGINE 001 — Procedural OBAS Spatial Instrument</title>
+    <script type="module" crossorigin src="./assets/index-CexVGyx_.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/three-Ll8aspxk.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-gZ6chGgo.css">
+  </head>
+  <body data-mode="calm">
+    <main class="instrument" aria-label="FIELD ENGINE 001">
+      <canvas id="field" tabindex="0" role="application" aria-label="Interactive procedural field" aria-describedby="field-help keyboard-help">
+        This instrument needs a browser with WebGL 2 support.
+      </canvas>
+      <div id="pressure-cursor" aria-hidden="true"><span></span></div>
+
+      <header class="masthead">
+        <div class="identity">
+          <div class="wordmark">FIELD ENGINE <span class="edition">001</span></div>
+          <h1>PROCEDURAL OBAS SPATIAL INSTRUMENT</h1>
+        </div>
+        <button class="pause-button" id="pause" type="button" aria-label="Pause motion" aria-pressed="false">
+          <span class="pause-icon" aria-hidden="true"></span><span id="pause-label">PAUSE</span>
+        </button>
+      </header>
+
+      <section class="field-caption" aria-label="Field behavior">
+        <div class="eyebrow">STUDY 001 / CONTINUOUS MATERIAL</div>
+        <div class="behavior-line"><span class="state-mark" aria-hidden="true"></span><span id="mode-name">CALM</span></div>
+        <p id="mode-description">A field in slow circulation.</p>
+      </section>
+
+      <aside class="control-panel" aria-label="Instrument controls">
+        <div class="panel-heading"><span>FIELD CONTROLS</span><span class="run-state"><i aria-hidden="true"></i><span id="run-state">RUNNING</span></span></div>
+        <div class="mode-switch" role="group" aria-label="Field mode">
+          <button type="button" data-mode="calm" aria-pressed="true"><span>01</span>CALM</button>
+          <button type="button" data-mode="pressure" aria-pressed="false"><span>02</span>PRESSURE</button>
+          <button type="button" data-mode="rupture" aria-pressed="false"><span>03</span>RUPTURE</button>
+        </div>
+        <details id="parameters" open>
+          <summary>Parameters <span aria-hidden="true">+</span></summary>
+          <div class="parameter-content">
+            <div class="parameter">
+              <div class="label-row"><label for="intensity">Motion intensity</label><output id="intensity-value" for="intensity">55%</output></div>
+              <input id="intensity" type="range" min="0" max="100" value="55" style="--fill:55%" />
+              <div class="range-notes" aria-hidden="true"><span>STILL</span><span>ACTIVE</span></div>
+            </div>
+            <div class="parameter">
+              <div class="label-row"><label for="density">Field density</label><output id="density-value" for="density">58%</output></div>
+              <input id="density" type="range" min="0" max="100" value="58" style="--fill:58%" />
+              <div class="range-notes" aria-hidden="true"><span>SPARSE</span><span>DENSE</span></div>
+            </div>
+            <div class="audio-section">
+              <div class="label-row"><label for="audio-toggle">Audio reactive</label><label class="switch"><input id="audio-toggle" type="checkbox" role="switch" /><span aria-hidden="true"></span></label></div>
+              <div class="source-row"><label for="audio-source">Source</label><select id="audio-source"><option value="pulse">Synthetic pulse</option><option value="microphone">Microphone</option></select></div>
+              <div class="meter audio-meter" id="audio-level" aria-hidden="true"><span></span></div>
+              <p id="audio-status" role="status">Choose a source to modulate the field.</p>
+            </div>
+          </div>
+        </details>
+        <div class="panel-bottom"><div class="pressure-readout"><span>PRESSURE</span><div id="pressure-level" class="meter" aria-hidden="true"><span></span></div><output id="pressure-value" aria-label="Applied pressure" aria-live="off">0.00</output></div><button id="reset" class="reset-button" type="button">RESET <span aria-hidden="true">↺</span></button></div>
+      </aside>
+
+      <footer class="field-footer">
+        <div class="interaction-note"><span class="touch-symbol" aria-hidden="true">⊕</span><div><p id="field-help">Touch the field. Hold to apply pressure.</p><span class="keyboard-hint" id="keyboard-help">1–3 mode · Space pause · Focus field: arrows move, Enter press</span></div></div>
+        <div class="telemetry"><span id="clock" aria-label="Elapsed simulation time">00:00</span><span class="divider">/</span><span id="fps">— FPS</span></div>
+      </footer>
+
+      <section class="error-panel" id="error" hidden role="alert"><p id="error-message"></p><button type="button" id="reload">RELOAD FIELD</button></section>
+      <noscript><div class="error-panel">Enable JavaScript to run the field.</div></noscript>
+    </main>
+  </body>
+</html>
