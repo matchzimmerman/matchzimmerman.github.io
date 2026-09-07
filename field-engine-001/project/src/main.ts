@@ -13,6 +13,7 @@ try {
       settings: controls.renderSettings,
       telemetry: controls.renderTelemetry,
       audio: controls.renderAudio,
+      sound: controls.renderSound,
       error: controls.renderError,
     },
   );

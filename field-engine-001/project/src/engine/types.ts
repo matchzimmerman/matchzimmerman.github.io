@@ -8,6 +8,7 @@ export interface EngineSettings {
   audioReactive: boolean;
   audioSource: AudioSource;
   paused: boolean;
+  volume: number;
 }
 
 export interface ModeProfile {
@@ -17,6 +18,9 @@ export interface ModeProfile {
   spread: number;
   fracture: number;
   response: number;
+  tension: number;
+  damping: number;
+  memory: number;
 }
 
 export interface PressurePoint {
@@ -37,6 +41,7 @@ export interface FieldState {
   audio: number;
   profile: ModeProfile;
   pressures: readonly PressurePoint[];
+  material?: MaterialSampler;
 }
 
 export interface FieldSample {
@@ -44,6 +49,27 @@ export interface FieldSample {
   y: number;
   z: number;
   energy: number;
+  trace?: number;
+  tear?: number;
+}
+
+export interface MaterialSample {
+  displacement: number;
+  velocity: number;
+  memory: number;
+  damage: number;
+}
+
+export interface MaterialSampler {
+  sample(x: number, z: number, out: MaterialSample): void;
+}
+
+export type ExcitationKind = 'press' | 'drag' | 'release' | 'fracture' | 'pulse';
+export interface Excitation {
+  x: number;
+  z: number;
+  force: number;
+  kind: ExcitationKind;
 }
 
 export interface FieldBasis {
@@ -59,6 +85,9 @@ export interface Telemetry {
   time: number;
   vertices: number;
   quality: 'standard' | 'adaptive';
+  energy: number;
+  memory: number;
+  contacts: number;
 }
 
 export const DEFAULT_SETTINGS: Readonly<EngineSettings> = {
@@ -68,6 +97,7 @@ export const DEFAULT_SETTINGS: Readonly<EngineSettings> = {
   audioReactive: false,
   audioSource: 'pulse',
   paused: false,
+  volume: 0.55,
 };
 
 export const MAX_PRESSURES = 5;

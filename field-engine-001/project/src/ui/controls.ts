@@ -1,5 +1,6 @@
 import { MODES } from '../engine/modes.ts';
 import type { AudioStatus } from '../engine/audio.ts';
+import type { SoundStatus } from '../engine/sound.ts';
 import type { FieldEngine } from '../engine/FieldEngine.ts';
 import type { AudioSource, EngineSettings, ModeId, Telemetry } from '../engine/types.ts';
 
@@ -11,9 +12,12 @@ function element<T extends HTMLElement>(id: string): T {
 
 export class Controls {
   private readonly controller = new AbortController();
-  private readonly modeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+  private readonly modeButtons = [...document.querySelectorAll<HTMLButtonElement>('button[data-mode]')];
   private readonly intensity = element<HTMLInputElement>('intensity');
   private readonly density = element<HTMLInputElement>('density');
+  private readonly volume = element<HTMLInputElement>('volume');
+  private readonly sound = element<HTMLButtonElement>('sound');
+  private readonly gestureState = element('gesture-state');
   private readonly audioToggle = element<HTMLInputElement>('audio-toggle');
   private readonly audioSource = element<HTMLSelectElement>('audio-source');
   private readonly audioStatus = element('audio-status');
@@ -31,6 +35,8 @@ export class Controls {
     }
     this.intensity.addEventListener('input', () => engine.setIntensity(Number(this.intensity.value) / 100), options);
     this.density.addEventListener('input', () => engine.setDensity(Number(this.density.value) / 100), options);
+    this.volume.addEventListener('input', () => engine.setVolume(Number(this.volume.value) / 100), options);
+    this.sound.addEventListener('click', () => { void engine.toggleSound(); }, options);
     this.audioToggle.addEventListener('change', () => { void engine.setAudio(this.audioToggle.checked); }, options);
     this.audioSource.addEventListener('change', () => engine.setAudioSource(this.audioSource.value as AudioSource), options);
     this.pause.addEventListener('click', () => engine.togglePause(), options);
@@ -43,8 +49,6 @@ export class Controls {
       if (mode) engine.setMode(mode);
       if (event.code === 'Space') { event.preventDefault(); engine.togglePause(); }
     }, options);
-    const detail = element<HTMLDetailsElement>('parameters');
-    detail.open = window.innerWidth > 760;
   }
 
   renderSettings = (settings: Readonly<EngineSettings>): void => {
@@ -53,18 +57,28 @@ export class Controls {
     for (const button of this.modeButtons) button.setAttribute('aria-pressed', String(button.dataset.mode === settings.mode));
     this.intensity.value = String(Math.round(settings.intensity * 100));
     this.density.value = String(Math.round(settings.density * 100));
+    this.volume.value = String(Math.round(settings.volume * 100));
     element('intensity-value').textContent = `${this.intensity.value}%`;
     element('density-value').textContent = `${this.density.value}%`;
+    element('volume-value').textContent = `${this.volume.value}%`;
     this.intensity.style.setProperty('--fill', `${this.intensity.value}%`);
     this.density.style.setProperty('--fill', `${this.density.value}%`);
+    this.volume.style.setProperty('--fill', `${this.volume.value}%`);
     this.audioToggle.checked = settings.audioReactive || this.pendingAudio;
     this.audioSource.value = settings.audioSource;
     this.pause.setAttribute('aria-pressed', String(settings.paused));
-    this.pause.setAttribute('aria-label', settings.paused ? 'Resume motion' : 'Pause motion');
+    this.pause.setAttribute('aria-label', settings.paused ? 'Resume the instrument' : 'Pause the instrument');
     element('pause-label').textContent = settings.paused ? 'RESUME' : 'PAUSE';
-    element('run-state').textContent = settings.paused ? 'PAUSED' : 'RUNNING';
-    element('mode-name').textContent = MODES[settings.mode].label;
+    element('run-state').textContent = settings.paused ? 'PAUSED' : 'LIVE';
     element('mode-description').textContent = MODES[settings.mode].description;
+  };
+
+  renderSound = (status: SoundStatus): void => {
+    this.sound.disabled = status.pending;
+    this.sound.setAttribute('aria-pressed', String(status.active));
+    this.sound.setAttribute('aria-busy', String(status.pending));
+    element('sound-label').textContent = status.pending ? 'Starting…' : status.active ? 'Mute sound' : 'Start sound';
+    element('sound-status').textContent = status.message;
   };
 
   renderAudio = (status: AudioStatus): void => {
@@ -76,9 +90,14 @@ export class Controls {
   };
 
   renderTelemetry = (data: Telemetry): void => {
-    this.pressureLevel.style.setProperty('--level', `${data.pressure * 100}%`);
+    this.pressureLevel.style.setProperty('--level', `${data.energy * 100}%`);
     this.audioLevel.style.setProperty('--level', `${data.audio * 100}%`);
-    element('pressure-value').textContent = data.pressure.toFixed(2);
+    element('pressure-value').textContent = data.energy.toFixed(2);
+    const caption = data.contacts > 0 ? `${data.contacts > 1 ? `${data.contacts} contacts. ` : ''}You’re loading tension. Release to hear the response.`
+      : data.energy > 0.12 ? 'The gesture has ended. Its energy is still moving.'
+      : data.memory > 0.08 ? 'The orange trace is fading. The material remembers briefly.'
+      : 'The blue lines are the material. Orange is your trace.';
+    if (this.gestureState.textContent !== caption) this.gestureState.textContent = caption;
     const minutes = Math.floor(data.time / 60).toString().padStart(2, '0');
     const seconds = Math.floor(data.time % 60).toString().padStart(2, '0');
     this.clock.textContent = `${minutes}:${seconds}`;

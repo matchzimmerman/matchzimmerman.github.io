@@ -1,7 +1,7 @@
 import { Mesh, OrthographicCamera, Plane, Raycaster, Vector2, Vector3 } from 'three';
 import type { Intersection } from 'three';
 import { damp, MAX_PRESSURES } from './types.ts';
-import type { PressurePoint } from './types.ts';
+import type { Excitation, FieldSample, PressurePoint } from './types.ts';
 
 /** Pointer Events unify mouse, pen, and up to five simultaneous touches. */
 export class InteractionSystem {
@@ -16,12 +16,15 @@ export class InteractionSystem {
   private keyX = 0;
   private keyZ = 0;
   private keyDown = false;
+  private keyActive = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly camera: OrthographicCamera,
     private readonly surface: Mesh,
     private readonly cursor: HTMLElement,
+    private readonly onExcitation: (event: Excitation) => void,
+    private readonly materialPosition: (x: number, z: number) => FieldSample,
   ) {
     const options = { signal: this.controller.signal };
     canvas.addEventListener('pointerdown', this.onDown, options);
@@ -38,6 +41,7 @@ export class InteractionSystem {
 
   private setPoint(id: number, x: number, z: number, down: boolean, strength: number): void {
     let point = this.pressures.find(p => p.id === id);
+    const wasDown = point?.down ?? false;
     if (!point) {
       if (this.pressures.length >= MAX_PRESSURES) {
         const expired = this.pressures.findIndex(p => !p.down);
@@ -51,9 +55,11 @@ export class InteractionSystem {
     point.targetZ = z;
     point.down = down;
     point.targetStrength = strength;
+    if (down && !wasDown) this.onExcitation({ x, z, force: strength, kind: 'press' });
   }
 
   private project(event: PointerEvent, down: boolean): void {
+    this.keyActive = false;
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -62,7 +68,12 @@ export class InteractionSystem {
     // Pick the actual deformed material, so a touch lands on the visible ridge.
     this.intersections.length = 0;
     this.raycaster.intersectObject(this.surface, false, this.intersections);
-    if (this.intersections.length) this.hit.copy(this.intersections[0].point);
+    if (this.intersections.length) {
+      // UVs contain rest coordinates; pressure follows the material even when it folds.
+      const uv = this.intersections[0].uv;
+      if (uv) this.hit.set(uv.x, 0, uv.y);
+      else this.hit.copy(this.intersections[0].point);
+    }
     else if (!this.raycaster.ray.intersectPlane(this.plane, this.hit)) return;
     const force = down ? (event.pointerType === 'pen' ? 0.4 + event.pressure * 0.9 : 1) : 0.12;
     this.setPoint(event.pointerId, this.hit.x, this.hit.z, down, force);
@@ -88,7 +99,10 @@ export class InteractionSystem {
   private onUp = (event: PointerEvent): void => {
     this.pendingMoves.delete(event.pointerId);
     const point = this.pressures.find(p => p.id === event.pointerId);
-    if (point) { point.down = false; point.targetStrength = 0; }
+    if (point) {
+      if (point.down) this.onExcitation({ x: point.x, z: point.z, force: Math.max(0.3, point.strength), kind: 'release' });
+      point.down = false; point.targetStrength = 0;
+    }
     this.cursor.classList.remove('pressed');
     if (event.pointerType === 'touch') this.cursor.classList.remove('visible');
   };
@@ -103,23 +117,39 @@ export class InteractionSystem {
     const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'];
     if (!keys.includes(event.key)) return;
     event.preventDefault();
-    if (event.key === 'ArrowLeft') this.keyX -= 0.35;
-    if (event.key === 'ArrowRight') this.keyX += 0.35;
-    if (event.key === 'ArrowUp') this.keyZ -= 0.35;
-    if (event.key === 'ArrowDown') this.keyZ += 0.35;
+    this.keyActive = true;
+    // Arrow movement follows screen axes, matching the stereo sound mapping.
+    const horizontal = event.key === 'ArrowRight' ? 0.35 : event.key === 'ArrowLeft' ? -0.35 : 0;
+    const vertical = event.key === 'ArrowUp' ? 0.35 : event.key === 'ArrowDown' ? -0.35 : 0;
+    this.keyX += horizontal * 0.845 - vertical * 0.535;
+    this.keyZ -= horizontal * 0.535 + vertical * 0.845;
     if (event.key === 'Enter') this.keyDown = true;
     this.keyX = Math.max(-8, Math.min(8, this.keyX));
     this.keyZ = Math.max(-8, Math.min(8, this.keyZ));
     this.setPoint(-1, this.keyX, this.keyZ, this.keyDown, this.keyDown ? 1 : 0.25);
+    this.updateKeyCursor();
   };
 
   private onKeyUp = (event: KeyboardEvent): void => {
     if (event.key === 'Enter') this.keyDown = false;
     if (event.key === 'Enter' || event.key.startsWith('Arrow')) {
       const point = this.pressures.find(p => p.id === -1);
-      if (point && !this.keyDown) { point.down = false; point.targetStrength = 0; }
+      if (point && !this.keyDown) {
+        if (point.down) this.onExcitation({ x: point.x, z: point.z, force: Math.max(0.3, point.strength), kind: 'release' });
+        point.down = false; point.targetStrength = 0;
+      }
     }
+    if (this.keyActive) this.updateKeyCursor();
   };
+
+  private updateKeyCursor(): void {
+    const point = this.materialPosition(this.keyX, this.keyZ);
+    this.hit.set(point.x, point.y, point.z).project(this.camera);
+    const { width, height } = this.canvas.getBoundingClientRect();
+    this.cursor.style.transform = `translate3d(${(this.hit.x + 1) * width / 2}px, ${(1 - this.hit.y) * height / 2}px, 0)`;
+    this.cursor.classList.add('visible');
+    this.cursor.classList.toggle('pressed', this.keyDown);
+  }
 
   update(dt: number): void {
     for (const event of this.pendingMoves.values()) {
@@ -130,9 +160,10 @@ export class InteractionSystem {
       const point = this.pressures[i];
       point.x = damp(point.x, point.targetX, 14, dt);
       point.z = damp(point.z, point.targetZ, 14, dt);
-      point.strength = damp(point.strength, point.targetStrength, point.down ? 5 : 2.6, dt);
+      point.strength = damp(point.strength, point.targetStrength, point.down ? 12 : 9, dt);
       if (point.targetStrength === 0 && point.strength < 0.003) this.pressures.splice(i, 1);
     }
+    if (this.keyActive) this.updateKeyCursor();
   }
 
   clear = (): void => {
@@ -140,6 +171,7 @@ export class InteractionSystem {
     this.pendingMoves.clear();
     this.keyX = this.keyZ = 0;
     this.keyDown = false;
+    this.keyActive = false;
     this.cursor.classList.remove('visible', 'pressed');
   };
 

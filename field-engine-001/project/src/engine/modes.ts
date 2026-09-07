@@ -8,18 +8,18 @@ export const MODES: Readonly<Record<ModeId, {
 }>> = {
   calm: {
     label: 'CALM',
-    description: 'A field in slow circulation.',
-    profile: { speed: 0.29, fold: 0.48, twist: 0.18, spread: 0, fracture: 0, response: 0.85 },
+    description: 'Soft material. Press gently; release for a short, rounded tone.',
+    profile: { speed: 0.22, fold: 0.48, twist: 0.12, spread: 0, fracture: 0, response: 0.85, tension: 20, damping: 2.4, memory: 0.28 },
   },
   pressure: {
     label: 'PRESSURE',
-    description: 'Gather, compress, release.',
-    profile: { speed: 0.55, fold: 0.95, twist: 0.46, spread: 0.18, fracture: 0.12, response: 1.55 },
+    description: 'Taut material. Drag a crease, then release and let it ring.',
+    profile: { speed: 0.34, fold: 0.8, twist: 0.16, spread: 0.05, fracture: 0, response: 1.55, tension: 38, damping: 0.72, memory: 0.095 },
   },
   rupture: {
     label: 'RUPTURE',
-    description: 'The structure opens. The field persists.',
-    profile: { speed: 0.85, fold: 1.3, twist: 0.7, spread: 0.55, fracture: 1, response: 1.9 },
+    description: 'Brittle material. A firm gesture opens seams and scatters metallic tones.',
+    profile: { speed: 0.46, fold: 1.0, twist: 0.2, spread: 0.12, fracture: 1, response: 1.9, tension: 26, damping: 1.1, memory: 0.045 },
   },
 };
 

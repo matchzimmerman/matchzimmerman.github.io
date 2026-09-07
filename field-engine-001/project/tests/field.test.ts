@@ -34,19 +34,6 @@ test('all modes remain finite at maximum input, including the polar center', () 
   }
 });
 
-test('pressure has a local effect and decays away from the contact', () => {
-  const current = state();
-  const near = sample(), far = sample();
-  sampleField(0, 0, current, near);
-  sampleField(20, 20, current, far);
-  current.pressures = [{ id: 1, x: 0, z: 0, targetX: 0, targetZ: 0, strength: 1, targetStrength: 1, radius: 2, down: true }];
-  const pressedNear = sample(), pressedFar = sample();
-  sampleField(0, 0, current, pressedNear);
-  sampleField(20, 20, current, pressedFar);
-  assert.ok(pressedNear.y < near.y - 0.5);
-  assert.ok(Math.abs(pressedFar.y - far.y) < 0.00001);
-});
-
 test('mode easing is independent of frame rate and reset restores the initial profile', () => {
   const slow = new ModeController(), fast = new ModeController();
   slow.set('rupture'); fast.set('rupture');

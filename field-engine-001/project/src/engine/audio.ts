@@ -28,7 +28,7 @@ export class AudioInput {
     this.source = source;
     if (source === 'pulse') {
       this.active = true;
-      this.onStatus({ active: true, pending: false, message: '72 BPM · silent visual pulse' });
+      this.onStatus({ active: true, pending: false, message: '72 BPM pulse is striking the field. Start sound to hear it.' });
       return true;
     }
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -45,7 +45,7 @@ export class AudioInput {
       await context.resume();
       if (generation !== this.generation) return false;
       stream = await navigator.mediaDevices.getUserMedia({ audio: {
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+        echoCancellation: true, noiseSuppression: false, autoGainControl: false,
       } });
       if (generation !== this.generation) {
         stream.getTracks().forEach(track => track.stop());
@@ -105,7 +105,7 @@ export class AudioInput {
     this.analyser = null;
     this.sourceNode = null;
     this.data = null;
-    this.onStatus({ active: false, pending: false, message: 'Choose a source to modulate the field.' });
+    this.onStatus({ active: false, pending: false, message: 'Optional: let a pulse or microphone play the material.' });
   }
 
   dispose(): void { this.stop(); }

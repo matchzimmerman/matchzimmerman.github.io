@@ -15,6 +15,8 @@ export class ProceduralField {
   readonly vertexCount: number;
   private readonly positions: Float32Array;
   private readonly energy: Float32Array;
+  private readonly trace: Float32Array;
+  private readonly tear: Float32Array;
   private readonly rest: Float32Array;
   private readonly basisData: Float64Array;
   private readonly basis: FieldBasis = { radius: 0, angle: 0, core: 0 };
@@ -38,6 +40,8 @@ export class ProceduralField {
     this.rest = new Float32Array(this.vertexCount * 2);
     this.basisData = new Float64Array(this.vertexCount * 3);
     this.energy = new Float32Array(this.vertexCount);
+    this.trace = new Float32Array(this.vertexCount);
+    this.tear = new Float32Array(this.vertexCount);
     const indices = new Uint32Array(segments * segments * 6);
     const coordinate = (i: number) => {
       const n = i / segments * 2 - 1;
@@ -67,6 +71,8 @@ export class ProceduralField {
     geometry.setAttribute('position', new BufferAttribute(this.positions, 3).setUsage(DynamicDrawUsage));
     geometry.setAttribute('uv', new BufferAttribute(this.rest, 2));
     geometry.setAttribute('energy', new BufferAttribute(this.energy, 1).setUsage(DynamicDrawUsage));
+    geometry.setAttribute('trace', new BufferAttribute(this.trace, 1).setUsage(DynamicDrawUsage));
+    geometry.setAttribute('tear', new BufferAttribute(this.tear, 1).setUsage(DynamicDrawUsage));
     geometry.setIndex(new BufferAttribute(indices, 1));
     // Conservative fixed bounds avoid recomputing them every frame and retain ray picking.
     geometry.computeBoundingSphere();
@@ -105,17 +111,21 @@ export class ProceduralField {
       this.positions[i * 3 + 1] = out.y;
       this.positions[i * 3 + 2] = out.z;
       this.energy[i] = out.energy;
+      this.trace[i] = out.trace ?? 0;
+      this.tear[i] = out.tear ?? 0;
     }
     this.surface.geometry.attributes.position.needsUpdate = true;
     this.surface.geometry.attributes.energy.needsUpdate = true;
+    this.surface.geometry.attributes.trace.needsUpdate = true;
+    this.surface.geometry.attributes.tear.needsUpdate = true;
     this.surface.material.uniforms.uFracture.value = state.profile.fracture;
 
     for (let i = 0; i < this.fragments.count; i++) {
       const seed = i * 4;
-      const a = this.fragmentSeeds[seed] * Math.PI * 2 + state.time * 0.12;
+      const a = this.fragmentSeeds[seed] * Math.PI * 2;
       const r = 1.6 + this.fragmentSeeds[seed + 1] * 3.8;
       sampleField(Math.cos(a) * r, Math.sin(a) * r, state, out);
-      const release = state.profile.fracture * state.intensity;
+      const release = (out.tear ?? 0) * 2 + out.energy * 0.35;
       const drift = Math.sin(a * 3 - state.time * 0.5) * release * 0.5;
       this.position.set(out.x + Math.cos(a) * drift, out.y + 0.055 + release * this.fragmentSeeds[seed + 2] * 1.6, out.z + Math.sin(a) * drift);
       this.rotation.setFromAxisAngle(Y_AXIS, -a + Math.sin(state.time + a) * release);
@@ -123,7 +133,7 @@ export class ProceduralField {
       this.scale.set(size * (2 + release * 4), 1, size * 0.55);
       this.matrix.compose(this.position, this.rotation, this.scale);
       this.fragments.setMatrixAt(i, this.matrix);
-      this.color.copy(this.ink).lerp(this.accent, Math.min(1, out.energy + (i % 7 === 0 ? 1 : release * 0.4)));
+      this.color.copy(this.ink).lerp(this.accent, Math.min(1, out.energy + (out.trace ?? 0) + release * 0.4));
       this.fragments.setColorAt(i, this.color);
     }
     this.fragments.instanceMatrix.needsUpdate = true;

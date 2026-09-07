@@ -1,8 +1,8 @@
 # FIELD ENGINE 001 — Procedural OBAS Spatial Instrument
 
-[Open the instrument](https://www.matchzimmerman.com/field-engine-001/) · [Download the source](./field-engine-001.zip)
+[Open the instrument](https://www.matchzimmerman.com/field-engine-001/) · [Current source](./project/) · [Original V1 source ZIP](./field-engine-001.zip)
 
-This directory publishes the complete V1 prototype through the existing GitHub Pages site.
+This directory publishes version 0.2: a resonant material with propagating pressure, gesture memory, local rupture and audible spatial synthesis. Choose **Start sound**, then press, drag and release.
 
 - `index.html` and `assets/`: production output from Vite.
 - `project/`: editable TypeScript source, tests, package lock, and full project documentation.
@@ -25,6 +25,7 @@ From the `project/` directory:
 ```bash
 npm test
 npm run build
+npm run verify:audio
 node scripts/stage-pages.mjs
 ```
 
