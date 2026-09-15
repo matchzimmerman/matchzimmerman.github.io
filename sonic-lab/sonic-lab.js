@@ -4,7 +4,6 @@ const LAB_GROUPS = [
     label: 'A / CURRENT DEVICES',
     title: 'Playable instruments + active systems',
     entries: [
-      { name: 'SONIC LAB HOST', tagline: 'SHARED DEVICE CONTAINER', release: 'prototype', activity: ['routing','system'], href: '/mz-audio-tools/lab/', description: 'A shared host for tabbed devices, global BPM / key / scale, snapshots, routing, and experimental audio-to-visual connections.' },
       { name: 'GULL', tagline: 'AVIAN SIGNAL SYNTHESIZER', release: 'prototype', activity: ['synthesis','generative'], href: '/mz-audio-tools/magpie/', description: 'A playable generative synthesizer for metallic calls, fluttering phrases, and strange field recordings.' },
       { name: 'SERIAL', tagline: 'SEQUENTIAL EFFECTS LAB', release: 'prototype', activity: ['effects','learning'], href: '/mz-audio-tools/serial/', description: 'Drag, snap, listen, and reorder real audio effects to hear firsthand why order changes the result.' },
       { name: 'ER·D', tagline: 'SIX-VOICE PERCUSSION SYNTH', release: 'prototype', activity: ['rhythm','synthesis'], href: '/mz-audio-tools/erd/', description: 'One oscillator, one modulator, and one decay per voice in a 16-step percussion instrument tuned to D Phrygian.' },
