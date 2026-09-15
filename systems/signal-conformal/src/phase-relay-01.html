@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>FIELD STATION: MAGPIE — PHASE RELAY 01</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050706;color:#ff681c;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  canvas{display:block;width:100vw;height:100vh;image-rendering:auto}
+  #gate{position:fixed;right:18px;bottom:16px;padding:7px 9px;border:1px solid rgba(255,104,28,.45);background:rgba(5,7,6,.78);font:10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.09em;color:#ff681c;cursor:pointer;user-select:none}
+  #gate.on{opacity:.35}
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<div id="gate">TAP / CLICK FOR FIELD AUDIO</div>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha:false });
+  const W = canvas.width, H = canvas.height;
+  const TAU = Math.PI * 2;
+  const params = new URLSearchParams(location.search);
+  const seed = +(params.get('seed') || 2147);
+  const frozen = params.has('t') ? +params.get('t') : null;
+  const loopSeconds = 19;
+
+  function fract(x){ return x - Math.floor(x); }
+  function hash(n){ return fract(Math.sin(n * 127.1 + seed * 0.013) * 43758.5453123); }
+  function smooth(a,b,x){ x=Math.max(0,Math.min(1,(x-a)/(b-a))); return x*x*(3-2*x); }
+  function pulse(p,a,b,c,d){ return smooth(a,b,p) * (1-smooth(c,d,p)); }
+  function mix(a,b,t){ return a+(b-a)*t; }
+
+  function phaseName(p){
+    if(p<.20) return 'LISTEN';
+    if(p<.39) return 'LOCK';
+    if(p<.58) return 'SHEAR';
+    if(p<.76) return 'MEMORY';
+    return 'REBUILD';
+  }
+
+  function influence(p){
+    const orbit = TAU * p;
+    return {
+      x: W*.5 + Math.cos(orbit) * 270 + Math.sin(orbit*3)*36,
+      y: H*.5 + Math.sin(orbit*2) * 170,
+      strength: .42 + .90*pulse(p,.17,.24,.71,.83)
+    };
+  }
+
+  function drawDither(p, inf){
+    ctx.save();
+    ctx.fillStyle = 'rgba(202,214,205,.13)';
+    const step=10;
+    for(let y=84;y<H-70;y+=step){
+      for(let x=28;x<W-28;x+=step){
+        const dx=x-inf.x, dy=y-inf.y;
+        const d=Math.hypot(dx,dy);
+        const ring=Math.exp(-Math.pow((d-170-42*Math.sin(p*TAU*2))/85,2));
+        const field=(Math.sin(x*.027+y*.018+p*TAU*2)+1)*.5;
+        if(hash(x*0.19+y*0.31) < ring*.28*field){
+          ctx.globalAlpha=.08+ring*.12;
+          ctx.fillRect(x,y,1,1);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function linePoint(baseY, x, p, lineIndex, ghostOffset=0){
+    const gp = (p + ghostOffset + 1) % 1;
+    const inf = influence(gp);
+    const dx=x-inf.x, dy=baseY-inf.y;
+    const d=Math.hypot(dx,dy)+.001;
+    const a=Math.atan2(dy,dx);
+    const local=Math.exp(-Math.pow(d/300,2));
+    const lock=pulse(gp,.18,.25,.37,.44);
+    const shear=pulse(gp,.36,.43,.57,.65);
+    const memory=pulse(gp,.54,.60,.77,.84);
+    const rebuild=smooth(.72,.87,gp)*(1-smooth(.94,1,gp));
+
+    const drift = Math.sin(x*.0108 + gp*TAU*1.6 + lineIndex*.37) * (8+9*hash(lineIndex));
+    const secondary = Math.sin(x*.024 - gp*TAU*1.15 + lineIndex*.19) * 4.5;
+    const lens = local * inf.strength * (52*Math.sin(a*2.6 + gp*TAU*1.4 + lineIndex*.045));
+    const lockFold = lock * local * 105 * Math.sin(a*4 + gp*TAU*.55);
+    const shearTerm = shear * local * (110*Math.sin((x+baseY)*.015 + gp*TAU*5 + lineIndex*.13));
+    const remembered = memory * local * 34 * Math.sin(a*6 - gp*TAU*1.2);
+    const rebuildTerm = rebuild * local * 72 * Math.sin(a*3 + gp*TAU*.35);
+
+    return baseY + drift + secondary + lens + lockFold + shearTerm + remembered + rebuildTerm;
+  }
+
+  function drawField(p){
+    const inf=influence(p);
+    const lineCount=43;
+    const y0=96, y1=H-84;
+    const memory=pulse(p,.53,.60,.78,.86);
+
+    if(memory>0.01){
+      for(let g=3; g>=1; g--){
+        ctx.beginPath();
+        const offset=-g*.0065;
+        for(let i=0;i<lineCount;i+=2){
+          const baseY=mix(y0,y1,i/(lineCount-1));
+          let first=true;
+          for(let x=18;x<=W-18;x+=8){
+            const y=linePoint(baseY,x,p,i,offset);
+            if(first){ctx.moveTo(x,y);first=false;} else ctx.lineTo(x,y);
+          }
+        }
+        ctx.strokeStyle=`rgba(255,104,28,${0.035 + memory*(.035+g*.012)})`;
+        ctx.lineWidth=.75;
+        ctx.stroke();
+      }
+    }
+
+    for(let i=0;i<lineCount;i++){
+      const baseY=mix(y0,y1,i/(lineCount-1));
+      ctx.beginPath();
+      let first=true;
+      for(let x=18;x<=W-18;x+=7){
+        const y=linePoint(baseY,x,p,i,0);
+        if(first){ctx.moveTo(x,y);first=false;} else ctx.lineTo(x,y);
+      }
+      const orange=(i%11===0 || (i+3)%17===0);
+      const alpha=.18 + .36*(1-Math.abs((i/(lineCount-1))-.5)*.72);
+      ctx.strokeStyle=orange?`rgba(255,104,28,${alpha*.88})`:`rgba(201,214,205,${alpha})`;
+      ctx.lineWidth=orange?1.15:.82;
+      ctx.stroke();
+    }
+
+    const pressure=pulse(p,.26,.34,.67,.76);
+    ctx.save();
+    ctx.globalAlpha=.08+.19*pressure;
+    for(let j=0;j<18;j++){
+      const a=(j/18)*TAU + p*TAU*.12;
+      const r=70+j*13;
+      ctx.beginPath();
+      ctx.arc(inf.x,inf.y,r,a-.5,a+.45);
+      ctx.strokeStyle=j%4===0?'#ff681c':'#87968d';
+      ctx.lineWidth=.7;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    return inf;
+  }
+
+  function drawApparatus(p, inf){
+    const lock=pulse(p,.18,.25,.40,.47);
+    const rebuild=smooth(.74,.87,p)*(1-smooth(.96,1,p));
+    const q=Math.max(lock,rebuild*.82);
+    if(q<.01) return;
+    ctx.save();
+    ctx.translate(inf.x,inf.y);
+    ctx.rotate(p*TAU*.22);
+    ctx.globalAlpha=.12+.30*q;
+    for(let i=0;i<9;i++){
+      const r=38+i*21;
+      ctx.beginPath();
+      const sx=r, sy=r*.56;
+      ctx.moveTo(0,-sy);
+      ctx.lineTo(sx,0);
+      ctx.lineTo(0,sy);
+      ctx.lineTo(-sx,0);
+      ctx.closePath();
+      ctx.strokeStyle=i%3===0?'#ff681c':'#a7b6ad';
+      ctx.lineWidth=.75;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawHUD(p){
+    const phase=phaseName(p);
+    const stamp=String(Math.floor(p*loopSeconds*1000)).padStart(5,'0');
+    ctx.save();
+    ctx.fillStyle='rgba(5,7,6,.84)';
+    ctx.fillRect(20,18,440,44);
+    ctx.strokeStyle='rgba(255,104,28,.42)';
+    ctx.strokeRect(20.5,18.5,439,43);
+    ctx.fillStyle='#ff681c';
+    ctx.font='13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    ctx.fillText('FIELD STATION: MAGPIE / PHASE RELAY 01',34,45);
+
+    ctx.fillStyle='rgba(5,7,6,.76)';
+    ctx.fillRect(20,H-51,530,30);
+    ctx.fillStyle='rgba(174,190,181,.72)';
+    ctx.font='10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    ctx.fillText(`SEED ${seed}  /  ${phase}  /  FIELD MEMORY ${stamp}`,34,H-31);
+
+    ctx.fillStyle='rgba(255,104,28,.55)';
+    const bars=[.24,.58,.39,.82,.31,.66,.49,.73];
+    bars.forEach((v,i)=>{
+      const active=(p*bars.length-i/bars.length+1)%1;
+      ctx.fillRect(W-180+i*18,H-40,12,2+16*(v*.4+active*.6));
+    });
+    ctx.restore();
+  }
+
+  function render(seconds){
+    const p=((seconds%loopSeconds)+loopSeconds)%loopSeconds/loopSeconds;
+    ctx.fillStyle='#050706'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(126,143,132,.035)'; ctx.lineWidth=1;
+    for(let x=40;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,72);ctx.lineTo(x,H-68);ctx.stroke();}
+    const inf=drawField(p);
+    drawDither(p,inf);
+    drawApparatus(p,inf);
+    drawHUD(p);
+    ctx.strokeStyle='rgba(255,104,28,.20)';
+    ctx.strokeRect(12.5,12.5,W-25,H-25);
+  }
+
+  let start=performance.now();
+  function tick(now){
+    const t=frozen!==null?frozen:(now-start)/1000;
+    render(t);
+    if(frozen===null) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  let audio=null;
+  function startAudio(){
+    if(audio) return;
+    const AC=window.AudioContext||window.webkitAudioContext;
+    const ac=new AC();
+    const master=ac.createGain(); master.gain.value=.065; master.connect(ac.destination);
+    const low=ac.createBiquadFilter(); low.type='lowpass'; low.frequency.value=260; low.Q.value=.7; low.connect(master);
+    const o1=ac.createOscillator(), o2=ac.createOscillator(), g1=ac.createGain(), g2=ac.createGain();
+    o1.type='sine'; o2.type='sine'; o1.frequency.value=55; o2.frequency.value=82.5;
+    g1.gain.value=.7; g2.gain.value=.18; o1.connect(g1).connect(low); o2.connect(g2).connect(low);
+    o1.start(); o2.start();
+    const lfo=ac.createOscillator(), lg=ac.createGain(); lfo.frequency.value=.11; lg.gain.value=18; lfo.connect(lg).connect(o2.frequency); lfo.start();
+    audio={ac,o1,o2,lfo};
+    const gate=document.getElementById('gate'); gate.textContent='FIELD AUDIO / ON'; gate.classList.add('on');
+  }
+  document.getElementById('gate').addEventListener('pointerdown',startAudio);
+  window.addEventListener('keydown',e=>{ if(e.code==='Space') startAudio(); });
+})();
+</script>
+</body>
+</html>
