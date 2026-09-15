@@ -5,26 +5,50 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>FIELD STATION: MAGPIE — PHASE RELAY 01</title>
 <style>
-  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050706;color:#ff681c;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  canvas{display:block;width:100vw;height:100vh;image-rendering:auto}
-  #gate{position:fixed;right:18px;bottom:16px;padding:7px 9px;border:1px solid rgba(255,104,28,.45);background:rgba(5,7,6,.78);font:10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.09em;color:#ff681c;cursor:pointer;user-select:none}
-  #gate.on{opacity:.35}
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050706;color:#ff681c;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overscroll-behavior:none}
+  canvas{position:fixed;inset:0;display:block;width:100%;height:100%;image-rendering:auto}
+  #gate{position:fixed;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));min-height:44px;display:flex;align-items:center;justify-content:center;padding:10px 12px;border:1px solid rgba(255,104,28,.55);background:rgba(5,7,6,.88);font:10px/1.15 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;color:#ff681c;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;z-index:5}
+  #gate.on{border-color:rgba(111,225,187,.55);color:#9fe8cf}
+  #gate.off{opacity:.72}
+  @media (max-width:620px){#gate{left:max(14px,env(safe-area-inset-left));right:auto;max-width:calc(100vw - 28px);font-size:9px;letter-spacing:.07em}}
 </style>
 </head>
 <body>
-<canvas id="c" width="1280" height="720"></canvas>
-<div id="gate">TAP / CLICK FOR FIELD AUDIO</div>
+<canvas id="c"></canvas>
+<button id="gate" type="button" aria-pressed="false">TAP FOR FIELD AUDIO</button>
 <script>
 (() => {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d', { alpha:false });
-  const W = canvas.width, H = canvas.height;
+  const gate = document.getElementById('gate');
   const TAU = Math.PI * 2;
   const params = new URLSearchParams(location.search);
   const seed = +(params.get('seed') || 2147);
   const frozen = params.has('t') ? +params.get('t') : null;
   const loopSeconds = 19;
+  let W = 1280, H = 720, DPR = 1;
 
+  function resizeCanvas(){
+    const vv = window.visualViewport;
+    const nextW = Math.max(280, Math.round(vv ? vv.width : window.innerWidth));
+    const nextH = Math.max(320, Math.round(vv ? vv.height : window.innerHeight));
+    const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
+    if(nextW === W && nextH === H && nextDpr === DPR && canvas.width) return;
+    W = nextW; H = nextH; DPR = nextDpr;
+    canvas.width = Math.max(1, Math.round(W * DPR));
+    canvas.height = Math.max(1, Math.round(H * DPR));
+    canvas.style.width = `${W}px`;
+    canvas.style.height = `${H}px`;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas, {passive:true});
+  window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 80), {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas, {passive:true});
+
+  function isPortrait(){ return H > W * 1.12 || W < 620; }
   function fract(x){ return x - Math.floor(x); }
   function hash(n){ return fract(Math.sin(n * 127.1 + seed * 0.013) * 43758.5453123); }
   function smooth(a,b,x){ x=Math.max(0,Math.min(1,(x-a)/(b-a))); return x*x*(3-2*x); }
@@ -41,9 +65,11 @@
 
   function influence(p){
     const orbit = TAU * p;
+    const rx = Math.min(270, W * (isPortrait() ? .27 : .22));
+    const ry = Math.min(170, H * (isPortrait() ? .18 : .24));
     return {
-      x: W*.5 + Math.cos(orbit) * 270 + Math.sin(orbit*3)*36,
-      y: H*.5 + Math.sin(orbit*2) * 170,
+      x: W*.5 + Math.cos(orbit) * rx + Math.sin(orbit*3)*Math.min(36,W*.055),
+      y: H*.5 + Math.sin(orbit*2) * ry,
       strength: .42 + .90*pulse(p,.17,.24,.71,.83)
     };
   }
@@ -51,12 +77,16 @@
   function drawDither(p, inf){
     ctx.save();
     ctx.fillStyle = 'rgba(202,214,205,.13)';
-    const step=10;
-    for(let y=84;y<H-70;y+=step){
-      for(let x=28;x<W-28;x+=step){
+    const portrait = isPortrait();
+    const top = portrait ? 102 : 84;
+    const bottom = portrait ? 126 : 70;
+    const step = W < 620 ? 8 : 10;
+    for(let y=top;y<H-bottom;y+=step){
+      for(let x=20;x<W-20;x+=step){
         const dx=x-inf.x, dy=y-inf.y;
         const d=Math.hypot(dx,dy);
-        const ring=Math.exp(-Math.pow((d-170-42*Math.sin(p*TAU*2))/85,2));
+        const ringRadius=Math.min(170, Math.min(W,H)*.30);
+        const ring=Math.exp(-Math.pow((d-ringRadius-42*Math.sin(p*TAU*2))/Math.max(58,Math.min(85,W*.19)),2));
         const field=(Math.sin(x*.027+y*.018+p*TAU*2)+1)*.5;
         if(hash(x*0.19+y*0.31) < ring*.28*field){
           ctx.globalAlpha=.08+ring*.12;
@@ -73,27 +103,31 @@
     const dx=x-inf.x, dy=baseY-inf.y;
     const d=Math.hypot(dx,dy)+.001;
     const a=Math.atan2(dy,dx);
-    const local=Math.exp(-Math.pow(d/300,2));
+    const radius=Math.max(170, Math.min(300, Math.min(W,H)*.62));
+    const local=Math.exp(-Math.pow(d/radius,2));
     const lock=pulse(gp,.18,.25,.37,.44);
     const shear=pulse(gp,.36,.43,.57,.65);
     const memory=pulse(gp,.54,.60,.77,.84);
     const rebuild=smooth(.72,.87,gp)*(1-smooth(.94,1,gp));
+    const amp=Math.max(.62, Math.min(1, H/720));
 
-    const drift = Math.sin(x*.0108 + gp*TAU*1.6 + lineIndex*.37) * (8+9*hash(lineIndex));
-    const secondary = Math.sin(x*.024 - gp*TAU*1.15 + lineIndex*.19) * 4.5;
-    const lens = local * inf.strength * (52*Math.sin(a*2.6 + gp*TAU*1.4 + lineIndex*.045));
-    const lockFold = lock * local * 105 * Math.sin(a*4 + gp*TAU*.55);
-    const shearTerm = shear * local * (110*Math.sin((x+baseY)*.015 + gp*TAU*5 + lineIndex*.13));
-    const remembered = memory * local * 34 * Math.sin(a*6 - gp*TAU*1.2);
-    const rebuildTerm = rebuild * local * 72 * Math.sin(a*3 + gp*TAU*.35);
+    const drift = Math.sin(x*.0108 + gp*TAU*1.6 + lineIndex*.37) * (8+9*hash(lineIndex)) * amp;
+    const secondary = Math.sin(x*.024 - gp*TAU*1.15 + lineIndex*.19) * 4.5 * amp;
+    const lens = local * inf.strength * (52*Math.sin(a*2.6 + gp*TAU*1.4 + lineIndex*.045)) * amp;
+    const lockFold = lock * local * 105 * Math.sin(a*4 + gp*TAU*.55) * amp;
+    const shearTerm = shear * local * (110*Math.sin((x+baseY)*.015 + gp*TAU*5 + lineIndex*.13)) * amp;
+    const remembered = memory * local * 34 * Math.sin(a*6 - gp*TAU*1.2) * amp;
+    const rebuildTerm = rebuild * local * 72 * Math.sin(a*3 + gp*TAU*.35) * amp;
 
     return baseY + drift + secondary + lens + lockFold + shearTerm + remembered + rebuildTerm;
   }
 
   function drawField(p){
     const inf=influence(p);
-    const lineCount=43;
-    const y0=96, y1=H-84;
+    const portrait=isPortrait();
+    const lineCount=portrait ? 49 : 43;
+    const y0=portrait ? 112 : 96;
+    const y1=H-(portrait ? 128 : 84);
     const memory=pulse(p,.53,.60,.78,.86);
 
     if(memory>0.01){
@@ -103,7 +137,7 @@
         for(let i=0;i<lineCount;i+=2){
           const baseY=mix(y0,y1,i/(lineCount-1));
           let first=true;
-          for(let x=18;x<=W-18;x+=8){
+          for(let x=14;x<=W-14;x+=Math.max(5,Math.min(8,W/140))){
             const y=linePoint(baseY,x,p,i,offset);
             if(first){ctx.moveTo(x,y);first=false;} else ctx.lineTo(x,y);
           }
@@ -118,7 +152,7 @@
       const baseY=mix(y0,y1,i/(lineCount-1));
       ctx.beginPath();
       let first=true;
-      for(let x=18;x<=W-18;x+=7){
+      for(let x=14;x<=W-14;x+=Math.max(5,Math.min(7,W/150))){
         const y=linePoint(baseY,x,p,i,0);
         if(first){ctx.moveTo(x,y);first=false;} else ctx.lineTo(x,y);
       }
@@ -134,7 +168,7 @@
     ctx.globalAlpha=.08+.19*pressure;
     for(let j=0;j<18;j++){
       const a=(j/18)*TAU + p*TAU*.12;
-      const r=70+j*13;
+      const r=Math.min(70+j*13, Math.min(W,H)*.46);
       ctx.beginPath();
       ctx.arc(inf.x,inf.y,r,a-.5,a+.45);
       ctx.strokeStyle=j%4===0?'#ff681c':'#87968d';
@@ -155,8 +189,9 @@
     ctx.translate(inf.x,inf.y);
     ctx.rotate(p*TAU*.22);
     ctx.globalAlpha=.12+.30*q;
+    const scale=Math.min(1,Math.min(W,H)/620);
     for(let i=0;i<9;i++){
-      const r=38+i*21;
+      const r=(38+i*21)*scale;
       ctx.beginPath();
       const sx=r, sy=r*.56;
       ctx.moveTo(0,-sy);
@@ -172,43 +207,78 @@
   }
 
   function drawHUD(p){
+    const portrait=isPortrait();
     const phase=phaseName(p);
     const stamp=String(Math.floor(p*loopSeconds*1000)).padStart(5,'0');
+    const margin=portrait ? 14 : 20;
     ctx.save();
-    ctx.fillStyle='rgba(5,7,6,.84)';
-    ctx.fillRect(20,18,440,44);
-    ctx.strokeStyle='rgba(255,104,28,.42)';
-    ctx.strokeRect(20.5,18.5,439,43);
-    ctx.fillStyle='#ff681c';
-    ctx.font='13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-    ctx.fillText('FIELD STATION: MAGPIE / PHASE RELAY 01',34,45);
 
-    ctx.fillStyle='rgba(5,7,6,.76)';
-    ctx.fillRect(20,H-51,530,30);
-    ctx.fillStyle='rgba(174,190,181,.72)';
-    ctx.font='10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-    ctx.fillText(`SEED ${seed}  /  ${phase}  /  FIELD MEMORY ${stamp}`,34,H-31);
+    if(portrait){
+      const headerW=W-margin*2;
+      ctx.fillStyle='rgba(5,7,6,.88)';
+      ctx.fillRect(margin,14,headerW,64);
+      ctx.strokeStyle='rgba(255,104,28,.46)';
+      ctx.strokeRect(margin+.5,14.5,headerW-1,63);
+      ctx.fillStyle='#ff681c';
+      ctx.font='11px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+      ctx.fillText('FIELD STATION: MAGPIE',margin+12,39);
+      ctx.fillStyle='rgba(255,104,28,.78)';
+      ctx.font='10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+      ctx.fillText('PHASE RELAY 01 / '+phase,margin+12,59);
+
+      const footerY=H-116;
+      const footerW=W-margin*2;
+      ctx.fillStyle='rgba(5,7,6,.80)';
+      ctx.fillRect(margin,footerY,footerW,48);
+      ctx.strokeStyle='rgba(126,143,132,.16)';
+      ctx.strokeRect(margin+.5,footerY+.5,footerW-1,47);
+      ctx.fillStyle='rgba(174,190,181,.72)';
+      ctx.font='9px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+      ctx.fillText(`SEED ${seed} / FIELD MEMORY ${stamp}`,margin+10,footerY+19);
+      ctx.fillStyle='rgba(255,104,28,.65)';
+      ctx.fillText('INFLUENCE DETECTED THROUGH DEFORMATION',margin+10,footerY+35);
+    } else {
+      const headerW=Math.min(440,W-40);
+      ctx.fillStyle='rgba(5,7,6,.84)';
+      ctx.fillRect(20,18,headerW,44);
+      ctx.strokeStyle='rgba(255,104,28,.42)';
+      ctx.strokeRect(20.5,18.5,headerW-1,43);
+      ctx.fillStyle='#ff681c';
+      ctx.font='13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+      ctx.fillText('FIELD STATION: MAGPIE / PHASE RELAY 01',34,45);
+
+      const footerW=Math.min(530,W-40);
+      ctx.fillStyle='rgba(5,7,6,.76)';
+      ctx.fillRect(20,H-51,footerW,30);
+      ctx.fillStyle='rgba(174,190,181,.72)';
+      ctx.font='10px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+      ctx.fillText(`SEED ${seed}  /  ${phase}  /  FIELD MEMORY ${stamp}`,34,H-31);
+    }
 
     ctx.fillStyle='rgba(255,104,28,.55)';
     const bars=[.24,.58,.39,.82,.31,.66,.49,.73];
+    const barBaseY=portrait ? 52 : H-40;
+    const barStartX=portrait ? W-168 : W-180;
     bars.forEach((v,i)=>{
       const active=(p*bars.length-i/bars.length+1)%1;
-      ctx.fillRect(W-180+i*18,H-40,12,2+16*(v*.4+active*.6));
+      ctx.fillRect(barStartX+i*18,barBaseY,10,2+14*(v*.4+active*.6));
     });
     ctx.restore();
   }
 
   function render(seconds){
+    resizeCanvas();
     const p=((seconds%loopSeconds)+loopSeconds)%loopSeconds/loopSeconds;
     ctx.fillStyle='#050706'; ctx.fillRect(0,0,W,H);
     ctx.strokeStyle='rgba(126,143,132,.035)'; ctx.lineWidth=1;
-    for(let x=40;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,72);ctx.lineTo(x,H-68);ctx.stroke();}
+    const top=isPortrait()?90:72, bottom=isPortrait()?122:68;
+    for(let x=40;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,H-bottom);ctx.stroke();}
     const inf=drawField(p);
     drawDither(p,inf);
     drawApparatus(p,inf);
     drawHUD(p);
     ctx.strokeStyle='rgba(255,104,28,.20)';
-    ctx.strokeRect(12.5,12.5,W-25,H-25);
+    ctx.strokeRect(8.5,8.5,W-17,H-17);
   }
 
   let start=performance.now();
@@ -220,22 +290,77 @@
   requestAnimationFrame(tick);
 
   let audio=null;
-  function startAudio(){
-    if(audio) return;
-    const AC=window.AudioContext||window.webkitAudioContext;
-    const ac=new AC();
-    const master=ac.createGain(); master.gain.value=.065; master.connect(ac.destination);
-    const low=ac.createBiquadFilter(); low.type='lowpass'; low.frequency.value=260; low.Q.value=.7; low.connect(master);
-    const o1=ac.createOscillator(), o2=ac.createOscillator(), g1=ac.createGain(), g2=ac.createGain();
-    o1.type='sine'; o2.type='sine'; o1.frequency.value=55; o2.frequency.value=82.5;
-    g1.gain.value=.7; g2.gain.value=.18; o1.connect(g1).connect(low); o2.connect(g2).connect(low);
-    o1.start(); o2.start();
-    const lfo=ac.createOscillator(), lg=ac.createGain(); lfo.frequency.value=.11; lg.gain.value=18; lfo.connect(lg).connect(o2.frequency); lfo.start();
-    audio={ac,o1,o2,lfo};
-    const gate=document.getElementById('gate'); gate.textContent='FIELD AUDIO / ON'; gate.classList.add('on');
+
+  function setGateState(state, label){
+    gate.textContent=label;
+    gate.classList.toggle('on',state==='on');
+    gate.classList.toggle('off',state==='off');
+    gate.setAttribute('aria-pressed',state==='on'?'true':'false');
   }
-  document.getElementById('gate').addEventListener('pointerdown',startAudio);
-  window.addEventListener('keydown',e=>{ if(e.code==='Space') startAudio(); });
+
+  function buildAudio(ac){
+    const master=ac.createGain();
+    master.gain.setValueAtTime(.0001,ac.currentTime);
+    master.gain.exponentialRampToValueAtTime(.12,ac.currentTime+.12);
+    master.connect(ac.destination);
+
+    const low=ac.createBiquadFilter();
+    low.type='lowpass'; low.frequency.value=320; low.Q.value=.75; low.connect(master);
+
+    const o1=ac.createOscillator(), o2=ac.createOscillator(), o3=ac.createOscillator();
+    const g1=ac.createGain(), g2=ac.createGain(), g3=ac.createGain();
+    o1.type='sine'; o2.type='sine'; o3.type='triangle';
+    o1.frequency.value=55; o2.frequency.value=82.5; o3.frequency.value=110;
+    g1.gain.value=.72; g2.gain.value=.24; g3.gain.value=.055;
+    o1.connect(g1).connect(low); o2.connect(g2).connect(low); o3.connect(g3).connect(low);
+
+    const pitchLfo=ac.createOscillator(), pitchDepth=ac.createGain();
+    pitchLfo.frequency.value=.11; pitchDepth.gain.value=5.5;
+    pitchLfo.connect(pitchDepth).connect(o2.frequency);
+
+    const ampLfo=ac.createOscillator(), ampDepth=ac.createGain();
+    ampLfo.frequency.value=.075; ampDepth.gain.value=.10;
+    ampLfo.connect(ampDepth).connect(g1.gain);
+
+    o1.start(); o2.start(); o3.start(); pitchLfo.start(); ampLfo.start();
+    return {ac,master,o1,o2,o3,pitchLfo,ampLfo};
+  }
+
+  async function toggleAudio(event){
+    if(event) event.preventDefault();
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC){ setGateState('off','AUDIO NOT SUPPORTED'); return; }
+
+    try{
+      if(!audio){
+        const ac=new AC();
+        audio=buildAudio(ac);
+        if(ac.state!=='running') await ac.resume();
+        if(ac.state==='running') setGateState('on','FIELD AUDIO / ON');
+        else setGateState('off','TAP AGAIN TO ENABLE AUDIO');
+        ac.onstatechange=()=>{
+          if(ac.state==='running') setGateState('on','FIELD AUDIO / ON');
+          else if(ac.state==='suspended') setGateState('off','FIELD AUDIO / OFF — TAP TO RESUME');
+        };
+        return;
+      }
+
+      if(audio.ac.state==='running'){
+        await audio.ac.suspend();
+        setGateState('off','FIELD AUDIO / OFF — TAP TO RESUME');
+      } else {
+        await audio.ac.resume();
+        if(audio.ac.state==='running') setGateState('on','FIELD AUDIO / ON');
+        else setGateState('off','TAP AGAIN TO ENABLE AUDIO');
+      }
+    }catch(err){
+      console.error('MAGPIE audio start failed',err);
+      setGateState('off','AUDIO BLOCKED — TAP AGAIN');
+    }
+  }
+
+  gate.addEventListener('click',toggleAudio);
+  window.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); toggleAudio(); } });
 })();
 </script>
 </body>
