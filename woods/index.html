@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#030506">
+<title>MZ WOODS — Prototype 0.01</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030506;color:#e9ebe4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none;overscroll-behavior:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #entry{position:fixed;inset:0;z-index:30;background:rgba(3,5,6,.985);display:grid;place-items:center;padding:28px}
+  #entryBox{width:min(420px,100%);text-align:center}
+  h1{margin:0 0 8px;font-size:clamp(30px,8vw,52px);letter-spacing:.12em;font-weight:600}
+  .ver{font-size:11px;opacity:.42;letter-spacing:.18em;margin-bottom:34px}
+  .note{font-size:13px;line-height:1.7;opacity:.68;margin-bottom:26px}
+  #enter{width:100%;min-height:60px;border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;font:inherit;letter-spacing:.12em;font-size:13px}
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none}
+  #hint{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);white-space:nowrap;font-size:10px;letter-spacing:.12em;opacity:.34}
+  #light{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));width:76px;height:76px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(5,7,8,.24);color:rgba(255,255,255,.72);font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:auto;display:none}
+  #joyBase,#joyKnob{position:absolute;border-radius:50%;pointer-events:none;display:none}
+  #joyBase{width:144px;height:144px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.035);transform:translate(-50%,-50%)}
+  #joyKnob{width:48px;height:48px;background:rgba(255,255,255,.19);transform:translate(-50%,-50%)}
+  #message{position:absolute;inset:0;display:grid;place-items:center;font-size:17px;letter-spacing:.2em;opacity:0;transition:opacity .25s}
+  #rotate{position:absolute;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:.12em;opacity:0;transition:opacity .2s}
+  @media(max-width:700px) and (orientation:portrait){#rotate{opacity:.42}}
+</style>
+</head>
+<body>
+<div id="entry">
+  <div id="entryBox">
+    <h1>MZ WOODS</h1>
+    <div class="ver">PROTOTYPE 0.01 / SEED 170926</div>
+    <div class="note">walk toward what you hear<br>headphones recommended</div>
+    <button id="enter">ENTER THE WOODS</button>
+  </div>
+</div>
+<div id="hud">
+  <div id="message">SIGNAL FOUND</div>
+  <div id="rotate">LANDSCAPE WORKS BEST</div>
+  <div id="hint">WASD / MOUSE · F = LIGHT</div>
+  <button id="light">LIGHT</button>
+  <div id="joyBase"></div><div id="joyKnob"></div>
+</div>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+
+const SEED = 170926, HALF = 92, TREE_COUNT = 260;
+const beaconPos = new THREE.Vector3(34,1.2,-28);
+const isTouch = matchMedia("(pointer:coarse)").matches || "ontouchstart" in window;
+const renderer = new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0x030506,1);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030506);
+scene.fog = new THREE.FogExp2(0x081012,0.036);
+
+const camera = new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.08,130);
+camera.position.set(0,1.58,0);
+camera.rotation.order = "YXZ";
+scene.add(camera);
+
+scene.add(new THREE.HemisphereLight(0x293944,0x080907,.34));
+const moon = new THREE.DirectionalLight(0x7f9eaf,.32);
+moon.position.set(-12,26,8); scene.add(moon);
+
+const groundMat = new THREE.MeshStandardMaterial({color:0x0e1713,roughness:1});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF*2.25,HALF*2.25),groundMat);
+ground.rotation.x = -Math.PI/2; scene.add(ground);
+
+const flashlight = new THREE.SpotLight(0xfff1d0,7.0,30,Math.PI/7.5,.52,1.45);
+flashlight.position.set(0,0,0); camera.add(flashlight);
+const ft = new THREE.Object3D(); ft.position.set(0,0,-1); camera.add(ft); flashlight.target = ft;
+let flashlightOn = true;
+
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+const rand = mulberry32(SEED);
+const rr=(a,b)=>a+(b-a)*rand();
+
+const trunkGeo = new THREE.CylinderGeometry(.34,.25,1,6,1,false);
+const trunkMat = new THREE.MeshStandardMaterial({color:0x251f1a,roughness:1});
+const crownGeo = new THREE.CylinderGeometry(.08,1.45,1,7,1,false);
+const crownMat = new THREE.MeshStandardMaterial({color:0x11291b,roughness:1});
+const trunks = new THREE.InstancedMesh(trunkGeo,trunkMat,TREE_COUNT);
+const crowns = new THREE.InstancedMesh(crownGeo,crownMat,TREE_COUNT);
+trunks.frustumCulled = false; crowns.frustumCulled = false;
+const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), pos = new THREE.Vector3(), scale = new THREE.Vector3();
+const collisions = [];
+let made = 0, attempts = 0;
+while(made<TREE_COUNT && attempts<TREE_COUNT*30){
+  attempts++;
+  const x=rr(-HALF,HALF), z=rr(-HALF,HALF);
+  if(Math.hypot(x,z)<8.5) continue;
+  if(Math.hypot(x-beaconPos.x,z-beaconPos.z)<8) continue;
+  const corridor=Math.abs(x*.55+z*.35);
+  if(corridor<2.4 && rand()<.84) continue;
+  const density=(Math.sin(x*.071)+Math.sin(z*.053)+Math.sin((x+z)*.031)+3)/6;
+  if(rand()>.36+density*.58) continue;
+  const h=rr(4.8,9.8), w=rr(.75,1.25), yaw=rr(-Math.PI,Math.PI);
+  quat.setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  pos.set(x,h*.5,z); scale.set(w,h,w); matrix.compose(pos,quat,scale); trunks.setMatrixAt(made,matrix);
+  const ch=rr(3.4,5.8), cw=rr(1.4,2.4);
+  pos.set(x,h+ch*.34,z); scale.set(cw,ch,cw); matrix.compose(pos,quat,scale); crowns.setMatrixAt(made,matrix);
+  collisions.push({x,z,r:.38*w});
+  made++;
+}
+scene.add(trunks,crowns);
+
+const deadGeo = new THREE.CylinderGeometry(.08,.18,1,5);
+const deadMat = new THREE.MeshStandardMaterial({color:0x38362d,roughness:1});
+for(let i=0;i<18;i++){
+  const h=rr(2,4.5), m=new THREE.Mesh(deadGeo,deadMat);
+  m.scale.set(1,h,1); m.position.set(rr(-60,60),h*.5,rr(-60,60)); m.rotation.z=rr(-.18,.18); scene.add(m);
+}
+
+const markerMat = new THREE.MeshStandardMaterial({color:0x3a0905,emissive:0xa61708,emissiveIntensity:1.6,roughness:.7});
+const marker = new THREE.Mesh(new THREE.CylinderGeometry(.35,.62,2.2,5),markerMat);
+marker.position.copy(beaconPos); scene.add(marker);
+const beaconLight = new THREE.PointLight(0xff2a0b,3.2,15,2);
+beaconLight.position.copy(beaconPos); scene.add(beaconLight);
+
+let audio=null,panner=null,toneGain=null,osc1=null,osc2=null;
+function startAudio(){
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC) return;
+  audio=new AC();
+  const master=audio.createGain(); master.gain.value=.75; master.connect(audio.destination);
+  panner=audio.createPanner();
+  panner.panningModel="HRTF"; panner.distanceModel="inverse"; panner.refDistance=8; panner.maxDistance=100; panner.rolloffFactor=1.1;
+  panner.positionX.value=beaconPos.x; panner.positionY.value=beaconPos.y; panner.positionZ.value=beaconPos.z;
+  toneGain=audio.createGain(); toneGain.gain.value=0;
+  const filter=audio.createBiquadFilter(); filter.type="lowpass"; filter.frequency.value=220;
+  osc1=audio.createOscillator(); osc1.type="sine"; osc1.frequency.value=73;
+  osc2=audio.createOscillator(); osc2.type="sine"; osc2.frequency.value=146.7;
+  const g2=audio.createGain(); g2.gain.value=.18;
+  osc1.connect(toneGain); osc2.connect(g2); g2.connect(toneGain); toneGain.connect(filter); filter.connect(panner); panner.connect(master);
+  osc1.start(); osc2.start();
+  audio.resume();
+}
+function updateListener(){
+  if(!audio) return;
+  const l=audio.listener, f=new THREE.Vector3(); camera.getWorldDirection(f);
+  const u=new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
+  if(l.positionX){
+    l.positionX.value=camera.position.x;l.positionY.value=camera.position.y;l.positionZ.value=camera.position.z;
+    l.forwardX.value=f.x;l.forwardY.value=f.y;l.forwardZ.value=f.z;
+    l.upX.value=u.x;l.upY.value=u.y;l.upZ.value=u.z;
+  }else{
+    l.setPosition(camera.position.x,camera.position.y,camera.position.z);
+    l.setOrientation(f.x,f.y,f.z,u.x,u.y,u.z);
+  }
+}
+
+let started=false,yaw=0,pitch=0, horror=false, horrorUntil=0, t=0, prev=performance.now();
+const keys=new Set(); let joy={x:0,y:0}; let gpLightWas=false;
+function toggleLight(){flashlightOn=!flashlightOn; flashlight.visible=flashlightOn}
+addEventListener("keydown",e=>{keys.add(e.code);if(e.code==="KeyF")toggleLight();});
+addEventListener("keyup",e=>keys.delete(e.code));
+renderer.domElement.addEventListener("click",()=>{if(started&&!isTouch) renderer.domElement.requestPointerLock?.()});
+addEventListener("mousemove",e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-1.35,Math.min(1.35,pitch-e.movementY*.0025));}});
+
+const lightBtn=document.getElementById("light"),hint=document.getElementById("hint"),joyBase=document.getElementById("joyBase"),joyKnob=document.getElementById("joyKnob");
+lightBtn.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();toggleLight()});
+if(isTouch){lightBtn.style.display="block";hint.style.display="none"}
+
+let moveId=null,lookId=null,moveOrigin={x:0,y:0},lookLast={x:0,y:0};
+function setJoy(x,y){
+  const dx=x-moveOrigin.x,dy=y-moveOrigin.y,r=72,len=Math.hypot(dx,dy)||1,s=Math.min(1,r/len);
+  const cx=dx*s,cy=dy*s; joy.x=cx/r;joy.y=-cy/r;
+  joyKnob.style.left=(moveOrigin.x+cx)+"px";joyKnob.style.top=(moveOrigin.y+cy)+"px";
+}
+addEventListener("touchstart",e=>{
+  if(!started)return;
+  for(const touch of e.changedTouches){
+    if(touch.clientX>innerWidth*.78&&touch.clientY>innerHeight*.68)continue;
+    if(touch.clientX<innerWidth*.5&&touch.clientY>innerHeight*.25&&moveId===null){
+      moveId=touch.identifier;moveOrigin={x:touch.clientX,y:touch.clientY};joy={x:0,y:0};
+      joyBase.style.display=joyKnob.style.display="block";joyBase.style.left=joyKnob.style.left=touch.clientX+"px";joyBase.style.top=joyKnob.style.top=touch.clientY+"px";
+    }else if(lookId===null){lookId=touch.identifier;lookLast={x:touch.clientX,y:touch.clientY}}
+  }
+},{passive:false});
+addEventListener("touchmove",e=>{
+  if(!started)return;e.preventDefault();
+  for(const touch of e.changedTouches){
+    if(touch.identifier===moveId)setJoy(touch.clientX,touch.clientY);
+    if(touch.identifier===lookId){
+      yaw-=(touch.clientX-lookLast.x)*.004;pitch=Math.max(-1.35,Math.min(1.35,pitch-(touch.clientY-lookLast.y)*.004));
+      lookLast={x:touch.clientX,y:touch.clientY};
+    }
+  }
+},{passive:false});
+addEventListener("touchend",e=>{
+  for(const touch of e.changedTouches){
+    if(touch.identifier===moveId){moveId=null;joy={x:0,y:0};joyBase.style.display=joyKnob.style.display="none"}
+    if(touch.identifier===lookId)lookId=null;
+  }
+},{passive:false});
+
+function canMove(nx,nz){
+  if(Math.abs(nx)>HALF||Math.abs(nz)>HALF)return false;
+  for(const c of collisions) if((nx-c.x)*(nx-c.x)+(nz-c.z)*(nz-c.z)<(c.r+.33)*(c.r+.33))return false;
+  return true;
+}
+function message(){
+  const m=document.getElementById("message");m.style.opacity="1";setTimeout(()=>m.style.opacity="0",2200);
+}
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min(.05,(now-prev)/1000);prev=now;if(!started){renderer.render(scene,camera);return}
+  t+=dt;
+  let mx=0,my=0;
+  if(keys.has("KeyA"))mx-=1;if(keys.has("KeyD"))mx+=1;if(keys.has("KeyW"))my+=1;if(keys.has("KeyS"))my-=1;
+  if(Math.hypot(joy.x,joy.y)>Math.hypot(mx,my)){mx=joy.x;my=joy.y}
+
+  const gp=navigator.getGamepads?.()[0];
+  if(gp){
+    const lx=Math.abs(gp.axes[0]||0)>.14?gp.axes[0]:0, ly=Math.abs(gp.axes[1]||0)>.14?-(gp.axes[1]||0):0;
+    if(Math.hypot(lx,ly)>Math.hypot(mx,my)){mx=lx;my=ly}
+    const rx=Math.abs(gp.axes[2]||0)>.12?gp.axes[2]:0, ry=Math.abs(gp.axes[3]||0)>.12?gp.axes[3]:0;
+    yaw-=rx*2.15*dt;pitch=Math.max(-1.35,Math.min(1.35,pitch-ry*2.15*dt));
+    const pressed=!!gp.buttons[0]?.pressed;if(pressed&&!gpLightWas)toggleLight();gpLightWas=pressed;
+  }
+
+  const mag=Math.hypot(mx,my);if(mag>1){mx/=mag;my/=mag}
+  const sy=Math.sin(yaw),cy=Math.cos(yaw),speed=4.25;
+  const dx=(mx*cy+my*-sy)*speed*dt, dz=(mx*-sy+my*-cy)*speed*dt;
+  const nx=camera.position.x+dx,nz=camera.position.z+dz;
+  if(canMove(nx,camera.position.z))camera.position.x=nx;
+  if(canMove(camera.position.x,nz))camera.position.z=nz;
+  const moving=Math.hypot(dx,dz)>.0001;
+  camera.position.y=1.58+(moving?Math.sin(t*9.4)*.025:0);
+  camera.rotation.y=yaw;camera.rotation.x=pitch;
+
+  const dist=Math.hypot(camera.position.x-beaconPos.x,camera.position.z-beaconPos.z);
+  const irregular=Math.sin(t*10.7)+Math.sin(t*27.3)*.45+(rand()-.5)*.28;
+  beaconLight.intensity=dist<34?Math.max(.15,3.2+irregular*2.0):1.0+Math.sin(t*1.7)*.2;
+  if(toneGain){
+    const pulseSpeed=dist<18?1.8:1.0, env=Math.pow(Math.max(0,Math.sin(t*pulseSpeed*Math.PI*2)),7);
+    toneGain.gain.setTargetAtTime(.11*env,audio.currentTime,.015);
+    osc1.frequency.setTargetAtTime(dist<18?92:73,audio.currentTime,.08);
+    osc2.frequency.setTargetAtTime(dist<18?184:146.7,audio.currentTime,.08);
+  }
+  if(dist<13&&!horror){horror=true;horrorUntil=t+2.8;message()}
+  if(t<horrorUntil){flashlight.visible=flashlightOn&&(Math.sin(t*35)+Math.sin(t*13)>-.15)}else flashlight.visible=flashlightOn;
+  updateListener();
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+
+document.getElementById("enter").addEventListener("click",()=>{
+  started=true;startAudio();document.getElementById("entry").remove();
+  if(!isTouch) renderer.domElement.requestPointerLock?.();
+});
+
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+</body>
+</html>
