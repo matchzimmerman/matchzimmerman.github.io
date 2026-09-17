@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#030506">
-<title>MZ WOODS — Prototype 0.01</title>
+<title>MZ WOODS — Prototype 0.02</title>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030506;color:#e9ebe4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none;overscroll-behavior:none}
@@ -30,8 +30,8 @@
 <div id="entry">
   <div id="entryBox">
     <h1>MZ WOODS</h1>
-    <div class="ver">PROTOTYPE 0.01 / SEED 170926</div>
-    <div class="note">walk toward what you hear<br>headphones recommended</div>
+    <div class="ver">PROTOTYPE 0.02 / SEED 170926</div>
+    <div class="note">follow the sound · watch for the signal<br>headphones recommended</div>
     <button id="enter">ENTER THE WOODS</button>
   </div>
 </div>
@@ -120,30 +120,58 @@ for(let i=0;i<18;i++){
 const markerMat = new THREE.MeshStandardMaterial({color:0x3a0905,emissive:0xa61708,emissiveIntensity:1.6,roughness:.7});
 const marker = new THREE.Mesh(new THREE.CylinderGeometry(.35,.62,2.2,5),markerMat);
 marker.position.copy(beaconPos); scene.add(marker);
-const beaconLight = new THREE.PointLight(0xff2a0b,3.2,15,2);
-beaconLight.position.copy(beaconPos); scene.add(beaconLight);
+const beaconLight = new THREE.PointLight(0xff2a0b,.2,70,1.45);
+beaconLight.position.copy(beaconPos); beaconLight.position.y=2.1; scene.add(beaconLight);
 
-let audio=null,panner=null,toneGain=null,osc1=null,osc2=null;
-function startAudio(){
+// A tiny supernatural flare: brief enough to feel discovered, clear enough to navigate by.
+const glowCanvas=document.createElement("canvas");glowCanvas.width=glowCanvas.height=64;
+const glowCtx=glowCanvas.getContext("2d"),glowGrad=glowCtx.createRadialGradient(32,32,0,32,32,32);
+glowGrad.addColorStop(0,"rgba(255,245,220,1)");
+glowGrad.addColorStop(.14,"rgba(255,90,35,.95)");
+glowGrad.addColorStop(.5,"rgba(255,30,8,.32)");
+glowGrad.addColorStop(1,"rgba(255,0,0,0)");
+glowCtx.fillStyle=glowGrad;glowCtx.fillRect(0,0,64,64);
+const signalSpriteMat=new THREE.SpriteMaterial({
+  map:new THREE.CanvasTexture(glowCanvas),color:0xff6a32,transparent:true,opacity:0,
+  blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false,fog:false
+});
+const signalSprite=new THREE.Sprite(signalSpriteMat);
+signalSprite.position.copy(beaconPos);signalSprite.position.y=2.65;signalSprite.scale.set(1.1,1.1,1);scene.add(signalSprite);
+
+let audio=null,panner=null,toneGain=null,osc1=null,osc2=null,osc3=null;
+async function startAudio(){
   const AC=window.AudioContext||window.webkitAudioContext;
   if(!AC) return;
-  audio=new AC();
-  const master=audio.createGain(); master.gain.value=.75; master.connect(audio.destination);
+  audio=new AC({latencyHint:"interactive"});
+  const master=audio.createGain(); master.gain.value=.78; master.connect(audio.destination);
   panner=audio.createPanner();
-  panner.panningModel="HRTF"; panner.distanceModel="inverse"; panner.refDistance=8; panner.maxDistance=100; panner.rolloffFactor=1.1;
-  panner.positionX.value=beaconPos.x; panner.positionY.value=beaconPos.y; panner.positionZ.value=beaconPos.z;
-  toneGain=audio.createGain(); toneGain.gain.value=0;
-  const filter=audio.createBiquadFilter(); filter.type="lowpass"; filter.frequency.value=220;
-  osc1=audio.createOscillator(); osc1.type="sine"; osc1.frequency.value=73;
-  osc2=audio.createOscillator(); osc2.type="sine"; osc2.frequency.value=146.7;
-  const g2=audio.createGain(); g2.gain.value=.18;
-  osc1.connect(toneGain); osc2.connect(g2); g2.connect(toneGain); toneGain.connect(filter); filter.connect(panner); panner.connect(master);
-  osc1.start(); osc2.start();
-  audio.resume();
+  panner.panningModel="HRTF";panner.distanceModel="inverse";panner.refDistance=14;panner.maxDistance=120;panner.rolloffFactor=.55;
+  if(panner.positionX){
+    panner.positionX.value=beaconPos.x;panner.positionY.value=beaconPos.y;panner.positionZ.value=beaconPos.z;
+  }else panner.setPosition(beaconPos.x,beaconPos.y,beaconPos.z);
+  toneGain=audio.createGain();toneGain.gain.value=0;
+  const filter=audio.createBiquadFilter();filter.type="lowpass";filter.frequency.value=720;filter.Q.value=.55;
+  osc1=audio.createOscillator();osc1.type="sine";osc1.frequency.value=110;
+  osc2=audio.createOscillator();osc2.type="triangle";osc2.frequency.value=220;
+  osc3=audio.createOscillator();osc3.type="sine";osc3.frequency.value=330;
+  const g2=audio.createGain(),g3=audio.createGain();g2.gain.value=.28;g3.gain.value=.085;
+  osc1.connect(toneGain);osc2.connect(g2);osc3.connect(g3);g2.connect(toneGain);g3.connect(toneGain);
+  toneGain.connect(filter);filter.connect(panner);panner.connect(master);
+  osc1.start();osc2.start();osc3.start();
+  try{await audio.resume()}catch(e){}
+
+  // Soft local knock confirms that mobile audio actually opened.
+  if(audio.state==="running"){
+    const wake=audio.createOscillator(),wakeGain=audio.createGain(),now=audio.currentTime;
+    wake.type="sine";wake.frequency.setValueAtTime(196,now);wake.frequency.exponentialRampToValueAtTime(128,now+.38);
+    wakeGain.gain.setValueAtTime(.0001,now);wakeGain.gain.exponentialRampToValueAtTime(.052,now+.035);
+    wakeGain.gain.exponentialRampToValueAtTime(.0001,now+.42);
+    wake.connect(wakeGain);wakeGain.connect(master);wake.start(now);wake.stop(now+.45);
+  }
 }
 function updateListener(){
   if(!audio) return;
-  const l=audio.listener, f=new THREE.Vector3(); camera.getWorldDirection(f);
+  const l=audio.listener,f=new THREE.Vector3();camera.getWorldDirection(f);
   const u=new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
   if(l.positionX){
     l.positionX.value=camera.position.x;l.positionY.value=camera.position.y;l.positionZ.value=camera.position.z;
@@ -155,8 +183,9 @@ function updateListener(){
   }
 }
 
-let started=false,yaw=0,pitch=0, horror=false, horrorUntil=0, t=0, prev=performance.now();
-const keys=new Set(); let joy={x:0,y:0}; let gpLightWas=false;
+let started=false,yaw=0,pitch=0,horror=false,horrorUntil=0,t=0,prev=performance.now();
+let nextSignalAt=.9,signalStarted=-99;
+const keys=new Set();let joy={x:0,y:0};let gpLightWas=false;
 function toggleLight(){flashlightOn=!flashlightOn; flashlight.visible=flashlightOn}
 addEventListener("keydown",e=>{keys.add(e.code);if(e.code==="KeyF")toggleLight();});
 addEventListener("keyup",e=>keys.delete(e.code));
@@ -165,6 +194,8 @@ addEventListener("mousemove",e=>{if(document.pointerLockElement===renderer.domEl
 
 const lightBtn=document.getElementById("light"),hint=document.getElementById("hint"),joyBase=document.getElementById("joyBase"),joyKnob=document.getElementById("joyKnob");
 lightBtn.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();toggleLight()});
+addEventListener("pointerdown",()=>{if(audio?.state==="suspended")audio.resume()},{passive:true});
+addEventListener("touchend",()=>{if(audio?.state==="suspended")audio.resume()},{passive:true});
 if(isTouch){lightBtn.style.display="block";hint.style.display="none"}
 
 let moveId=null,lookId=null,moveOrigin={x:0,y:0},lookLast={x:0,y:0};
@@ -236,13 +267,20 @@ function animate(now){
   camera.rotation.y=yaw;camera.rotation.x=pitch;
 
   const dist=Math.hypot(camera.position.x-beaconPos.x,camera.position.z-beaconPos.z);
-  const irregular=Math.sin(t*10.7)+Math.sin(t*27.3)*.45+(rand()-.5)*.28;
-  beaconLight.intensity=dist<34?Math.max(.15,3.2+irregular*2.0):1.0+Math.sin(t*1.7)*.2;
-  if(toneGain){
-    const pulseSpeed=dist<18?1.8:1.0, env=Math.pow(Math.max(0,Math.sin(t*pulseSpeed*Math.PI*2)),7);
-    toneGain.gain.setTargetAtTime(.11*env,audio.currentTime,.015);
-    osc1.frequency.setTargetAtTime(dist<18?92:73,audio.currentTime,.08);
-    osc2.frequency.setTargetAtTime(dist<18?184:146.7,audio.currentTime,.08);
+  if(t>=nextSignalAt){signalStarted=t;nextSignalAt=t+3.8+rand()*2.8}
+  const signalAge=t-signalStarted;
+  const flare=signalAge>=0&&signalAge<.72?Math.pow(Math.sin(Math.PI*signalAge/.72),2.2):0;
+  const nearFlutter=dist<16?Math.max(0,Math.sin(t*10.7)+Math.sin(t*27.3)*.42):0;
+  signalSpriteMat.opacity=.018+flare*.98;
+  const flareSize=1.1+flare*2.1;signalSprite.scale.set(flareSize,flareSize,1);
+  beaconLight.intensity=.18+flare*42+nearFlutter*2.4;
+  markerMat.emissiveIntensity=1.1+flare*5.5+nearFlutter*.6;
+  if(toneGain&&audio?.state==="running"){
+    const env=.022+flare*.22+(dist<13?nearFlutter*.012:0);
+    toneGain.gain.setTargetAtTime(env,audio.currentTime,.02);
+    osc1.frequency.setTargetAtTime(dist<18?123.5:110,audio.currentTime,.08);
+    osc2.frequency.setTargetAtTime(dist<18?247:220,audio.currentTime,.08);
+    osc3.frequency.setTargetAtTime(dist<18?370.5:330,audio.currentTime,.08);
   }
   if(dist<13&&!horror){horror=true;horrorUntil=t+2.8;message()}
   if(t<horrorUntil){flashlight.visible=flashlightOn&&(Math.sin(t*35)+Math.sin(t*13)>-.15)}else flashlight.visible=flashlightOn;
