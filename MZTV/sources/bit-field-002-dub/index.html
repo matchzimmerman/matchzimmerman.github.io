@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MZTV BIT FIELD 002 — DUB</title>
+<style>
+  html,body{
+    margin:0;width:100%;height:100%;overflow:hidden;background:#f2efdf;
+    cursor:none;
+  }
+  canvas{
+    display:block;width:100vw;height:100vh;
+    image-rendering:pixelated;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d', { alpha:false });
+
+  const palette = [
+    '#f2efdf', '#ff5b2e', '#ffdf35', '#00d7a7',
+    '#1c63ff', '#f13cff', '#09254f'
+  ];
+
+  let W=0,H=0,dpr=1,t=0,last=0;
+  let cols=48, rows=27;
+  let cells=[];
+  let nextMutation=0;
+
+  function resize(){
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    c.width = Math.floor(W*dpr);
+    c.height = Math.floor(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    build();
+  }
+
+  function build(){
+    cells = [];
+    for(let y=0;y<rows;y++){
+      const row=[];
+      for(let x=0;x<cols;x++){
+        row.push({
+          phase: Math.random()*Math.PI*2,
+          bias: Math.random()*2-1
+        });
+      }
+      cells.push(row);
+    }
+  }
+
+  function mutate(now){
+    if(now < nextMutation) return;
+    nextMutation = now + 1700 + Math.random()*3600;
+
+    const cx = Math.floor(Math.random()*cols);
+    const cy = Math.floor(Math.random()*rows);
+    const r  = 3 + Math.floor(Math.random()*8);
+
+    for(let y=Math.max(0,cy-r); y<Math.min(rows,cy+r); y++){
+      for(let x=Math.max(0,cx-r); x<Math.min(cols,cx+r); x++){
+        const d=Math.hypot(x-cx,y-cy);
+        if(d<r && Math.random() > d/r){
+          cells[y][x].bias = Math.random()*2-1;
+          cells[y][x].phase += (Math.random()*2-1)*2;
+        }
+      }
+    }
+  }
+
+  const GLYPHS = {
+    M:["10001","11011","10101","10101","10001","10001","10001"],
+    Z:["11111","00001","00010","00100","01000","10000","11111"],
+    T:["11111","00100","00100","00100","00100","00100","00100"],
+    V:["10001","10001","10001","10001","10001","01010","00100"]
+  };
+
+  function drawLogo(){
+    const text = "MZTV";
+    const glyphW = 5, glyphH = 7;
+    const gap = 2;
+    const logicalW = text.length*glyphW + (text.length-1)*gap;
+    const px = Math.max(8, Math.floor(Math.min(W*0.64/logicalW, H*0.43/glyphH)));
+    const totalW = logicalW*px;
+    const totalH = glyphH*px;
+    const startX = Math.round((W-totalW)/2);
+    const startY = Math.round((H-totalH)/2);
+
+    ctx.fillStyle = 'rgba(242,239,223,0.70)';
+    ctx.fillRect(startX-px*1.4, startY-px*1.2, totalW+px*2.8, totalH+px*2.4);
+
+    let xCursor = startX;
+    for(let gi=0; gi<text.length; gi++){
+      const glyph = GLYPHS[text[gi]];
+      for(let gy=0; gy<glyphH; gy++){
+        for(let gx=0; gx<glyphW; gx++){
+          if(glyph[gy][gx] !== "1") continue;
+          const n = gi*100 + gy*10 + gx;
+          const rupture = Math.sin(t*0.37 + n*1.73) * Math.sin(t*0.071 + n*0.33);
+          const rareKick = Math.sin(t*0.19+n*2.1) > 0.985 ? 1 : 0;
+
+          const jx = Math.round(
+            Math.sin(t*0.48 + n*1.91) * px*0.12*rupture +
+            rareKick*Math.sin(n*4.2)*px*0.60
+          );
+          const jy = Math.round(
+            Math.cos(t*0.41 + n*1.37) * px*0.10*rupture +
+            rareKick*Math.cos(n*3.8)*px*0.45
+          );
+
+          const breathe = 0.92 + 0.08*Math.sin(t*0.31+n);
+          const s = Math.max(2, Math.round(px*breathe));
+          const pal = 1 + ((gi + gx + gy + Math.floor(t*0.18)) % (palette.length-1));
+
+          ctx.fillStyle = palette[pal];
+          ctx.fillRect(
+            Math.round(xCursor + gx*px + (px-s)/2 + jx),
+            Math.round(startY + gy*px + (px-s)/2 + jy),
+            s, s
+          );
+        }
+      }
+      xCursor += (glyphW+gap)*px;
+    }
+  }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+
+    const dt = Math.min(0.05,(now-last)/1000 || 0);
+    last=now;
+    t += dt;
+    mutate(now);
+
+    ctx.fillStyle = palette[0];
+    ctx.fillRect(0,0,W,H);
+
+    const cw=W/cols, ch=H/rows;
+    const f1x = cols*(0.50 + 0.25*Math.sin(t*0.071));
+    const f1y = rows*(0.50 + 0.25*Math.cos(t*0.053));
+    const f2x = cols*(0.50 + 0.32*Math.cos(t*0.041+1.8));
+    const f2y = rows*(0.50 + 0.28*Math.sin(t*0.063+0.7));
+
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const cell = cells[y][x];
+        const d1 = Math.hypot((x-f1x)/cols,(y-f1y)/rows);
+        const d2 = Math.hypot((x-f2x)/cols,(y-f2y)/rows);
+
+        const wave =
+          Math.sin(x*0.43 + t*0.72 + cell.phase) +
+          Math.cos(y*0.57 - t*0.48) +
+          Math.sin((x+y)*0.19 + t*0.22) +
+          Math.sin(d1*31 - t*1.1)*0.8 +
+          Math.cos(d2*27 + t*0.7)*0.6;
+
+        const threshold = 1.35 + cell.bias*0.35;
+        if(wave > threshold){
+          const p = 1 + ((x+y+Math.floor(t*0.25))%(palette.length-1));
+          ctx.fillStyle = palette[p];
+          ctx.fillRect(
+            Math.floor(x*cw), Math.floor(y*ch),
+            Math.ceil(cw)+1, Math.ceil(ch)+1
+          );
+        }
+      }
+    }
+
+    ctx.lineWidth = Math.max(1, Math.floor(Math.min(W,H)/700));
+    for(let k=0;k<4;k++){
+      ctx.strokeStyle = palette[1+((k+Math.floor(t*0.08))%(palette.length-1))];
+      ctx.beginPath();
+      const yy = H*(0.14+k*0.22) + Math.sin(t*0.21+k)*H*0.03;
+
+      for(let x=0;x<=W;x+=W/16){
+        const snap = Math.round((yy + Math.sin(x*0.012+t*(0.25+k*0.03))*H*0.055)/ch)*ch;
+        if(x===0) ctx.moveTo(x,snap);
+        else ctx.lineTo(x,snap);
+      }
+      ctx.stroke();
+    }
+
+    drawLogo();
+
+    ctx.fillStyle = '#09254f';
+    ctx.font = `${Math.max(11,Math.floor(H*0.014))}px monospace`;
+    ctx.textBaseline='top';
+    ctx.fillText(
+      'MZTV / BIT FIELD 002 / DUB',
+      Math.floor(W*0.018),
+      Math.floor(H*0.022)
+    );
+  }
+
+  let audioStarted=false;
+  let AC=null;
+  let master=null;
+  let dubSend=null;
+  let nextBeat=0;
+  let beatIndex=0;
+  let scheduler=null;
+
+  const BPM = 74;
+  const BEAT = 60/BPM;
+
+  function makeNoiseBuffer(ac, seconds=1){
+    const b=ac.createBuffer(1,Math.floor(ac.sampleRate*seconds),ac.sampleRate);
+    const d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++){
+      d[i]=(Math.random()*2-1);
+    }
+    return b;
+  }
+
+  function startAudio(){
+    if(audioStarted) return;
+    audioStarted=true;
+
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+
+    master=AC.createGain();
+    master.gain.value=0.34;
+
+    const lp=AC.createBiquadFilter();
+    lp.type='lowpass';
+    lp.frequency.value=2350;
+    lp.Q.value=0.55;
+
+    const comp=AC.createDynamicsCompressor();
+    comp.threshold.value=-18;
+    comp.knee.value=14;
+    comp.ratio.value=2.5;
+    comp.attack.value=0.012;
+    comp.release.value=0.22;
+
+    dubSend=AC.createGain();
+    dubSend.gain.value=0.42;
+
+    const delay=AC.createDelay(2);
+    delay.delayTime.value=BEAT*0.75;
+
+    const fb=AC.createGain();
+    fb.gain.value=0.46;
+
+    const echoLP=AC.createBiquadFilter();
+    echoLP.type='lowpass';
+    echoLP.frequency.value=1550;
+    echoLP.Q.value=0.6;
+
+    dubSend.connect(delay);
+    delay.connect(echoLP);
+    echoLP.connect(fb);
+    fb.connect(delay);
+    echoLP.connect(master);
+
+    master.connect(lp);
+    lp.connect(comp);
+    comp.connect(AC.destination);
+
+    nextBeat=AC.currentTime+0.10;
+    scheduler=setInterval(schedule,25);
+  }
+
+  function kick(time, amp=0.38){
+    const o=AC.createOscillator();
+    const g=AC.createGain();
+
+    o.type='sine';
+    o.frequency.setValueAtTime(86,time);
+    o.frequency.exponentialRampToValueAtTime(43,time+0.11);
+
+    g.gain.setValueAtTime(0.0001,time);
+    g.gain.exponentialRampToValueAtTime(amp,time+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001,time+0.30);
+
+    o.connect(g);
+    g.connect(master);
+    o.start(time);
+    o.stop(time+0.32);
+  }
+
+  function bass(time, freq, len=0.36, amp=0.20){
+    const o1=AC.createOscillator();
+    const o2=AC.createOscillator();
+    const filt=AC.createBiquadFilter();
+    const g=AC.createGain();
+
+    o1.type='sine';
+    o2.type='triangle';
+    o1.frequency.value=freq;
+    o2.frequency.value=freq*2;
+    o2.detune.value=-5;
+
+    filt.type='lowpass';
+    filt.frequency.value=310;
+    filt.Q.value=0.8;
+
+    g.gain.setValueAtTime(0.0001,time);
+    g.gain.exponentialRampToValueAtTime(amp,time+0.018);
+    g.gain.exponentialRampToValueAtTime(0.0001,time+len);
+
+    o1.connect(filt);
+    o2.connect(filt);
+    filt.connect(g);
+    g.connect(master);
+
+    o1.start(time);
+    o2.start(time);
+    o1.stop(time+len+0.05);
+    o2.stop(time+len+0.05);
+  }
+
+  function rim(time, amp=0.065){
+    const src=AC.createBufferSource();
+    src.buffer=makeNoiseBuffer(AC,0.08);
+
+    const bp=AC.createBiquadFilter();
+    bp.type='bandpass';
+    bp.frequency.value=1050;
+    bp.Q.value=1.1;
+
+    const g=AC.createGain();
+    g.gain.setValueAtTime(amp,time);
+    g.gain.exponentialRampToValueAtTime(0.0001,time+0.07);
+
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(master);
+    g.connect(dubSend);
+
+    src.start(time);
+    src.stop(time+0.08);
+  }
+
+  function chord(time, freqs, amp=0.032){
+    const bus=AC.createGain();
+    const filt=AC.createBiquadFilter();
+    const g=AC.createGain();
+
+    filt.type='lowpass';
+    filt.frequency.value=1350;
+    filt.Q.value=0.65;
+
+    g.gain.setValueAtTime(0.0001,time);
+    g.gain.exponentialRampToValueAtTime(amp,time+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,time+0.17);
+
+    for(const f of freqs){
+      const o=AC.createOscillator();
+      o.type='triangle';
+      o.frequency.value=f;
+      o.detune.value=(Math.random()*8-4);
+      o.connect(bus);
+      o.start(time);
+      o.stop(time+0.20);
+    }
+
+    bus.connect(filt);
+    filt.connect(g);
+    g.connect(master);
+    g.connect(dubSend);
+  }
+
+  function schedule(){
+    if(!AC) return;
+
+    while(nextBeat < AC.currentTime+0.12){
+      const step = beatIndex % 16;
+
+      if(step===0 || step===8) kick(nextBeat,0.34);
+      if(step===6 && Math.random()<0.42) kick(nextBeat,0.17);
+
+      const bassMap = {
+        0:36.708,
+        3:36.708,
+        6:43.654,
+        8:32.703,
+        11:36.708,
+        14:55.000
+      };
+
+      if(bassMap[step]){
+        bass(nextBeat,bassMap[step],0.30+Math.random()*0.18,0.17);
+      }
+
+      if(step===4 || step===12){
+        rim(nextBeat,0.055);
+      }
+
+      if((step===2 || step===10) && Math.random()<0.72){
+        chord(nextBeat,[146.83,174.61,220.00,261.63],0.026);
+      }
+
+      if(step===15 && Math.random()<0.25){
+        chord(nextBeat,[130.81,164.81,196.00,246.94],0.020);
+      }
+
+      nextBeat += BEAT/2;
+      beatIndex++;
+    }
+  }
+
+  function ensureAudio(){
+    startAudio();
+    if(AC && AC.state==='suspended') AC.resume();
+  }
+
+  window.addEventListener('pointerdown',ensureAudio,{once:true});
+  window.addEventListener('keydown',ensureAudio,{once:true});
+  setTimeout(ensureAudio,250);
+
+  addEventListener('resize',resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
