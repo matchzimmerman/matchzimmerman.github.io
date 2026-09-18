@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MZTV BIT FIELD 003 — WEATHER TRIAD</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f3efdf;cursor:none}
+  canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const c=document.getElementById('c');
+  const ctx=c.getContext('2d',{alpha:false});
+
+  const CITIES=[
+    {name:'BALTIMORE',lat:39.2904,lon:-76.6122,tz:'America/New_York',hue:18,pan:-0.62,
+      data:{temp:18,dew:11,wind:10,dir:225,ok:false,updated:null}},
+    {name:'GALWAY',lat:53.2707,lon:-9.0568,tz:'Europe/Dublin',hue:164,pan:0,
+      data:{temp:13,dew:10,wind:18,dir:245,ok:false,updated:null}},
+    {name:'LONDON',lat:51.5072,lon:-0.1276,tz:'Europe/London',hue:286,pan:0.62,
+      data:{temp:15,dew:10,wind:12,dir:230,ok:false,updated:null}}
+  ];
+
+  const GLYPHS={
+    M:["10001","11011","10101","10101","10001","10001","10001"],
+    Z:["11111","00001","00010","00100","01000","10000","11111"],
+    T:["11111","00100","00100","00100","00100","00100","00100"],
+    V:["10001","10001","10001","10001","10001","01010","00100"]
+  };
+
+  let W=0,H=0,dpr=1,t=0,last=0;
+  let cols=48,rows=27,cells=[],nextMutation=0;
+  let weatherStatus='CONNECTING';
+
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const norm=(v,a,b)=>clamp((v-a)/(b-a),0,1);
+  const mix=(a,b,p)=>a+(b-a)*p;
+  const cityTime=(city)=>{
+    const parts=new Intl.DateTimeFormat('en-US',{
+      timeZone:city.tz,hour:'2-digit',minute:'2-digit',second:'2-digit',
+      hour12:false
+    }).formatToParts(new Date());
+    const get=(type)=>Number(parts.find(p=>p.type===type)?.value||0);
+    const h=get('hour')%24,m=get('minute'),s=get('second');
+    return {h,m,s,frac:(h+m/60+s/3600)/24};
+  };
+  const hsl=(h,s,l,a=1)=>`hsla(${((h%360)+360)%360} ${s}% ${l}% / ${a})`;
+
+  async function fetchCity(city){
+    const q=new URLSearchParams({
+      latitude:String(city.lat),
+      longitude:String(city.lon),
+      current:'temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m',
+      wind_speed_unit:'kmh',
+      timezone:'auto'
+    });
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?'+q.toString(),{cache:'no-store'});
+    if(!r.ok) throw new Error('weather '+r.status);
+    const j=await r.json();
+    const d=j.current||{};
+    city.data.temp=Number.isFinite(d.temperature_2m)?d.temperature_2m:city.data.temp;
+    city.data.dew=Number.isFinite(d.dew_point_2m)?d.dew_point_2m:city.data.dew;
+    city.data.wind=Number.isFinite(d.wind_speed_10m)?d.wind_speed_10m:city.data.wind;
+    city.data.dir=Number.isFinite(d.wind_direction_10m)?d.wind_direction_10m:city.data.dir;
+    city.data.ok=true;
+    city.data.updated=Date.now();
+  }
+
+  async function updateWeather(){
+    const results=await Promise.allSettled(CITIES.map(fetchCity));
+    const good=results.filter(r=>r.status==='fulfilled').length;
+    weatherStatus=good===3?'LIVE':good>0?'PARTIAL':'FALLBACK';
+  }
+  updateWeather();
+  setInterval(updateWeather,10*60*1000);
+
+  function resize(){
+    dpr=Math.min(2,window.devicePixelRatio||1);
+    W=innerWidth;H=innerHeight;
+    c.width=Math.floor(W*dpr);c.height=Math.floor(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    build();
+  }
+
+  function build(){
+    cells=[];
+    for(let y=0;y<rows;y++){
+      const row=[];
+      for(let x=0;x<cols;x++){
+        row.push({phase:Math.random()*Math.PI*2,bias:Math.random()*2-1});
+      }
+      cells.push(row);
+    }
+  }
+
+  function averages(){
+    const avg=(key)=>CITIES.reduce((s,c)=>s+c.data[key],0)/CITIES.length;
+    return {temp:avg('temp'),dew:avg('dew'),wind:avg('wind')};
+  }
+
+  function mutate(now){
+    if(now<nextMutation)return;
+    const av=averages();
+    nextMutation=now+mix(5200,1400,norm(av.wind,0,45))+Math.random()*2600;
+    const cx=Math.floor(Math.random()*cols),cy=Math.floor(Math.random()*rows);
+    const r=3+Math.floor(Math.random()*(5+norm(av.dew,-5,24)*7));
+    for(let y=Math.max(0,cy-r);y<Math.min(rows,cy+r);y++){
+      for(let x=Math.max(0,cx-r);x<Math.min(cols,cx+r);x++){
+        const d=Math.hypot(x-cx,y-cy);
+        if(d<r&&Math.random()>d/r){
+          cells[y][x].bias=Math.random()*2-1;
+          cells[y][x].phase+=(Math.random()*2-1)*(0.5+norm(av.wind,0,45)*2.2);
+        }
+      }
+    }
+  }
+
+  function cityColor(city,alpha=1,lightBias=0){
+    const tempShift=mix(-24,28,norm(city.data.temp,-10,35));
+    const tm=cityTime(city);
+    const daylight=0.52+0.48*Math.sin((tm.frac-.25)*Math.PI*2);
+    const light=clamp(44+daylight*18+lightBias,32,72);
+    return hsl(city.hue+tempShift,78,light,alpha);
+  }
+
+  function drawField(){
+    const av=averages();
+    const bgHue=46+mix(-8,8,norm(av.temp,-5,30));
+    ctx.fillStyle=hsl(bgHue,32,93);
+    ctx.fillRect(0,0,W,H);
+
+    const cw=W/cols,ch=H/rows;
+    const windDrive=norm(av.wind,0,45);
+    const dewDrive=norm(av.dew,-5,24);
+
+    const f1x=cols*(.50+.25*Math.sin(t*(.045+.07*windDrive)));
+    const f1y=rows*(.50+.25*Math.cos(t*(.041+.05*windDrive)));
+    const f2x=cols*(.50+.32*Math.cos(t*.037+1.8));
+    const f2y=rows*(.50+.28*Math.sin(t*.049+.7));
+
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const cell=cells[y][x];
+        const d1=Math.hypot((x-f1x)/cols,(y-f1y)/rows);
+        const d2=Math.hypot((x-f2x)/cols,(y-f2y)/rows);
+        const wave=
+          Math.sin(x*.43+t*(.52+.46*windDrive)+cell.phase)+
+          Math.cos(y*.57-t*.42)+
+          Math.sin((x+y)*.19+t*.20)+
+          Math.sin(d1*31-t*(.70+.75*windDrive))*.8+
+          Math.cos(d2*27+t*.58)*.6;
+
+        const threshold=mix(1.62,1.02,dewDrive)+cell.bias*.33;
+        if(wave>threshold){
+          const city=CITIES[(x+y+Math.floor(t*.16))%3];
+          ctx.fillStyle=cityColor(city,.82);
+          ctx.fillRect(Math.floor(x*cw),Math.floor(y*ch),Math.ceil(cw)+1,Math.ceil(ch)+1);
+        }
+      }
+    }
+  }
+
+  function drawWindTraces(){
+    const lineBase=Math.max(1,Math.floor(Math.min(W,H)/760));
+    CITIES.forEach((city,i)=>{
+      const wind=norm(city.data.wind,0,45);
+      const ang=(city.data.dir-90)*Math.PI/180;
+      const ct=cityTime(city);
+      const baseY=H*(.18+i*.30)+Math.sin(t*.18+i+ct.frac*Math.PI*2)*H*.028;
+      ctx.strokeStyle=cityColor(city,.72,-8);
+      ctx.lineWidth=lineBase+wind*2;
+      ctx.beginPath();
+      const seg=W/18;
+      for(let k=0;k<=18;k++){
+        const x=k*seg;
+        const drift=Math.cos(ang)*wind*24;
+        const y=baseY+
+          Math.sin(k*.8+t*(.18+wind*.35)+i)*H*(.018+.035*wind)+
+          Math.sin(ang)*wind*22;
+        if(k===0)ctx.moveTo(x+drift,y);
+        else ctx.lineTo(x+drift,y);
+      }
+      ctx.stroke();
+    });
+  }
+
+  function drawLogo(){
+    const text='MZTV',glyphW=5,glyphH=7,gap=2;
+    const logicalW=text.length*glyphW+(text.length-1)*gap;
+    const px=Math.max(8,Math.floor(Math.min(W*.64/logicalW,H*.43/glyphH)));
+    const totalW=logicalW*px,totalH=glyphH*px;
+    const startX=Math.round((W-totalW)/2),startY=Math.round((H-totalH)/2);
+    const av=averages();
+
+    ctx.fillStyle='rgba(243,239,223,.68)';
+    ctx.fillRect(startX-px*1.4,startY-px*1.2,totalW+px*2.8,totalH+px*2.4);
+
+    let xCursor=startX;
+    for(let gi=0;gi<text.length;gi++){
+      const glyph=GLYPHS[text[gi]];
+      for(let gy=0;gy<glyphH;gy++){
+        for(let gx=0;gx<glyphW;gx++){
+          if(glyph[gy][gx]!=='1')continue;
+          const n=gi*100+gy*10+gx;
+          const city=CITIES[(gi+gx+gy)%3];
+          const wind=norm(city.data.wind,0,45);
+          const dew=norm(city.data.dew,-5,24);
+          const dir=(city.data.dir-90)*Math.PI/180;
+          const rupture=Math.sin(t*(.23+.32*wind)+n*1.73)*Math.sin(t*.061+n*.33);
+          const jx=Math.round(Math.cos(dir)*px*(.04+.22*wind)*rupture);
+          const jy=Math.round(Math.sin(dir)*px*(.04+.22*wind)*rupture);
+          const sizeBias=mix(.82,1.04,dew);
+          const breathe=sizeBias+Math.sin(t*.27+n)*(.03+.05*wind);
+          const s=Math.max(2,Math.round(px*breathe));
+          ctx.fillStyle=cityColor(city,.96);
+          ctx.fillRect(
+            Math.round(xCursor+gx*px+(px-s)/2+jx),
+            Math.round(startY+gy*px+(px-s)/2+jy),
+            s,s
+          );
+        }
+      }
+      xCursor+=(glyphW+gap)*px;
+    }
+
+    const outlineAlpha=.15+norm(av.wind,0,45)*.18;
+    ctx.strokeStyle=hsl(220,40,18,outlineAlpha);
+    ctx.lineWidth=Math.max(1,px*.06);
+    ctx.strokeRect(startX-px*1.4,startY-px*1.2,totalW+px*2.8,totalH+px*2.4);
+  }
+
+  function drawTelemetry(){
+    const pad=Math.max(14,W*.018);
+    const y=H-Math.max(58,H*.065);
+    const fs=Math.max(11,Math.floor(H*.014));
+    ctx.font=`${fs}px ui-monospace,SFMono-Regular,Menlo,Monaco,monospace`;
+    ctx.textBaseline='top';
+
+    CITIES.forEach((city,i)=>{
+      const tm=cityTime(city);
+      const time=`${String(tm.h).padStart(2,'0')}:${String(tm.m).padStart(2,'0')}`;
+      const txt=`${city.name}  ${time}  ${city.data.temp.toFixed(1)}°C  DP ${city.data.dew.toFixed(1)}°  WIND ${city.data.wind.toFixed(1)} km/h @ ${Math.round(city.data.dir)}°`;
+      const x=i===0?pad:i===1?W*.5:W-pad;
+      ctx.textAlign=i===0?'left':i===1?'center':'right';
+      ctx.fillStyle=cityColor(city,.95,-12);
+      ctx.fillText(txt,x,y);
+    });
+
+    ctx.textAlign='left';
+    ctx.fillStyle='rgba(9,37,79,.72)';
+    ctx.font=`${Math.max(10,Math.floor(H*.012))}px ui-monospace,SFMono-Regular,Menlo,Monaco,monospace`;
+    ctx.fillText(`MZTV / WEATHER TRIAD 003 / ${weatherStatus}`,pad,pad);
+  }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt=Math.min(.05,(now-last)/1000||0);
+    last=now;t+=dt;
+    mutate(now);
+    drawField();
+    drawWindTraces();
+    drawLogo();
+    drawTelemetry();
+  }
+
+  // -------------------- AUDIO --------------------
+  let audioStarted=false,AC=null,master=null,dubSend=null,dubFeedback=null,dubDelay=null;
+  let nextBeat=0,beatIndex=0,scheduler=null;
+
+  const D_MINOR=[36.708,43.654,49.000,55.000,65.406,73.416,87.307];
+
+  function beatSeconds(){
+    const w=averages().wind;
+    const bpm=mix(68,82,norm(w,0,42));
+    return 60/bpm;
+  }
+
+  function makePan(input,pan){
+    if(AC.createStereoPanner){
+      const p=AC.createStereoPanner();p.pan.value=pan;input.connect(p);return p;
+    }
+    return input;
+  }
+
+  function startAudio(){
+    if(audioStarted)return;
+    audioStarted=true;
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+
+    master=AC.createGain();master.gain.value=.31;
+
+    const lp=AC.createBiquadFilter();
+    lp.type='lowpass';lp.frequency.value=2050;lp.Q.value=.55;
+
+    const comp=AC.createDynamicsCompressor();
+    comp.threshold.value=-19;comp.knee.value=15;comp.ratio.value=2.4;
+    comp.attack.value=.014;comp.release.value=.26;
+
+    dubSend=AC.createGain();dubSend.gain.value=.34;
+    dubDelay=AC.createDelay(3);dubDelay.delayTime.value=.47;
+    dubFeedback=AC.createGain();dubFeedback.gain.value=.42;
+    const echoLP=AC.createBiquadFilter();
+    echoLP.type='lowpass';echoLP.frequency.value=1180;echoLP.Q.value=.7;
+
+    dubSend.connect(dubDelay);
+    dubDelay.connect(echoLP);
+    echoLP.connect(dubFeedback);
+    dubFeedback.connect(dubDelay);
+    echoLP.connect(master);
+
+    master.connect(lp);lp.connect(comp);comp.connect(AC.destination);
+
+    nextBeat=AC.currentTime+.12;
+    scheduler=setInterval(schedule,25);
+  }
+
+  function kick(time,amp=.32){
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(78,time);
+    o.frequency.exponentialRampToValueAtTime(42,time+.12);
+    g.gain.setValueAtTime(.0001,time);
+    g.gain.exponentialRampToValueAtTime(amp,time+.005);
+    g.gain.exponentialRampToValueAtTime(.0001,time+.30);
+    o.connect(g);g.connect(master);o.start(time);o.stop(time+.33);
+  }
+
+  function cityBass(city,time,step){
+    const tm=cityTime(city);
+    const tempIndex=Math.round(norm(city.data.temp,-8,34)*(D_MINOR.length-1));
+    const timeShift=Math.floor(tm.frac*4)%3;
+    const idx=(tempIndex+timeShift+step)%D_MINOR.length;
+    const freq=D_MINOR[idx];
+    const wind=norm(city.data.wind,0,45);
+
+    const o1=AC.createOscillator(),o2=AC.createOscillator();
+    const filt=AC.createBiquadFilter(),g=AC.createGain();
+    o1.type='sine';o2.type='triangle';
+    o1.frequency.value=freq;o2.frequency.value=freq*2;o2.detune.value=-4;
+    filt.type='lowpass';
+    filt.frequency.value=mix(190,390,norm(city.data.temp,-8,34));
+    filt.Q.value=.75;
+
+    const len=mix(.28,.56,norm(city.data.dew,-5,24));
+    g.gain.setValueAtTime(.0001,time);
+    g.gain.exponentialRampToValueAtTime(.055+.06*wind,time+.018);
+    g.gain.exponentialRampToValueAtTime(.0001,time+len);
+
+    o1.connect(filt);o2.connect(filt);filt.connect(g);
+    const out=makePan(g,city.pan);
+    out.connect(master);
+    o1.start(time);o2.start(time);o1.stop(time+len+.06);o2.stop(time+len+.06);
+  }
+
+  function cityChord(city,time){
+    const tm=cityTime(city);
+    const temp=norm(city.data.temp,-8,34);
+    const dew=norm(city.data.dew,-5,24);
+    const degree=Math.floor((temp*4+tm.frac*3))%4;
+    const roots=[73.416,87.307,98.000,110.000];
+    const root=roots[degree];
+    const freqs=[root,root*1.1892,root*1.4983];
+
+    const bus=AC.createGain(),filt=AC.createBiquadFilter(),g=AC.createGain();
+    filt.type='lowpass';filt.frequency.value=mix(760,1450,temp);filt.Q.value=.7;
+    g.gain.setValueAtTime(.0001,time);
+    g.gain.exponentialRampToValueAtTime(.018+.018*dew,time+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,time+mix(.11,.24,dew));
+
+    freqs.forEach((f,j)=>{
+      const o=AC.createOscillator();
+      o.type=j===0?'triangle':'sine';
+      o.frequency.value=f;o.detune.value=(j-1)*3;
+      o.connect(bus);o.start(time);o.stop(time+.28);
+    });
+
+    bus.connect(filt);filt.connect(g);
+    const out=makePan(g,city.pan);
+    out.connect(master);out.connect(dubSend);
+  }
+
+  function softRim(time,amp=.05){
+    const len=Math.floor(AC.sampleRate*.065);
+    const b=AC.createBuffer(1,len,AC.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+    const src=AC.createBufferSource(),bp=AC.createBiquadFilter(),g=AC.createGain();
+    src.buffer=b;bp.type='bandpass';bp.frequency.value=930;bp.Q.value=1.0;
+    g.gain.setValueAtTime(amp,time);g.gain.exponentialRampToValueAtTime(.0001,time+.065);
+    src.connect(bp);bp.connect(g);g.connect(master);g.connect(dubSend);
+    src.start(time);src.stop(time+.07);
+  }
+
+  function schedule(){
+    if(!AC)return;
+    while(nextBeat<AC.currentTime+.14){
+      const step=beatIndex%16;
+      const beat=beatSeconds();
+      const av=averages();
+      const dew=norm(av.dew,-5,24);
+      dubFeedback.gain.setTargetAtTime(mix(.31,.55,dew),nextBeat,.2);
+      dubDelay.delayTime.setTargetAtTime(beat*.75,nextBeat,.15);
+
+      if(step===0||step===8)kick(nextBeat,.30);
+      if(step===6&&Math.random()<.30+.25*norm(av.wind,0,45))kick(nextBeat,.14);
+      if(step===4||step===12)softRim(nextBeat,.045);
+
+      CITIES.forEach((city,i)=>{
+        const wind=norm(city.data.wind,0,45);
+        const bassSteps=[[0,7,11],[2,8,14],[3,9,15]][i];
+        if(bassSteps.includes(step)&&Math.random()<.56+.25*wind){
+          cityBass(city,nextBeat,i);
+        }
+        const chordStep=[2,6,10][i];
+        if(step===chordStep&&Math.random()<.28+.48*wind){
+          cityChord(city,nextBeat);
+        }
+      });
+
+      nextBeat+=beat/2;
+      beatIndex++;
+    }
+  }
+
+  function ensureAudio(){
+    startAudio();
+    if(AC&&AC.state==='suspended')AC.resume();
+  }
+
+  window.addEventListener('pointerdown',ensureAudio,{once:true});
+  window.addEventListener('keydown',ensureAudio,{once:true});
+  setTimeout(ensureAudio,250);
+
+  addEventListener('resize',resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
