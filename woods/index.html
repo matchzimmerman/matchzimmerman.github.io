@@ -4,38 +4,59 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#030506">
-<title>MZ WOODS — Prototype 0.03</title>
+<title>FIELD STATION: MAGPIE — Woods Recovery</title>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030506;color:#e9ebe4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none;overscroll-behavior:none}
   canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   #entry{position:fixed;inset:0;z-index:30;background:rgba(3,5,6,.985);display:grid;place-items:center;padding:28px}
   #entryBox{width:min(420px,100%);text-align:center}
-  h1{margin:0 0 8px;font-size:clamp(30px,8vw,52px);letter-spacing:.12em;font-weight:600}
-  .ver{font-size:11px;opacity:.42;letter-spacing:.18em;margin-bottom:34px}
-  .note{font-size:13px;line-height:1.7;opacity:.68;margin-bottom:26px}
-  #enter{width:100%;min-height:60px;border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;font:inherit;letter-spacing:.12em;font-size:13px}
+  h1{margin:0 0 10px;font-size:clamp(27px,7.3vw,48px);line-height:1.06;letter-spacing:.12em;font-weight:600;color:#f0802b}
+  .ver{font-size:10px;color:#f0802b;opacity:.62;letter-spacing:.18em;margin-bottom:34px}
+  .note{font-size:12px;line-height:1.75;opacity:.68;margin-bottom:26px;letter-spacing:.08em}
+  #enter{width:100%;min-height:60px;border:1px solid rgba(240,128,43,.72);background:rgba(240,128,43,.035);color:#f5a15e;font:inherit;letter-spacing:.14em;font-size:12px}
   #hud{position:fixed;inset:0;z-index:10;pointer-events:none}
   #hint{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);white-space:nowrap;font-size:10px;letter-spacing:.12em;opacity:.34}
-  #light{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));width:76px;height:76px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(5,7,8,.24);color:rgba(255,255,255,.72);font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:auto;display:none}
+  #light{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));width:76px;height:76px;border-radius:50%;border:1px solid rgba(240,128,43,.42);background:rgba(5,7,8,.34);color:rgba(245,154,78,.82);font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:auto;display:none}
   #joyBase,#joyKnob{position:absolute;border-radius:50%;pointer-events:none;display:none}
-  #joyBase{width:144px;height:144px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.035);transform:translate(-50%,-50%)}
-  #joyKnob{width:48px;height:48px;background:rgba(255,255,255,.19);transform:translate(-50%,-50%)}
-  #message{position:absolute;inset:0;display:grid;place-items:center;font-size:17px;letter-spacing:.2em;opacity:0;transition:opacity .25s}
+  #joyBase{width:144px;height:144px;border:1px solid rgba(240,128,43,.28);background:rgba(240,128,43,.035);transform:translate(-50%,-50%)}
+  #joyKnob{width:48px;height:48px;background:rgba(240,128,43,.24);transform:translate(-50%,-50%)}
+  #message{position:absolute;inset:0;display:grid;place-items:center;color:#f39144;text-shadow:0 0 18px rgba(240,104,24,.72);font-size:15px;letter-spacing:.2em;opacity:0;transition:opacity .25s}
   #rotate{position:absolute;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:.12em;opacity:0;transition:opacity .2s}
-  @media(max-width:700px) and (orientation:portrait){#rotate{opacity:.42}}
+  #fieldFx{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:.17;background:radial-gradient(circle at 50% 46%,transparent 0 46%,rgba(0,0,0,.72) 100%),repeating-linear-gradient(0deg,rgba(240,110,28,.055) 0 1px,transparent 1px 4px);mix-blend-mode:screen}
+  #magpie{position:absolute;left:max(15px,env(safe-area-inset-left));top:max(14px,env(safe-area-inset-top));color:#e97828;text-shadow:0 0 10px rgba(235,92,18,.35);line-height:1.45;letter-spacing:.12em}
+  #magpieTitle{font-size:11px;font-weight:700}
+  #fieldStatus,#gridStatus{font-size:8px;opacity:.62}
+  #receiver{position:absolute;right:max(15px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));color:#e97828;text-align:right;letter-spacing:.14em;font-size:9px}
+  #channels{display:flex;justify-content:flex-end;gap:7px;margin-top:6px}
+  .channel{width:17px;height:5px;border:1px solid rgba(235,120,42,.52);background:rgba(235,120,42,.035);box-shadow:0 0 0 transparent;transition:.35s}
+  .channel.on{background:var(--signal,#ed7928);border-color:var(--signal,#ed7928);box-shadow:0 0 10px var(--signal,#ed7928)}
+  #fieldLog{position:absolute;left:max(15px,env(safe-area-inset-left));top:max(67px,calc(env(safe-area-inset-top) + 56px));width:min(315px,calc(100vw - 30px));padding:8px 10px;border-left:1px solid rgba(235,120,42,.48);background:linear-gradient(90deg,rgba(3,5,6,.62),transparent);color:#e9873d;font-size:9px;line-height:1.55;letter-spacing:.09em;opacity:0;transition:opacity .4s}
+  #fieldLog.visible{opacity:.83}
+  #logLabel{display:block;font-size:8px;opacity:.52;margin-bottom:2px}
+  @media(max-width:700px) and (orientation:portrait){#rotate{opacity:.34}#fieldLog{width:min(270px,calc(100vw - 30px))}}
 </style>
 </head>
 <body>
 <div id="entry">
   <div id="entryBox">
-    <h1>MZ WOODS</h1>
-    <div class="ver">PROTOTYPE 0.03 / SEED 170926</div>
-    <div class="note">follow the signals<br>listen for what follows</div>
-    <button id="enter">ENTER THE WOODS</button>
+    <h1>FIELD STATION:<br>MAGPIE</h1>
+    <div class="ver">WOODS RECOVERY / PROTOTYPE 0.04 / 2147</div>
+    <div class="note">GULL FIELD UNIT ONLINE<br>3 UNRESOLVED SIGNALS</div>
+    <button id="enter">BEGIN RECOVERY</button>
   </div>
 </div>
+<div id="fieldFx"></div>
 <div id="hud">
+  <div id="magpie">
+    <div id="magpieTitle">FIELD STATION: MAGPIE</div>
+    <div id="fieldStatus">FIELD MEMORY // 0 OF 3</div>
+    <div id="gridStatus">GRID LINK // LOST</div>
+  </div>
+  <div id="receiver">GULL // RECOVERY
+    <div id="channels"><i class="channel" data-channel="0"></i><i class="channel" data-channel="1"></i><i class="channel" data-channel="2"></i></div>
+  </div>
+  <div id="fieldLog"><span id="logLabel">AB’S LOG</span><span id="logText"></span></div>
   <div id="message">SIGNAL FOUND</div>
   <div id="rotate">LANDSCAPE WORKS BEST</div>
   <div id="hint">WASD / MOUSE · F = LIGHT</div>
@@ -143,6 +164,22 @@ for(let i=0;i<moteCount;i++){
 const moteGeo=new THREE.BufferGeometry();moteGeo.setAttribute("position",new THREE.BufferAttribute(motePositions,3));
 const motes=new THREE.Points(moteGeo,new THREE.PointsMaterial({color:0x829b87,size:.075,transparent:true,opacity:.34,depthWrite:false}));
 scene.add(motes);
+
+// Abandoned GULL recovery pylons: physical MAGPIE hardware embedded in the field.
+const pylonDark=new THREE.MeshStandardMaterial({color:0x111513,roughness:.88,metalness:.28});
+const pylonOrange=new THREE.MeshStandardMaterial({color:0x3a1608,emissive:0xf06b1c,emissiveIntensity:.2,roughness:.64,metalness:.18});
+const fieldPylons=signalSites.map((site,index)=>{
+  const group=new THREE.Group(),mast=new THREE.Mesh(new THREE.CylinderGeometry(.07,.12,3.35,5),pylonDark);
+  mast.position.y=1.68;group.add(mast);
+  const cross=new THREE.Mesh(new THREE.BoxGeometry(1.28,.07,.07),pylonDark);cross.position.y=2.66;cross.rotation.y=index*.82;group.add(cross);
+  const ringMat=pylonOrange.clone(),ring=new THREE.Mesh(new THREE.TorusGeometry(.48,.048,4,10),ringMat);
+  ring.position.y=2.66;ring.rotation.y=index*.82;group.add(ring);
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(.62,.33,.09),pylonDark);panel.position.set(.18,1.03,.12);panel.rotation.y=index*.82;group.add(panel);
+  const lampMat=pylonOrange.clone(),lamp=new THREE.Mesh(new THREE.BoxGeometry(.36,.055,.055),lampMat);
+  lamp.position.set(.18,1.07,.175);lamp.rotation.y=index*.82;group.add(lamp);
+  group.position.set(site.pos.x,0,site.pos.z);scene.add(group);collisions.push({x:site.pos.x,z:site.pos.z,r:.55});
+  return{group,ring,ringMat,lamp,lampMat,recovered:false};
+});
 
 const markerMat=new THREE.MeshStandardMaterial({color:0x3a0905,emissive:0xff3515,emissiveIntensity:1.6,roughness:.7});
 const marker=new THREE.Mesh(new THREE.CylinderGeometry(.35,.62,2.2,5),markerMat);
@@ -334,10 +371,27 @@ function canMove(nx,nz){
   for(const c of collisions) if((nx-c.x)*(nx-c.x)+(nz-c.z)*(nz-c.z)<(c.r+.33)*(c.r+.33))return false;
   return true;
 }
-let messageTimer=null;
+const magpieLogs=[
+  "FIELD HOLDS WHAT THE GRID ERASES.",
+  "SIGNALS ARE ARRIVING OUT OF ORDER.",
+  "RETURN PATH NO LONGER MATCHES ENTRY."
+];
+let messageTimer=null,fieldLogTimer=null;
 function message(text,duration=2200){
   const m=document.getElementById("message");clearTimeout(messageTimer);m.textContent=text;m.style.opacity="1";
   messageTimer=setTimeout(()=>m.style.opacity="0",duration);
+}
+function writeFieldLog(text,duration=5600){
+  const panel=document.getElementById("fieldLog");clearTimeout(fieldLogTimer);
+  document.getElementById("logText").textContent=text;panel.classList.add("visible");
+  fieldLogTimer=setTimeout(()=>panel.classList.remove("visible"),duration);
+}
+function recoverMagpieChannel(index,site){
+  const channel=document.querySelector('[data-channel="'+index+'"]');
+  if(channel){channel.classList.add("on");channel.style.setProperty("--signal","#"+site.color.toString(16).padStart(6,"0"))}
+  document.getElementById("fieldStatus").textContent="FIELD MEMORY // "+(index+1)+" OF 3";
+  const rig=fieldPylons[index];if(rig){rig.recovered=true;rig.ringMat.emissive.set(site.color);rig.lampMat.emissive.set(site.color)}
+  writeFieldLog(String(17+index).padStart(2,"0")+" // "+magpieLogs[index]);
 }
 function leaveSpentMarker(){
   const spentMat=markerMat.clone();spentMat.color.multiplyScalar(.35);spentMat.emissiveIntensity=.18;
@@ -353,7 +407,7 @@ function collectSignal(){
   const site=signalSites[signalIndex];signalActive=false;collectedSignals++;
   leaveSpentMarker();marker.visible=false;signalSprite.visible=false;beaconLight.intensity=0;
   if(toneGain&&audio)toneGain.gain.setTargetAtTime(0,audio.currentTime,.035);
-  addMemoryTone(site,signalIndex);message(site.name+" HELD",2100);
+  addMemoryTone(site,signalIndex);recoverMagpieChannel(signalIndex,site);message("GULL // CH-0"+(signalIndex+1)+" HELD",2100);
   horrorUntil=t+1.7+signalIndex*.18;
   for(let i=0;i<Math.min(3,collectedSignals);i++)ghostSteps.push(t+1.08+i*.57);
   if(signalIndex<signalSites.length-1)transitionAt=t+3.0;
@@ -369,7 +423,9 @@ function beginFinalEcho(){
   const echoSite={pos:beaconPos,color:0xff3515,freq:signalSites[0].freq};
   setSignalVisual(echoSite);marker.visible=false;signalSprite.visible=true;
   retuneSignal(echoSite);echoMode=true;signalActive=true;echoUntil=t+8;signalStarted=-99;nextSignalAt=t+.08;
-  message("THE WOODS REMEMBER",3400);
+  document.getElementById("gridStatus").textContent="SIGNAL SOURCE // LOCAL";
+  writeFieldLog("-- // SOURCE IDENTIFIED: GULL OPERATOR.",8000);
+  message("ARCHIVE RETURN // UNAUTHORIZED",3400);
 }
 
 function animate(now){
@@ -432,6 +488,16 @@ function animate(now){
     signalSpriteMat.opacity=0;beaconLight.intensity=0;
   }
 
+  for(let i=0;i<fieldPylons.length;i++){
+    const rig=fieldPylons[i];
+    if(rig.recovered){
+      rig.ringMat.emissiveIntensity=1.45+Math.sin(t*.9+i)*.45;rig.lampMat.emissiveIntensity=2.2+Math.sin(t*1.7+i)*.7;
+    }else if(signalActive&&!echoMode&&i===signalIndex){
+      rig.ringMat.emissiveIntensity=.3+flare*3.2;rig.lampMat.emissiveIntensity=.45+flare*4.5;
+    }else{
+      rig.ringMat.emissiveIntensity=.12;rig.lampMat.emissiveIntensity=.12;
+    }
+  }
   scene.fog.density=.036+collectedSignals*.00145+Math.sin(t*.17)*.0011;
   motes.rotation.y=t*.0024;motes.position.y=Math.sin(t*.14)*.08;
   ft.position.x=Math.sin(t*1.35)*.012+(moving?Math.sin(t*4.7)*.01:0);
@@ -448,7 +514,8 @@ requestAnimationFrame(animate);
 
 document.getElementById("enter").addEventListener("click",()=>{
   started=true;startAudio();document.getElementById("entry").remove();
-  if(!isTouch) renderer.domElement.requestPointerLock?.();
+  writeFieldLog("16 // RECOVERY SITE W-03. GRID MAPS UNRELIABLE. FOLLOW THE FIELD.",7200);
+  if(!isTouch)renderer.domElement.requestPointerLock?.();
 });
 
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
