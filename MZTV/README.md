@@ -28,6 +28,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-002-dub/`
 
+### BIT FIELD 003 — WEATHER TRIAD
+Live-data MZTV source driven by Baltimore, Galway, and London. Open-Meteo current temperature, dew point, wind speed, and wind direction plus each city's local time modulate color, pixel density, drift direction, typography behavior, tempo, bass voicing, filtered chord activity, stereo position, and dub delay depth.
+
+Path:
+`sources/bit-field-003-weather-triad/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-003-weather-triad/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
