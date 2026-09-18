@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#030506">
-<title>MZ WOODS — Prototype 0.02</title>
+<title>MZ WOODS — Prototype 0.03</title>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030506;color:#e9ebe4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none;overscroll-behavior:none}
@@ -30,8 +30,8 @@
 <div id="entry">
   <div id="entryBox">
     <h1>MZ WOODS</h1>
-    <div class="ver">PROTOTYPE 0.02 / SEED 170926</div>
-    <div class="note">follow the sound · watch for the signal<br>headphones recommended</div>
+    <div class="ver">PROTOTYPE 0.03 / SEED 170926</div>
+    <div class="note">follow the signals<br>listen for what follows</div>
     <button id="enter">ENTER THE WOODS</button>
   </div>
 </div>
@@ -45,8 +45,29 @@
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
 
-const SEED = 170926, HALF = 92, TREE_COUNT = 260;
-const beaconPos = new THREE.Vector3(34,1.2,-28);
+const SEED = 170926, HALF = 92, TREE_COUNT = 286;
+const signalSites=[
+  {pos:new THREE.Vector3(34,1.2,-28),color:0xff3515,freq:110,name:"SIGNAL 01"},
+  {pos:new THREE.Vector3(-42,1.2,-54),color:0x55d7c8,freq:87.31,name:"SIGNAL 02"},
+  {pos:new THREE.Vector3(-24,1.2,40),color:0xffb21a,freq:73.42,name:"SIGNAL 03"}
+];
+let signalIndex=0;
+const beaconPos=signalSites[0].pos.clone();
+const routePoints=[
+  new THREE.Vector2(0,0),new THREE.Vector2(15,-10),new THREE.Vector2(34,-28),
+  new THREE.Vector2(4,-42),new THREE.Vector2(-42,-54),
+  new THREE.Vector2(-58,-10),new THREE.Vector2(-24,40)
+];
+function pointSegmentDistance(px,pz,a,b){
+  const vx=b.x-a.x,vz=b.y-a.y,wx=px-a.x,wz=pz-a.y;
+  const q=Math.max(0,Math.min(1,(wx*vx+wz*vz)/(vx*vx+vz*vz)));
+  return Math.hypot(px-(a.x+vx*q),pz-(a.y+vz*q));
+}
+function routeDistance(x,z){
+  let d=Infinity;
+  for(let i=0;i<routePoints.length-1;i++)d=Math.min(d,pointSegmentDistance(x,z,routePoints[i],routePoints[i+1]));
+  return d;
+}
 const isTouch = matchMedia("(pointer:coarse)").matches || "ontouchstart" in window;
 const renderer = new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
@@ -95,9 +116,8 @@ while(made<TREE_COUNT && attempts<TREE_COUNT*30){
   attempts++;
   const x=rr(-HALF,HALF), z=rr(-HALF,HALF);
   if(Math.hypot(x,z)<8.5) continue;
-  if(Math.hypot(x-beaconPos.x,z-beaconPos.z)<8) continue;
-  const corridor=Math.abs(x*.55+z*.35);
-  if(corridor<2.4 && rand()<.84) continue;
+  if(signalSites.some(site=>Math.hypot(x-site.pos.x,z-site.pos.z)<8)) continue;
+  if(routeDistance(x,z)<2.75&&rand()<.88) continue;
   const density=(Math.sin(x*.071)+Math.sin(z*.053)+Math.sin((x+z)*.031)+3)/6;
   if(rand()>.36+density*.58) continue;
   const h=rr(4.8,9.8), w=rr(.75,1.25), yaw=rr(-Math.PI,Math.PI);
@@ -113,64 +133,140 @@ scene.add(trunks,crowns);
 const deadGeo = new THREE.CylinderGeometry(.08,.18,1,5);
 const deadMat = new THREE.MeshStandardMaterial({color:0x38362d,roughness:1});
 for(let i=0;i<18;i++){
-  const h=rr(2,4.5), m=new THREE.Mesh(deadGeo,deadMat);
-  m.scale.set(1,h,1); m.position.set(rr(-60,60),h*.5,rr(-60,60)); m.rotation.z=rr(-.18,.18); scene.add(m);
+  const h=rr(2,4.5),m=new THREE.Mesh(deadGeo,deadMat);
+  m.scale.set(1,h,1);m.position.set(rr(-60,60),h*.5,rr(-60,60));m.rotation.z=rr(-.18,.18);scene.add(m);
 }
+const moteCount=74,motePositions=new Float32Array(moteCount*3);
+for(let i=0;i<moteCount;i++){
+  motePositions[i*3]=rr(-HALF,HALF);motePositions[i*3+1]=rr(.35,4.4);motePositions[i*3+2]=rr(-HALF,HALF);
+}
+const moteGeo=new THREE.BufferGeometry();moteGeo.setAttribute("position",new THREE.BufferAttribute(motePositions,3));
+const motes=new THREE.Points(moteGeo,new THREE.PointsMaterial({color:0x829b87,size:.075,transparent:true,opacity:.34,depthWrite:false}));
+scene.add(motes);
 
-const markerMat = new THREE.MeshStandardMaterial({color:0x3a0905,emissive:0xa61708,emissiveIntensity:1.6,roughness:.7});
-const marker = new THREE.Mesh(new THREE.CylinderGeometry(.35,.62,2.2,5),markerMat);
-marker.position.copy(beaconPos); scene.add(marker);
-const beaconLight = new THREE.PointLight(0xff2a0b,.2,70,1.45);
-beaconLight.position.copy(beaconPos); beaconLight.position.y=2.1; scene.add(beaconLight);
+const markerMat=new THREE.MeshStandardMaterial({color:0x3a0905,emissive:0xff3515,emissiveIntensity:1.6,roughness:.7});
+const marker=new THREE.Mesh(new THREE.CylinderGeometry(.35,.62,2.2,5),markerMat);
+scene.add(marker);
+const beaconLight=new THREE.PointLight(0xff3515,.2,70,1.45);scene.add(beaconLight);
 
-// A tiny supernatural flare: brief enough to feel discovered, clear enough to navigate by.
+// The flare is visible through the tree mass, but only for a fraction of a second.
 const glowCanvas=document.createElement("canvas");glowCanvas.width=glowCanvas.height=64;
 const glowCtx=glowCanvas.getContext("2d"),glowGrad=glowCtx.createRadialGradient(32,32,0,32,32,32);
-glowGrad.addColorStop(0,"rgba(255,245,220,1)");
-glowGrad.addColorStop(.14,"rgba(255,90,35,.95)");
-glowGrad.addColorStop(.5,"rgba(255,30,8,.32)");
-glowGrad.addColorStop(1,"rgba(255,0,0,0)");
+glowGrad.addColorStop(0,"rgba(255,255,255,1)");
+glowGrad.addColorStop(.14,"rgba(255,255,255,.96)");
+glowGrad.addColorStop(.5,"rgba(255,255,255,.28)");
+glowGrad.addColorStop(1,"rgba(255,255,255,0)");
 glowCtx.fillStyle=glowGrad;glowCtx.fillRect(0,0,64,64);
 const signalSpriteMat=new THREE.SpriteMaterial({
-  map:new THREE.CanvasTexture(glowCanvas),color:0xff6a32,transparent:true,opacity:0,
+  map:new THREE.CanvasTexture(glowCanvas),color:signalSites[0].color,transparent:true,opacity:0,
   blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false,fog:false
 });
-const signalSprite=new THREE.Sprite(signalSpriteMat);
-signalSprite.position.copy(beaconPos);signalSprite.position.y=2.65;signalSprite.scale.set(1.1,1.1,1);scene.add(signalSprite);
+const signalSprite=new THREE.Sprite(signalSpriteMat);signalSprite.scale.set(1.1,1.1,1);scene.add(signalSprite);
+function setSignalVisual(site){
+  beaconPos.copy(site.pos);
+  marker.position.copy(beaconPos);
+  beaconLight.position.copy(beaconPos);beaconLight.position.y=2.1;
+  signalSprite.position.copy(beaconPos);signalSprite.position.y=2.65;
+  markerMat.color.set(site.color).multiplyScalar(.23);markerMat.emissive.set(site.color);
+  beaconLight.color.set(site.color);signalSpriteMat.color.set(site.color);
+}
+setSignalVisual(signalSites[0]);
 
-let audio=null,panner=null,toneGain=null,osc1=null,osc2=null,osc3=null;
+let audio=null,audioMaster=null,memoryBus=null,ambientGain=null,ambientFilter=null,noiseBuffer=null;
+let panner=null,toneGain=null,osc1=null,osc2=null,osc3=null;
+function positionPanner(node,v){
+  if(!node)return;
+  if(node.positionX){node.positionX.value=v.x;node.positionY.value=v.y;node.positionZ.value=v.z}
+  else node.setPosition(v.x,v.y,v.z);
+}
+function retuneSignal(site){
+  if(!audio||!osc1)return;
+  positionPanner(panner,site.pos);
+  const now=audio.currentTime;
+  osc1.frequency.setTargetAtTime(site.freq,now,.08);
+  osc2.frequency.setTargetAtTime(site.freq*2,now,.08);
+  osc3.frequency.setTargetAtTime(site.freq*3,now,.08);
+}
 async function startAudio(){
   const AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC) return;
+  if(!AC)return;
   audio=new AC({latencyHint:"interactive"});
-  const master=audio.createGain(); master.gain.value=.78; master.connect(audio.destination);
+  const limiter=audio.createDynamicsCompressor();
+  limiter.threshold.value=-7;limiter.knee.value=0;limiter.ratio.value=18;limiter.attack.value=.003;limiter.release.value=.22;
+  limiter.connect(audio.destination);
+  audioMaster=audio.createGain();audioMaster.gain.value=.8;audioMaster.connect(limiter);
+  memoryBus=audio.createGain();memoryBus.gain.value=.82;memoryBus.connect(audioMaster);
+
+  noiseBuffer=audio.createBuffer(1,audio.sampleRate*2,audio.sampleRate);
+  const noise=noiseBuffer.getChannelData(0);let brown=0;
+  for(let i=0;i<noise.length;i++){const white=Math.random()*2-1;brown=(brown+.022*white)/1.022;noise[i]=brown*3.2}
+  const wind=audio.createBufferSource(),windHigh=audio.createBiquadFilter();
+  ambientFilter=audio.createBiquadFilter();ambientGain=audio.createGain();
+  wind.buffer=noiseBuffer;wind.loop=true;windHigh.type="highpass";windHigh.frequency.value=58;
+  ambientFilter.type="lowpass";ambientFilter.frequency.value=520;ambientGain.gain.value=.032;
+  wind.connect(windHigh);windHigh.connect(ambientFilter);ambientFilter.connect(ambientGain);ambientGain.connect(audioMaster);wind.start();
+
   panner=audio.createPanner();
   panner.panningModel="HRTF";panner.distanceModel="inverse";panner.refDistance=14;panner.maxDistance=120;panner.rolloffFactor=.55;
-  if(panner.positionX){
-    panner.positionX.value=beaconPos.x;panner.positionY.value=beaconPos.y;panner.positionZ.value=beaconPos.z;
-  }else panner.setPosition(beaconPos.x,beaconPos.y,beaconPos.z);
   toneGain=audio.createGain();toneGain.gain.value=0;
   const filter=audio.createBiquadFilter();filter.type="lowpass";filter.frequency.value=720;filter.Q.value=.55;
-  osc1=audio.createOscillator();osc1.type="sine";osc1.frequency.value=110;
-  osc2=audio.createOscillator();osc2.type="triangle";osc2.frequency.value=220;
-  osc3=audio.createOscillator();osc3.type="sine";osc3.frequency.value=330;
+  osc1=audio.createOscillator();osc1.type="sine";
+  osc2=audio.createOscillator();osc2.type="triangle";
+  osc3=audio.createOscillator();osc3.type="sine";
   const g2=audio.createGain(),g3=audio.createGain();g2.gain.value=.28;g3.gain.value=.085;
   osc1.connect(toneGain);osc2.connect(g2);osc3.connect(g3);g2.connect(toneGain);g3.connect(toneGain);
-  toneGain.connect(filter);filter.connect(panner);panner.connect(master);
-  osc1.start();osc2.start();osc3.start();
+  toneGain.connect(filter);filter.connect(panner);panner.connect(audioMaster);
+  retuneSignal(signalSites[signalIndex]);osc1.start();osc2.start();osc3.start();
   try{await audio.resume()}catch(e){}
 
-  // Soft local knock confirms that mobile audio actually opened.
+  // A soft knock confirms that mobile audio has opened.
   if(audio.state==="running"){
     const wake=audio.createOscillator(),wakeGain=audio.createGain(),now=audio.currentTime;
     wake.type="sine";wake.frequency.setValueAtTime(196,now);wake.frequency.exponentialRampToValueAtTime(128,now+.38);
     wakeGain.gain.setValueAtTime(.0001,now);wakeGain.gain.exponentialRampToValueAtTime(.052,now+.035);
     wakeGain.gain.exponentialRampToValueAtTime(.0001,now+.42);
-    wake.connect(wakeGain);wakeGain.connect(master);wake.start(now);wake.stop(now+.45);
+    wake.connect(wakeGain);wakeGain.connect(audioMaster);wake.start(now);wake.stop(now+.45);
+  }
+}
+function addMemoryTone(site,index){
+  if(!audio||audio.state!=="running")return;
+  const now=audio.currentTime,layer=audio.createGain(),filter=audio.createBiquadFilter();
+  const low=audio.createOscillator(),upper=audio.createOscillator(),lowGain=audio.createGain();
+  const lfo=audio.createOscillator(),lfoGain=audio.createGain();
+  layer.gain.setValueAtTime(.0001,now);layer.gain.exponentialRampToValueAtTime(.016+index*.0025,now+1.8);
+  filter.type="lowpass";filter.frequency.value=480;
+  low.type="sine";low.frequency.value=site.freq;lowGain.gain.value=.32;
+  upper.type="triangle";upper.frequency.value=site.freq*2;
+  lfo.type="sine";lfo.frequency.value=.075+index*.027;lfoGain.gain.value=.004;
+  low.connect(lowGain);lowGain.connect(filter);upper.connect(filter);filter.connect(layer);layer.connect(memoryBus);
+  lfo.connect(lfoGain);lfoGain.connect(layer.gain);
+  low.start();upper.start();lfo.start();
+}
+function playFootstep(ghost=false){
+  if(!audio||audio.state!=="running"||!audioMaster)return;
+  const now=audio.currentTime,thump=audio.createOscillator(),thumpGain=audio.createGain();
+  let destination=audioMaster;
+  if(ghost){
+    const stepPanner=audio.createPanner();stepPanner.panningModel="HRTF";stepPanner.distanceModel="inverse";
+    stepPanner.refDistance=.8;stepPanner.maxDistance=24;stepPanner.rolloffFactor=1.15;
+    const back=new THREE.Vector3(0,0,1).applyQuaternion(camera.quaternion).setY(0).normalize();
+    const side=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion).setY(0).normalize();
+    const stepPos=camera.position.clone().addScaledVector(back,2.8).addScaledVector(side,(Math.random()-.5)*1.1);
+    positionPanner(stepPanner,stepPos);stepPanner.connect(audioMaster);destination=stepPanner;
+  }
+  thump.type="sine";thump.frequency.setValueAtTime(ghost?105:88,now);thump.frequency.exponentialRampToValueAtTime(46,now+.12);
+  thumpGain.gain.setValueAtTime(ghost?.052:.026,now);thumpGain.gain.exponentialRampToValueAtTime(.0001,now+.15);
+  thump.connect(thumpGain);thumpGain.connect(destination);thump.start(now);thump.stop(now+.17);
+  if(noiseBuffer){
+    const grit=audio.createBufferSource(),gritFilter=audio.createBiquadFilter(),gritGain=audio.createGain();
+    grit.buffer=noiseBuffer;grit.playbackRate.value=ghost?.82:1.15;gritFilter.type="bandpass";gritFilter.frequency.value=ghost?680:430;gritFilter.Q.value=.7;
+    gritGain.gain.setValueAtTime(ghost?.024:.012,now);gritGain.gain.exponentialRampToValueAtTime(.0001,now+.11);
+    grit.connect(gritFilter);gritFilter.connect(gritGain);gritGain.connect(destination);
+    grit.start(now,Math.random()*1.6,.13);
   }
 }
 function updateListener(){
-  if(!audio) return;
+  if(!audio)return;
   const l=audio.listener,f=new THREE.Vector3();camera.getWorldDirection(f);
   const u=new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
   if(l.positionX){
@@ -183,8 +279,10 @@ function updateListener(){
   }
 }
 
-let started=false,yaw=0,pitch=0,horror=false,horrorUntil=0,t=0,prev=performance.now();
-let nextSignalAt=.9,signalStarted=-99;
+let started=false,yaw=0,pitch=0,horrorUntil=0,t=0,prev=performance.now();
+let nextSignalAt=.9,signalStarted=-99,signalActive=true,echoMode=false,echoUntil=-1;
+let transitionAt=-1,finalEchoAt=-1,lastStepAt=-1,collectedSignals=0;
+const ghostSteps=[];
 const keys=new Set();let joy={x:0,y:0};let gpLightWas=false;
 function toggleLight(){flashlightOn=!flashlightOn; flashlight.visible=flashlightOn}
 addEventListener("keydown",e=>{keys.add(e.code);if(e.code==="KeyF")toggleLight();});
@@ -236,9 +334,44 @@ function canMove(nx,nz){
   for(const c of collisions) if((nx-c.x)*(nx-c.x)+(nz-c.z)*(nz-c.z)<(c.r+.33)*(c.r+.33))return false;
   return true;
 }
-function message(){
-  const m=document.getElementById("message");m.style.opacity="1";setTimeout(()=>m.style.opacity="0",2200);
+let messageTimer=null;
+function message(text,duration=2200){
+  const m=document.getElementById("message");clearTimeout(messageTimer);m.textContent=text;m.style.opacity="1";
+  messageTimer=setTimeout(()=>m.style.opacity="0",duration);
 }
+function leaveSpentMarker(){
+  const spentMat=markerMat.clone();spentMat.color.multiplyScalar(.35);spentMat.emissiveIntensity=.18;
+  const spent=new THREE.Mesh(marker.geometry,spentMat);spent.position.copy(marker.position);scene.add(spent);
+}
+function activateSignal(index){
+  signalIndex=index;echoMode=false;signalActive=true;signalStarted=-99;nextSignalAt=t+.55;
+  const site=signalSites[index];setSignalVisual(site);marker.visible=true;signalSprite.visible=true;
+  retuneSignal(site);
+}
+function collectSignal(){
+  if(!signalActive||echoMode)return;
+  const site=signalSites[signalIndex];signalActive=false;collectedSignals++;
+  leaveSpentMarker();marker.visible=false;signalSprite.visible=false;beaconLight.intensity=0;
+  if(toneGain&&audio)toneGain.gain.setTargetAtTime(0,audio.currentTime,.035);
+  addMemoryTone(site,signalIndex);message(site.name+" HELD",2100);
+  horrorUntil=t+1.7+signalIndex*.18;
+  for(let i=0;i<Math.min(3,collectedSignals);i++)ghostSteps.push(t+1.08+i*.57);
+  if(signalIndex<signalSites.length-1)transitionAt=t+3.0;
+  else finalEchoAt=t+3.15;
+}
+function beginFinalEcho(){
+  const back=new THREE.Vector3(0,0,1).applyQuaternion(camera.quaternion).setY(0).normalize();
+  beaconPos.set(
+    Math.max(-HALF+5,Math.min(HALF-5,camera.position.x+back.x*13)),
+    1.2,
+    Math.max(-HALF+5,Math.min(HALF-5,camera.position.z+back.z*13))
+  );
+  const echoSite={pos:beaconPos,color:0xff3515,freq:signalSites[0].freq};
+  setSignalVisual(echoSite);marker.visible=false;signalSprite.visible=true;
+  retuneSignal(echoSite);echoMode=true;signalActive=true;echoUntil=t+8;signalStarted=-99;nextSignalAt=t+.08;
+  message("THE WOODS REMEMBER",3400);
+}
+
 function animate(now){
   requestAnimationFrame(animate);
   const dt=Math.min(.05,(now-prev)/1000);prev=now;if(!started){renderer.render(scene,camera);return}
@@ -258,32 +391,56 @@ function animate(now){
 
   const mag=Math.hypot(mx,my);if(mag>1){mx/=mag;my/=mag}
   const sy=Math.sin(yaw),cy=Math.cos(yaw),speed=4.25;
-  const dx=(mx*cy+my*-sy)*speed*dt, dz=(mx*-sy+my*-cy)*speed*dt;
+  const dx=(mx*cy+my*-sy)*speed*dt,dz=(mx*-sy+my*-cy)*speed*dt;
   const nx=camera.position.x+dx,nz=camera.position.z+dz;
   if(canMove(nx,camera.position.z))camera.position.x=nx;
   if(canMove(camera.position.x,nz))camera.position.z=nz;
   const moving=Math.hypot(dx,dz)>.0001;
   camera.position.y=1.58+(moving?Math.sin(t*9.4)*.025:0);
   camera.rotation.y=yaw;camera.rotation.x=pitch;
+  if(moving&&t-lastStepAt>.52){playFootstep(false);lastStepAt=t}
+
+  if(transitionAt>0&&t>=transitionAt){transitionAt=-1;activateSignal(signalIndex+1)}
+  if(finalEchoAt>0&&t>=finalEchoAt){finalEchoAt=-1;beginFinalEcho()}
+  if(ghostSteps.length&&t>=ghostSteps[0]){ghostSteps.shift();playFootstep(true);horrorUntil=Math.max(horrorUntil,t+.46)}
+  if(echoMode&&t>=echoUntil){
+    echoMode=false;signalActive=false;signalSprite.visible=false;beaconLight.intensity=0;
+    if(toneGain&&audio)toneGain.gain.setTargetAtTime(0,audio.currentTime,.08);
+  }
 
   const dist=Math.hypot(camera.position.x-beaconPos.x,camera.position.z-beaconPos.z);
-  if(t>=nextSignalAt){signalStarted=t;nextSignalAt=t+3.8+rand()*2.8}
-  const signalAge=t-signalStarted;
-  const flare=signalAge>=0&&signalAge<.72?Math.pow(Math.sin(Math.PI*signalAge/.72),2.2):0;
-  const nearFlutter=dist<16?Math.max(0,Math.sin(t*10.7)+Math.sin(t*27.3)*.42):0;
-  signalSpriteMat.opacity=.018+flare*.98;
-  const flareSize=1.1+flare*2.1;signalSprite.scale.set(flareSize,flareSize,1);
-  beaconLight.intensity=.18+flare*42+nearFlutter*2.4;
-  markerMat.emissiveIntensity=1.1+flare*5.5+nearFlutter*.6;
-  if(toneGain&&audio?.state==="running"){
-    const env=.022+flare*.22+(dist<13?nearFlutter*.012:0);
-    toneGain.gain.setTargetAtTime(env,audio.currentTime,.02);
-    osc1.frequency.setTargetAtTime(dist<18?123.5:110,audio.currentTime,.08);
-    osc2.frequency.setTargetAtTime(dist<18?247:220,audio.currentTime,.08);
-    osc3.frequency.setTargetAtTime(dist<18?370.5:330,audio.currentTime,.08);
+  let flare=0,nearFlutter=0;
+  if(signalActive){
+    if(t>=nextSignalAt){signalStarted=t;nextSignalAt=t+(echoMode?1.65:3.8+rand()*2.8)}
+    const signalAge=t-signalStarted;
+    flare=signalAge>=0&&signalAge<.72?Math.pow(Math.sin(Math.PI*signalAge/.72),2.2):0;
+    nearFlutter=dist<16?Math.max(0,Math.sin(t*10.7)+Math.sin(t*27.3)*.42):0;
+    signalSpriteMat.opacity=.018+flare*.98;
+    const flareSize=1.1+flare*2.1;signalSprite.scale.set(flareSize,flareSize,1);
+    beaconLight.intensity=.18+flare*42+nearFlutter*2.4;
+    markerMat.emissiveIntensity=1.1+flare*5.5+nearFlutter*.6;
+    if(toneGain&&audio?.state==="running"){
+      const base=echoMode?signalSites[0].freq:signalSites[signalIndex].freq;
+      const env=.022+flare*.22+(dist<13?nearFlutter*.012:0);
+      toneGain.gain.setTargetAtTime(env,audio.currentTime,.02);
+      osc1.frequency.setTargetAtTime(dist<18?base*1.12:base,audio.currentTime,.08);
+      osc2.frequency.setTargetAtTime(dist<18?base*2.24:base*2,audio.currentTime,.08);
+      osc3.frequency.setTargetAtTime(dist<18?base*3.36:base*3,audio.currentTime,.08);
+    }
+    if(!echoMode&&dist<5.6)collectSignal();
+  }else{
+    signalSpriteMat.opacity=0;beaconLight.intensity=0;
   }
-  if(dist<13&&!horror){horror=true;horrorUntil=t+2.8;message()}
-  if(t<horrorUntil){flashlight.visible=flashlightOn&&(Math.sin(t*35)+Math.sin(t*13)>-.15)}else flashlight.visible=flashlightOn;
+
+  scene.fog.density=.036+collectedSignals*.00145+Math.sin(t*.17)*.0011;
+  motes.rotation.y=t*.0024;motes.position.y=Math.sin(t*.14)*.08;
+  ft.position.x=Math.sin(t*1.35)*.012+(moving?Math.sin(t*4.7)*.01:0);
+  ft.position.y=Math.sin(t*.93)*.008+(moving?Math.abs(Math.sin(t*9.4))*.008:0);
+  flashlight.intensity=7+Math.sin(t*5.7)*.08;
+  if(ambientFilter&&audio?.state==="running")ambientFilter.frequency.setTargetAtTime(470+Math.sin(t*.21)*85+collectedSignals*24,audio.currentTime,.18);
+  const disturbed=t<horrorUntil||(echoMode&&flare>.44);
+  if(disturbed)flashlight.visible=flashlightOn&&(Math.sin(t*35)+Math.sin(t*13)>-.15);
+  else flashlight.visible=flashlightOn;
   updateListener();
   renderer.render(scene,camera);
 }
