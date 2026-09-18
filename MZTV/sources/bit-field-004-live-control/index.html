@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV 004 — LIVE WEATHER FIELD</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f1eddf;cursor:none}
+canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
+</style></head><body><canvas id="c"></canvas><script>
+(()=>{
+const c=document.getElementById('c'),x=c.getContext('2d',{alpha:false});
+const cities=[
+{name:'BALTIMORE',lat:39.2904,lon:-76.6122,tz:'America/New_York',h:18,pan:-.65,d:{temp:18,dew:11,wind:10,dir:225,ok:false}},
+{name:'GALWAY',lat:53.2707,lon:-9.0568,tz:'Europe/Dublin',h:166,pan:0,d:{temp:13,dew:10,wind:18,dir:245,ok:false}},
+{name:'LONDON',lat:51.5072,lon:-.1276,tz:'Europe/London',h:286,pan:.65,d:{temp:15,dew:10,wind:12,dir:230,ok:false}}];
+const glyph={M:["10001","11011","10101","10101","10001","10001","10001"],Z:["11111","00001","00010","00100","01000","10000","11111"],T:["11111","00100","00100","00100","00100","00100","00100"],V:["10001","10001","10001","10001","10001","01010","00100"]};
+let W,H,D=1,t=0,last=0,status='CONNECTING',cells=[],cols=54,rows=30,nextMut=0,logs=[],nextLog=0;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), norm=(v,a,b)=>clamp((v-a)/(b-a),0,1), mix=(a,b,p)=>a+(b-a)*p;
+const hs=(h,s,l,a=1)=>`hsla(${(h+360)%360} ${s}% ${l}% / ${a})`;
+function tm(q){let p=new Intl.DateTimeFormat('en-US',{timeZone:q.tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(new Date()),g=k=>+((p.find(z=>z.type===k)||{}).value||0),h=g('hour')%24,m=g('minute'),s=g('second');return{h,m,s,f:(h+m/60+s/3600)/24,str:`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}}
+function col(q,a=1,b=0){let day=.5+.5*Math.sin((tm(q).f-.25)*Math.PI*2);return hs(q.h+mix(-25,30,norm(q.d.temp,-10,35)),82,clamp(40+day*20+b,30,72),a)}
+async function get(q){let u='https://api.open-meteo.com/v1/forecast?'+new URLSearchParams({latitude:q.lat,longitude:q.lon,current:'temperature_2m,dew_point_2m,wind_speed_10m,wind_direction_10m',wind_speed_unit:'kmh',timezone:'auto'});let r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;let d=(await r.json()).current||{};q.d.temp=d.temperature_2m??q.d.temp;q.d.dew=d.dew_point_2m??q.d.dew;q.d.wind=d.wind_speed_10m??q.d.wind;q.d.dir=d.wind_direction_10m??q.d.dir;q.d.ok=true}
+async function update(){let r=await Promise.allSettled(cities.map(get)),n=r.filter(v=>v.status==='fulfilled').length;status=n===3?'LIVE':n?'PARTIAL':'FALLBACK';pushLog(`DATA  ${n}/3 CITY FEEDS ${status}`)}
+update();setInterval(update,600000);
+function avg(k){return cities.reduce((s,q)=>s+q.d[k],0)/3}
+function resize(){D=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;c.width=W*D;c.height=H*D;x.setTransform(D,0,0,D,0,0);cells=Array.from({length:rows},()=>Array.from({length:cols},()=>({p:Math.random()*6.28,b:Math.random()*2-1})))}
+function pushLog(s){logs.unshift({s,at:Date.now()});logs=logs.slice(0,7)}
+function mut(now){if(now<nextMut)return;nextMut=now+mix(5500,1500,norm(avg('wind'),0,45))+Math.random()*1800;let cx=Math.random()*cols,cy=Math.random()*rows,r=3+Math.random()*8;for(let y=0;y<rows;y++)for(let z=0;z<cols;z++)if(Math.hypot(z-cx,y-cy)<r&&Math.random()<.35){cells[y][z].b=Math.random()*2-1;cells[y][z].p+=Math.random()*3-1.5}}
+function field(){let temp=avg('temp'),dew=avg('dew'),wind=avg('wind'),cw=W/cols,ch=H/rows;x.fillStyle=hs(45+mix(-8,8,norm(temp,-5,30)),28,92);x.fillRect(0,0,W,H);let wd=norm(wind,0,45),dd=norm(dew,-5,24);for(let y=0;y<rows;y++)for(let z=0;z<cols;z++){let a=cells[y][z],v=Math.sin(z*.42+t*(.5+wd*.6)+a.p)+Math.cos(y*.55-t*.38)+Math.sin((z+y)*.18+t*.19)+a.b*.4;if(v>mix(1.45,.72,dd)){let q=cities[(z+y+Math.floor(t*.12))%3];x.fillStyle=col(q,.74);x.fillRect(z*cw,y*ch,cw+1,ch+1)}}}
+function traces(){cities.forEach((q,i)=>{let w=norm(q.d.wind,0,45),a=(q.d.dir-90)*Math.PI/180,base=H*(.17+i*.29);x.strokeStyle=col(q,.65,-8);x.lineWidth=1+w*2;x.beginPath();for(let k=0;k<=24;k++){let xx=k*W/24+Math.cos(a)*w*25,yy=base+Math.sin(k*.72+t*(.16+w*.42)+i)*H*(.012+w*.03)+Math.sin(a)*w*22;k?x.lineTo(xx,yy):x.moveTo(xx,yy)}x.stroke()})}
+function logo(){
+let text='MZTV',gw=5,gh=7,gap=2,lw=text.length*gw+3*gap,p=Math.max(7,Math.floor(Math.min(W*.58/lw,H*.39/gh))),sw=lw*p,sh=gh*p,sx=(W-sw)/2,sy=(H-sh)/2;
+let wind=norm(avg('wind'),0,45),dew=norm(avg('dew'),-5,24),temp=norm(avg('temp'),-8,34);
+for(let gi=0,cx=sx;gi<4;gi++,cx+=(gw+gap)*p){let G=glyph[text[gi]],q=cities[gi%3];for(let gy=0;gy<gh;gy++)for(let gx=0;gx<gw;gx++)if(G[gy][gx]==='1'){let n=gi*100+gy*10+gx,phase=Math.sin(t*(.24+wind*.55)+n*1.71),slow=Math.sin(t*.067+n*.39),burst=Math.max(0,Math.sin(t*.11+n*2.9)-.91)*11;
+let mode=(gi+gy+gx)%4,dx=0,dy=0,sz=p*.82;
+if(mode===0){dx=phase*p*(.08+wind*.22);dy=slow*p*.07;sz=p*(.68+dew*.28)}
+if(mode===1){dx=slow*p*(.05+temp*.13);dy=phase*p*(.04+wind*.17);sz=p*(.9+phase*.08)}
+if(mode===2){dx=Math.cos(q.d.dir*Math.PI/180)*p*(wind*.25+burst*.03);dy=Math.sin(q.d.dir*Math.PI/180)*p*(wind*.25+burst*.03);sz=p*(.62+.25*Math.abs(slow))}
+if(mode===3){dx=Math.round(phase*wind*2)*p*.12;dy=Math.round(slow*dew*2)*p*.1;sz=p*(.76+temp*.18)}
+x.fillStyle=mode===0?col(q,.98):mode===1?hs(q.h+120,78,52,.9):mode===2?hs(48+q.h*.18,92,56,.92):hs(218+q.h*.08,78,52,.9);
+x.fillRect(Math.round(cx+gx*p+(p-sz)/2+dx),Math.round(sy+gy*p+(p-sz)/2+dy),Math.max(2,Math.round(sz)),Math.max(2,Math.round(sz)));
+if(mode===2&&wind>.35){x.fillStyle=col(q,.18);x.fillRect(Math.round(cx+gx*p+dx-p*.25),Math.round(sy+gy*p+dy),Math.round(sz*1.5),Math.max(2,p*.12))}}
+}}
+function meter(xx,yy,w,val,color,label){x.fillStyle='rgba(9,37,79,.16)';x.fillRect(xx,yy,w,4);x.fillStyle=color;x.fillRect(xx,yy,w*clamp(val,0,1),4);x.fillStyle='rgba(9,37,79,.8)';x.font=`${Math.max(9,H*.0105)}px monospace`;x.fillText(label,xx,yy-13)}
+function hud(){
+let pad=W*.018,fs=Math.max(10,H*.012),panelW=Math.min(W*.36,520),panelH=Math.min(H*.23,205),px=pad,py=H-panelH-pad;
+x.fillStyle='rgba(241,237,223,.88)';x.fillRect(px,py,panelW,panelH);x.strokeStyle='rgba(9,37,79,.35)';x.strokeRect(px,py,panelW,panelH);
+x.textAlign='left';x.textBaseline='top';x.font=`${fs}px monospace`;x.fillStyle='#09254f';x.fillText(`MZTV // CONTROL CAPTURE // ${status}`,px+12,py+10);
+logs.forEach((l,i)=>{x.fillStyle=i?'rgba(9,37,79,.68)':'#09254f';x.fillText(l.s,px+12,py+32+i*(fs+5))});
+let mx=px+panelW+pad,my=py,mw=W-mx-pad,mh=panelH;x.fillStyle='rgba(241,237,223,.82)';x.fillRect(mx,my,mw,mh);x.strokeStyle='rgba(9,37,79,.28)';x.strokeRect(mx,my,mw,mh);
+let avW=norm(avg('wind'),0,45),avD=norm(avg('dew'),-5,24),avT=norm(avg('temp'),-8,34),bpm=mix(68,82,avW),bar=Math.max(90,mw*.2);
+x.fillStyle='#09254f';x.font=`${fs}px monospace`;x.fillText('LIVE MAPPING',mx+12,my+10);
+meter(mx+12,my+48,bar,avW,'#00a990',`MOTION ← WIND  ${avg('wind').toFixed(1)} km/h`);
+meter(mx+12,my+84,bar,avD,'#7556d8',`DENSITY/DELAY ← DEW  ${avg('dew').toFixed(1)}°C`);
+meter(mx+12,my+120,bar,avT,'#df6a36',`COLOR/PITCH ← TEMP  ${avg('temp').toFixed(1)}°C`);
+meter(mx+12,my+156,bar,norm(bpm,60,90),'#09254f',`TEMPO ← WIND AVG  ${bpm.toFixed(1)} BPM`);
+let right=mx+bar+34;
+cities.forEach((q,i)=>{let tt=tm(q),yy=my+34+i*48;x.fillStyle=col(q,1,-10);x.fillText(`${q.name}  ${tt.str}`,right,yy);x.fillStyle='rgba(9,37,79,.72)';x.fillText(`${q.d.temp.toFixed(1)}°C  DP ${q.d.dew.toFixed(1)}°  W ${q.d.wind.toFixed(1)} @ ${Math.round(q.d.dir)}°`,right,yy+17)});
+}
+function logTick(now){if(now<nextLog)return;nextLog=now+3000;let q=cities[Math.floor(Math.random()*3)],a=[`${q.name} WIND → MOTION ${q.d.wind.toFixed(1)} km/h`,`${q.name} TEMP → PALETTE/PITCH ${q.d.temp.toFixed(1)}°C`,`${q.name} DEW → DENSITY/ECHO ${q.d.dew.toFixed(1)}°C`,`${q.name} TIME → PHASE ${tm(q).str}`];pushLog(a[Math.floor(Math.random()*a.length)])}
+function draw(now){requestAnimationFrame(draw);let dt=Math.min(.05,(now-last)/1000||0);last=now;t+=dt;mut(now);logTick(now);field();traces();logo();hud()}
+let AC,master,send,delay,fb,nextBeat=0,step=0,started=false;const notes=[36.708,43.654,49,55,65.406,73.416,87.307];
+function start(){if(started)return;started=true;AC=new(window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=.3;let lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2050;let comp=AC.createDynamicsCompressor();comp.threshold.value=-19;send=AC.createGain();send.gain.value=.35;delay=AC.createDelay(3);fb=AC.createGain();fb.gain.value=.42;let elp=AC.createBiquadFilter();elp.type='lowpass';elp.frequency.value=1150;send.connect(delay);delay.connect(elp);elp.connect(fb);fb.connect(delay);elp.connect(master);master.connect(lp);lp.connect(comp);comp.connect(AC.destination);nextBeat=AC.currentTime+.1;setInterval(sched,25)}
+function pan(node,v){if(!AC.createStereoPanner)return node;let p=AC.createStereoPanner();p.pan.value=v;node.connect(p);return p}
+function kick(at){let o=AC.createOscillator(),g=AC.createGain();o.frequency.setValueAtTime(78,at);o.frequency.exponentialRampToValueAtTime(42,at+.12);g.gain.setValueAtTime(.0001,at);g.gain.exponentialRampToValueAtTime(.3,at+.005);g.gain.exponentialRampToValueAtTime(.0001,at+.3);o.connect(g);g.connect(master);o.start(at);o.stop(at+.32)}
+function voice(q,at,i,chord=false){let temp=norm(q.d.temp,-8,34),dew=norm(q.d.dew,-5,24),w=norm(q.d.wind,0,45),idx=(Math.round(temp*6)+i+Math.floor(tm(q).f*4))%notes.length,root=notes[idx]*(chord?2:1),bus=AC.createGain(),f=AC.createBiquadFilter(),g=AC.createGain();f.type='lowpass';f.frequency.value=chord?mix(700,1400,temp):mix(180,380,temp);let os=chord?[1,1.1892,1.4983]:[1,2];os.forEach((r,j)=>{let o=AC.createOscillator();o.type=j?'sine':'triangle';o.frequency.value=root*r;o.connect(bus);o.start(at);o.stop(at+(chord?.25:.55))});g.gain.setValueAtTime(.0001,at);g.gain.exponentialRampToValueAtTime(chord?.026:.07+w*.04,at+.015);g.gain.exponentialRampToValueAtTime(.0001,at+(chord?mix(.12,.25,dew):mix(.3,.55,dew)));bus.connect(f);f.connect(g);let out=pan(g,q.pan);out.connect(master);if(chord)out.connect(send)}
+function sched(){while(AC&&nextBeat<AC.currentTime+.13){let w=norm(avg('wind'),0,45),dew=norm(avg('dew'),-5,24),beat=60/mix(68,82,w),s=step%16;fb.gain.setTargetAtTime(mix(.3,.56,dew),nextBeat,.2);delay.delayTime.setTargetAtTime(beat*.75,nextBeat,.15);if(s===0||s===8)kick(nextBeat);cities.forEach((q,i)=>{if([[0,7,11],[2,8,14],[3,9,15]][i].includes(s)&&Math.random()<.58+w*.22)voice(q,nextBeat,i,false);if(s===[2,6,10][i]&&Math.random()<.3+w*.45)voice(q,nextBeat,i,true)});nextBeat+=beat/2;step++}}
+function audio(){start();if(AC.state==='suspended')AC.resume()}
+addEventListener('pointerdown',audio,{once:true});addEventListener('keydown',audio,{once:true});setTimeout(audio,250);addEventListener('resize',resize);resize();pushLog('SYSTEM  WEATHER → SOUND + MOTION');requestAnimationFrame(draw);
+})();
+</script></body></html>
