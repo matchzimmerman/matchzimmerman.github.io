@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MZTV 005 — SIGNAL ATLAS</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#01070b}
+  body{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;cursor:none}
+  #stage{position:absolute;inset:0;overflow:hidden;background:#01070b}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #field{z-index:0}
+  #hud{z-index:1;pointer-events:none}
+  #wake{position:absolute;z-index:2;left:50%;top:50%;transform:translate(-50%,-50%);padding:11px 17px;border:1px solid #55d9ff;color:#dff8ff;background:#041018cc;font:12px ui-monospace,monospace;letter-spacing:.14em;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s}
+  #wake.show{opacity:1;pointer-events:auto}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="field" width="1920" height="1080"></canvas>
+  <canvas id="hud" width="1920" height="1080"></canvas>
+  <button id="wake">START MZTV AUDIO</button>
+</div>
+<script>
+(()=>{'use strict';
+const VW=1920,VH=1080,TAU=Math.PI*2;
+const field=document.getElementById('field');
+const hud=document.getElementById('hud');
+const wake=document.getElementById('wake');
+const h=hud.getContext('2d',{alpha:true});
+const gl=field.getContext('webgl',{alpha:false,antialias:true,premultipliedAlpha:false})||field.getContext('experimental-webgl');
+
+const CITIES=[
+  {name:'BALTIMORE',lat:39.2904,lon:-76.6122,tz:'America/New_York',zone:'EST',hue:56,hex:'#fff047',pan:-.62,unit:'us',fallback:{temp:3.3,dew:-2.2,wind:11.3,dir:292,code:0,cloud:15,humidity:64}},
+  {name:'GALWAY',lat:53.2707,lon:-9.0568,tz:'Europe/Dublin',zone:'GMT',hue:190,hex:'#55e8ff',pan:0,unit:'metric',fallback:{temp:7,dew:5,wind:18,dir:225,code:3,cloud:78,humidity:83}},
+  {name:'LONDON',lat:51.5072,lon:-.1276,tz:'Europe/London',zone:'GMT',hue:276,hex:'#b66cff',pan:.62,unit:'metric',fallback:{temp:6,dew:4,wind:14,dir:203,code:3,cloud:92,humidity:86}}
+].map((q,i)=>({...q,i,d:{...q.fallback,ok:false},hist:{wind:[],temp:[],dew:[],audio:[],visual:[]}}));
+
+const state={status:'CONNECTING',audio:'ARMED',start:performance.now(),last:performance.now(),frame:0,logs:[],nextLog:0,glitch:0,glitchUntil:0,weatherUpdated:0,audioLevel:0,visualLevel:.45,phase:0};
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const norm=(v,a,b)=>clamp((v-a)/(b-a));
+const mix=(a,b,t)=>a+(b-a)*t;
+const fract=v=>v-Math.floor(v);
+const hash=n=>fract(Math.sin(n*127.1)*43758.5453123);
+const avg=k=>CITIES.reduce((s,q)=>s+q.d[k],0)/CITIES.length;
+const cssAlpha=(hex,a)=>{const v=parseInt(hex.slice(1),16);return `rgba(${v>>16},${v>>8&255},${v&255},${a})`};
+
+function clock(q){
+  const p=new Intl.DateTimeFormat('en-GB',{timeZone:q.tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZoneName:'short'}).formatToParts(new Date());
+  const g=k=>(p.find(v=>v.type===k)||{}).value||'00';
+  const hr=(+g('hour'))%24,mn=+g('minute'),sc=+g('second');
+  return {str:`${String(hr).padStart(2,'0')}:${String(mn).padStart(2,'0')}:${String(sc).padStart(2,'0')}`,zone:g('timeZoneName'),f:(hr+mn/60+sc/3600)/24};
+}
+function condition(code){
+  if(code===0)return 'CLEAR'; if(code<=2)return 'PART CLOUD'; if(code===3)return 'OVERCAST';
+  if(code<=48)return 'FOG'; if(code<=57)return 'DRIZZLE'; if(code<=67)return 'RAIN';
+  if(code<=77)return 'SNOW'; if(code<=82)return 'SHOWERS'; return 'STORM';
+}
+function tempDisplay(q){return q.unit==='us'?`${Math.round(q.d.temp*9/5+32)}°F`:`${Math.round(q.d.temp)}°C`}
+function dewDisplay(q){return q.unit==='us'?`${Math.round(q.d.dew*9/5+32)}°F`:`${Math.round(q.d.dew)}°C`}
+function windDisplay(q){return q.unit==='us'?`${Math.round(q.d.wind/1.609)} mph`:`${Math.round(q.d.wind)} km/h`}
+function cardinal(deg){return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(deg/22.5)%16]}
+
+async function getWeather(q){
+  const url='https://api.open-meteo.com/v1/forecast?'+new URLSearchParams({latitude:q.lat,longitude:q.lon,current:'temperature_2m,dew_point_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,cloud_cover',wind_speed_unit:'kmh',timezone:'auto'});
+  const r=await fetch(url,{cache:'no-store'}); if(!r.ok)throw new Error(String(r.status));
+  const d=(await r.json()).current||{};
+  q.d.temp=d.temperature_2m??q.d.temp; q.d.dew=d.dew_point_2m??q.d.dew;
+  q.d.humidity=d.relative_humidity_2m??q.d.humidity; q.d.wind=d.wind_speed_10m??q.d.wind;
+  q.d.dir=d.wind_direction_10m??q.d.dir; q.d.code=d.weather_code??q.d.code; q.d.cloud=d.cloud_cover??q.d.cloud; q.d.ok=true;
+}
+async function updateWeather(){
+  const r=await Promise.allSettled(CITIES.map(getWeather)); const n=r.filter(v=>v.status==='fulfilled').length;
+  state.status=n===3?'LIVE':n?'PARTIAL':'FALLBACK'; state.weatherUpdated=Date.now();
+  addLog(null,`DATA SYNC  ${n}/3 CITY FEEDS  ${state.status}`);
+}
+updateWeather(); setInterval(updateWeather,10*60*1000);
+
+function addLog(city,text){
+  state.logs.unshift({city,text,time:new Date()}); state.logs=state.logs.slice(0,7);
+}
+addLog(null,'SYSTEM  WEATHER → SOUND + MOTION');
+
+function updateHistories(t){
+  CITIES.forEach((q,i)=>{
+    const values={
+      wind:norm(q.d.wind,0,40)+Math.sin(t*.31+i)*.035,
+      temp:norm(q.d.temp,-8,32)+Math.sin(t*.16+i*1.7)*.025,
+      dew:norm(q.d.dew,-10,24)+Math.sin(t*.23+i*.9)*.03,
+      audio:clamp(state.audioLevel*(.72+i*.13)+Math.sin(t*1.7+i)*.035),
+      visual:clamp(.35+norm(q.d.wind,0,40)*.4+Math.sin(t*.63+i)*.08)
+    };
+    Object.keys(values).forEach(k=>{q.hist[k].push(clamp(values[k]));if(q.hist[k].length>64)q.hist[k].shift()});
+  });
+}
+setInterval(()=>updateHistories((performance.now()-state.start)/1000),250);
+
+function hexRgb(hex){const v=parseInt(hex.slice(1),16);return[(v>>16)/255,(v>>8&255)/255,(v&255)/255]}
+
+function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s}
+function program(vs,fs){const p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,vs));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p}
+
+let bgProgram,ptProgram,ptCount=0,buffers={};
+if(gl){
+  bgProgram=program(`
+    attribute vec2 a_pos; varying vec2 v_uv;
+    void main(){v_uv=a_pos*.5+.5;gl_Position=vec4(a_pos,0.,1.);}
+  `,`
+    precision highp float; varying vec2 v_uv;
+    uniform float u_time; uniform vec3 u_wind; uniform vec3 u_dew; uniform vec3 u_temp; uniform vec3 u_c0; uniform vec3 u_c1; uniform vec3 u_c2;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
+    float fbm(vec2 p){float f=0.,a=.5;for(int i=0;i<5;i++){f+=a*noise(p);p=p*2.03+vec2(7.7,3.1);a*=.5;}return f;}
+    void main(){
+      vec2 uv=v_uv; float region=floor(clamp(uv.x*3.,0.,2.));
+      float wind=region<.5?u_wind.x:(region<1.5?u_wind.y:u_wind.z);
+      float dew=region<.5?u_dew.x:(region<1.5?u_dew.y:u_dew.z);
+      vec3 city=region<.5?u_c0:(region<1.5?u_c1:u_c2);
+      vec2 p=vec2(uv.x*5.3,uv.y*3.1); p.x+=u_time*(.008+.026*wind); p.y+=sin(u_time*.028+uv.x*8.)*.14;
+      float n=fbm(p+fbm(p*1.7+u_time*.012));
+      float cloud=smoothstep(.45-.12*dew,.82,n)*(.18+.35*dew);
+      float horizon=smoothstep(.82,.3,abs(uv.y-.47));
+      float pulse=.5+.5*sin(uv.x*31.+u_time*.1+n*7.);
+      vec3 base=vec3(.0025,.012,.019);
+      vec3 col=base+city*cloud*horizon*.23+city*pulse*.016*smoothstep(.22,.78,uv.y);
+      float seam=pow(max(0.,sin(uv.x*140.+n*8.)),32.)*.05;
+      col+=city*seam*smoothstep(.18,.83,uv.y);
+      float vig=smoothstep(1.15,.33,length((uv-.5)*vec2(1.05,.82)));
+      gl_FragColor=vec4(col*mix(.58,1.,vig),1.);
+    }
+  `);
+  ptProgram=program(`
+    precision highp float;
+    attribute vec2 a_base; attribute float a_seed; attribute float a_band; attribute float a_kind; attribute float a_size;
+    uniform float u_time; uniform float u_audio; uniform float u_glitch; uniform vec3 u_wind; uniform vec3 u_dew; uniform vec3 u_temp; uniform vec3 u_dir;
+    varying float v_band; varying float v_alpha; varying float v_shape; varying float v_hot;
+    float H(float n){return fract(sin(n*91.3458)*47453.5453);}
+    void main(){
+      int bi=int(a_band+.5); float wind=bi==0?u_wind.x:(bi==1?u_wind.y:u_wind.z); float dew=bi==0?u_dew.x:(bi==1?u_dew.y:u_dew.z); float temp=bi==0?u_temp.x:(bi==1?u_temp.y:u_temp.z); float dir=bi==0?u_dir.x:(bi==1?u_dir.y:u_dir.z);
+      vec2 p=a_base; float wave=sin(u_time*(.16+wind*.37)+a_seed*18.+p.y*9.); float slow=cos(u_time*.071+a_seed*7.+p.x*5.);
+      if(a_kind<.5){
+        float rupture=smoothstep(.78,1.,sin(u_time*.19+a_seed*44.))*u_glitch;
+        p.x+=wave*(.003+wind*.014)+cos(dir)*wind*.018*rupture+slow*.002;
+        p.y+=slow*(.003+dew*.009)+sin(dir)*wind*.012*rupture+sin(p.x*13.+u_time*.11)*.004;
+        p.x+=sin(p.y*10.+u_time*.12+a_seed)*(.002+.006*u_audio);
+        v_alpha=.27+.55*(.5+.5*sin(a_seed*80.+u_time*(.25+wind)))+.18*dew;
+      }else if(a_kind<1.5){
+        p.x+=sin(p.y*11.+u_time*(.11+wind*.18)+a_seed*9.)*(.025+.035*wind);
+        p.y+=cos(p.x*8.-u_time*.08+a_seed*13.)*(.012+.025*dew);
+        p.x=mod(p.x+1.+u_time*(.002+.008*wind)+a_seed*.0004,2.)-1.;
+        v_alpha=.08+.3*(.5+.5*wave)*dew;
+      }else{
+        p.x+=wave*(.02+.035*wind);p.y+=slow*(.012+.02*dew);v_alpha=.035+.16*(.5+.5*wave);
+      }
+      gl_Position=vec4(p,0.,1.);
+      gl_PointSize=a_size*(.72+.65*dew+.4*u_audio)*(a_kind<.5?1.:.65);
+      v_band=a_band;v_shape=H(a_seed*113.);v_hot=H(a_seed*51.+floor(u_time*.2))+temp*.35;
+    }
+  `,`
+    precision mediump float; uniform vec3 u_c0; uniform vec3 u_c1; uniform vec3 u_c2;
+    varying float v_band; varying float v_alpha; varying float v_shape; varying float v_hot;
+    void main(){vec2 p=gl_PointCoord-.5;if(v_shape<.72&&dot(p,p)>.25)discard;vec3 c=v_band<.5?u_c0:(v_band<1.5?u_c1:u_c2);c=mix(c,vec3(1.),smoothstep(.88,1.3,v_hot)*.7);gl_FragColor=vec4(c,v_alpha);}
+  `);
+  const tri=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,tri);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);buffers.tri=tri;
+  buildParticles();
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+}
+
+function buildParticles(){
+  const oc=document.createElement('canvas');oc.width=1580;oc.height=500;const o=oc.getContext('2d');o.fillStyle='#fff';o.textBaseline='middle';o.font='900 490px Arial Black,Impact,sans-serif';
+  const letters='MZTV',xs=[0,405,800,1180];for(let i=0;i<4;i++)o.fillText(letters[i],xs[i],245);
+  const im=o.getImageData(0,0,oc.width,oc.height).data,base=[],seed=[],band=[],kind=[],size=[];
+  const step=5;for(let y=4;y<oc.height;y+=step)for(let x=4;x<oc.width;x+=step){if(im[(y*oc.width+x)*4+3]>100&&Math.random()>.2){const px=170+x,py=245+y*.92;pushPoint(px,py,0,Math.floor(clamp(px/VW*3,0,2)),mix(1.2,4.6,Math.random()));}}
+  for(let ribbon=0;ribbon<36;ribbon++){const b=ribbon%3;for(let j=0;j<190;j++){const u=j/189,px=-80+u*2080,center=450+Math.sin(u*TAU*(1.1+ribbon%4*.22)+ribbon)*mix(70,240,hash(ribbon*9));const py=center+(ribbon-18)*7+Math.sin(u*TAU*5+ribbon)*15;pushPoint(px,py,1,b,mix(.8,2.4,hash(j+ribbon*317)));}}
+  for(let i=0;i<4600;i++){const px=Math.random()*VW,py=mix(190,760,Math.random());pushPoint(px,py,2,Math.floor(px/VW*3),mix(.5,2,Math.random()));}
+  function pushPoint(px,py,k,b,s){base.push(px/VW*2-1,1-py/VH*2);seed.push(Math.random()*1000);band.push(b);kind.push(k);size.push(s)}
+  ptCount=seed.length;
+  [['base',base,2],['seed',seed,1],['band',band,1],['kind',kind,1],['size',size,1]].forEach(([name,data,n])=>{const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);buffers[name]={b,n}});
+}
+
+function uniforms(p,t){
+  const wind=CITIES.map(q=>norm(q.d.wind,0,40)),dew=CITIES.map(q=>norm(q.d.dew,-10,24)),temp=CITIES.map(q=>norm(q.d.temp,-8,32)),dir=CITIES.map(q=>q.d.dir*Math.PI/180),cols=CITIES.map(q=>hexRgb(q.hex));
+  const f=(n,v)=>{const l=gl.getUniformLocation(p,n);if(l!==null)gl.uniform1f(l,v)};
+  const v3=(n,v)=>{const l=gl.getUniformLocation(p,n);if(l!==null)gl.uniform3fv(l,v)};
+  f('u_time',t);f('u_audio',state.audioLevel);f('u_glitch',state.glitch);v3('u_wind',wind);v3('u_dew',dew);v3('u_temp',temp);v3('u_dir',dir);v3('u_c0',cols[0]);v3('u_c1',cols[1]);v3('u_c2',cols[2]);
+}
+function attrib(p,name,buffer,n){const loc=gl.getAttribLocation(p,name);if(loc<0)return;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,n,gl.FLOAT,false,0,0)}
+function renderGL(t){
+  gl.viewport(0,0,field.width,field.height);gl.disable(gl.BLEND);gl.useProgram(bgProgram);attrib(bgProgram,'a_pos',buffers.tri,2);uniforms(bgProgram,t);gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.useProgram(ptProgram);uniforms(ptProgram,t);
+  Object.keys(buffers).filter(k=>k!=='tri').forEach(k=>attrib(ptProgram,'a_'+k,buffers[k].b,buffers[k].n));gl.drawArrays(gl.POINTS,0,ptCount);
+}
+
+function font(size,weight=400){h.font=`${weight} ${size}px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace`}
+function txt(s,x,y,color='#c9d7df',size=13,align='left',weight=400){font(size,weight);h.textAlign=align;h.textBaseline='top';h.fillStyle=color;h.fillText(s,x,y)}
+function line(x1,y1,x2,y2,color='#50606a',w=1){h.beginPath();h.moveTo(x1,y1);h.lineTo(x2,y2);h.strokeStyle=color;h.lineWidth=w;h.stroke()}
+function panel(x,y,w,hh){h.fillStyle='rgba(1,8,13,.76)';h.fillRect(x,y,w,hh);h.strokeStyle='rgba(126,159,176,.58)';h.lineWidth=1;h.strokeRect(x+.5,y+.5,w-1,hh-1)}
+
+function skyline(q,x,y,w,hh,t){
+  h.save();h.beginPath();h.rect(x,y,w,hh);h.clip();
+  const day=.5+.5*Math.sin((clock(q).f-.25)*TAU);const cloudy=norm(q.d.cloud,0,100);
+  const g=h.createLinearGradient(0,y,0,y+hh);g.addColorStop(0,`rgb(${Math.round(35+day*95)},${Math.round(43+day*96)},${Math.round(48+day*100)})`);g.addColorStop(1,'#10191e');h.fillStyle=g;h.fillRect(x,y,w,hh);
+  h.globalAlpha=.18+.3*cloudy;for(let n=0;n<11;n++){const cx=x+((hash(n+q.i*41)*w+t*(1+q.d.wind*.05)*(n%2?1:-1))%(w+70))-35,cy=y+8+hash(n*7+q.i)*55,rx=25+hash(n*3)*42;h.fillStyle='#d6dde0';h.beginPath();h.ellipse(cx,cy,rx,7+hash(n)*10,0,0,TAU);h.fill()}
+  h.globalAlpha=1;h.fillStyle='#071015';const base=y+hh*.72;
+  if(q.i===0){for(let n=0;n<12;n++){const bw=7+hash(n)*13,bh=14+hash(n*11)*55,bx=x+n*w/12;h.fillRect(bx,base-bh,bw,bh);if(n===8){h.fillRect(bx+3,base-bh-28,3,28)}}}
+  if(q.i===1){for(let n=0;n<9;n++){const bw=w/9+2,bh=20+hash(n*23)*25,bx=x+n*w/9;h.fillRect(bx,base-bh,bw,bh);h.beginPath();h.moveTo(bx,base-bh);h.lineTo(bx+bw/2,base-bh-9-hash(n)*8);h.lineTo(bx+bw,base-bh);h.fill()}}
+  if(q.i===2){for(let n=0;n<10;n++){const bw=8+hash(n)*16,bh=15+hash(n*9)*42,bx=x+n*w/10;h.fillRect(bx,base-bh,bw,bh)}const bx=x+w*.72;h.fillRect(bx,base-67,16,67);h.beginPath();h.moveTo(bx,base-67);h.lineTo(bx+8,base-102);h.lineTo(bx+16,base-67);h.fill()}
+  const water=h.createLinearGradient(0,base,0,y+hh);water.addColorStop(0,'rgba(120,150,160,.2)');water.addColorStop(1,'rgba(0,7,12,.8)');h.fillStyle=water;h.fillRect(x,base,w,y+hh-base);
+  h.globalAlpha=.25;for(let n=0;n<16;n++){const yy=base+n*3;line(x+hash(n)*w*.3,yy,x+w*(.45+hash(n+8)*.55),yy,'#aebbc0',.5)}h.restore();h.globalAlpha=1;
+  h.strokeStyle='rgba(160,183,194,.38)';h.strokeRect(x+.5,y+.5,w-1,hh-1);
+}
+
+function compass(q,cx,cy,r,t){
+  h.save();h.translate(cx,cy);h.strokeStyle='rgba(145,174,187,.5)';h.lineWidth=1;h.beginPath();h.arc(0,0,r,0,TAU);h.stroke();
+  for(let i=0;i<24;i++){const a=i/24*TAU-Math.PI/2,rr=i%6===0?r-8:r-4;h.beginPath();h.moveTo(Math.cos(a)*rr,Math.sin(a)*rr);h.lineTo(Math.cos(a)*r,Math.sin(a)*r);h.stroke()}
+  ['N','E','S','W'].forEach((s,i)=>txt(s,[0,r+12,0,-r-12][i],[-r-15,-5,r+5,-5][i],'#b8c8d0',8,i===0||i===2?'center':i===1?'left':'right'));
+  const a=q.d.dir*Math.PI/180-Math.PI/2;h.rotate(a);h.shadowColor=q.hex;h.shadowBlur=10;h.strokeStyle=q.hex;h.lineWidth=2;h.beginPath();h.moveTo(-r*.25,0);h.lineTo(r*.82,0);h.stroke();h.fillStyle=q.hex;h.beginPath();h.moveTo(r*.82,0);h.lineTo(r*.61,-4);h.lineTo(r*.61,4);h.fill();h.restore();h.shadowBlur=0;
+}
+function spark(q,key,x,y,w,hh,label,color){
+  const a=q.hist[key];txt(label,x,y+1,'#8ea1ab',8);line(x+44,y+hh/2,x+w,y+hh/2,'rgba(140,165,176,.18)',.7);
+  if(a.length<2)return;h.beginPath();a.forEach((v,i)=>{const xx=x+44+i/(a.length-1)*(w-44),yy=y+hh-(v*hh*.82+hh*.09);i?h.lineTo(xx,yy):h.moveTo(xx,yy)});h.strokeStyle=color;h.lineWidth=1;h.stroke();
+}
+function cityCard(q,x,t){
+  const y=26,w=592,imw=130,imh=132;skyline(q,x,y,imw,imh,t);
+  const ix=x+148,ct=clock(q);txt(q.name,ix,y+1,'#d9e5e9',18);txt(`${ct.str}  ${ct.zone}`,ix,y+27,'#d9e5e9',15);
+  txt('TEMP',ix,y+63,'#9babb4',11);txt(tempDisplay(q),ix+58,y+63,'#e0e7e8',13);
+  txt('DEW',ix,y+86,'#9babb4',11);txt(dewDisplay(q),ix+58,y+86,'#e0e7e8',13);
+  txt('WIND',ix,y+109,'#9babb4',11);txt(`${windDisplay(q)} ${cardinal(q.d.dir)}`,ix+58,y+109,'#e0e7e8',12);
+  txt('COND',ix,y+132,'#9babb4',11);txt(condition(q.d.code),ix+58,y+132,'#e0e7e8',12);h.shadowColor=q.hex;h.shadowBlur=12;h.fillStyle=q.hex;h.beginPath();h.arc(ix+145,y+137,5,0,TAU);h.fill();h.shadowBlur=0;
+  compass(q,x+335,y+75,44,t);
+  const sx=x+408,sw=173; spark(q,'wind',sx,y+2,sw,20,'WIND','#aebbc2');spark(q,'temp',sx,y+28,sw,20,'TEMP',q.hex);spark(q,'dew',sx,y+54,sw,20,'DEW','#6ee6ee');spark(q,'audio',sx,y+80,sw,20,'AUDIO','#7387ff');spark(q,'visual',sx,y+106,sw,20,'VISUAL',q.hex);
+}
+
+function verticalSignals(t){
+  h.save();h.globalCompositeOperation='lighter';
+  for(let i=0;i<130;i++){const x=40+hash(i*17)*1840;const band=Math.floor(x/VW*3),q=CITIES[band],amp=hash(i*6+3),top=250+hash(i)*320,len=20+amp*150*(.4+norm(q.d.wind,0,40));h.strokeStyle=cssAlpha(q.hex,.025+amp*.14);h.lineWidth=hash(i+8)>.84?2:1;h.beginPath();h.moveTo(x,top-len/2);h.lineTo(x,top+len/2);h.stroke()}
+  const glitch=state.glitch;for(let i=0;i<40;i++){const phase=hash(i*44+Math.floor(t*.8));if(phase>.57){const x=80+hash(i*12)*1760,y=250+hash(i*37+Math.floor(t*.4))*440,s=3+hash(i*91)*18*(1+glitch*2),q=CITIES[Math.floor(x/VW*3)];h.fillStyle=cssAlpha(q.hex,.12+phase*.55);h.fillRect(Math.round(x),Math.round(y),Math.round(s),Math.round(s))}}
+  h.restore();
+}
+
+function meter(x,y,w,v,color,label,source){
+  txt(label,x,y-2,'#b7c6ce',11);txt(`[${source}]`,x+82,y-2,'#82939d',10);h.fillStyle='rgba(87,111,124,.24)';h.fillRect(x+220,y,w-220,8);h.fillStyle=color;h.shadowColor=color;h.shadowBlur=6;h.fillRect(x+220,y,(w-220)*clamp(v),8);h.shadowBlur=0;h.strokeStyle='rgba(151,177,188,.42)';h.strokeRect(x+220+.5,y+.5,w-221,7);
+}
+function drawLogs(x,y,w,hh){
+  panel(x,y,w,hh);txt(`MZTV  //  LIVE SYSTEM LOG  //  ${state.status}`,x+16,y+12,'#d6e4e9',13);line(x+14,y+36,x+w-14,y+36,'rgba(141,171,184,.3)');
+  state.logs.forEach((l,i)=>{const tm=l.time.toLocaleTimeString('en-GB',{hour12:false});txt(`[${tm}]`,x+16,y+48+i*20,'#8799a2',11);let xx=x+95;if(l.city!==null){const q=CITIES[l.city];txt(q.name,xx,y+48+i*20,q.hex,11);xx+=q.name.length*7.2+12}txt(l.text,xx,y+48+i*20,'#b9c7ce',11)});txt('›',x+16,y+hh-22,'#c9d6db',13);
+}
+function drawEngines(x,y){
+  const wind=norm(avg('wind'),0,40),dew=norm(avg('dew'),-10,24),temp=norm(avg('temp'),-8,32),cloud=norm(avg('cloud'),0,100),variance=clamp((Math.max(...CITIES.map(q=>q.d.temp))-Math.min(...CITIES.map(q=>q.d.temp)))/18),sync=clamp(1-Math.abs(clock(CITIES[0]).f-clock(CITIES[2]).f)/.4);
+  txt('AUDIO ENGINE',x,y,'#c3d1d7',13);meter(x,y+30,365,wind,CITIES[0].hex,'BASS','BALTIMORE_WIND');meter(x,y+61,365,temp,CITIES[1].hex,'DRUMS','GALWAY_TEMP');meter(x,y+92,365,cloud,CITIES[2].hex,'CHORDS','LONDON_CLOUDS');meter(x,y+123,365,dew,'#e7ecdf','ECHO','TRIAD_DEW');meter(x,y+154,365,sync,'#d9e2e5','FILTER','TIME_DIFFERENCE');
+  x+=415;txt('VISUAL ENGINE',x,y,'#c3d1d7',13);meter(x,y+30,365,temp,CITIES[0].hex,'PALETTE','WEATHER_BLEND');meter(x,y+61,365,wind,CITIES[1].hex,'MOTION','WIND_COMPOSITE');meter(x,y+92,365,variance,'#778cff','GLITCH','TEMP_VARIANCE');meter(x,y+123,365,dew,'#e7ecdf','PARTICLES','DEW_POINT');meter(x,y+154,365,sync,CITIES[2].hex,'MZTV_CORE','TRIAD_SYNC');
+}
+function triad(x,y,w,hh,t){
+  panel(x,y,w,hh);txt('TRIAD FIELD',x+16,y+12,'#c8d6dc',13);const cx=x+132,cy=y+105,r=47,pts=[[cx-32,cy+8],[cx+10,cy-23],[cx+44,cy+18]];
+  h.save();h.globalCompositeOperation='lighter';pts.forEach((p,i)=>{h.strokeStyle=cssAlpha(CITIES[i].hex,.85);h.lineWidth=1.5;h.shadowColor=CITIES[i].hex;h.shadowBlur=8;h.beginPath();h.arc(p[0],p[1],r,0,TAU);h.stroke();for(let k=0;k<55;k++){const a=hash(k+i*83)*TAU,rr=Math.sqrt(hash(k*7+i*91))*r*.9;h.fillStyle=cssAlpha(CITIES[i].hex,.25+hash(k*3)*.6);h.fillRect(p[0]+Math.cos(a+t*.02*(i-1))*rr,p[1]+Math.sin(a+t*.017*(i+1))*rr,1.2,1.2)}});h.restore();h.shadowBlur=0;
+  txt('DATA',x+w-90,y+61,'#9dacb4',11);txt('SOUND',x+w-90,y+85,'#9dacb4',11);txt('MOTION',x+w-90,y+109,'#9dacb4',11);txt('IN SYNC',x+w-90,y+133,'#cbd9de',11);
+}
+function drawHUD(t){
+  h.clearRect(0,0,VW,VH);verticalSignals(t);
+  CITIES.forEach((q,i)=>cityCard(q,35+i*627,t));line(646,24,646,161,'rgba(155,179,190,.55)');line(1273,24,1273,161,'rgba(155,179,190,.55)');
+  txt('THREE CITIES.  ONE FIELD.',1883,190,'rgba(190,205,212,.8)',15,'right');
+  const y=790;drawLogs(35,y,630,194);drawEngines(704,y+19);triad(1517,y,368,194,t);
+  txt('MZTV  v0.5  //  LIVE WEATHER SIGNAL ATLAS',39,1018,'#9babb3',12);txt(`AUDIO ${state.audio}  //  DATA ${state.status}  //  ${ptCount.toLocaleString()} LIVE POINTS`,960,1018,'#778b96',11,'center');txt('GENERATIVE TELEVISION FOR A MORE INTERCONNECTED NOW.',1882,1018,'#9babb3',12,'right');
+}
+
+let AC,master,filter,delay,feedback,send,analyser,nextBeat=0,step=0,scheduler,audioStarted=false,noiseBuffer;
+const notes=[36.708,41.203,43.654,49.0,55.0,61.735,65.406,73.416];
+function makeNoise(){const b=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const a=b.getChannelData(0);let last=0;for(let i=0;i<a.length;i++){last=last*.92+(Math.random()*2-1)*.08;a[i]=last}return b}
+function connectPan(node,val){if(!AC.createStereoPanner)return node;const p=AC.createStereoPanner();p.pan.value=val;node.connect(p);return p}
+function startAudio(){
+  if(audioStarted){if(AC&&AC.state==='suspended')AC.resume();return}audioStarted=true;
+  try{
+    AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});master=AC.createGain();master.gain.value=.31;filter=AC.createBiquadFilter();filter.type='lowpass';filter.frequency.value=1900;filter.Q.value=.45;
+    delay=AC.createDelay(4);feedback=AC.createGain();feedback.gain.value=.42;send=AC.createGain();send.gain.value=.3;const dlp=AC.createBiquadFilter();dlp.type='lowpass';dlp.frequency.value=950;
+    analyser=AC.createAnalyser();analyser.fftSize=512;send.connect(delay);delay.connect(dlp);dlp.connect(feedback);feedback.connect(delay);dlp.connect(master);master.connect(filter);filter.connect(analyser);analyser.connect(AC.destination);noiseBuffer=makeNoise();nextBeat=AC.currentTime+.08;scheduler=setInterval(schedule,25);
+    AC.resume().then(()=>{state.audio='LIVE';wake.classList.remove('show')}).catch(()=>{state.audio='CLICK TO START';wake.classList.add('show')});
+  }catch(e){state.audio='UNAVAILABLE'}
+}
+function env(g,at,peak,attack,decay){g.gain.setValueAtTime(.0001,at);g.gain.exponentialRampToValueAtTime(peak,at+attack);g.gain.exponentialRampToValueAtTime(.0001,at+decay)}
+function kick(at){const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(82,at);o.frequency.exponentialRampToValueAtTime(39,at+.15);env(g,at,.32,.004,.34);o.connect(g);g.connect(master);o.start(at);o.stop(at+.36)}
+function rim(at,pan=.2){const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();s.buffer=noiseBuffer;f.type='bandpass';f.frequency.value=620;f.Q.value=1.4;env(g,at,.032,.003,.11);s.connect(f);f.connect(g);const out=connectPan(g,pan);out.connect(master);out.connect(send);s.start(at);s.stop(at+.14)}
+function bass(at,q,accent=1){const temp=norm(q.d.temp,-8,32),w=norm(q.d.wind,0,40),idx=(Math.round(temp*5)+Math.floor(clock(q).f*8)+step)%notes.length,o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();o.type='triangle';o.frequency.value=notes[idx%notes.length];f.type='lowpass';f.frequency.value=170+w*230;f.Q.value=2.2;env(g,at,(.07+w*.055)*accent,.012,.46);o.connect(f);f.connect(g);const out=connectPan(g,q.pan*.35);out.connect(master);o.start(at);o.stop(at+.5)}
+function chord(at,q){const temp=norm(q.d.temp,-8,32),cloud=norm(q.d.cloud,0,100),dew=norm(q.d.dew,-10,24),root=notes[(q.i+Math.floor(clock(q).f*6))%notes.length]*4,bus=AC.createGain(),f=AC.createBiquadFilter(),g=AC.createGain();[1,1.1892,1.4983].forEach((r,j)=>{const o=AC.createOscillator();o.type=j?'sine':'triangle';o.detune.value=(j-1)*4;o.frequency.value=root*r;o.connect(bus);o.start(at);o.stop(at+.42)});f.type='lowpass';f.frequency.value=mix(650,1450,temp);f.Q.value=.7;env(g,at,.018+cloud*.022,.02,mix(.18,.39,dew));bus.connect(f);f.connect(g);const out=connectPan(g,q.pan);out.connect(master);out.connect(send)}
+function schedule(){
+  if(!AC)return;while(nextBeat<AC.currentTime+.14){const w=norm(avg('wind'),0,40),dew=norm(avg('dew'),-10,24),bpm=mix(68,82,w),beat=60/bpm,s=step%16;filter.frequency.setTargetAtTime(mix(1200,2250,norm(CITIES[1].d.temp,-8,32)),nextBeat,.2);feedback.gain.setTargetAtTime(mix(.3,.58,dew),nextBeat,.25);delay.delayTime.setTargetAtTime(beat*.75,nextBeat,.15);if(s===0||s===8)kick(nextBeat);if(s===4||s===12||s===15&&Math.random()<w)rim(nextBeat,CITIES[1].pan);if([0,3,7,10,14].includes(s)&&Math.random()<.72)bass(nextBeat,CITIES[0],s===0?1.2:1);if([2,6,11].includes(s)&&Math.random()<.25+norm(CITIES[2].d.cloud,0,100)*.45)chord(nextBeat,CITIES[2]);nextBeat+=beat/2;step++}
+}
+function sampleAudio(){if(!analyser)return state.audioLevel*=.94;const a=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(a);let s=0;for(let i=0;i<55;i++)s+=a[i];state.audioLevel=mix(state.audioLevel,clamp(s/(55*155)),.2)}
+
+function logCycle(now){
+  if(now<state.nextLog)return;state.nextLog=now+2200+Math.random()*1900;const q=CITIES[Math.floor(Math.random()*3)],options=[
+    `wind ↑ ${windDisplay(q)}  →  ${q.i===0?'low sub modulation':'particle drift'}`,
+    `temp ${tempDisplay(q)}  →  filter cutoff ${q.d.temp>10?'↑':'↓'}`,
+    `dew ${dewDisplay(q)}  →  echo density ${Math.round(norm(q.d.dew,-10,24)*100)}%`,
+    `cloud cover ${Math.round(q.d.cloud)}%  →  reverb field`,
+    `local time ${clock(q).str}  →  harmonic phase`
+  ];addLog(q.i,options[Math.floor(Math.random()*options.length)]);
+  if(Math.random()<.22)addLog(null,`TRIAD SYNC  LFO shift ${(avg('wind')/82).toFixed(2)} Hz`);
+}
+function glitchCycle(now){
+  if(now>state.glitchUntil){state.glitch*=.94;if(Math.random()<.0018+norm(avg('wind'),0,40)*.002){state.glitch=1;state.glitchUntil=now+180+Math.random()*520;addLog(null,'MZTV CORE  glyph rupture → re-form')}}else state.glitch=1;
+}
+function frameLoop(now){
+  requestAnimationFrame(frameLoop);const t=(now-state.start)/1000;state.frame++;state.phase=t;sampleAudio();logCycle(now);glitchCycle(now);state.visualLevel=.35+norm(avg('wind'),0,40)*.35+state.glitch*.3;if(gl)renderGL(t);drawHUD(t);
+}
+
+function resize(){
+  const d=Math.min(devicePixelRatio||1,1.5);field.width=Math.round(VW*d);field.height=Math.round(VH*d);hud.width=Math.round(VW*d);hud.height=Math.round(VH*d);h.setTransform(d,0,0,d,0,0);
+}
+wake.addEventListener('click',startAudio);addEventListener('pointerdown',startAudio,{once:true});addEventListener('keydown',startAudio,{once:true});addEventListener('resize',resize);resize();
+setTimeout(startAudio,350);updateHistories(0);requestAnimationFrame(frameLoop);
+window.MZTV={cities:CITIES,state,refreshWeather:updateWeather,startAudio};
+})();
+</script>
+</body>
+</html>

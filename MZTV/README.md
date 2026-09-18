@@ -37,6 +37,24 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-003-weather-triad/`
 
+### BIT FIELD 004 — LIVE CONTROL FIELD
+Live weather-control field with an autonomous MZTV glyph system, control-capture log, mapping meters, local city clocks, and weather-driven audiovisual modulation.
+
+Path:
+`sources/bit-field-004-live-control/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-004-live-control/`
+
+### BIT FIELD 005 — SIGNAL ATLAS
+Dense WebGL weather instrument modeled on the MZTV Live Weather Triad graphic. Roughly 40,000 live points form and deform the central MZTV signal while Baltimore, Galway, and London drive color, movement, particle density, glyph rupture, dub audio, live graphs, compasses, system logs, and engine meters.
+
+Path:
+`sources/bit-field-005-signal-atlas/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-005-signal-atlas/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
