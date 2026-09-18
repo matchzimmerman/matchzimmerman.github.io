@@ -19,11 +19,11 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-001/`
 
-### MZTV Director v0.1
+### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
 Path:
-`obs/mztv_director_v0_1.lua`
+`obs/mztv_director_v0_1_1.lua`
 
 ## Canonical rule
 
