@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MZTV BIT FIELD 001</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f2efdf;}
+  canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d', { alpha: false });
+
+  const palette = [
+    '#f2efdf', '#ff5b2e', '#ffdf35', '#00d7a7',
+    '#1c63ff', '#f13cff', '#09254f'
+  ];
+
+  let W=0,H=0,dpr=1,t=0,last=0;
+  let cols=48, rows=27;
+  let cells=[];
+  let nextMutation=0;
+
+  function resize(){
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    c.width = Math.floor(W*dpr); c.height = Math.floor(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    build();
+  }
+
+  function build(){
+    cells = [];
+    for(let y=0;y<rows;y++){
+      const row=[];
+      for(let x=0;x<cols;x++){
+        row.push({
+          life: Math.random(),
+          phase: Math.random()*Math.PI*2,
+          bias: Math.random()*2-1
+        });
+      }
+      cells.push(row);
+    }
+  }
+
+  function mutate(now){
+    if(now < nextMutation) return;
+    nextMutation = now + 1800 + Math.random()*4200;
+
+    const cx = Math.floor(Math.random()*cols);
+    const cy = Math.floor(Math.random()*rows);
+    const r  = 3 + Math.floor(Math.random()*9);
+
+    for(let y=Math.max(0,cy-r); y<Math.min(rows,cy+r); y++){
+      for(let x=Math.max(0,cx-r); x<Math.min(cols,cx+r); x++){
+        const d=Math.hypot(x-cx,y-cy);
+        if(d<r && Math.random() > d/r){
+          cells[y][x].life = Math.random();
+          cells[y][x].bias = Math.random()*2-1;
+        }
+      }
+    }
+  }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt = Math.min(0.05,(now-last)/1000 || 0);
+    last=now;
+    t += dt;
+    mutate(now);
+
+    ctx.fillStyle = palette[0];
+    ctx.fillRect(0,0,W,H);
+
+    const cw = W/cols, ch = H/rows;
+    const f1x = cols*(0.50 + 0.25*Math.sin(t*0.071));
+    const f1y = rows*(0.50 + 0.25*Math.cos(t*0.053));
+    const f2x = cols*(0.50 + 0.32*Math.cos(t*0.041+1.8));
+    const f2y = rows*(0.50 + 0.28*Math.sin(t*0.063+0.7));
+
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const cell = cells[y][x];
+        const d1 = Math.hypot((x-f1x)/cols,(y-f1y)/rows);
+        const d2 = Math.hypot((x-f2x)/cols,(y-f2y)/rows);
+
+        const wave =
+          Math.sin(x*0.43 + t*0.72 + cell.phase) +
+          Math.cos(y*0.57 - t*0.48) +
+          Math.sin((x+y)*0.19 + t*0.22) +
+          Math.sin(d1*31 - t*1.1) * 0.8 +
+          Math.cos(d2*27 + t*0.7) * 0.6;
+
+        const threshold = 1.35 + cell.bias*0.35;
+        if(wave > threshold){
+          const p = 1 + ((x + y + Math.floor(t*0.25)) % (palette.length-1));
+          ctx.fillStyle = palette[p];
+          ctx.fillRect(Math.floor(x*cw), Math.floor(y*ch),
+                       Math.ceil(cw)+1, Math.ceil(ch)+1);
+        }
+      }
+    }
+
+    ctx.lineWidth = Math.max(1, Math.floor(Math.min(W,H)/700));
+    for(let k=0;k<4;k++){
+      ctx.strokeStyle = palette[1+((k+Math.floor(t*0.08))%(palette.length-1))];
+      ctx.beginPath();
+      const yy = H*(0.14 + k*0.22) + Math.sin(t*0.21+k)*H*0.03;
+      for(let x=0;x<=W;x+=W/16){
+        const snap = Math.round((yy + Math.sin(x*0.012 + t*(0.25+k*0.03))*H*0.055)/ch)*ch;
+        if(x===0) ctx.moveTo(x,snap); else ctx.lineTo(x,snap);
+      }
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#09254f';
+    ctx.font = `${Math.max(11, Math.floor(H*0.015))}px monospace`;
+    ctx.textBaseline = 'top';
+    ctx.fillText('MZTV / BIT FIELD 001', Math.floor(W*0.018), Math.floor(H*0.022));
+  }
+
+  addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
