@@ -19,6 +19,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-001/`
 
+### BIT FIELD 002 — DUB
+Generative MZTV transmission source with a large evolving pixel-built MZTV mark, low-key dub audio, rolled-off high end, sub/bass movement, filtered chord stabs, and dub delay.
+
+Path:
+`sources/bit-field-002-dub/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-002-dub/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
