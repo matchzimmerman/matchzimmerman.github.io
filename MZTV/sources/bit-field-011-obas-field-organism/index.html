@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV 011 — OBAS FIELD ORGANISM</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#eee2bf}
+body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:none}
+canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+#go{position:fixed;left:24px;bottom:24px;border:1px solid #17345f;background:#eee2bf;color:#17345f;padding:10px 14px;opacity:0;pointer-events:none}
+#go.show{opacity:.95;pointer-events:auto}
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<button id="go">START MZTV AUDIO</button>
+<script>
+(function(){'use strict';
+var VW=1920,VH=1080,BW=480,BH=270,T=Math.PI*2;
+var c=document.getElementById('c'),x=c.getContext('2d',{alpha:false}),go=document.getElementById('go');
+var b=document.createElement('canvas');b.width=BW;b.height=BH;var q=b.getContext('2d',{alpha:false}),im=q.createImageData(BW,BH),d=im.data;
+var P=new URLSearchParams(location.search),hud=P.get('hud')!=='0';
+var PAL=[
+  [[238,226,191],[23,52,95],[240,91,63],[65,190,158]],
+  [[244,238,210],[19,54,102],[245,109,68],[80,202,189]],
+  [[232,223,191],[18,43,88],[233,96,65],[93,182,155]]
+], pi=0;
+var MODES=[
+  {name:'WIDE SHEAR', a:[1.7,0.9,0.6], b:[0.8,1.4,0.5], k:5.4, c:2.1},
+  {name:'LINK GRID', a:[2.1,1.1,0.7], b:[1.2,1.8,0.4], k:6.0, c:2.5},
+  {name:'PLATEAU', a:[1.3,1.6,0.5], b:[1.0,0.9,0.8], k:5.0, c:1.9},
+  {name:'CHEVRON DRIFT', a:[2.0,0.8,0.7], b:[0.7,1.6,0.6], k:6.7, c:2.8},
+  {name:'RUPTURE FOLD', a:[1.5,1.0,1.0], b:[1.4,1.1,0.5], k:5.8, c:2.3}
+];
+var EVENTS=['QUIET','TORSION','SHEAR','CHEVRON','COMPRESSION','PLATEAU'];
+var CH=[
+ ['Dm9',[293.66,349.23,440.00,523.25,659.26],73.42],
+ ['G6/9',[293.66,329.63,392.00,440.00,493.88],49.00],
+ ['Cmaj9',[293.66,329.63,392.00,493.88,523.25],65.41],
+ ['Am9',[329.63,392.00,440.00,493.88,523.25],55.00],
+ ['Em11',[329.63,392.00,440.00,493.88,587.33],82.41]
+];
+var S={born:performance.now(),started:false,audio:'ARMED',bpm:72,bar:0,ch:0,name:'Dm9',
+ mode:0,nextMode:1,event:'QUIET',epoch:0,morph:0,str:.4,den:.62,ten:.38,res:.52,mot:.30,bri:.48,
+ tden:.62,tten:.38,tres:.52,tmot:.30,tbri:.48,fieldWarp:0};
+var mem={m:[0],ch:[0],log:[]};
+function C(v,a,b){a=a===undefined?0:a;b=b===undefined?1:b;return Math.max(a,Math.min(b,v))}
+function L(a,b,t){return a+(b-a)*t}
+function H(n){var z=Math.sin(n*127.1+311.7)*43758.5453;return z-Math.floor(z)}
+function age(){var z=(performance.now()-S.born)/1000,h=Math.floor(z/3600),m=Math.floor(z%3600/60),s=Math.floor(z%60);return [h,m,s].map(v=>String(v).padStart(2,'0')).join(':')}
+function log(t){mem.log.unshift([age(),S.bar,t]);if(mem.log.length>6)mem.log.length=6}
+log('FIELD SEED / OBAS FIELD ORGANISM / Dm9');
+function chooseMode(seed){var i=Math.floor(H(seed)*MODES.length);for(var k=0;k<MODES.length;k++){var z=(i+k)%MODES.length;if(mem.m.indexOf(z)<0)return z}return i}
+function chooseChord(seed){var r=[(S.ch+1)%CH.length,(S.ch-1+CH.length)%CH.length,(S.ch+2)%CH.length],z=r[Math.floor(H(seed)*r.length)];if(mem.ch.indexOf(z)>=0)z=r[(r.indexOf(z)+1)%r.length];return z}
+function evolve(e){S.epoch=e;S.nextMode=chooseMode(e*11.7+3);mem.m.push(S.nextMode);if(mem.m.length>4)mem.m.shift();var nc=chooseChord(e*13.2+7);mem.ch.push(nc);if(mem.ch.length>3)mem.ch.shift();S.event=EVENTS[Math.floor(H(e*17.4+2)*EVENTS.length)];S.str=.34+.58*H(e*19.3+1);S.tden=.50+.32*H(e*23.2+5);S.tten=.24+.44*H(e*29.1+9);S.tres=.38+.42*H(e*31.7+4);S.tmot=.16+.50*H(e*37.4+6);S.tbri=.40+.42*H(e*41.1+8);if(e>0&&e%5===0)pi=(pi+1)%PAL.length;log('EVOLVE -> '+EVENTS[Math.floor(H(e*17.4+2)*EVENTS.length)]+' / '+CH[nc][0]+' / '+MODES[S.nextMode].name);if(S.started)setChord(nc,8.0)}
+var last=performance.now(),time=0;
+function update(now){var dt=Math.min(.05,(now-last)/1000||0);last=now;time+=dt;var ed=110,e=Math.floor(time/ed);if(e!==S.epoch)evolve(e);var ep=(time-e*ed)/ed,m=C((ep-.10)/.72);S.morph=m*m*(3-2*m);if(ep>.82&&S.mode!==S.nextMode)S.mode=S.nextMode;['den','ten','res','mot','bri'].forEach(function(k){var tk='t'+k;S[k]+=(S[tk]-S[k])*(1-Math.pow(.001,dt))});S.fieldWarp+=dt*(.12+.45*S.mot)}
+var X=new Float32Array(BW),Y=new Float32Array(BH),B=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+for(var i=0;i<BW;i++)X[i]=i/(BW-1);for(i=0;i<BH;i++)Y[i]=i/(BH-1);
+function wrap(u){return u-Math.floor(u)}
+function modeField(mi,u,v,dr){var M=MODES[mi],a=M.a,b=M.b;var cx=u-.5,cy=v-.5;var r=Math.sqrt(cx*cx+cy*cy),an=Math.atan2(cy,cx);var f1=Math.sin((a[0]*u+b[0]*v)*Math.PI*2+dr*.7)+0.6*Math.cos((a[1]*u-b[1]*v)*Math.PI*2-dr*.35);var f2=Math.sin((b[2]*u+a[2]*v)*Math.PI*2+dr*.48)+0.55*Math.sin((u-v)*Math.PI*M.k+dr*.2);var ring=Math.cos(r*M.k*3.5-dr*.28+Math.sin(an*M.c+dr*.15)*.5);return .56*f1+.32*f2+.18*ring}
+function transform(u,v,dr){var cx=u-.5,cy=v-.5,r=Math.sqrt(cx*cx+cy*cy)+1e-6,an=Math.atan2(cy,cx),ux=u,vy=v;if(S.event==='TORSION'){var z=an+S.str*.30*Math.sin(r*18-dr*2.1);ux=.5+r*Math.cos(z);vy=.5+r*Math.sin(z)}else if(S.event==='SHEAR'){ux=u+.07*S.str*Math.sign(Math.sin(v*T*4+dr));vy=v+.02*Math.sin(u*T*3-dr)}else if(S.event==='CHEVRON'){ux=u+.06*S.str*Math.sign(Math.sin((u+v)*T*3.5+dr));vy=v+.04*S.str*Math.sign(Math.sin((u-v)*T*2.4-dr*.8))}else if(S.event==='COMPRESSION'){ux=.5+cx*(.70+.28*Math.sin(v*T*2.5+dr));vy=v}else if(S.event==='PLATEAU'){ux=u+.03*Math.sign(Math.sin(v*T*5-dr));vy=v+.03*Math.sign(Math.sin(u*T*4+dr))}return [ux,vy]}
+function field(){var pal=PAL[pi],dr=S.fieldWarp,o=0;for(var yy=0;yy<BH;yy++){var v=Y[yy];for(var xx=0;xx<BW;xx++){var u=X[xx],t=transform(u,v,dr),ux=t[0],vy=t[1],fA=modeField(S.mode,ux,vy,dr),fB=modeField(S.nextMode,ux,vy,dr+1.2),f=L(fA,fB,S.morph);var cell=Math.abs(wrap((f*(3.5+S.ten*4.5)+ux*1.2-vy*.7)*1.4)-.5);var contour=Math.abs(wrap((f*(6.2+S.den*4.0)+ux*2.2+vy*1.6))-0.5);var micro=Math.abs(wrap((f*2.6+ux*8.5-vy*5.4+dr*.2))-0.5);var dither=(B[((yy&3)<<2)|(xx&3)]+.5)/16-.5;var thick=.034+.034*S.res,thin=.014+.016*S.den,mw=.010+.008*S.ten,ci=0;if(cell<thick)ci=1; if(contour<thin && cell>thick*.66)ci=2; if(micro<mw && cell>thick*1.2)ci=3; if(S.event==='QUIET' && ci===3 && H(xx*3.17+yy*9.1+Math.floor(dr*2))>.42)ci=0; if(ci===0 && contour<thin*2.1 && H(xx*13.1+yy*7.7+Math.floor(dr*.8))<.02+.07*S.den)ci=2; if(ci===0 && micro<mw*1.5 && H(xx*5.4+yy*11.2+Math.floor(dr*1.1))<.01+.03*S.bri)ci=3; if(ci===1 && contour<thin*.52)ci=3; if(ci===0 && dither>.39 && H(xx*2.1+yy*4.3+Math.floor(dr*.4))<.012)ci=2; var cc=pal[ci]; d[o++]=cc[0]; d[o++]=cc[1]; d[o++]=cc[2]; d[o++]=255;}}
+ q.putImageData(im,0,0); x.imageSmoothingEnabled=false; x.drawImage(b,0,0,VW,VH);
+}
+function text(s,xx,yy,sz,col,w,al){x.textAlign=al||'left';x.textBaseline='top';x.fillStyle=col;x.font=(w||500)+' '+(sz||12)+'px ui-monospace,monospace';x.fillText(s,xx,yy)}
+function HUD(){if(!hud)return;var p=PAL[pi],paper='rgb('+p[0]+')',ink='rgb('+p[1]+')',coral='rgb('+p[2]+')',mint='rgb('+p[3]+')';x.globalAlpha=.9;x.fillStyle=paper;x.fillRect(20,18,690,78);x.fillRect(VW-420,18,400,78);x.fillRect(20,VH-170,760,150);x.globalAlpha=1;text('MZTV / OBAS FIELD ORGANISM 011',34,31,19,ink,700);text(S.audio+' / '+S.name+' / '+S.event,34,61,11,coral,700);text('AGE '+age()+' / EPOCH '+S.epoch,VW-34,31,12,ink,700,'right');text('MODE '+MODES[S.mode].name+' -> '+MODES[S.nextMode].name,VW-34,59,11,mint,700,'right');text('EVOLUTION MEMORY',34,VH-153,11,ink,700);mem.log.slice(0,5).forEach(function(e,j){text(e[0]+' B'+String(e[1]).padStart(4,'0')+' '+e[2],34,VH-128+j*21,9,j?ink:coral,j?500:700)})}
+var AC,master,lp,voices=[],subs=[],timer,next=0,beats=0;
+function curve(a){var n=2048,z=new Float32Array(n);for(var i=0;i<n;i++){var v=i*2/n-1;z[i]=Math.tanh(v*a)/Math.tanh(a)}return z}
+function pan(v){if(!AC.createStereoPanner)return null;var p=AC.createStereoPanner();p.pan.value=v;return p}
+function audioBuild(){AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});master=AC.createGain();master.gain.value=.56;var hp=AC.createBiquadFilter(),sat=AC.createWaveShaper(),comp=AC.createDynamicsCompressor();hp.type='highpass';hp.frequency.value=22;lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=4400;sat.curve=curve(1.35);sat.oversample='2x';comp.threshold.value=-16;comp.knee.value=14;comp.ratio.value=2.4;comp.attack.value=.03;comp.release.value=.6;master.connect(hp);hp.connect(lp);lp.connect(sat);sat.connect(comp);comp.connect(AC.destination);[-.62,-.30,0,.30,.62].forEach(function(pv,i){var o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter(),pp=pan(pv);o1.type='triangle';o2.type='sine';o2.detune.value=(i-2)*3.0;f.type='lowpass';f.frequency.value=1800+i*220;g.gain.value=.0001;o1.connect(f);o2.connect(f);f.connect(g);if(pp){g.connect(pp);pp.connect(master)}else g.connect(master);o1.start();o2.start();voices.push([o1,o2,g,f,pp,pv])});for(var j=0;j<2;j++){var o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();o.type='sine';f.type='lowpass';f.frequency.value=130;g.gain.value=.0001;o.connect(f);f.connect(g);g.connect(master);o.start();subs.push([o,g])}setChord(S.ch,.05);next=AC.currentTime+.08;timer=setInterval(schedule,40)}
+function setChord(i,gl){S.ch=i;S.name=CH[i][0];if(!AC)return;var n=AC.currentTime,ch=CH[i];voices.forEach(function(v,j){v[0].frequency.setTargetAtTime(ch[1][j],n,gl*.28);v[1].frequency.setTargetAtTime(ch[1][j]*2,n,gl*.34)});subs[0][0].frequency.setTargetAtTime(ch[2],n,gl*.26);subs[1][0].frequency.setTargetAtTime(ch[2]*2,n,gl*.32);log('HARMONY -> '+ch[0]+' / common-tone glide')}
+function schedule(){if(!AC)return;var sp=60/S.bpm;while(next<AC.currentTime+.2){var bt=beats++;S.bar=Math.floor(bt/4);var pulse=bt%2===0?1:.68,n=next;voices.forEach(function(v,i){var base=.011+S.res*.010+(i>2?S.bri*.0045:0);v[2].gain.setTargetAtTime(base*pulse,n,.18);v[2].gain.setTargetAtTime(base*.76,n+.32,.52);v[3].frequency.setTargetAtTime(900+S.bri*2600+S.ten*680,n,.7);if(v[4])v[4].pan.setTargetAtTime(C(v[5]+Math.sin(bt*.09+i)*.06,-1,1),n,.9)});subs.forEach(function(v,i){var a=(i===0?.050:.016)*(.78+S.res*.45);v[1].gain.setTargetAtTime(a*(bt%4===0?1:.70),n,.24);v[1].gain.setTargetAtTime(a*.62,n+.44,.56)});next+=sp}}
+function start(){if(S.started){if(AC&&AC.state==='suspended')AC.resume();return}S.started=true;try{audioBuild();AC.resume().then(function(){S.audio='LIVE';go.classList.remove('show')}).catch(function(){S.audio='CLICK TO START';go.classList.add('show')});if(AC.state!=='running'){S.audio='CLICK TO START';go.classList.add('show')}}catch(e){S.audio='UNAVAILABLE'}}
+go.onclick=function(){start();if(AC)AC.resume()}; addEventListener('pointerdown',function(){start();if(AC)AC.resume()},{once:true}); addEventListener('keydown',function(e){if(e.key.toLowerCase()==='h')hud=!hud; if(e.key.toLowerCase()==='r')evolve(S.epoch+1); if(e.key===' ')start()}); setTimeout(function(){if(P.get('audio')!=='0')start()},300);
+function frame(n){requestAnimationFrame(frame); update(n); if(AC)lp.frequency.setTargetAtTime(3000+S.bri*2800,AC.currentTime,1.8); field(); HUD()}
+requestAnimationFrame(frame); window.MZTV={state:S,memory:mem,evolve:evolve,startAudio:start,version:'011-obas-field-organism'};
+})();
+</script>
+</body>
+</html>
