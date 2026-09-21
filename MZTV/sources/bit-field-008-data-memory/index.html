@@ -570,10 +570,11 @@ function drawHUD(){
 
 // ---------------- AUDIO ----------------
 
-let AC,master,masterTone,masterSat,comp,limiter,analyser;
+let AC,master,dcBlocker,masterTone,masterSat,comp,limiter,analyser;
 let subBus,drumBus,padBus,noiseBuffer;
 let nextTick=0,tickIndex=0,scheduler=null,padTimer=null;
 let padVoices=[],eventQueue=[],lastEvolvedBar=-1;
+let activeSub=null;
 
 const BPM=82;
 const QUARTER=60/BPM;
@@ -635,16 +636,41 @@ function kick(time,amp=.60){
   queue('kick',time,amp);
 }
 
+function releaseActiveSub(time){
+  if(!activeSub)return;
+  const v=activeSub;
+  try{
+    if(v.g.gain.cancelAndHoldAtTime){
+      v.g.gain.cancelAndHoldAtTime(time);
+    }else{
+      v.g.gain.cancelScheduledValues(time);
+      v.g.gain.setValueAtTime(Math.max(.0001,v.g.gain.value),time);
+    }
+    v.g.gain.exponentialRampToValueAtTime(.0001,time+.024);
+    v.o.stop(time+.032);
+  }catch(e){}
+  activeSub=null;
+}
+
 function sub808(time,freq,len=.60,amp=.17,glideTo=null){
-  const o=AC.createOscillator(),lp=AC.createBiquadFilter(),sat=shaper(1.16),g=AC.createGain();
+  // Monophonic 808 voice: crossfade the previous tail instead of summing
+  // unrelated low-frequency phases in the center.
+  releaseActiveSub(time);
+
+  const o=AC.createOscillator(),lp=AC.createBiquadFilter(),sat=shaper(1.12),g=AC.createGain();
   o.type='sine';
   o.frequency.setValueAtTime(freq,time);
-  o.frequency.exponentialRampToValueAtTime(Math.max(29,freq*.88),time+.075);
+  o.frequency.exponentialRampToValueAtTime(Math.max(29,freq*.90),time+.085);
   if(glideTo)o.frequency.linearRampToValueAtTime(glideTo,time+len*.68);
-  lp.type='lowpass';lp.frequency.value=150;lp.Q.value=.45;
-  const end=safeEnv(g,time,amp,.016,.040,len);
+
+  lp.type='lowpass';lp.frequency.value=145;lp.Q.value=.38;
+  const end=safeEnv(g,time,amp,.020,.035,len);
+
   o.connect(lp);lp.connect(sat);sat.connect(g);g.connect(subBus);
-  o.start(time);o.stop(end+.035);
+  activeSub={o,g,end};
+  o.onended=()=>{if(activeSub&&activeSub.o===o)activeSub=null};
+  o.start(time);
+  o.stop(end+.040);
   queue('sub',time,amp*2.6);
 }
 
@@ -703,10 +729,12 @@ function buildPads(){
     o2.detune.value=(2-i)*4.1;
     hp.type='highpass';hp.frequency.value=170;
     lp.type='lowpass';lp.frequency.value=900+i*90;lp.Q.value=.55;
-    g.gain.value=.012;
+    g.gain.value=.0001;
     o1.connect(sat);o2.connect(sat);sat.connect(hp);hp.connect(lp);lp.connect(g);
     if(p){g.connect(p);p.connect(padBus)}else g.connect(padBus);
-    o1.start();o2.start();
+    const padStart=AC.currentTime+.015;
+    o1.start(padStart);o2.start(padStart);
+    g.gain.setTargetAtTime(.012,padStart,.075);
     padVoices.push({o1,o2,lp,g,p,panBase:pans[i],i});
   }
   evolvePads();
@@ -739,7 +767,12 @@ function evolvePads(){
     v.g.gain.setTargetAtTime(.009+sweep*.007+state.saturation*.006,now,.8);
     if(v.p)v.p.pan.setTargetAtTime(clamp(v.panBase+Math.sin(now*.014+i)*.10,-1,1),now,1.0);
   });
-  if(masterSat)masterSat.curve=makeSatCurve(1.05+state.saturation*1.35);
+  // Do not rewrite a live WaveShaper curve: doing that can create a hard
+  // discontinuity in the center channel. Saturation stays fixed; the evolving
+  // tone is expressed through smoothly-ramped gain/filter parameters instead.
+  if(masterTone){
+    masterTone.frequency.setTargetAtTime(5200+state.padBrightness*1050,now,1.25);
+  }
 }
 
 function makeSatCurve(amount){
@@ -811,20 +844,26 @@ function startAudio(){
   try{
     AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});
 
-    master=AC.createGain();master.gain.value=.68;
+    master=AC.createGain();master.gain.value=.64;
+
+    // Remove subsonic/DC energy before it reaches nonlinear processors.
+    dcBlocker=AC.createBiquadFilter();
+    dcBlocker.type='highpass';dcBlocker.frequency.value=20;dcBlocker.Q.value=.35;
 
     masterTone=AC.createBiquadFilter();
-    masterTone.type='lowpass';masterTone.frequency.value=6100;masterTone.Q.value=.30;
+    masterTone.type='lowpass';masterTone.frequency.value=5750;masterTone.Q.value=.26;
 
+    // Fixed curve only. Changing a WaveShaper curve while audio is passing
+    // through it can produce the exact tick/click artifact heard in the center.
     masterSat=AC.createWaveShaper();
-    masterSat.curve=makeSatCurve(1.45);
+    masterSat.curve=makeSatCurve(1.28);
     masterSat.oversample='2x';
 
     comp=AC.createDynamicsCompressor();
-    comp.threshold.value=-15;comp.knee.value=14;comp.ratio.value=3.2;comp.attack.value=.008;comp.release.value=.22;
+    comp.threshold.value=-15;comp.knee.value=16;comp.ratio.value=3;comp.attack.value=.012;comp.release.value=.26;
 
     limiter=AC.createDynamicsCompressor();
-    limiter.threshold.value=-3;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=.001;limiter.release.value=.065;
+    limiter.threshold.value=-3;limiter.knee.value=1;limiter.ratio.value=12;limiter.attack.value=.002;limiter.release.value=.10;
 
     analyser=AC.createAnalyser();
     analyser.fftSize=1024;
@@ -846,7 +885,8 @@ function startAudio(){
     const padComp=AC.createDynamicsCompressor();padComp.threshold.value=-21;padComp.knee.value=18;padComp.ratio.value=2;padComp.attack.value=.05;padComp.release.value=.65;
     padBus.connect(padHP);padHP.connect(padLP);padLP.connect(padComp);padComp.connect(master);
 
-    master.connect(masterTone);
+    master.connect(dcBlocker);
+    dcBlocker.connect(masterTone);
     masterTone.connect(masterSat);
     masterSat.connect(comp);
     comp.connect(limiter);
@@ -859,7 +899,8 @@ function startAudio(){
     nextTick=AC.currentTime+.08;
     scheduler=setInterval(schedule,25);
 
-    addLog('SYSTEM','AUDIO ENGINE START · continuous scheduler',PAL.navy);
+    addLog('SYSTEM','AUDIO ENGINE START · click-safe continuous scheduler',PAL.navy);
+    addLog('AUDIO','FIXED SATURATION CURVE · MONO 808 CROSSFADE',PAL.coral);
     addLog('FORM','FOUNDATION · '+state.rhythmName+' · '+state.chordName,PAL.magenta);
 
     AC.resume().then(()=>{
