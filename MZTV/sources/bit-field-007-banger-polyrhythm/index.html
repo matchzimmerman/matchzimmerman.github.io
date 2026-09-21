@@ -51,124 +51,13 @@ const state={
   low:0,lowMid:0,mid:0,high:0,rms:0,
   kick:0,sub:0,tom:0,rim:0,brush:0,
   pad:0,drift:0,section:0,
-  chordName:'Fm9',bpm:82,recoveries:0,
-  generation:0,evolution:'STABLE',morph:0
+  chordName:'Fm9',bpm:82
 };
 
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 const mix=(a,b,t)=>a+(b-a)*t;
 const hash=n=>{const x=Math.sin(n*127.1+311.7)*43758.5453123;return x-Math.floor(x)};
 const ease=t=>t*t*(3-2*t);
-
-// ---------------- FIELD GENOME ----------------
-// The visual/audio language stays recognizably FIELD, but the rules themselves
-// mutate over long durations. Evolution persists through OBS browser refreshes.
-const GENOME_KEY='mztv007-field-genome-v1';
-const BASE_GENOME={
-  laneAmp:1,laneSpeed:1,laneCurve:1,laneTopology:1,
-  clusterDensity:1,clusterScale:1,clusterOrbit:1,fieldOpacity:1,moteActivity:1,
-  coreLobes:5,coreEcc:.54,coreDrift:1,paletteShift:0,
-  padBrightness:1,padMotion:1,subWeight:1,drumWeight:1,harmonicWarp:1,
-  rhythmTom:5,rhythmRim:7,rhythmBrush:3,bassMigration:5
-};
-const LIMITS={
-  laneAmp:[.65,1.55,.30],laneSpeed:[.55,1.65,.34],laneCurve:[.62,1.55,.28],laneTopology:[.72,1.38,.20],
-  clusterDensity:[.55,1.70,.34],clusterScale:[.65,1.48,.27],clusterOrbit:[.55,1.60,.34],
-  fieldOpacity:[.60,1.48,.28],moteActivity:[.55,1.65,.30],
-  coreEcc:[.38,.78,.11],coreDrift:[.55,1.55,.30],
-  padBrightness:[.62,1.55,.26],padMotion:[.55,1.68,.32],
-  subWeight:[.72,1.30,.18],drumWeight:[.72,1.30,.18],
-  harmonicWarp:[.985,1.018,.007]
-};
-const DISCRETE={
-  coreLobes:[3,4,5,6,7,8,9,10,11],
-  paletteShift:[0,1,2,3,4,5,6],
-  rhythmTom:[4,5,7,9,11],
-  rhythmRim:[5,7,9,11,13],
-  rhythmBrush:[3,4,5,6,7],
-  bassMigration:[3,4,5,6,7,8,9]
-};
-let genome={...BASE_GENOME},targetGenome={...BASE_GENOME};
-let evolution={
-  generation:0,morphStart:Date.now()-12*60*1000,morphDuration:12*60*1000,
-  nextMutationAt:Date.now()+8*60*1000
-};
-let lastGenomeSave=0;
-
-function evoProgress(now=Date.now()){
-  return clamp((now-evolution.morphStart)/Math.max(1,evolution.morphDuration),0,1);
-}
-function evo(k,now=Date.now()){
-  const p=ease(evoProgress(now));
-  return mix(genome[k],targetGenome[k],p);
-}
-function genomeSnapshot(){
-  const out={};
-  Object.keys(BASE_GENOME).forEach(k=>out[k]=evo(k));
-  return out;
-}
-function seeded(g,i,salt=0){ return hash(g*131.17+i*47.31+salt*911.7); }
-
-function saveGenome(force=false){
-  const now=Date.now();
-  if(!force && now-lastGenomeSave<30000)return;
-  lastGenomeSave=now;
-  try{localStorage.setItem(GENOME_KEY,JSON.stringify({genome,targetGenome,evolution}))}catch(e){}
-}
-function loadGenome(){
-  try{
-    const raw=JSON.parse(localStorage.getItem(GENOME_KEY)||'null');
-    if(raw&&raw.genome&&raw.targetGenome&&raw.evolution){
-      genome={...BASE_GENOME,...raw.genome};
-      targetGenome={...BASE_GENOME,...raw.targetGenome};
-      evolution={...evolution,...raw.evolution};
-      // If a refresh happened after the scheduled mutation moment, evolve once
-      // rather than resetting to the original instrument.
-      if(Date.now()>evolution.nextMutationAt) evolution.nextMutationAt=Date.now()+90000;
-    }
-  }catch(e){}
-}
-function mutateGenome(){
-  const g=evolution.generation+1;
-  genome=genomeSnapshot();
-  targetGenome={...genome};
-
-  const traits=Object.keys(BASE_GENOME)
-    .map((k,i)=>({k,r:seeded(g,i,17)}))
-    .sort((a,b)=>a.r-b.r);
-  const count=3+Math.floor(seeded(g,3,29)*3); // 3–5 inherited changes per generation.
-
-  for(let i=0;i<count;i++){
-    const k=traits[i].k;
-    if(DISCRETE[k]){
-      const opts=DISCRETE[k];
-      const current=Math.round(genome[k]);
-      const choices=opts.filter(v=>v!==current);
-      targetGenome[k]=choices[Math.floor(seeded(g,i,41)*choices.length)] ?? current;
-    }else if(LIMITS[k]){
-      const [lo,hi,step]=LIMITS[k];
-      const delta=(seeded(g,i,53)*2-1)*step;
-      targetGenome[k]=clamp(genome[k]+delta,lo,hi);
-    }
-  }
-
-  evolution.generation=g;
-  evolution.morphStart=Date.now();
-  evolution.morphDuration=(9+seeded(g,1,67)*10)*60*1000;      // 9–19 min morph.
-  evolution.nextMutationAt=Date.now()+(22+seeded(g,2,71)*20)*60*1000; // 22–42 min generation.
-  saveGenome(true);
-}
-
-function updateEvolution(){
-  const now=Date.now();
-  if(now>=evolution.nextMutationAt)mutateGenome();
-  const p=evoProgress(now);
-  state.generation=evolution.generation;
-  state.morph=p;
-  state.evolution=p<.995?'MUTATING':'STABLE';
-  saveGenome(false);
-}
-loadGenome();
 
 let W=VW,H=VH,dpr=1,scaleX=1,scaleY=1;
 function resize(){
@@ -237,12 +126,11 @@ function drawBackground(){
   ctx.save();
   ctx.globalCompositeOperation='multiply';
   clouds.forEach((q,i)=>{
-    const motion=evo('padMotion');
-    const x=q.x+Math.sin(t*.035*motion+i)*45*motion;
-    const y=q.y+Math.cos(t*.029*motion+q.phase)*32*motion;
-    const breathe=1+state.pad*.16+Math.sin(t*.08*motion+q.phase)*.045;
+    const x=q.x+Math.sin(t*.035+i)*45;
+    const y=q.y+Math.cos(t*.029+q.phase)*32;
+    const breathe=1+state.pad*.16+Math.sin(t*.08+q.phase)*.045;
     const g=ctx.createRadialGradient(x,y,0,x,y,q.r*breathe);
-    const alpha=q.a*(.7+state.pad*.75)*evo('fieldOpacity');
+    const alpha=q.a*(.7+state.pad*.75);
     g.addColorStop(0,hexA(q.color,alpha*1.7));
     g.addColorStop(.45,hexA(q.color,alpha));
     g.addColorStop(1,hexA(q.color,0));
@@ -260,26 +148,24 @@ function drawBackground(){
 
 function laneY(l,x){
   const q=lanes[l];
-  const curve=evo('laneCurve'),speed=evo('laneSpeed'),amp=evo('laneAmp');
-  const wave1=Math.sin(x*.0052*curve+t*q.speed*speed+q.phase);
-  const wave2=Math.sin(x*.0107*curve-t*q.speed*.52*speed+q.phase*1.7);
+  const wave1=Math.sin(x*.0052+t*q.speed+q.phase);
+  const wave2=Math.sin(x*.0107-t*q.speed*.52+q.phase*1.7);
   const reactive=(state.low*.55+state.lowMid*.28+state.kick*.25);
-  return q.y + wave1*q.amp*amp*(.50+reactive) + wave2*q.amp*amp*.16;
+  return q.y + wave1*q.amp*(.50+reactive) + wave2*q.amp*.16;
 }
 
 function drawLanes(){
   lanes.forEach((q,li)=>{
-    const nodeCount=Math.max(3,Math.round(q.nodes*evo('laneTopology')));
+    const nodeCount=q.nodes;
     const nodeW=VW/(nodeCount-1);
-    const laneAmp=evo('laneAmp'),laneSpeed=evo('laneSpeed');
     ctx.beginPath();
     for(let i=0;i<nodeCount;i++){
       const x=i*nodeW;
       const phase=q.phase+i*.73;
-      const cycle=Math.sin(t*q.speed*laneSpeed + phase);
+      const cycle=Math.sin(t*q.speed + phase);
       const y=q.y
-        + cycle*q.amp*laneAmp*(.58+state.low*.34)
-        + Math.sin(t*.19*laneSpeed+phase*1.9)*18
+        + cycle*q.amp*(.58+state.low*.34)
+        + Math.sin(t*.19+phase*1.9)*18
         + (li%2?1:-1)*state.kick*12;
       if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
@@ -292,7 +178,7 @@ function drawLanes(){
     for(let i=0;i<nodeCount;i++){
       const x=i*nodeW;
       const phase=q.phase+i*.73+1.7;
-      const y=q.y+Math.sin(t*q.speed*.73*laneSpeed+phase)*q.amp*laneAmp*.40+Math.cos(t*.13*laneSpeed+phase)*13;
+      const y=q.y+Math.sin(t*q.speed*.73+phase)*q.amp*.40+Math.cos(t*.13+phase)*13;
       if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
     ctx.strokeStyle=hexA(q.color,.14+state.pad*.10);
@@ -304,13 +190,12 @@ function drawLanes(){
 function drawCluster(q,idx){
   const li=q.lane;
   const band=lanes[li];
-  const orbitRate=evo('clusterOrbit'),clusterScale=evo('clusterScale');
-  let x=q.x + Math.sin(t*.05*orbitRate+q.phase)*85*orbitRate + q.drift*t*4*orbitRate;
+  let x=q.x + Math.sin(t*.05+q.phase)*85 + q.drift*t*4;
   x=((x+80)%(VW+160)+VW+160)%(VW+160)-80;
   const y0=laneY(li,x);
   const energy=.34+state.low*.64+state.mid*.22+state.pad*.18;
   const pulse=1+state.kick*.28+state.tom*.16;
-  const cells=Math.max(4,Math.round(q.density*evo('clusterDensity')));
+  const cells=q.density;
 
   ctx.save();
   ctx.globalCompositeOperation='source-over';
@@ -319,7 +204,7 @@ function drawCluster(q,idx){
     const rr=Math.sqrt(hash(idx*1100+j*23+2));
     const rx=(34+q.base*3.0)*rr;
     const ry=(20+q.base*2.4)*rr*(.75+state.low*.6);
-    const orbit=t*(.035+.012*li)*orbitRate*(idx%2?1:-1);
+    const orbit=t*(.035+.012*li)*(idx%2?1:-1);
     let px=x+Math.cos(a+orbit)*rx;
     let py=y0+Math.sin(a+orbit*.72)*ry;
 
@@ -328,9 +213,8 @@ function drawCluster(q,idx){
     px+=Math.sin(a*2.3+t*.22)*rhythm*15;
     py+=Math.cos(a*1.7-t*.18)*rhythm*11;
 
-    const s=q.base*clusterScale*(.55+hash(j*7+idx)*.92)*pulse*(.88+energy*.22);
-    const shift=Math.round(evo('paletteShift'));
-    const color=COLORS[(q.paletteOffset+j+li+shift+COLORS.length)%COLORS.length];
+    const s=q.base*(.55+hash(j*7+idx)*.92)*pulse*(.88+energy*.22);
+    const color=COLORS[(q.paletteOffset+j+li)%COLORS.length];
     ctx.fillStyle=hexA(color,.76+hash(j*11+4)*.20);
 
     // Slight rounding keeps the OBAS blocks tactile instead of next-neighbor harsh.
@@ -352,31 +236,17 @@ function drawMotes(){
     const y=m.y+Math.sin(t*.12+m.p)*16;
     const x=m.x+Math.cos(t*.09+m.p*1.2)*18;
     const trigger=(Math.sin(t*.23+m.p+i*.07)+1)*.5;
-    const activity=evo('moteActivity');
-    const a=(.16+trigger*.18+state.high*.10)*activity;
-    const shift=Math.round(evo('paletteShift'));
-    ctx.fillStyle=hexA(COLORS[(COLORS.indexOf(m.c)+shift+COLORS.length)%COLORS.length],a);
-    const s=m.s*(.7+state.mid*.55)*(.78+activity*.22);
+    const a=.16+trigger*.18+state.high*.10;
+    ctx.fillStyle=hexA(m.c,a);
+    const s=m.s*(.7+state.mid*.55);
     roundedRect(x-s*.5,y-s*.5,s,s,Math.min(2,s*.18));
     ctx.fill();
   });
 }
 
 function drawReactiveCore(){
-  // Never hard-reset to center: the core wanders on several incommensurate,
-  // very slow cycles so the field feels continuously alive rather than looped.
-  const coreDrift=evo('coreDrift');
-  const cx=VW*(.50
-    + Math.sin(t*.0067*coreDrift)*.075*coreDrift
-    + Math.sin(t*.0113*coreDrift+1.9)*.032
-    + Math.sin(t*.0029*coreDrift+4.1)*.018);
-  const cy=VH*(.52
-    + Math.sin(t*.0051*coreDrift+2.4)*.060*coreDrift
-    + Math.cos(t*.0097*coreDrift+.6)*.026
-    + Math.sin(t*.0023*coreDrift+5.2)*.015);
+  const cx=VW*.5, cy=VH*.52;
   const r=92+state.low*105+state.kick*30;
-  const lobes=Math.max(3,Math.round(evo('coreLobes')));
-  const ecc=evo('coreEcc');
   ctx.save();
   ctx.globalAlpha=.17+state.low*.16;
   ctx.strokeStyle=PAL.navy;
@@ -384,10 +254,10 @@ function drawReactiveCore(){
   ctx.beginPath();
   for(let i=0;i<=72;i++){
     const a=i/72*TAU;
-    const wobble=1+.10*Math.sin(a*lobes+t*.23)+.07*Math.sin(a*(lobes+2)-t*.17);
+    const wobble=1+.10*Math.sin(a*5+t*.23)+.07*Math.sin(a*7-t*.17);
     const rr=r*wobble;
     const x=cx+Math.cos(a)*rr;
-    const y=cy+Math.sin(a)*rr*ecc;
+    const y=cy+Math.sin(a)*rr*.54;
     if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
   }
   ctx.closePath();
@@ -402,9 +272,7 @@ function drawHUD(){
   ctx.font='11px ui-monospace,SFMono-Regular,Menlo,monospace';
   ctx.fillText('MZTV / BIT FIELD 007 / BANGER POLYRHYTHM',24,20);
 
-  const rt=Math.round(evo('rhythmTom')),rr=Math.round(evo('rhythmRim')),rb=Math.round(evo('rhythmBrush'));
-  const evoTag='GEN '+String(state.generation).padStart(3,'0')+' '+state.evolution+(state.evolution==='MUTATING'?' '+Math.round(state.morph*100)+'%':'');
-  const status=state.audio+'   REC '+state.recoveries+'   '+evoTag+'   '+state.bpm+' BPM   '+rt+':'+rr+':'+rb+' FIELD   '+state.chordName;
+  const status=state.audio+'   '+state.bpm+' BPM   5:7:3 FIELD   '+state.chordName;
   ctx.textAlign='right';
   ctx.fillText(status,VW-24,20);
 
@@ -444,9 +312,6 @@ function hexA(hex,a){
 let AC,master,masterTone,comp,analyser,subBus,drumBus,padBus;
 let nextTick=0,tickIndex=0,scheduler=null,noiseBuffer=null;
 let padVoices=[],padTimer=null,eventQueue=[];
-let audioWatchdog=null,rebuildingAudio=false,lastAudioHealthy=performance.now();
-let chordIndex=0,nextChordBar=7;
-const CHORD_SPANS=[7,11,13,9];
 
 const BPM=82;
 const QUARTER=60/BPM;
@@ -505,7 +370,7 @@ function kick(time,amp=.72){
   o.frequency.setValueAtTime(112,time);
   o.frequency.exponentialRampToValueAtTime(43,time+.105);
   o.frequency.exponentialRampToValueAtTime(36,time+.29);
-  env(g,time,amp*evo('drumWeight'),.003,.015,.32);
+  env(g,time,amp,.003,.015,.32);
   o.connect(g);g.connect(sat);sat.connect(drumBus);
   o.start(time);o.stop(time+.38);
   queue('kick',time,amp);
@@ -519,7 +384,7 @@ function sub(time,freq,len=.42,amp=.25){
   o2.frequency.setValueAtTime(freq*2,time);
   o2.detune.value=-4;
   lp.type='lowpass';lp.frequency.value=155;lp.Q.value=.7;
-  env(g,time,amp*evo('subWeight'),.014,.035,len);
+  env(g,time,amp,.014,.035,len);
   o1.connect(lp);o2.connect(lp);lp.connect(sat);sat.connect(g);g.connect(subBus);
   o1.start(time);o2.start(time);o1.stop(time+len+.12);o2.stop(time+len+.12);
   queue('sub',time,amp*2.4);
@@ -531,7 +396,7 @@ function lowTom(time,pan=.2,amp=.12){
   o.frequency.setValueAtTime(142,time);
   o.frequency.exponentialRampToValueAtTime(92,time+.16);
   bp.type='lowpass';bp.frequency.value=580;bp.Q.value=.6;
-  env(g,time,amp*evo('drumWeight'),.004,.012,.19);
+  env(g,time,amp,.004,.012,.19);
   o.connect(bp);bp.connect(g);
   const p=panNode(pan);
   if(p){g.connect(p);p.connect(drumBus)}else g.connect(drumBus);
@@ -543,7 +408,7 @@ function rim(time,pan=-.2,amp=.048){
   const s=AC.createBufferSource(),bp=AC.createBiquadFilter(),g=AC.createGain();
   s.buffer=noiseBuffer;
   bp.type='bandpass';bp.frequency.value=720;bp.Q.value=1.35;
-  env(g,time,amp*evo('drumWeight'),.002,.005,.075);
+  env(g,time,amp,.002,.005,.075);
   s.connect(bp);bp.connect(g);
   const p=panNode(pan);
   if(p){g.connect(p);p.connect(drumBus)}else g.connect(drumBus);
@@ -556,7 +421,7 @@ function brush(time,pan=.45,amp=.022){
   s.buffer=noiseBuffer;
   hp.type='highpass';hp.frequency.value=650;
   lp.type='lowpass';lp.frequency.value=2600;
-  env(g,time,amp*evo('drumWeight'),.006,.008,.11);
+  env(g,time,amp,.006,.008,.11);
   s.connect(hp);hp.connect(lp);lp.connect(g);
   const p=panNode(pan);
   if(p){g.connect(p);p.connect(drumBus)}else g.connect(drumBus);
@@ -582,7 +447,7 @@ function buildPads(){
     o1.connect(sat);o2.connect(sat);sat.connect(lp);lp.connect(g);
     if(p){g.connect(p);p.connect(padBus)}else g.connect(padBus);
     o1.start();o2.start();
-    padVoices.push({o1,o2,lp,g,p,panBase:pans[i],i,baseFreq:CHORDS[0].freqs[i]});
+    padVoices.push({o1,o2,lp,g,p,panBase:pans[i],i});
   }
   evolvePads();
   padTimer=setInterval(evolvePads,180);
@@ -594,10 +459,8 @@ function setChord(index){
   const now=AC.currentTime;
   padVoices.forEach((v,i)=>{
     const f=chord.freqs[i];
-    v.baseFreq=f;
-    const warp=evo('harmonicWarp');
-    v.o1.frequency.setTargetAtTime(f*warp,now,1.8);
-    v.o2.frequency.setTargetAtTime(f*2*warp,now,2.1);
+    v.o1.frequency.setTargetAtTime(f,now,1.8);
+    v.o2.frequency.setTargetAtTime(f*2,now,2.1);
   });
 }
 
@@ -605,17 +468,12 @@ function evolvePads(){
   if(!AC||!padVoices.length)return;
   const now=AC.currentTime;
   const sec=now/QUARTER/16;
-  const padMotion=evo('padMotion'),brightness=evo('padBrightness'),warp=evo('harmonicWarp');
-  state.drift=(Math.sin(now*.031*padMotion)+1)*.5;
+  state.drift=(Math.sin(now*.031)+1)*.5;
   padVoices.forEach((v,i)=>{
-    const sweep=.5+.5*Math.sin(now*(.035+i*.006)*padMotion+i*1.7);
-    v.lp.frequency.setTargetAtTime((620+sweep*980+state.lowMid*260)*brightness,now,.3);
+    const sweep=.5+.5*Math.sin(now*(.035+i*.006)+i*1.7);
+    v.lp.frequency.setTargetAtTime(620+sweep*980+state.lowMid*260,now,.3);
     v.g.gain.setTargetAtTime(.014+sweep*.012+state.pad*.006,now,.5);
-    if(v.baseFreq){
-      v.o1.frequency.setTargetAtTime(v.baseFreq*warp,now,.8);
-      v.o2.frequency.setTargetAtTime(v.baseFreq*2*warp,now,.9);
-    }
-    if(v.p)v.p.pan.setTargetAtTime(clamp(v.panBase+Math.sin(now*.021*padMotion+i)*.12*padMotion,-1,1),now,.7);
+    if(v.p)v.p.pan.setTargetAtTime(clamp(v.panBase+Math.sin(now*.021+i)*.12,-1,1),now,.7);
   });
 }
 
@@ -632,10 +490,7 @@ function schedule(){
     if(step===11 && bar%2===1)kick(nextTick,.25);
 
     // BANGER-style controlled low voice.
-    // Keep the bass musical, but prevent the exact two-bar phrase from snapping
-    // back into place. Prime-length bar offsets make the phrase migrate slowly.
-    const migration=Math.max(3,Math.round(evo('bassMigration')));
-    const bassCycle=(s + Math.floor(bar/3)*migration + Math.floor(bar/7)*3 + Math.floor(bar/11)*7)%32;
+    const bassCycle=s%32;
     const bassMap={
       0:[43.65,.29,.44],5:[43.65,.19,.29],10:[51.91,.20,.34],
       15:[38.89,.16,.26],16:[43.65,.26,.44],22:[34.65,.19,.36],
@@ -643,25 +498,16 @@ function schedule(){
     };
     if(bassMap[bassCycle]){
       const b=bassMap[bassCycle];
-      sub(nextTick,b[0]*evo('harmonicWarp'),b[2],b[1]);
+      sub(nextTick,b[0],b[2],b[1]);
     }
 
-    // The polyrhythmic topology itself is heritable. Ratios can slowly mutate
-    // across generations, changing the system rather than merely its pattern.
-    const tomDiv=Math.max(3,Math.round(evo('rhythmTom')));
-    const rimDiv=Math.max(3,Math.round(evo('rhythmRim')));
-    const brushDiv=Math.max(3,Math.round(evo('rhythmBrush')));
-    if(s%tomDiv===2%tomDiv)lowTom(nextTick,(s%(tomDiv*2)===2?-.28:.26),.09+(bar%4===3?.025:0));
-    if(s%rimDiv===4%rimDiv)rim(nextTick,(s%(rimDiv*2)===4?.38:-.38),.040);
-    if(s%brushDiv===1 && step!==0 && step!==8)brush(nextTick,(s%(brushDiv*2)===1?.58:-.58),.014+(bar%8>5?.007:0));
+    // Independent 5 / 7 / 3 cycles = long phase relationship against 16.
+    if(s%5===2)lowTom(nextTick,(s%10===2?-.28:.26),.09+(bar%4===3?.025:0));
+    if(s%7===4)rim(nextTick,(s%14===4?.38:-.38),.040);
+    if(s%3===1 && step!==0 && step!==8)brush(nextTick,(s%6===1?.58:-.58),.014+(bar%8>5?.007:0));
 
-    // Chord changes use unequal spans instead of a fixed 8-bar reset.
-    // The voices still glide, but the large-scale form no longer announces a loop.
-    if(step===0 && bar>=nextChordBar){
-      chordIndex=(chordIndex+1)%CHORDS.length;
-      setChord(chordIndex);
-      nextChordBar=bar+CHORD_SPANS[chordIndex%CHORD_SPANS.length];
-    }
+    // Chord field only changes every 8 bars; voices glide instead of jumping.
+    if(step===0 && bar%8===0)setChord(Math.floor(bar/8)%CHORDS.length);
 
     nextTick+=SIXTEENTH;
     tickIndex++;
@@ -669,79 +515,14 @@ function schedule(){
   }
 }
 
-async function recoverAudio(reason='WATCHDOG'){
-  if(rebuildingAudio)return;
-  rebuildingAudio=true;
-  state.audio='RECOVERING';
-  state.recoveries++;
-  try{
-    if(scheduler){clearInterval(scheduler);scheduler=null}
-    if(padTimer){clearInterval(padTimer);padTimer=null}
-    padVoices.forEach(v=>{
-      try{v.o1.stop()}catch(e){}
-      try{v.o2.stop()}catch(e){}
-    });
-    padVoices=[];
-    eventQueue=[];
-    if(AC){
-      try{AC.onstatechange=null}catch(e){}
-      try{await AC.close()}catch(e){}
-    }
-  }finally{
-    AC=master=masterTone=comp=analyser=subBus=drumBus=padBus=null;
-    noiseBuffer=null;
-    state.started=false;
-    setTimeout(()=>{
-      rebuildingAudio=false;
-      startAudio();
-    },250);
-  }
-}
-
-function startAudioWatchdog(){
-  if(audioWatchdog)return;
-  audioWatchdog=setInterval(async()=>{
-    if(rebuildingAudio||!state.started||!AC)return;
-
-    if(AC.state==='suspended'||AC.state==='interrupted'){
-      state.audio='RESUMING';
-      try{await AC.resume()}catch(e){}
-      if(AC.state==='running'){
-        state.audio='LIVE';
-        lastAudioHealthy=performance.now();
-      }else{
-        recoverAudio('CONTEXT_'+String(AC.state).toUpperCase());
-        return;
-      }
-    }
-
-    if(AC.state==='closed'){
-      recoverAudio('CONTEXT_CLOSED');
-      return;
-    }
-
-    // Pads are continuous, so 12 seconds of near-zero analyser output means
-    // the embedded browser audio graph has genuinely stopped producing sound.
-    if(AC.state==='running' && performance.now()-lastAudioHealthy>12000){
-      recoverAudio('SILENCE');
-    }
-  },3000);
-}
-
 function startAudio(){
   if(state.started){
-    if(AC&&(AC.state==='suspended'||AC.state==='interrupted'))AC.resume();
+    if(AC&&AC.state==='suspended')AC.resume();
     return;
   }
   state.started=true;
   try{
     AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});
-    lastAudioHealthy=performance.now();
-    AC.onstatechange=()=>{
-      if(!AC)return;
-      if(AC.state==='running')state.audio='LIVE';
-      else if(AC.state==='suspended'||AC.state==='interrupted')state.audio='RESUMING';
-    };
 
     master=AC.createGain();master.gain.value=.92;
     masterTone=AC.createBiquadFilter();masterTone.type='lowpass';masterTone.frequency.value=6900;masterTone.Q.value=.35;
@@ -773,7 +554,6 @@ function startAudio(){
     buildPads();
     nextTick=AC.currentTime+.08;
     scheduler=setInterval(schedule,25);
-    startAudioWatchdog();
 
     AC.resume().then(()=>{
       state.audio='LIVE';
@@ -824,7 +604,6 @@ function sampleAudio(){
   let sq=0;
   for(let i=0;i<wave.length;i++){const v=(wave[i]-128)/128;sq+=v*v}
   state.rms=mix(state.rms,Math.sqrt(sq/wave.length),.18);
-  if(state.rms>.0015 || state.low>.004 || state.mid>.004)lastAudioHealthy=performance.now();
   state.pad=mix(state.pad,clamp(state.mid*.88+state.rms*.85),.06);
 }
 
@@ -846,7 +625,6 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(.05,(now-last)/1000||0);
   last=now;t+=dt;
-  updateEvolution();
   sampleAudio();
   processEvents();
 
@@ -864,14 +642,7 @@ window.MZTV={
   state,
   startAudio,
   setChord:i=>{if(AC)setChord(i)},
-  genome:()=>({generation:evolution.generation,current:genomeSnapshot(),target:{...targetGenome},evolution:{...evolution}}),
-  forceMutation:()=>mutateGenome(),
-  resetGenome:()=>{
-    genome={...BASE_GENOME};targetGenome={...BASE_GENOME};
-    evolution={generation:0,morphStart:Date.now()-12*60*1000,morphDuration:12*60*1000,nextMutationAt:Date.now()+8*60*1000};
-    saveGenome(true);
-  },
-  version:'007-banger-polyrhythm-evolving-field'
+  version:'007-banger-polyrhythm'
 };
 
 })();
