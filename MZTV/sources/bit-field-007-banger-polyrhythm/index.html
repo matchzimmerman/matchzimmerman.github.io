@@ -51,7 +51,7 @@ const state={
   low:0,lowMid:0,mid:0,high:0,rms:0,
   kick:0,sub:0,tom:0,rim:0,brush:0,
   pad:0,drift:0,section:0,
-  chordName:'Fm9',bpm:82
+  chordName:'Fm9',bpm:82,recoveries:0
 };
 
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
@@ -245,7 +245,16 @@ function drawMotes(){
 }
 
 function drawReactiveCore(){
-  const cx=VW*.5, cy=VH*.52;
+  // Never hard-reset to center: the core wanders on several incommensurate,
+  // very slow cycles so the field feels continuously alive rather than looped.
+  const cx=VW*(.50
+    + Math.sin(t*.0067)*.075
+    + Math.sin(t*.0113+1.9)*.032
+    + Math.sin(t*.0029+4.1)*.018);
+  const cy=VH*(.52
+    + Math.sin(t*.0051+2.4)*.060
+    + Math.cos(t*.0097+.6)*.026
+    + Math.sin(t*.0023+5.2)*.015);
   const r=92+state.low*105+state.kick*30;
   ctx.save();
   ctx.globalAlpha=.17+state.low*.16;
@@ -272,7 +281,7 @@ function drawHUD(){
   ctx.font='11px ui-monospace,SFMono-Regular,Menlo,monospace';
   ctx.fillText('MZTV / BIT FIELD 007 / BANGER POLYRHYTHM',24,20);
 
-  const status=state.audio+'   '+state.bpm+' BPM   5:7:3 FIELD   '+state.chordName;
+  const status=state.audio+'   REC '+state.recoveries+'   '+state.bpm+' BPM   5:7:3 FIELD   '+state.chordName;
   ctx.textAlign='right';
   ctx.fillText(status,VW-24,20);
 
@@ -312,6 +321,9 @@ function hexA(hex,a){
 let AC,master,masterTone,comp,analyser,subBus,drumBus,padBus;
 let nextTick=0,tickIndex=0,scheduler=null,noiseBuffer=null;
 let padVoices=[],padTimer=null,eventQueue=[];
+let audioWatchdog=null,rebuildingAudio=false,lastAudioHealthy=performance.now();
+let chordIndex=0,nextChordBar=7;
+const CHORD_SPANS=[7,11,13,9];
 
 const BPM=82;
 const QUARTER=60/BPM;
@@ -490,7 +502,9 @@ function schedule(){
     if(step===11 && bar%2===1)kick(nextTick,.25);
 
     // BANGER-style controlled low voice.
-    const bassCycle=s%32;
+    // Keep the bass musical, but prevent the exact two-bar phrase from snapping
+    // back into place. Prime-length bar offsets make the phrase migrate slowly.
+    const bassCycle=(s + Math.floor(bar/3)*5 + Math.floor(bar/7)*3 + Math.floor(bar/11)*7)%32;
     const bassMap={
       0:[43.65,.29,.44],5:[43.65,.19,.29],10:[51.91,.20,.34],
       15:[38.89,.16,.26],16:[43.65,.26,.44],22:[34.65,.19,.36],
@@ -506,8 +520,13 @@ function schedule(){
     if(s%7===4)rim(nextTick,(s%14===4?.38:-.38),.040);
     if(s%3===1 && step!==0 && step!==8)brush(nextTick,(s%6===1?.58:-.58),.014+(bar%8>5?.007:0));
 
-    // Chord field only changes every 8 bars; voices glide instead of jumping.
-    if(step===0 && bar%8===0)setChord(Math.floor(bar/8)%CHORDS.length);
+    // Chord changes use unequal spans instead of a fixed 8-bar reset.
+    // The voices still glide, but the large-scale form no longer announces a loop.
+    if(step===0 && bar>=nextChordBar){
+      chordIndex=(chordIndex+1)%CHORDS.length;
+      setChord(chordIndex);
+      nextChordBar=bar+CHORD_SPANS[chordIndex%CHORD_SPANS.length];
+    }
 
     nextTick+=SIXTEENTH;
     tickIndex++;
@@ -515,14 +534,79 @@ function schedule(){
   }
 }
 
+async function recoverAudio(reason='WATCHDOG'){
+  if(rebuildingAudio)return;
+  rebuildingAudio=true;
+  state.audio='RECOVERING';
+  state.recoveries++;
+  try{
+    if(scheduler){clearInterval(scheduler);scheduler=null}
+    if(padTimer){clearInterval(padTimer);padTimer=null}
+    padVoices.forEach(v=>{
+      try{v.o1.stop()}catch(e){}
+      try{v.o2.stop()}catch(e){}
+    });
+    padVoices=[];
+    eventQueue=[];
+    if(AC){
+      try{AC.onstatechange=null}catch(e){}
+      try{await AC.close()}catch(e){}
+    }
+  }finally{
+    AC=master=masterTone=comp=analyser=subBus=drumBus=padBus=null;
+    noiseBuffer=null;
+    state.started=false;
+    setTimeout(()=>{
+      rebuildingAudio=false;
+      startAudio();
+    },250);
+  }
+}
+
+function startAudioWatchdog(){
+  if(audioWatchdog)return;
+  audioWatchdog=setInterval(async()=>{
+    if(rebuildingAudio||!state.started||!AC)return;
+
+    if(AC.state==='suspended'||AC.state==='interrupted'){
+      state.audio='RESUMING';
+      try{await AC.resume()}catch(e){}
+      if(AC.state==='running'){
+        state.audio='LIVE';
+        lastAudioHealthy=performance.now();
+      }else{
+        recoverAudio('CONTEXT_'+String(AC.state).toUpperCase());
+        return;
+      }
+    }
+
+    if(AC.state==='closed'){
+      recoverAudio('CONTEXT_CLOSED');
+      return;
+    }
+
+    // Pads are continuous, so 12 seconds of near-zero analyser output means
+    // the embedded browser audio graph has genuinely stopped producing sound.
+    if(AC.state==='running' && performance.now()-lastAudioHealthy>12000){
+      recoverAudio('SILENCE');
+    }
+  },3000);
+}
+
 function startAudio(){
   if(state.started){
-    if(AC&&AC.state==='suspended')AC.resume();
+    if(AC&&(AC.state==='suspended'||AC.state==='interrupted'))AC.resume();
     return;
   }
   state.started=true;
   try{
     AC=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});
+    lastAudioHealthy=performance.now();
+    AC.onstatechange=()=>{
+      if(!AC)return;
+      if(AC.state==='running')state.audio='LIVE';
+      else if(AC.state==='suspended'||AC.state==='interrupted')state.audio='RESUMING';
+    };
 
     master=AC.createGain();master.gain.value=.92;
     masterTone=AC.createBiquadFilter();masterTone.type='lowpass';masterTone.frequency.value=6900;masterTone.Q.value=.35;
@@ -554,6 +638,7 @@ function startAudio(){
     buildPads();
     nextTick=AC.currentTime+.08;
     scheduler=setInterval(schedule,25);
+    startAudioWatchdog();
 
     AC.resume().then(()=>{
       state.audio='LIVE';
@@ -604,6 +689,7 @@ function sampleAudio(){
   let sq=0;
   for(let i=0;i<wave.length;i++){const v=(wave[i]-128)/128;sq+=v*v}
   state.rms=mix(state.rms,Math.sqrt(sq/wave.length),.18);
+  if(state.rms>.0015 || state.low>.004 || state.mid>.004)lastAudioHealthy=performance.now();
   state.pad=mix(state.pad,clamp(state.mid*.88+state.rms*.85),.06);
 }
 
