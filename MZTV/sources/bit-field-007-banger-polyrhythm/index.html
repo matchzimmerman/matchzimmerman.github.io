@@ -90,8 +90,8 @@ const DISCRETE={
 };
 let genome={...BASE_GENOME},targetGenome={...BASE_GENOME};
 let evolution={
-  generation:0,morphStart:Date.now(),morphDuration:12*60*1000,
-  nextMutationAt:Date.now()+18*60*1000
+  generation:0,morphStart:Date.now()-12*60*1000,morphDuration:12*60*1000,
+  nextMutationAt:Date.now()+8*60*1000
 };
 let lastGenomeSave=0;
 
@@ -868,7 +868,7 @@ window.MZTV={
   forceMutation:()=>mutateGenome(),
   resetGenome:()=>{
     genome={...BASE_GENOME};targetGenome={...BASE_GENOME};
-    evolution={generation:0,morphStart:Date.now(),morphDuration:12*60*1000,nextMutationAt:Date.now()+18*60*1000};
+    evolution={generation:0,morphStart:Date.now()-12*60*1000,morphDuration:12*60*1000,nextMutationAt:Date.now()+8*60*1000};
     saveGenome(true);
   },
   version:'007-banger-polyrhythm-evolving-field'
