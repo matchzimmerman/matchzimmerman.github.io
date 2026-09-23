@@ -5,93 +5,25 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <!--ARTIFACT-START-->
 <title>MZTV Substrate</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* MZTV · SUBSTRATE — Match Zimmerman Creative Media Group
-   Single-world broadcast design: the palette tokens below are rewritten live
-   by the system as it migrates between colour families. */
-:root{
-  color-scheme: dark;
-  --c0:#0e3a3c; --c1:#1f5f5a; --c2:#e8a33d; --c3:#f4e9c9;
-  --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --serif:"EB Garamond", Garamond, "Iowan Old Style", "Times New Roman", serif;
-  --fs:clamp(10.5px, 0.66vw, 15px);
-}
+   All on-screen type is drawn by the piece itself: a 5×7 bitmap face
+   rendered into #hudc in the field's current grammar and palette. */
+:root{ color-scheme: dark; --c0:#0e3a3c; --c3:#f4e9c9; }
 html,body{height:100%;margin:0;overflow:hidden;background:var(--c0);}
-body{font-family:var(--mono);font-size:var(--fs);color:var(--c2);-webkit-font-smoothing:antialiased;}
-#field{position:fixed;inset:0;width:100%;height:100%;display:block;}
-.hud{position:fixed;inset:0;pointer-events:none;box-sizing:border-box;
-  padding-block:max(2.4vh,16px);padding-inline:max(1.8vw,16px);
-  display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr auto;gap:1rem;}
-.hud[hidden]{display:none!important}
-.plate{background:color-mix(in srgb, var(--c0) 86%, transparent);padding:.75em 1em;line-height:1.55;font-variant-numeric:tabular-nums;}
-.label{letter-spacing:.16em;text-transform:uppercase;font-size:.8em;color:var(--c3);margin:0 0 .4em;font-weight:500}
-.ident{grid-column:1;grid-row:1;justify-self:start;align-self:start}
-.ident h1{font-family:var(--serif);font-style:italic;font-weight:400;font-size:calc(var(--fs)*2.7);line-height:1;margin:.12em 0 .18em;color:var(--c2);letter-spacing:.01em}
-.ident .sub{color:var(--c3);opacity:.85}
-.clock{grid-column:2;grid-row:1;align-self:start;text-align:right}
-.clock .big{font-size:1.5em;color:var(--c2);font-weight:500;letter-spacing:.04em}
-.clock .dim{color:var(--c3);opacity:.85}
-.log{grid-column:1;grid-row:3;align-self:end;justify-self:start;max-width:min(62ch,100%);box-sizing:border-box}
-.log ol{margin:0;padding:0}
-.log li{list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.log li b{font-weight:500;color:var(--c3)}
-.map{grid-column:2;grid-row:3;align-self:end}
-.map .rows{display:grid;grid-template-columns:auto auto auto auto;gap:.1em 1.1em;align-items:baseline}
-.map .src{color:var(--c3);opacity:.9}
-.map .v{text-align:right;color:var(--c2)}
-.map .arr{color:var(--c3);opacity:.9}
-.meter{height:.42em;background:color-mix(in srgb, var(--c3) 22%, transparent);margin-top:.55em;position:relative}
-.meter i{position:absolute;inset:0 auto 0 0;background:var(--c2);width:0}
-.gate{position:fixed;left:max(1.8vw,16px);top:50%;transform:translateY(-50%);max-width:min(40ch, calc(100% - 32px));box-sizing:border-box;padding:1.1em 1.25em;font-size:max(13px,var(--fs));}
-.gate p{margin:.2em 0 .9em;color:var(--c3);line-height:1.6}
-.gate button{font:inherit;font-weight:500;letter-spacing:.08em;background:var(--c2);color:var(--c0);border:0;padding:.75em 1.2em;cursor:pointer;text-transform:uppercase;font-size:.9em}
-.gate button:hover{background:var(--c3)}
-.gate button:focus-visible{outline:2px solid var(--c3);outline-offset:3px}
-.gate .keys{margin:.9em 0 0;font-size:.85em;opacity:.8}
-.fail{position:fixed;inset:0;display:grid;place-items:center;color:var(--c3);padding:24px;text-align:left}
-@media (max-width:760px){
-  .map{display:none}
-  .hud{grid-template-columns:1fr}
-  .clock{grid-column:1;grid-row:2;justify-self:end;align-self:start;text-align:right}
-  .log li:nth-child(n+5){display:none}
-}
+body{font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--c3);}
+#field,#hudc{position:fixed;inset:0;width:100%;height:100%;display:block;}
+#hudc{pointer-events:none;image-rendering:pixelated;}
+.sr{position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;}
+.sr:focus{left:16px;top:16px;width:auto;height:auto;padding:8px 12px;background:var(--c3);color:var(--c0);border:0;font:inherit;z-index:3;}
+.fail{position:fixed;inset:0;display:grid;place-items:center;padding:24px;}
+.fail div{max-width:44ch;background:var(--c0);padding:16px;}
 </style>
 </head>
 <body>
 <canvas id="field"></canvas>
-
-<div class="hud" id="hud">
-  <div class="plate ident">
-    <div class="label">MZTV · generative field</div>
-    <h1>Substrate</h1>
-    <div class="sub">a morphogenetic field in D Phrygian</div>
-  </div>
-  <div class="plate clock">
-    <div class="label">performance time</div>
-    <div class="big" id="elapsed">00:00:00</div>
-    <div class="dim" id="cities">BAL --:-- · GAL --:-- · LON --:--</div>
-    <div class="dim" id="epoch">EPOCH 0 · MEMORY 0</div>
-  </div>
-  <div class="plate log">
-    <div class="label">evolution log</div>
-    <ol id="log"></ol>
-  </div>
-  <div class="plate map">
-    <div class="label">field → sound</div>
-    <div class="rows" id="rows"></div>
-    <div class="meter" title="tension"><i id="tension"></i></div>
-  </div>
-</div>
-
-<div class="plate gate" id="gate">
-  <div class="label">now transmitting</div>
-  <p>A self-organising field that listens to itself and remembers where it has been. Sound starts when you enter. Headphones or a system with real low end.</p>
-  <button id="enter" type="button">Enter the field</button>
-  <p class="keys">H hide overlay · R provoke rupture · M mute</p>
-</div>
+<canvas id="hudc" aria-hidden="true"></canvas>
+<button id="enter" class="sr" type="button">Enter the field (sound on)</button>
 
 <script>
 "use strict";
@@ -111,6 +43,7 @@ const Q = new URLSearchParams(location.search);
 const SPEED = Math.max(0.1, +Q.get('speed') || 1);
 const SEED = +Q.get('seed') || (Date.now() % 2147483647);
 const KEY = 'mztv.substrate.v1';
+const AUTOSTART = Q.get('autostart')==='1';
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const rng = mulberry32(SEED);
@@ -159,35 +92,152 @@ function save(){
   }catch(e){}
 }
 
-// ---------- log + HUD ------------------------------------------------
+// ---------- log + bitmap HUD ------------------------------------------
+// All type is a 5×7 bitmap face drawn by the piece itself, in the field's
+// current grammar (square pixel / round dot / scan line) and live palette.
 const $=id=>document.getElementById(id);
-const hud=$('hud'); if (Q.get('hud')==='0') hud.hidden=true;
+let hudOn = Q.get('hud')!=='0';
 let elapsed=0; const LOG=[];
 function log(txt, blip){
-  LOG.unshift(`<span>${hms(elapsed)}</span> — ${txt}`); if (LOG.length>9) LOG.pop();
-  const ol=$('log'); ol.innerHTML = LOG.map((l,i)=>`<li style="opacity:${(1-i*0.085).toFixed(2)}">${l}</li>`).join('');
+  LOG.unshift({t:elapsed, txt}); if (LOG.length>9) LOG.pop(); hudDirty=true;
   if (blip && audioOn) tick_blip(A.ctx.currentTime+0.02);
 }
-const ROWS = [
-  ['cov','FIELD COVERAGE','sub','SUB DRONE'],
-  ['edge','EDGE DENSITY','kp','KNOCK PROB'],
-  ['aniso','ANISOTROPY','band','KNOCK BAND'],
-  ['cx','MASS CENTROID','pan','KNOCK PAN'],
-  ['stab','STABILITY','fb','DUB FEEDBACK'],
-  ['sed','SEDIMENT','rev','ROOM SIZE'],
-  ['ten','TENSION','drv','SATURATION'],
-  ['bass','BASS NOTE','drift','FIELD DRIFT'],
-  ['reg','REGIME','fk','FEED / KILL'],
-  ['met','METER','bpm','TEMPO']
-];
-$('rows').innerHTML = ROWS.map(r=>`<span class="src">${r[1]}</span><b class="v" id="m-${r[0]}">—</b><span class="arr">→ ${r[3]}</span><b class="v" id="m-${r[2]}">—</b>`).join('');
-const MAP={};
-function setMap(k,v){ MAP[k]=v; }
+const LIVE={cov:0,edge:0,aniso:0,cx:0,stab:0,sed:0,bassDeg:null,deg:0};
+const G5 = {
+ 'A':[14,17,17,31,17,17,17],'B':[30,17,17,30,17,17,30],'C':[14,17,16,16,16,17,14],'D':[30,17,17,17,17,17,30],
+ 'E':[31,16,16,30,16,16,31],'F':[31,16,16,30,16,16,16],'G':[14,17,16,23,17,17,15],'H':[17,17,17,31,17,17,17],
+ 'I':[14,4,4,4,4,4,14],'J':[7,2,2,2,2,18,12],'K':[17,18,20,24,20,18,17],'L':[16,16,16,16,16,16,31],
+ 'M':[17,27,21,21,17,17,17],'N':[17,17,25,21,19,17,17],'O':[14,17,17,17,17,17,14],'P':[30,17,17,30,16,16,16],
+ 'Q':[14,17,17,17,21,18,13],'R':[30,17,17,30,20,18,17],'S':[15,16,16,14,1,1,30],'T':[31,4,4,4,4,4,4],
+ 'U':[17,17,17,17,17,17,14],'V':[17,17,17,17,17,10,4],'W':[17,17,17,21,21,21,10],'X':[17,17,10,4,10,17,17],
+ 'Y':[17,17,10,4,4,4,4],'Z':[31,1,2,4,8,16,31],
+ '0':[14,17,19,21,25,17,14],'1':[4,12,4,4,4,4,14],'2':[14,17,1,2,4,8,31],'3':[31,2,4,2,1,17,14],
+ '4':[2,6,10,18,31,2,2],'5':[31,16,30,1,1,17,14],'6':[6,8,16,30,17,17,14],'7':[31,1,2,4,8,8,8],
+ '8':[14,17,17,14,17,17,14],'9':[14,17,17,15,1,2,12],
+ ' ':[0,0,0,0,0,0,0],'.':[0,0,0,0,0,12,12],',':[0,0,0,0,12,4,8],':':[0,12,12,0,12,12,0],';':[0,12,12,0,12,4,8],
+ '-':[0,0,0,31,0,0,0],'—':[0,0,0,31,0,0,0],'−':[0,0,0,31,0,0,0],'–':[0,0,0,31,0,0,0],'+':[0,4,4,31,4,4,0],
+ '%':[24,25,2,4,8,19,3],'/':[0,1,2,4,8,16,0],'(':[2,4,8,8,8,4,2],')':[8,4,2,2,2,4,8],
+ '→':[0,4,2,31,2,4,0],'←':[0,4,8,31,8,4,0],'>':[8,4,2,1,2,4,8],'<':[2,4,8,16,8,4,2],
+ "'":[4,4,8,0,0,0,0],'"':[10,10,0,0,0,0,0],'·':[0,0,0,4,0,0,0],'#':[10,10,31,10,31,10,10],'_':[0,0,0,0,0,0,31],
+ '=':[0,0,31,0,31,0,0],'?':[14,17,1,2,4,0,4],'!':[4,4,4,4,4,0,4],'[':[14,8,8,8,8,8,14],']':[14,2,2,2,2,2,14],
+ '°':[12,18,18,12,0,0,0],'|':[4,4,4,4,4,4,4],'♭':[16,16,22,25,17,17,30],'×':[0,17,10,4,10,17,0],'~':[0,0,8,21,2,0,0],
+ '█':[31,31,31,31,31,31,31],'░':[0,21,0,21,0,21,0]
+};
+const hc=$('hudc'), hx=hc.getContext('2d');
+let hudDirty=true, C=['#000','#000','#fff','#fff'];
+const B4=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+const cw=s=>6*s, tw=(str,s)=>str.length*6*s-s;
+function glyphs(str,x,y,s,col,fade){
+  const mode=field.mode; hx.fillStyle=col;
+  for(let i=0;i<str.length;i++){
+    let ch=str[i]; let g=G5[ch]||G5[ch.toUpperCase()]||G5['?']; const ox=x+i*6*s;
+    for(let r=0;r<7;r++){ const row=g[r]; if(!row) continue;
+      for(let c=0;c<5;c++){ if(!(row&(16>>c))) continue;
+        const px=ox+c*s, py=y+r*s;
+        if(fade>0 && B4[((py/s|0)&3)*4+((px/s|0)&3)]/16 < fade) continue;
+        if(mode===1 && s>=3){ hx.beginPath(); hx.arc(px+s/2,py+s/2,s*.56,0,6.2832); hx.fill(); }
+        else if(mode===2){ hx.fillRect(px,py+Math.round(s*.15),s,Math.max(1,Math.round(s*.7))); }
+        else hx.fillRect(px,py,s,s);
+      } } }
+}
+// a line of text on a solid ground band; segments = [[text,colorIndex],...]
+function band(segs,x,y,s,align,fade,padX,vp){
+  const str=segs.map(q=>q[0]).join(''); const w=tw(str,s), p=padX==null?2*s:padX, v=vp==null?2*s:vp;
+  const x0= align==='right'? x-w : x;
+  hx.fillStyle=C[0]; hx.fillRect(x0-p, y-v, w+2*p, 7*s+2*v);
+  let cx=x0; for(const [t,ci] of segs){
+    if(ci==='inv'){ hx.fillStyle=C[3]; hx.fillRect(cx-s, y-v, t.length*6*s+s, 7*s+2*v); glyphs(t,cx,y,s,C[0],fade||0); }
+    else glyphs(t,cx,y,s,C[ci],fade||0);
+    cx+=t.length*6*s; }
+  return w;
+}
+const pctS=v=>String(Math.round(clamp(v,0,1)*100)).padStart(3)+'%';
+const bar=(v,n=10)=>{const k=Math.round(clamp(v,0,1)*n);return '█'.repeat(k)+'░'.repeat(n-k);};
+function stateLine(){
+  if(seq.ruptureBar>=0) return ['BREAKING APART','NEW WORLD ARRIVES ON THE DOWNBEAT'];
+  if(pending||seq.armed) return ['RUPTURE ARMED','WAITING FOR THE NEXT BAR'];
+  if(LIVE.cov<.02) return ['NEARLY EMPTY','THE KICK IS RESEEDING IT'];
+  const st=LIVE.stab>.72?'SETTLED':LIVE.stab>.35?'SHIFTING':'TURBULENT';
+  const br=seq.rest>0?' · DUB BREAK, KICK WITHHELD':'';
+  return [st, `${Math.round(LIVE.cov*100)}% OF THE SCREEN IS ALIVE${br}`];
+}
+function drawHUD(){
+  const W=Math.round(innerWidth*DPR), H=Math.round(innerHeight*DPR);
+  if(hc.width!==W||hc.height!==H){ hc.width=W; hc.height=H; }
+  hx.clearRect(0,0,W,H);
+  const rgb=j=>[0,1,2].map(c=>Math.round(field.pal[j*3+c]*255));
+  const lum=a=>{const f=a.map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4);});return .2126*f[0]+.7152*f[1]+.0722*f[2];};
+  const L0=lum(rgb(0)), cr=j=>{const l=lum(rgb(j));return (Math.max(l,L0)+.05)/(Math.min(l,L0)+.05);};
+  const order=[1,2,3].sort((a,b)=>cr(b)-cr(a)), P=order[0], E=cr(order[1])>=3?order[1]:P;
+  const css=j=>`rgb(${rgb(j).join(',')})`;
+  C[0]=css(0); C[3]=css(P); C[2]=css(E); C[1]=css(1);
+  document.documentElement.style.setProperty('--c0',C[0]); document.documentElement.style.setProperty('--c3',C[3]);
+  const s=Math.max(1,Math.round(H/470)), LH=11*s, pad=Math.max(Math.round(16*DPR), Math.round(W*.02)+2*s);
+  const narrow = W/DPR < 900;
+  if(!hudOn){ if(!audioOn && !AUTOSTART) drawGate(W,H,s,pad); return; }
+  // ident — top left
+  let y=pad+2*s;
+  band([['MZTV 013 · GENERATIVE FIELD',3]],pad,y,s); y+=LH;
+  y+=4*s; band([['SUBSTRATE',2]],pad,y,s*3,null,0,2*s,2*s); y+=7*s*3+6*s;
+  band([['A MORPHOGENETIC FIELD IN D PHRYGIAN',3]],pad,y,s);
+  // clock — top right
+  const now=new Date(); let cities='';
+  try{ const f=tz=>now.toLocaleTimeString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit'}); cities=`BAL ${f('America/New_York')} · GAL ${f('Europe/Dublin')} · LON ${f('Europe/London')}`; }catch(e){}
+  y=pad+2*s; const R=W-pad;
+  band([['PERFORMANCE TIME',3]],R,y,s,'right'); y+=LH;
+  y+=3*s; band([[hms(elapsed),2]],R,y,s*2,'right',0,2*s,2*s); y+=7*s*2+6*s;
+  if(!narrow) { band([[cities,3]],R,y,s,'right'); y+=LH; }
+  band([[`EPOCH ${M.epoch} · MEMORY ${M.bank.length} · RUN ${M.runs}`,3]],R,y,s,'right');
+  // evolution log — bottom left
+  const logN = narrow?4:LOG.length, maxC = narrow? Math.floor((W-2*pad)/cw(s)) : 60;
+  y=H-pad-LH*(logN+1);
+  band([[' EVOLUTION LOG ','inv']],pad,y,s); y+=LH;
+  for(let i=0;i<logN && i<LOG.length;i++){
+    const L=LOG[i]; let segs=[[hms(L.t)+' — ',2]], n=11;
+    for(const [k,part] of L.txt.split(/(<b>|<\/b>)/).reduce((acc,p)=>{ if(p==='<b>')acc.em=1; else if(p==='</b>')acc.em=0; else if(p) acc.out.push([acc.em,p]); return acc; },{em:0,out:[]}).out.entries()){
+      let t=part[1].toUpperCase(); if(n+t.length>maxC) t=t.slice(0,Math.max(0,maxC-n-2))+'..'; n+=t.length; segs.push([t,part[0]?2:3]); if(n>=maxC) break; }
+    band(segs,pad,y,s,null,i*.1); y+=LH;
+  }
+  if(narrow){ if(!audioOn && !AUTOSTART) drawGate(W,H,s,pad); return; }
+  // what is happening / what controls what — bottom right
+  const [st,det]=stateLine();
+  const dir = LIVE.aniso>.12?'SIDEWAYS':LIVE.aniso<-.12?'UPRIGHT ':'NO GRAIN';
+  const pos = LIVE.cx>.12?'RIGHT   ':LIVE.cx<-.12?'LEFT    ':'CENTRE  ';
+  const bn = LIVE.bassDeg==null?'--':NOTE[LIVE.bassDeg];
+  const rate = SPEED*(.35+.65*LIVE.stab)/epochLen; const mins=Math.max(0,Math.round((1-tension)/Math.max(rate,1e-4)));
+  const rows=[
+    [[' WHAT IS HAPPENING ','inv']],
+    [[st+' · ',2],[det,3]],
+    [[`PATTERN ${M.regime} · DRAWN AS ${MODES[M.mode]}`,3]],
+    [[`KEY CENTRE ${NOTE[M.center]} PHRYGIAN · ${Math.round(seq.bpm)} BPM · KICK ${seq.kk} IN ${seq.n}`,3]],
+    [[tension>=1?'RUPTURE DUE ANY MOMENT':`NEXT RUPTURE IN ~${mins} MIN AT THIS STILLNESS`,3]],
+    [['',3]],
+    [[' WHAT CONTROLS WHAT ','inv']],
+    [['HOW MUCH IS ALIVE  ',3],[bar(LIVE.cov/.6),2],[' → HOW LOUD THE SUB IS',3]],
+    [['HOW MANY EDGES     ',3],[bar(LIVE.edge*4),2],[' → HOW OFTEN THE KNOCK HITS',3]],
+    [['STRIPE DIRECTION   ',3],[dir+'  ',2],[` → KNOCK PITCH ${Math.round(AP.band)} HZ`,3]],
+    [['WHERE THE MASS SITS',3],[' '+pos+' ',2],[` → KNOCK PANNED ${pos.trim()}`,3]],
+    [['HOW STILL IT IS    ',3],[bar(LIVE.stab),2],[' → ECHO LENGTH + TENSION',3]],
+    [['MEMORY LAID DOWN   ',3],[bar(LIVE.sed*1.6),2],[' → SIZE OF THE ROOM',3]],
+    [['TENSION            ',3],[bar(tension),2],[` → DISTORTION ${Math.round((AP.drv-1)*100)}%, RUPTURE AT FULL`,3]],
+    [['EACH KICK          ',3],['PLANTS NEW GROWTH',2],[' AT A DRIFTING POINT',3]],
+    [['BASS NOTE          ',3],[bn.padEnd(3),2],[`        → WIND BLOWS ${LIVE.deg}°`,3]]
+  ];
+  y=H-pad-LH*rows.length; const x=W-pad-tw('X'.repeat(62),s);
+  for(const r of rows){ if(r[0][0]) band(r,x,y,s); y+=LH; }
+  if(!audioOn && !AUTOSTART) drawGate(W,H,s,pad);
+}
+function drawGate(W,H,s,pad){
+  const s2=s*2, y=Math.round(H*.46);
+  band([['CLICK ANYWHERE TO ENTER THE FIELD',2]],pad,y,s2,null,0,3*s,2*s);
+  band([['SOUND ON · HEADPHONES OR A SYSTEM WITH REAL LOW END',3]],pad,y+11*s2,s);
+  band([['KEYS  H OVERLAY · R PROVOKE RUPTURE · M MUTE',3]],pad,y+11*s2+11*s,s);
+}
 
 // ---------- WebGL ----------------------------------------------------
 const cv=$('field');
 const gl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:'high-performance'});
-function fail(msg){ document.body.insertAdjacentHTML('beforeend',`<div class="fail"><div class="plate"><div class="label">signal lost</div>${msg}</div></div>`); throw new Error(msg); }
+function fail(msg){ document.body.insertAdjacentHTML('beforeend',`<div class="fail"><div>SIGNAL LOST — ${msg}</div></div>`); throw new Error(msg); }
 if (!gl) fail('This transmission needs WebGL2. Open it in a current Chrome, Edge, Firefox or Safari.');
 const hasCBF = !!gl.getExtension('EXT_color_buffer_float');
 const hasFL  = !!gl.getExtension('OES_texture_float_linear');
@@ -470,7 +520,7 @@ function onBar(t){
   if(rng()<.02){ A.delaySteps=pick([2,3,4,6]); setDelay(A.delaySteps,false); ev(t,'log',`delay → ${['','','1/8','3/16','1/4','','3/8'][A.delaySteps]} · tape drift`); }
   if(rng()<.045 && audioOn) pad(t, M.center+pick([0,0,3,5,1]), bd*3, .026);
   if(rng()<.003){ const c=wpick([0,1,3,6],[3,1,2,1.5]); if(c!==M.center){ const o=M.center; setCenter(c,t); ev(t,'log',`harmonic center drifts ${NOTE[o]} → <b>${NOTE[c]}</b>`);} }
-  if(seq.bar%8===0){ const nk=clamp(Math.round(seq.nn*(.22+(MAP.edge||.1)*2.2)),2,seq.nn-1); if(nk!==seq.nk){ seq.nk=nk; regen(); } }
+  if(seq.bar%8===0){ const nk=clamp(Math.round(seq.nn*(.22+(LIVE.edge||.1)*2.2)),2,seq.nn-1); if(nk!==seq.nk){ seq.nk=nk; regen(); } }
   if(audioOn && seq.bar%16===0 && rng()<.3) A.lfo.frequency.setTargetAtTime(seq.bpm/60*pick([.5,.75,1,1.5,2,4/3]),t,.3);
 }
 function scheduleStep(t){
@@ -606,23 +656,9 @@ function control(dt){
     A.droneLp.frequency.setTargetAtTime(160+500*cov,t,2); }
   field.windMag=(.004+.004*tide)*(REDUCED?.5:1);
   // HUD values
-  const deg=Math.round(((field.windAng+field.nudge)*180/Math.PI%360+360)%360);
-  Object.assign(MAP,{cov:cov.toFixed(3),sub:AP.sub.toFixed(2),edge:edge.toFixed(3),kp:AP.kp.toFixed(2),
-    aniso:(aniso>=0?'+':'')+aniso.toFixed(2),band:Math.round(AP.band)+' Hz',cx:(cx>=0?'+':'')+cx.toFixed(2),pan:(AP.pan>=0?'+':'')+AP.pan.toFixed(2),
-    stab:stab.toFixed(2),fb:AP.fb.toFixed(2),sed:sed.toFixed(3),rev:AP.rev.toFixed(2),ten:tension.toFixed(2),drv:'+'+Math.round((AP.drv-1)*100)+'%',
-    drift:deg+'°',reg:M.regime,fk:`.${field.F.toFixed(4).slice(2)} / .${field.k.toFixed(4).slice(2)}`,met:`E(${seq.kk},${seq.n}) · E(${seq.nk},${seq.nn})`,bpm:Math.round(seq.bpm)});
-  MAP.edge=+edge;
+  Object.assign(LIVE,{cov,edge,aniso,cx,stab,sed,deg:Math.round(((field.windAng+field.nudge)*180/Math.PI%360+360)%360)});
+  hudDirty=true;
 }
-function drawHUD(){
-  for(const r of ROWS){ for(const k of [r[0],r[2]]){ const el=$('m-'+k); if(el && MAP[k]!==undefined) el.textContent= k==='edge'? (+MAP.edge).toFixed(3) : MAP[k]; } }
-  $('tension').style.width=(clamp(tension,0,1)*100).toFixed(1)+'%';
-  $('elapsed').textContent=hms(elapsed);
-  const now=new Date(), f=tz=>now.toLocaleTimeString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit'});
-  try{ $('cities').textContent=`BAL ${f('America/New_York')} · GAL ${f('Europe/Dublin')} · LON ${f('Europe/London')}`; }catch(e){}
-  $('epoch').textContent=`EPOCH ${M.epoch} · MEMORY ${M.bank.length} · RUN ${M.runs} · ${MODES[M.mode]}`;
-  const r=document.documentElement.style; for(let j=0;j<4;j++){ r.setProperty('--c'+j,`rgb(${Math.round(field.pal[j*3]*255)},${Math.round(field.pal[j*3+1]*255)},${Math.round(field.pal[j*3+2]*255)})`); }
-}
-
 // ---------- events from the sequencer --------------------------------
 function processEvents(){
   const now=clockNow();
@@ -631,7 +667,7 @@ function processEvents(){
     if(e.type==='kick'){ const [wx,wy]=wanderer(elapsed); const j=.06;
       addDrop((wx+(rng()-.5)*j+1)%1,(wy+(rng()-.5)*j+1)%1, e.data.acc?.03:.014+rng()*.01, e.data.acc?.7:.45);
       if(e.data.acc && !REDUCED) field.ring=[wx,wy,0,.8]; }
-    else if(e.type==='bass'){ field.tNudge=(e.data.deg-3)*.28; setMap('bass',NOTE[e.data.deg]); }
+    else if(e.type==='bass'){ field.tNudge=(e.data.deg-3)*.28; LIVE.bassDeg=e.data.deg; }
     else if(e.type==='shear'){ field.tShear=1; }
     else if(e.type==='rupture'){ applyRupture(e.data); }
     else if(e.type==='log'){ log(e.data, true); }
@@ -681,7 +717,7 @@ function frame(now){
   }
   render();
   readAcc+=dt; if(readAcc>=.5){ readAcc-=.5; readback(); control(.5); }
-  hudAcc+=dt; if(hudAcc>=.5){ hudAcc=0; if(!hud.hidden) drawHUD(); }
+  hudAcc+=dt; if(hudAcc>=.5 || (hudDirty && hudAcc>.1)){ hudAcc=0; hudDirty=false; drawHUD(); }
   saveAcc+=dt; if(saveAcc>=30){ saveAcc=0; save(); }
   requestAnimationFrame(frame);
 }
@@ -692,22 +728,23 @@ async function enter(){
   if(A.ctx && A.ctx.state==='running' && !audioOn){
     audioOn=true; EVQ.length=0; seq.nextT=A.ctx.currentTime+.12;
     A.master.gain.setTargetAtTime(muted?0:.85,A.ctx.currentTime,1.5);
-    $('gate').hidden=true; log('audio field open');
+    log('audio field open'); drawHUD();
   }
 }
 $('enter').addEventListener('click',enter);
+addEventListener('pointerdown',()=>{ if(!audioOn) enter(); });
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
-  if(k==='h'){ hud.hidden=!hud.hidden; if(!hud.hidden) drawHUD(); }
+  if(k==='h'){ hudOn=!hudOn; drawHUD(); }
   else if(k==='r'){ log('human intervention'); planRupture('provoked'); }
   else if(k==='m' && audioOn){ muted=!muted; A.master.gain.setTargetAtTime(muted?0:.85,A.ctx.currentTime,.2); }
-  else if(k==='enter' && !audioOn) enter();
+  else if(!audioOn && !e.metaKey && !e.ctrlKey) enter();
 });
 addEventListener('pagehide',save);
 if(resumed){ log(`transmission resumes · run ${M.runs} · ${M.bank.length} impressions held`); if(M.sed) log('sediment restored from previous runs'); }
 else log('transmission begins · epoch 0');
 log(`regime <b>${M.regime}</b> · palette ${PALETTES[M.pal].name}`);
-if(Q.get('autostart')==='1'){ enter(); }
+if(AUTOSTART){ enter(); }
 else { try{ initAudio(); if(A.ctx.state==='running') enter(); }catch(e){} }
 drawHUD();
 requestAnimationFrame(frame);
