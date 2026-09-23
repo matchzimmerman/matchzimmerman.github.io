@@ -64,6 +64,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-012-48h-resonant-memory/`
 
+### BIT FIELD 013 — SUBSTRATE
+Morphogenetic reaction–diffusion field in D Phrygian dub. The field's coverage, edges, anisotropy and centroid drive sub, knock, pan and dub feedback; kicks seed new growth; a sediment layer records where forms have lived and feeds back into the chemistry. Settled states are stored as impressions and recognised across epochs; accumulated stability (or collapse, saturation, recognition, or a human R keypress) triggers rupture — new regime, palette, meter, harmonic center and visual grammar (ordered dither / halftone / line screen). Memory persists across reloads. Params: `?autostart=1` `?hud=0` `?speed=N` `?reset=1`.
+
+Path:
+`sources/bit-field-013-substrate/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-013-substrate/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
