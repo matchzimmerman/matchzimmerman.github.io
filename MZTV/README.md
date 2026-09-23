@@ -55,6 +55,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-005-signal-atlas/`
 
+### BIT FIELD 012 — 48H RESONANT MEMORY
+Persistent 48-hour audiovisual organism derived from the recent resonant/cymatic and OBAS field studies. Shared pressure, resonance, density, tension, motion, brightness, and strain drive both sound and image across eight six-hour macro tides, with four-minute generated state cells and browser-persistent performance time.
+
+Path:
+`sources/bit-field-012-48h-resonant-memory/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-012-48h-resonant-memory/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
