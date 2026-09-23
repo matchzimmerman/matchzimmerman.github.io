@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!--ARTIFACT-START-->
+<title>MZTV Substrate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* MZTV · SUBSTRATE — Match Zimmerman Creative Media Group
+   Single-world broadcast design: the palette tokens below are rewritten live
+   by the system as it migrates between colour families. */
+:root{
+  color-scheme: dark;
+  --c0:#0e3a3c; --c1:#1f5f5a; --c2:#e8a33d; --c3:#f4e9c9;
+  --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --serif:"EB Garamond", Garamond, "Iowan Old Style", "Times New Roman", serif;
+  --fs:clamp(10.5px, 0.66vw, 15px);
+}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--c0);}
+body{font-family:var(--mono);font-size:var(--fs);color:var(--c2);-webkit-font-smoothing:antialiased;}
+#field{position:fixed;inset:0;width:100%;height:100%;display:block;}
+.hud{position:fixed;inset:0;pointer-events:none;box-sizing:border-box;
+  padding-block:max(2.4vh,16px);padding-inline:max(1.8vw,16px);
+  display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr auto;gap:1rem;}
+.hud[hidden]{display:none!important}
+.plate{background:color-mix(in srgb, var(--c0) 86%, transparent);padding:.75em 1em;line-height:1.55;font-variant-numeric:tabular-nums;}
+.label{letter-spacing:.16em;text-transform:uppercase;font-size:.8em;color:var(--c3);margin:0 0 .4em;font-weight:500}
+.ident{grid-column:1;grid-row:1;justify-self:start;align-self:start}
+.ident h1{font-family:var(--serif);font-style:italic;font-weight:400;font-size:calc(var(--fs)*2.7);line-height:1;margin:.12em 0 .18em;color:var(--c2);letter-spacing:.01em}
+.ident .sub{color:var(--c3);opacity:.85}
+.clock{grid-column:2;grid-row:1;align-self:start;text-align:right}
+.clock .big{font-size:1.5em;color:var(--c2);font-weight:500;letter-spacing:.04em}
+.clock .dim{color:var(--c3);opacity:.85}
+.log{grid-column:1;grid-row:3;align-self:end;justify-self:start;max-width:min(62ch,100%);box-sizing:border-box}
+.log ol{margin:0;padding:0}
+.log li{list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log li b{font-weight:500;color:var(--c3)}
+.map{grid-column:2;grid-row:3;align-self:end}
+.map .rows{display:grid;grid-template-columns:auto auto auto auto;gap:.1em 1.1em;align-items:baseline}
+.map .src{color:var(--c3);opacity:.9}
+.map .v{text-align:right;color:var(--c2)}
+.map .arr{color:var(--c3);opacity:.9}
+.meter{height:.42em;background:color-mix(in srgb, var(--c3) 22%, transparent);margin-top:.55em;position:relative}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--c2);width:0}
+.gate{position:fixed;left:max(1.8vw,16px);top:50%;transform:translateY(-50%);max-width:min(40ch, calc(100% - 32px));box-sizing:border-box;padding:1.1em 1.25em;font-size:max(13px,var(--fs));}
+.gate p{margin:.2em 0 .9em;color:var(--c3);line-height:1.6}
+.gate button{font:inherit;font-weight:500;letter-spacing:.08em;background:var(--c2);color:var(--c0);border:0;padding:.75em 1.2em;cursor:pointer;text-transform:uppercase;font-size:.9em}
+.gate button:hover{background:var(--c3)}
+.gate button:focus-visible{outline:2px solid var(--c3);outline-offset:3px}
+.gate .keys{margin:.9em 0 0;font-size:.85em;opacity:.8}
+.fail{position:fixed;inset:0;display:grid;place-items:center;color:var(--c3);padding:24px;text-align:left}
+@media (max-width:760px){
+  .map{display:none}
+  .hud{grid-template-columns:1fr}
+  .clock{grid-column:1;grid-row:2;justify-self:end;align-self:start;text-align:right}
+  .log li:nth-child(n+5){display:none}
+}
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+
+<div class="hud" id="hud">
+  <div class="plate ident">
+    <div class="label">MZTV · generative field</div>
+    <h1>Substrate</h1>
+    <div class="sub">a morphogenetic field in D Phrygian</div>
+  </div>
+  <div class="plate clock">
+    <div class="label">performance time</div>
+    <div class="big" id="elapsed">00:00:00</div>
+    <div class="dim" id="cities">BAL --:-- · GAL --:-- · LON --:--</div>
+    <div class="dim" id="epoch">EPOCH 0 · MEMORY 0</div>
+  </div>
+  <div class="plate log">
+    <div class="label">evolution log</div>
+    <ol id="log"></ol>
+  </div>
+  <div class="plate map">
+    <div class="label">field → sound</div>
+    <div class="rows" id="rows"></div>
+    <div class="meter" title="tension"><i id="tension"></i></div>
+  </div>
+</div>
+
+<div class="plate gate" id="gate">
+  <div class="label">now transmitting</div>
+  <p>A self-organising field that listens to itself and remembers where it has been. Sound starts when you enter. Headphones or a system with real low end.</p>
+  <button id="enter" type="button">Enter the field</button>
+  <p class="keys">H hide overlay · R provoke rupture · M mute</p>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   MZTV · SUBSTRATE
+   Gray–Scott reaction–diffusion field (WebGL2) coupled to a dub engine
+   (Web Audio) in D Phrygian. The field is read back twice a second;
+   its shape drives the sound, the rhythm seeds the field, a sediment
+   layer records where life has been, a memory bank recognises old
+   states, and accumulated stability produces rupture.
+   URL params (GitHub Pages / OBS):  ?autostart=1  ?hud=0  ?speed=N
+                                     ?seed=N  ?reset=1
+   ===================================================================== */
+
+// ---------- params, rng, helpers -------------------------------------
+const Q = new URLSearchParams(location.search);
+const SPEED = Math.max(0.1, +Q.get('speed') || 1);
+const SEED = +Q.get('seed') || (Date.now() % 2147483647);
+const KEY = 'mztv.substrate.v1';
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rng = mulberry32(SEED);
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const pick=a=>a[Math.floor(rng()*a.length)];
+function wpick(items,w){let s=0;for(const x of w)s+=x;let r=rng()*s;for(let i=0;i<items.length;i++){r-=w[i];if(r<=0)return items[i];}return items[items.length-1];}
+const hms=s=>{s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor(s/60)%60,x=s%60;return[h,m,x].map(v=>String(v).padStart(2,'0')).join(':');};
+const hex2rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
+
+// ---------- vocabularies ---------------------------------------------
+const REGIMES = {           // Gray–Scott feed / kill families
+  MITOSIS:{F:.0367,k:.0649}, CORAL:{F:.0545,k:.0620}, MAZE:{F:.0290,k:.0570},
+  WORMS:{F:.0780,k:.0610},   SOLITON:{F:.0300,k:.0620}, WAVES:{F:.0140,k:.0450},
+  HOLES:{F:.0390,k:.0580},   USKATE:{F:.0620,k:.0609}, PULSE:{F:.0250,k:.0600}
+};
+const PALETTES = [            // ground, sediment, body, core
+  {name:'ESTUARY',  c:['#0e3a3c','#1d5a55','#e8a33d','#f4e9c9']},
+  {name:'PHOSPHOR', c:['#0b1f1a','#1b4436','#7ff09a','#e8ffd9']},
+  {name:'CHALK',    c:['#dcdccb','#bcc1ad','#2437a8','#e2472b']},
+  {name:'KILN',     c:['#4a1a12','#6e2d1c','#e9b04a','#cfe3e6']},
+  {name:'TIDEPOOL', c:['#153b6b','#23608a','#f2d6a2','#ff7a4d']},
+  {name:'LICHEN',   c:['#c9cf9a','#aab57a','#34331f','#f7f3dc']},
+  {name:'SIGNAL',   c:['#f0b43a','#d8932c','#16302e','#f7eed2']}
+];
+const MODES = ['ORDERED DITHER','HALFTONE','LINE SCREEN'];
+const SCALES = [240,320,420];                 // sim width → feature size
+const NOTE = ['D','E♭','F','G','A','B♭','C'];
+const SC = [0,1,3,5,7,8,10];                  // D Phrygian
+const scaleFreq=(deg,oct)=>{const o=Math.floor(deg/7),i=((deg%7)+7)%7;return 36.708*2**(oct-1)*2**((SC[i]+12*o)/12);};
+
+// ---------- persistent memory ----------------------------------------
+if (Q.get('reset')==='1') { try{localStorage.removeItem(KEY);}catch(e){} }
+let M = null;
+try { M = JSON.parse(localStorage.getItem(KEY)||'null'); } catch(e) { M = null; }
+const resumed = !!(M && M.v===1);
+if (!resumed) M = { v:1, born:Date.now(), runs:0, totalSec:0, epoch:0,
+  regime:pick(['MITOSIS','CORAL','SOLITON','MAZE']), pal:Math.floor(rng()*PALETTES.length),
+  center:0, n:16, bpm:72, mode:0, coreMode:0, scale:1, memPol:1, visits:{}, bank:[], sed:null };
+M.runs++;
+M.visits[M.regime] = M.visits[M.regime] || 1;
+function save(){
+  try{
+    if (lastRead) { let s=''; for(let i=0;i<64*36;i++) s+=String.fromCharCode(lastRead[i*4+1]); M.sed=btoa(s); }
+    localStorage.setItem(KEY, JSON.stringify(M));
+  }catch(e){}
+}
+
+// ---------- log + HUD ------------------------------------------------
+const $=id=>document.getElementById(id);
+const hud=$('hud'); if (Q.get('hud')==='0') hud.hidden=true;
+let elapsed=0; const LOG=[];
+function log(txt, blip){
+  LOG.unshift(`<span>${hms(elapsed)}</span> — ${txt}`); if (LOG.length>9) LOG.pop();
+  const ol=$('log'); ol.innerHTML = LOG.map((l,i)=>`<li style="opacity:${(1-i*0.085).toFixed(2)}">${l}</li>`).join('');
+  if (blip && audioOn) tick_blip(A.ctx.currentTime+0.02);
+}
+const ROWS = [
+  ['cov','FIELD COVERAGE','sub','SUB DRONE'],
+  ['edge','EDGE DENSITY','kp','KNOCK PROB'],
+  ['aniso','ANISOTROPY','band','KNOCK BAND'],
+  ['cx','MASS CENTROID','pan','KNOCK PAN'],
+  ['stab','STABILITY','fb','DUB FEEDBACK'],
+  ['sed','SEDIMENT','rev','ROOM SIZE'],
+  ['ten','TENSION','drv','SATURATION'],
+  ['bass','BASS NOTE','drift','FIELD DRIFT'],
+  ['reg','REGIME','fk','FEED / KILL'],
+  ['met','METER','bpm','TEMPO']
+];
+$('rows').innerHTML = ROWS.map(r=>`<span class="src">${r[1]}</span><b class="v" id="m-${r[0]}">—</b><span class="arr">→ ${r[3]}</span><b class="v" id="m-${r[2]}">—</b>`).join('');
+const MAP={};
+function setMap(k,v){ MAP[k]=v; }
+
+// ---------- WebGL ----------------------------------------------------
+const cv=$('field');
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,powerPreference:'high-performance'});
+function fail(msg){ document.body.insertAdjacentHTML('beforeend',`<div class="fail"><div class="plate"><div class="label">signal lost</div>${msg}</div></div>`); throw new Error(msg); }
+if (!gl) fail('This transmission needs WebGL2. Open it in a current Chrome, Edge, Firefox or Safari.');
+const hasCBF = !!gl.getExtension('EXT_color_buffer_float');
+const hasFL  = !!gl.getExtension('OES_texture_float_linear');
+const FULL = hasCBF && hasFL;
+if (!hasCBF) fail('This GPU cannot render to float textures (EXT_color_buffer_float), which the field needs.');
+const IFMT = FULL ? gl.RGBA32F : gl.RGBA16F;
+
+const VS=`#version 300 es
+in vec2 p; out vec2 uv; void main(){ uv=p*.5+.5; gl_Position=vec4(p,0,1); }`;
+const NOISE=`
+float h1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float n2(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h1(i),h1(i+vec2(1,0)),f.x),mix(h1(i+vec2(0,1)),h1(i+vec2(1,1)),f.x),f.y); }`;
+const SIM_FS=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 o;
+uniform sampler2D S; uniform vec2 px; uniform float aspect, t, seed;
+uniform float F0, K0, fA, kA, memPol, sedK, sedD;
+uniform vec2 wind; uniform float curl;
+uniform vec4 drops[8]; uniform int nDrops;
+${NOISE}
+void main(){
+  vec2 q=uv*vec2(aspect,1.)*2.3+seed; float e=.02, tt=t*.011;
+  vec2 cu=vec2(n2(q+vec2(0,e)+tt)-n2(q-vec2(0,e)+tt), -(n2(q+vec2(e,0)+tt)-n2(q-vec2(e,0)+tt)))/(2.*e);
+  vec2 vel=wind+cu*curl;
+  vec2 p=uv-vel*px;
+  vec4 c=texture(S,p);
+  vec4 l=-c
+    +.2*(texture(S,p+vec2(px.x,0.))+texture(S,p-vec2(px.x,0.))+texture(S,p+vec2(0.,px.y))+texture(S,p-vec2(0.,px.y)))
+    +.05*(texture(S,p+px)+texture(S,p-px)+texture(S,p+vec2(px.x,-px.y))+texture(S,p+vec2(-px.x,px.y)));
+  float U=c.r, V=c.g, sed=c.b;
+  float m1=n2(uv*vec2(aspect,1.)*1.4+seed*1.7+t*.0041)-.5;
+  float m2=n2(uv*vec2(aspect,1.)*0.9-seed+t*.0029)-.5;
+  float F=F0+fA*m1+memPol*sed*.007;
+  float K=K0+kA*m2;
+  float r=U*V*V;
+  U+=l.r-r+F*(1.-U);
+  V+=.5*l.g+r-(F+K)*V;
+  for(int i=0;i<8;i++){ if(i>=nDrops) break; vec4 d=drops[i];
+    vec2 dd=(uv-d.xy)*vec2(aspect,1.); dd-=vec2(aspect,1.)*round(dd/vec2(aspect,1.));
+    float g=exp(-dot(dd,dd)/(d.z*d.z)); V+=d.w*g*.5; U-=d.w*g*.5; }
+  sed+=sedK*smoothstep(.14,.28,V)*(1.-sed)-sedD*sed;
+  o=vec4(clamp(U,0.,1.),clamp(V,0.,1.),clamp(sed,0.,1.),1.);
+}`;
+const COPY_FS=`#version 300 es
+precision highp float; in vec2 uv; out vec4 o; uniform sampler2D S; uniform int mode;
+void main(){ vec4 c=texture(S,uv); o = mode==0 ? c : vec4(clamp(c.g*2.,0.,1.), c.b, c.r, 1.); }`;
+const RENDER_FS=`#version 300 es
+precision highp float;
+in vec2 uv; out vec4 o;
+uniform sampler2D S; uniform vec2 res, spx; uniform vec3 pal[4];
+uniform float dotSz, th1, th2; uniform int mode, coreMode; uniform vec4 ring;
+float b2(vec2 a){ a=floor(a); return fract(a.x*.5+a.y*a.y*.75); }
+float b4(vec2 a){ return b2(.5*a)*.25+b2(a); }
+float b8(vec2 a){ return b4(.5*a)*.25+b2(a); }
+float sv(vec2 p){ float v=texture(S,p).g*.4; vec2 d=spx*.7;
+  v+=.15*(texture(S,p+vec2(d.x,0.)).g+texture(S,p-vec2(d.x,0.)).g+texture(S,p+vec2(0.,d.y)).g+texture(S,p-vec2(0.,d.y)).g); return v; }
+float tone(vec2 p, float aspect){
+  float V=sv(p), sed=texture(S,p).b;
+  float L=smoothstep(.04,.75,sed);
+  L=mix(L,2.,smoothstep(th1-.05,th1+.05,V));
+  float c;
+  if(coreMode==0) c=smoothstep(th2-.035,th2+.035,V);
+  else { vec2 g=vec2(texture(S,p+vec2(spx.x,0.)).g-texture(S,p-vec2(spx.x,0.)).g, texture(S,p+vec2(0.,spx.y)).g-texture(S,p-vec2(0.,spx.y)).g); c=smoothstep(.05,.12,length(g)); }
+  L=mix(L,3.,c);
+  float vg=length((p-.5)*vec2(aspect,1.));
+  return max(0.,L-.55*smoothstep(.62,1.08,vg));
+}
+void main(){
+  vec2 fc=gl_FragCoord.xy; float aspect=res.x/res.y;
+  vec2 cell, p; float cs=dotSz;
+  if(mode==0){ cell=floor(fc/cs); p=(cell+.5)*cs/res; }
+  else if(mode==1){ float row=floor(fc.y/cs); float off=mod(row,2.)*.5; cell=vec2(floor(fc.x/cs+off),row); p=(vec2(cell.x-off,cell.y)+.5)*cs/res; }
+  else { cell=vec2(0.,floor(fc.y/cs)); p=vec2(fc.x/res.x,(cell.y+.5)*cs/res.y); }
+  // pressure ring from accented kicks
+  vec2 d=(p-ring.xy)*vec2(aspect,1.); float r=length(d), w=ring.z*.32;
+  float amp=ring.w*exp(-ring.z*2.2)*exp(-pow((r-w)*13.,2.));
+  p+=(d/(r+1e-4))/vec2(aspect,1.)*amp*.014;
+  float L=tone(p,aspect); float base=floor(L), f=L-base; bool up;
+  if(mode==0) up = f > b8(cell);
+  else if(mode==1){ vec2 lc=vec2(fract(fc.x/cs+mod(cell.y,2.)*.5),fract(fc.y/cs))-.5; up = length(lc) < sqrt(f)*.72; }
+  else { float ly=fract(fc.y/cs)-.5; up = abs(ly) < f*.5; }
+  int lv=int(clamp(base+(up?1.:0.),0.,3.));
+  o=vec4(pal[lv],1.);
+}`;
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))fail('shader: '+gl.getShaderInfoLog(s));return s;}
+function prog(fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,VS));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));gl.bindAttribLocation(p,0,'p');gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))fail('link: '+gl.getProgramInfoLog(p));
+  const u={};const n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);for(let i=0;i<n;i++){const a=gl.getActiveUniform(p,i);u[a.name.replace('[0]','')]=gl.getUniformLocation(p,a.name);}return {p,u};}
+const P_SIM=prog(SIM_FS), P_COPY=prog(COPY_FS), P_REN=prog(RENDER_FS);
+const vb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,vb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+
+function mkTex(w,h,data,fmt){ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  if(fmt==='rgba8') gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  else gl.texImage2D(gl.TEXTURE_2D,0,IFMT,w,h,0,gl.RGBA,gl.FLOAT,data);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE) fail('framebuffer incomplete');
+  return {t,fb,w,h}; }
+
+let sim=null;   // {a,b,w,h}
+const RB = mkTex(64,36,null,'rgba8'); const rbBuf=new Uint8Array(64*36*4); let lastRead=null;
+
+function initData(w,h){
+  const d=new Float32Array(w*h*4); let sedGrid=null;
+  if (M.sed) { try{ const s=atob(M.sed); sedGrid=new Float32Array(64*36); for(let i=0;i<sedGrid.length;i++) sedGrid[i]=s.charCodeAt(i)/255; }catch(e){ sedGrid=null; } }
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=(y*w+x)*4; d[i]=1; d[i+1]=0;
+    if(sedGrid){ const gx=x/w*63, gy=y/h*35, x0=Math.floor(gx), y0=Math.floor(gy), x1=Math.min(63,x0+1), y1=Math.min(35,y0+1), fx=gx-x0, fy=gy-y0;
+      d[i+2]=lerp(lerp(sedGrid[y0*64+x0],sedGrid[y0*64+x1],fx),lerp(sedGrid[y1*64+x0],sedGrid[y1*64+x1],fx),fy); }
+    d[i+3]=1; }
+  for(let s=0;s<26;s++){ const cx=rng()*w, cy=rng()*h, r=3+rng()*7;
+    for(let y=Math.floor(cy-r);y<cy+r;y++) for(let x=Math.floor(cx-r);x<cx+r;x++){
+      if((x-cx)**2+(y-cy)**2>r*r) continue; const xx=(x+w)%w, yy=(y+h)%h, i=(yy*w+xx)*4; d[i]=.35; d[i+1]=.25+rng()*.1; } }
+  return d;
+}
+function simSize(){ const w=SCALES[M.scale]; return [w, Math.max(32,Math.round(w*cv.height/cv.width))]; }
+function buildSim(){ const [w,h]=simSize(); const d=initData(w,h); sim={a:mkTex(w,h,d),b:mkTex(w,h,d),w,h}; }
+function resampleSim(){ const [w,h]=simSize(); if(sim && sim.w===w && sim.h===h) return;
+  const a=mkTex(w,h,null), b=mkTex(w,h,null);
+  gl.useProgram(P_COPY.p); gl.uniform1i(P_COPY.u.mode,0); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,sim.a.t); gl.uniform1i(P_COPY.u.S,0);
+  for(const t of [a,b]){ gl.bindFramebuffer(gl.FRAMEBUFFER,t.fb); gl.viewport(0,0,w,h); gl.drawArrays(gl.TRIANGLES,0,3); }
+  for(const t of [sim.a,sim.b]){ gl.deleteTexture(t.t); gl.deleteFramebuffer(t.fb); }
+  sim={a,b,w,h}; }
+
+let DPR=1;
+function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); const W=Math.max(2,Math.round(innerWidth*DPR)), H=Math.max(2,Math.round(innerHeight*DPR));
+  if(cv.width===W && cv.height===H) return; cv.width=W; cv.height=H; if(sim) resampleSim(); }
+resize(); buildSim(); addEventListener('resize',resize);
+
+// ---------- field state ----------------------------------------------
+const R0 = REGIMES[M.regime];
+const field = { F:R0.F, k:R0.k, tF:R0.F, tk:R0.k, fA:.005, kA:.0016, sps:REDUCED?300:540,
+  windAng:rng()*Math.PI*2, nudge:0, tNudge:0, windMag:.006, curl:.004, shear:0, tShear:0,
+  memPol:M.memPol, mode:M.mode, coreMode:M.coreMode, th2:.3, seed:rng()*50,
+  pal:new Float32Array(12), tpal:new Float32Array(12), palTau:40, ring:[.5,.5,9,0] };
+function palTarget(i,recall,w){ const a=PALETTES[i].c.map(hex2rgb), b=recall!=null?PALETTES[recall].c.map(hex2rgb):null;
+  for(let j=0;j<4;j++) for(let c=0;c<3;c++) field.tpal[j*3+c]= b? lerp(a[j][c],b[j][c],w) : a[j][c]; }
+palTarget(M.pal); field.pal.set(field.tpal);
+let pendingDrops=[];
+function addDrop(x,y,r,s){ if(pendingDrops.length<8) pendingDrops.push([x,y,r,s]); }
+function wanderer(t){ return [ .5+.38*Math.sin(t*.031+1.3)*Math.cos(t*.0171), .5+.34*Math.sin(t*.0229+.4)*Math.cos(t*.0133+2.) ]; }
+
+// ---------- audio ----------------------------------------------------
+const A = { ctx:null };
+let audioOn=false, muted=false;
+function satCurve(k,norm){ const n=2048,c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]= norm? Math.tanh(k*x)/Math.tanh(k) : Math.tanh(x); } return c; }
+function makeIR(ctx,sec){ const len=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,len,ctx.sampleRate);
+  for(let ch=0;ch<2;ch++){ const d=b.getChannelData(ch); let lp=0; for(let i=0;i<len;i++){ const t=i/len; lp+= (Math.random()*2-1 - lp)*(0.22-0.17*t); d[i]=lp*Math.pow(1-t,2.6)*(i<ctx.sampleRate*0.012? i/(ctx.sampleRate*0.012):1); } } return b; }
+function initAudio(){
+  if (A.ctx) return;
+  const ctx = A.ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback'});
+  const master=ctx.createGain(); master.gain.value=0; A.master=master;
+  const lim=ctx.createDynamicsCompressor(); lim.threshold.value=-2; lim.knee.value=0; lim.ratio.value=20; lim.attack.value=.002; lim.release.value=.12;
+  const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.knee.value=8; comp.ratio.value=3.5; comp.attack.value=.012; comp.release.value=.28;
+  const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=6500; tone.Q.value=.4;
+  const drv=ctx.createWaveShaper(); drv.curve=satCurve(1.4,true); drv.oversample='2x';
+  const drvIn=ctx.createGain(); drvIn.gain.value=1; A.drvIn=drvIn;
+  const bus=ctx.createGain(); bus.gain.value=.5; A.bus=bus;
+  bus.connect(drvIn); drvIn.connect(drv); drv.connect(tone); tone.connect(comp); comp.connect(lim); lim.connect(master); master.connect(ctx.destination);
+  // reverb — the room grows with sediment
+  const rev=ctx.createConvolver(); rev.buffer=makeIR(ctx,5.5); const revIn=ctx.createGain(); revIn.gain.value=.3; A.revIn=revIn;
+  const revHp=ctx.createBiquadFilter(); revHp.type='highpass'; revHp.frequency.value=140; const revOut=ctx.createGain(); revOut.gain.value=.55;
+  revIn.connect(revHp); revHp.connect(rev); rev.connect(revOut); revOut.connect(bus);
+  // dub delay, ping-pong, saturated loop
+  const dIn=ctx.createGain(); A.dIn=dIn; const dHp=ctx.createBiquadFilter(); dHp.type='highpass'; dHp.frequency.value=190;
+  const dl=ctx.createDelay(4), dr=ctx.createDelay(4); A.dl=dl; A.dr=dr; A.delaySteps=3;
+  const fb=ctx.createGain(); fb.gain.value=.55; A.fb=fb; const dLp=ctx.createBiquadFilter(); dLp.type='lowpass'; dLp.frequency.value=1700; dLp.Q.value=.6;
+  const dSat=ctx.createWaveShaper(); dSat.curve=satCurve(1,false);
+  const mg=ctx.createChannelMerger(2); const dOut=ctx.createGain(); dOut.gain.value=.62;
+  dIn.connect(dHp); dHp.connect(dl); dl.connect(dr); dl.connect(mg,0,0); dr.connect(mg,0,1);
+  dr.connect(dLp); dLp.connect(dSat); dSat.connect(fb); fb.connect(dl);
+  mg.connect(dOut); dOut.connect(bus); dOut.connect(revIn);
+  // sidechain-ducked music bus
+  const duck=ctx.createGain(); duck.gain.value=1; A.duck=duck; duck.connect(bus);
+  const kickBus=ctx.createGain(); kickBus.gain.value=.95; kickBus.connect(bus); A.kickBus=kickBus;
+  // sub drone
+  const dG=ctx.createGain(); dG.gain.value=.15; A.droneG=dG; dG.connect(duck);
+  const f0=scaleFreq(M.center,1);
+  const o1=ctx.createOscillator(); o1.type='sine'; o1.frequency.value=f0;
+  const o2=ctx.createOscillator(); o2.type='sine'; o2.frequency.value=f0*2; const g2=ctx.createGain(); g2.gain.value=.32;
+  const o3=ctx.createOscillator(); o3.type='triangle'; o3.frequency.value=f0*3; const g3=ctx.createGain(); g3.gain.value=.05;
+  const dLp2=ctx.createBiquadFilter(); dLp2.type='lowpass'; dLp2.frequency.value=260; A.droneLp=dLp2;
+  const drift=ctx.createOscillator(); drift.frequency.value=.043; const driftG=ctx.createGain(); driftG.gain.value=5; drift.connect(driftG); driftG.connect(o2.detune); driftG.connect(o3.detune);
+  o1.connect(dG); o2.connect(g2); g2.connect(dG); o3.connect(g3); g3.connect(dLp2); dLp2.connect(dG);
+  [o1,o2,o3,drift].forEach(o=>o.start()); A.drone=[o1,o2,o3];
+  // wobble bass (persistent mono voice)
+  const bO=ctx.createOscillator(); bO.type='sawtooth'; const bS=ctx.createOscillator(); bS.type='sine';
+  const bSG=ctx.createGain(); bSG.gain.value=.8;
+  const bF=ctx.createBiquadFilter(); bF.type='lowpass'; bF.frequency.value=220; bF.Q.value=8; A.bF=bF;
+  const bA=ctx.createGain(); bA.gain.value=0; A.bA=bA;
+  const lfo=ctx.createOscillator(); lfo.type='sine'; lfo.frequency.value=1.2; const lfoG=ctx.createGain(); lfoG.gain.value=160; A.lfo=lfo; A.lfoG=lfoG;
+  lfo.connect(lfoG); lfoG.connect(bF.frequency);
+  bO.frequency.value=scaleFreq(M.center,1); bS.frequency.value=scaleFreq(M.center,1); A.bO=bO; A.bS=bS;
+  bO.connect(bF); bS.connect(bSG); bSG.connect(bA); bF.connect(bA); bA.connect(duck);
+  const bSend=ctx.createGain(); bSend.gain.value=.1; bA.connect(bSend); bSend.connect(dIn);
+  [bO,bS,lfo].forEach(o=>o.start());
+  // noise
+  const nb=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate); const nd=nb.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=Math.random()*2-1; A.noise=nb;
+  setDelay(A.delaySteps, true);
+}
+const stepDur=()=>60/seq.bpm/4;
+function setDelay(steps, now){ const ctx=A.ctx; if(!ctx) return; const T=clamp(steps*stepDur(),.05,3.9);
+  if(now){ A.dl.delayTime.value=T; A.dr.delayTime.value=T; } else { const t=ctx.currentTime; A.dl.delayTime.setTargetAtTime(T,t,.9); A.dr.delayTime.setTargetAtTime(T,t,.9); } }
+function duckAt(t){ const g=A.duck.gain; g.setTargetAtTime(.5,t,.006); g.setTargetAtTime(1,t+.06,.14); }
+function kick(t,amp){ const c=A.ctx,o=c.createOscillator(),g=c.createGain();
+  o.frequency.setValueAtTime(130,t); o.frequency.exponentialRampToValueAtTime(45,t+.1); o.frequency.exponentialRampToValueAtTime(37,t+.55);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+.005); g.gain.setTargetAtTime(.0001,t+.07,.14);
+  o.connect(g); g.connect(A.kickBus); o.start(t); o.stop(t+1); duckAt(t); }
+function knock(t,f,pan,amp,send){ const c=A.ctx;
+  const src=c.createBufferSource(); src.buffer=A.noise; const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=4.5;
+  const g=c.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+.003); g.gain.exponentialRampToValueAtTime(.0001,t+.1);
+  const o=c.createOscillator(); o.frequency.setValueAtTime(f*.5,t); o.frequency.exponentialRampToValueAtTime(f*.33,t+.08);
+  const og=c.createGain(); og.gain.setValueAtTime(.0001,t); og.gain.exponentialRampToValueAtTime(amp*.9,t+.002); og.gain.exponentialRampToValueAtTime(.0001,t+.09);
+  const p=c.createStereoPanner(); p.pan.value=clamp(pan,-1,1);
+  src.connect(bp); bp.connect(g); g.connect(p); o.connect(og); og.connect(p); p.connect(A.bus);
+  if(send>0){ const s=c.createGain(); s.gain.value=send; p.connect(s); s.connect(A.dIn); }
+  src.start(t,Math.random()*1.7,.15); o.start(t); o.stop(t+.13); }
+function bassNote(t,f,len){ A.bO.frequency.setTargetAtTime(f,t,.014); A.bS.frequency.setTargetAtTime(f,t,.014);
+  const g=A.bA.gain; g.setTargetAtTime(.38,t,.008); g.setTargetAtTime(0,t+len,.07); }
+function swell(t0,dur,amp){ const c=A.ctx;
+  const src=c.createBufferSource(); src.buffer=A.noise; src.loop=true;
+  const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=2; lp.frequency.setValueAtTime(160,t0); lp.frequency.exponentialRampToValueAtTime(2200,t0+dur);
+  const o=c.createOscillator(); o.type='triangle'; o.frequency.value=scaleFreq(M.center,4); const og=c.createGain(); og.gain.value=.5;
+  const g=c.createGain(); g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(amp,t0+dur); g.gain.setValueAtTime(.0001,t0+dur+.004);
+  src.connect(lp); lp.connect(g); o.connect(og); og.connect(g); g.connect(A.bus); g.connect(A.revIn);
+  src.start(t0); src.stop(t0+dur+.05); o.start(t0); o.stop(t0+dur+.05); }
+function pad(t,deg,dur,amp){ const c=A.ctx;
+  const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=.7; lp.frequency.setValueAtTime(260,t); lp.frequency.linearRampToValueAtTime(880,t+dur*.45); lp.frequency.linearRampToValueAtTime(240,t+dur);
+  const g=c.createGain(); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+dur*.35); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  const s=c.createGain(); s.gain.value=.9;
+  for(const i of [0,2,4]) for(const dt of [-7,6]){ const o=c.createOscillator(); o.type='triangle'; o.frequency.value=scaleFreq(deg+i,3); o.detune.value=dt; o.connect(lp); o.start(t); o.stop(t+dur+.1); }
+  lp.connect(g); g.connect(A.duck); g.connect(s); s.connect(A.revIn); }
+function tick_blip(t){ const c=A.ctx,o=c.createOscillator(),g=c.createGain(),s=c.createGain(); o.type='sine'; o.frequency.value=scaleFreq(M.center,6);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.025,t+.004); g.gain.exponentialRampToValueAtTime(.0001,t+.05); s.gain.value=1.4;
+  o.connect(g); g.connect(A.bus); g.connect(s); s.connect(A.dIn); o.start(t); o.stop(t+.08); }
+function setCenter(deg,t){ M.center=deg; if(!audioOn) return; const f=scaleFreq(deg,1); A.drone[0].frequency.setTargetAtTime(f,t,3); A.drone[1].frequency.setTargetAtTime(f*2,t,3); A.drone[2].frequency.setTargetAtTime(f*3,t,3); }
+
+// ---------- sequencer ------------------------------------------------
+function euclid(k,n,rot){ const p=[]; for(let i=0;i<n;i++) p.push(((i+rot)*k)%n<k?1:0); return p; }
+function meterSet(){ const s=[16,12]; if(M.epoch>=1)s.push(14); if(M.epoch>=3)s.push(10,15); if(M.epoch>=5)s.push(9,13); return s; }
+const seq = { bpm:M.bpm, n:M.n, pos:0, bar:0, kpos:0, nextT:0, rest:0, lastRest:0, armed:false, ruptureBar:-1,
+  kk:3, bk:5, brot:2, nn:11, nk:4, nrot:1, pats:{} };
+function voiceMeter(n){ seq.n=n; seq.kk=Math.max(2,Math.round(n/4)-(rng()<.4?1:0)); seq.bk=Math.max(3,Math.round(n*.32)); seq.brot=Math.floor(rng()*n);
+  seq.nn=pick([n-1,n+1,9,7,11].filter(x=>x>=5&&x!==n)); seq.nk=Math.max(2,Math.round(seq.nn*.4)); seq.nrot=Math.floor(rng()*seq.nn); regen(); }
+function regen(){ seq.pats.kick=euclid(seq.kk,seq.n,0); seq.pats.bass=euclid(seq.bk,seq.n,seq.brot); seq.pats.knock=euclid(seq.nk,seq.nn,seq.nrot); }
+voiceMeter(seq.n);
+const EVQ=[];                                   // time-stamped visual events
+function ev(t,type,data){ EVQ.push({t,type,data}); }
+const clockNow=()=>audioOn?A.ctx.currentTime:performance.now()/1000;
+seq.nextT=clockNow()+.1;
+const AP = { sub:.2, kp:.5, band:420, pan:0, fb:.55, rev:.3, drv:1, cut:220, depth:160, bassP:.7 };
+let pending=null;
+
+function onBar(t){
+  seq.bar++;
+  if (seq.armed && seq.ruptureBar<0){                  // begin the breakdown
+    seq.armed=false; seq.ruptureBar=seq.bar+2; seq.rest=2;
+    const bd=seq.n*stepDur();
+    if(audioOn) swell(t+bd*.35, bd*1.65, .22);
+    ev(t,'shear'); ev(t,'log','kick withdrawn · field shearing');
+  }
+  if (seq.bar===seq.ruptureBar && pending){             // the downbeat of the new world
+    seq.ruptureBar=-1; seq.rest=0; const p=pending;
+    const oldM=`E(${seq.kk},${seq.n})`, oldB=Math.round(seq.bpm), oldC=M.center;
+    seq.bpm=p.bpm; M.bpm=p.bpm; voiceMeter(p.n); M.n=p.n;
+    if(audioOn){ setDelay(pick([3,4,6]),false); A.lfo.frequency.setTargetAtTime(seq.bpm/60*pick([.5,.75,1,1.5,2]),t,.5); }
+    if(p.center!==oldC) setCenter(p.center,t);
+    ev(t,'rupture',p);
+    ev(t,'log',`meter ${oldM} → <b>E(${seq.kk},${seq.n})</b> · ${oldB} → ${Math.round(seq.bpm)} BPM`);
+    if(p.center!==oldC) ev(t,'log',`harmonic center ${NOTE[oldC]} → <b>${NOTE[p.center]}</b>`);
+    if(audioOn) pad(t, p.center, seq.n*stepDur()*3, .03);
+    return;
+  }
+  if (seq.rest>0) { seq.rest--; if(seq.rest===0 && seq.ruptureBar<0) ev(t,'log','kick returns'); }
+  else if (seq.ruptureBar<0 && seq.bar-seq.lastRest>20 && rng()<.05*(1.2-tideV())) {
+    seq.rest=pick([4,8]); seq.lastRest=seq.bar; ev(t,'log',`dub break · kick withdrawn ${seq.rest} bars`); }
+  const bd=seq.n*stepDur();
+  if(audioOn && rng()<.07) swell(t+bd*.25, bd*.75, .12);
+  if(rng()<.02){ A.delaySteps=pick([2,3,4,6]); setDelay(A.delaySteps,false); ev(t,'log',`delay → ${['','','1/8','3/16','1/4','','3/8'][A.delaySteps]} · tape drift`); }
+  if(rng()<.045 && audioOn) pad(t, M.center+pick([0,0,3,5,1]), bd*3, .026);
+  if(rng()<.003){ const c=wpick([0,1,3,6],[3,1,2,1.5]); if(c!==M.center){ const o=M.center; setCenter(c,t); ev(t,'log',`harmonic center drifts ${NOTE[o]} → <b>${NOTE[c]}</b>`);} }
+  if(seq.bar%8===0){ const nk=clamp(Math.round(seq.nn*(.22+(MAP.edge||.1)*2.2)),2,seq.nn-1); if(nk!==seq.nk){ seq.nk=nk; regen(); } }
+  if(audioOn && seq.bar%16===0 && rng()<.3) A.lfo.frequency.setTargetAtTime(seq.bpm/60*pick([.5,.75,1,1.5,2,4/3]),t,.3);
+}
+function scheduleStep(t){
+  if (seq.pos===0) onBar(t);
+  const s=seq.pos;
+  if (!seq.rest && seq.pats.kick[s]) { const acc=s===0; if(audioOn) kick(t, acc?.95:.78); ev(t,'kick',{acc}); }
+  const ks=seq.kpos%seq.nn;
+  if (seq.pats.knock[ks] && rng()<AP.kp) { const thr=rng()<.09; if(audioOn) knock(t, AP.band*(1+(rng()-.5)*.15), AP.pan+(rng()-.5)*.3, .16, thr?.85:.08); }
+  if (seq.pats.bass[s] && rng()<AP.bassP) {
+    const off=wpick([0,1,2,3,4,5,6],[5,2,1,1.4,2.2,1,1.6]); const deg=M.center+off; let f=scaleFreq(deg,1); if(f<34) f*=2; if(rng()<.18) f*=2;
+    let g=1; while(g<seq.n && !seq.pats.bass[(s+g)%seq.n]) g++;
+    if(audioOn) bassNote(t,f,stepDur()*g*.85); ev(t,'bass',{deg:((deg%7)+7)%7});
+  }
+  seq.pos++; seq.kpos++; if(seq.pos>=seq.n) seq.pos=0;
+}
+function schedTick(){ const now=clockNow(); if(seq.nextT<now-1) seq.nextT=now+.05; while(seq.nextT<now+.25){ scheduleStep(seq.nextT); seq.nextT+=stepDur(); } }
+try { const wk=new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),40)'],{type:'text/javascript'}))); wk.onmessage=schedTick; }
+catch(e){ setInterval(schedTick,40); }
+
+// ---------- rupture planning -----------------------------------------
+let tension=0, epochLen=lerp(22,50,rng()), epochStart=0;
+function chooseRegime(){ const names=Object.keys(REGIMES).filter(n=>n!==M.regime);
+  const w=names.map(n=>{ const vis=M.visits[n]||0; const imp=M.bank.filter(b=>b.regime===n).reduce((a,b)=>a+b.count,0); return Math.pow(1/(1+vis),.7)*(1+.35*Math.min(imp,6)); });
+  return wpick(names,w); }
+function modesUnlocked(){ return M.epoch>=4?[0,1,2]:M.epoch>=2?[0,1]:[0]; }
+function planRupture(reason){
+  if (pending || seq.armed || seq.ruptureBar>=0) return;
+  pending = { reason, regime:chooseRegime(),
+    pal: rng()<.6 ? wpick(PALETTES.map((_,i)=>i).filter(i=>i!==M.pal), PALETTES.map((_,i)=>i).filter(i=>i!==M.pal).map(()=>1)) : M.pal,
+    n: rng()<.75 ? pick(meterSet().filter(x=>x!==seq.n)) : seq.n,
+    bpm: clamp(seq.bpm+(rng()*2-1)*6,66,82),
+    center: rng()<.5 ? wpick([0,1,3,6],[4,1,2,1.5]) : M.center,
+    mode: rng()<.5 ? pick(modesUnlocked()) : M.mode,
+    coreMode: rng()<.35 ? 1-M.coreMode : M.coreMode,
+    scale: rng()<.3 ? Math.floor(rng()*SCALES.length) : M.scale,
+    memPol: rng()<.45 ? -M.memPol : M.memPol,
+    erode: rng()<.3 };
+  seq.armed=true;
+  log(`tension ${tension.toFixed(2)} · <b>rupture armed</b> (${reason})`, true);
+}
+function applyRupture(p){
+  const old=M.regime, oldPal=M.pal, oldMode=M.mode, oldScale=M.scale, oldPol=M.memPol;
+  M.epoch++; M.regime=p.regime; M.visits[p.regime]=(M.visits[p.regime]||0)+1; M.pal=p.pal; M.mode=p.mode; M.coreMode=p.coreMode; M.scale=p.scale; M.memPol=p.memPol;
+  const R=REGIMES[p.regime]; field.tF=R.F; field.tk=R.k; field.mode=p.mode; field.coreMode=p.coreMode; field.memPol=p.memPol;
+  field.tShear=0; field.windAng+=Math.PI*(.5+rng()); field.seed=rng()*50;
+  recall=null; palTarget(M.pal); field.palTau=2.5; palFastUntil=elapsed+10;
+  if (p.scale!==oldScale) resampleSim();
+  if (p.erode) erodeNext=true;
+  for(let i=0;i<7;i++) addDrop(rng(),rng(),.02+rng()*.03,.9);
+  field.ring=[.5,.5,0,1.6];
+  tension=0; epochLen=lerp(22,50,rng()); epochStart=elapsed; pending=null; collapseT=0; floodT=0;
+  log(`<b>RUPTURE</b> · epoch ${M.epoch} · ${old} → <b>${p.regime}</b>`, true);
+  if(p.pal!==oldPal) log(`palette migrates → <b>${PALETTES[p.pal].name}</b>`);
+  if(p.mode!==oldMode) log(`visual grammar → <b>${MODES[p.mode]}</b>`);
+  if(p.scale!==oldScale) log(`field scale ${SCALES[oldScale]} → ${SCALES[p.scale]} cells`);
+  if(p.erode) log('sediment eroded · half of memory-in-place lost');
+  if(p.memPol!==oldPol) log(`memory polarity → ${p.memPol>0?'+ (old ground feeds growth)':'− (old ground resists)'}`);
+  if(M.epoch===1) log('new vocabulary · meter 14');
+  if(M.epoch===2) log('new grammar available · <b>HALFTONE</b>');
+  if(M.epoch===3) log('new vocabulary · meters 10, 15');
+  if(M.epoch===4) log('new grammar available · <b>LINE SCREEN</b>');
+  if(M.epoch===5) log('new vocabulary · meters 9, 13');
+  save();
+}
+
+// ---------- memory: impressions & recall -----------------------------
+let recall=null, recallW=0, palFastUntil=0, erodeNext=false;
+const sigDist=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
+function impress(sig){
+  let best=null,bd=1e9; for(const b of M.bank){ const d=sigDist(sig,b.sig); if(d<bd){bd=d;best=b;} }
+  if(best && bd<.05){ best.count++; best.sig=best.sig.map((v,i)=>lerp(v,sig[i],.25)); log(`state reinforced · impression #${M.bank.indexOf(best)+1} ×${best.count}`); }
+  else { M.bank.push({sig, regime:M.regime, pal:M.pal, center:M.center, epoch:M.epoch, t:M.totalSec, count:1, last:-1e9});
+    if(M.bank.length>48){ M.bank.sort((a,b)=>b.count-a.count||b.t-a.t); M.bank.length=48; }
+    log(`impression stored · ${M.regime.toLowerCase()} at cov ${sig[0].toFixed(2)} · bank ${M.bank.length}`); }
+  save();
+}
+function tryRecall(sig){
+  let best=null,bd=1e9; for(const b of M.bank){ if(b.epoch===M.epoch || M.totalSec-b.last<600/SPEED) continue; const d=sigDist(sig,b.sig); if(d<bd){bd=d;best=b;} }
+  if(!best || bd>.06) return;
+  best.last=M.totalSec; recall=best.pal; recallW=.4; palTarget(M.pal,recall,recallW);
+  tension+=.12;
+  log(`<b>recognition</b> · resembles epoch ${best.epoch} (T+${hms(best.t)}) · ${best.regime.toLowerCase()}`, true);
+  if(audioOn){ const bd2=seq.n*stepDur(); pad(A.ctx.currentTime+.1, best.center, bd2*4, .034); }
+  if(tension>.8) planRupture('memory');
+}
+
+// ---------- analysis → mapping ---------------------------------------
+let prevSig=null, changeE=.01, stab=0, stableRun=0, lastImp=-1e9, lastRecallCheck=0, collapseT=0, floodT=0;
+const det={aniso:0, mass:0, dens:1, t:{}};
+function tideV(){ return .5+.5*Math.sin(elapsed*SPEED/60/9.3*Math.PI*2); }
+function detector(name,val,txt){ if(det[name]===val) return; if(elapsed-(det.t[name]||-1e9)<45/SPEED){ return; } det[name]=val; det.t[name]=elapsed; if(txt) log(txt); }
+function readback(){
+  gl.useProgram(P_COPY.p); gl.uniform1i(P_COPY.u.mode,1); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,sim.a.t); gl.uniform1i(P_COPY.u.S,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,RB.fb); gl.viewport(0,0,64,36); gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.readPixels(0,0,64,36,gl.RGBA,gl.UNSIGNED_BYTE,rbBuf); lastRead=rbBuf;
+}
+function control(dt){
+  const W=64,H=36,N=W*H,px=rbBuf; const b=new Uint8Array(N);
+  let cov=0,sx=0,sy=0,sm=0,eh=0,evn=0,sed=0,mx=0;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=y*W+x, v=px[i*4]/255*.5; sed+=px[i*4+1]/255; if(v>mx)mx=v;
+    if(v>.15){b[i]=1;cov++;} sx+=v*(x/(W-1)*2-1); sy+=v*(y/(H-1)*2-1); sm+=v; }
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=y*W+x; if(x<W-1&&b[i]!==b[i+1])eh++; if(y<H-1&&b[i]!==b[i+W])evn++; }
+  cov/=N; sed/=N; const edge=(eh+evn)/(2*N), aniso=(evn-eh)/(evn+eh+1), cx=sm>1e-3?sx/sm:0, cy=sm>1e-3?sy/sm:0;
+  field.th2=clamp(mx*.8,.24,.42);
+  const sig=[cov, edge*2.5, aniso*.5, cx*.5, cy*.5];
+  if(prevSig){ changeE=lerp(changeE,sigDist(sig,prevSig),.08); } prevSig=sig;
+  stab=clamp(1-changeE/.012,0,1);
+  M.totalSec+=dt;
+  // tension accrues from stability
+  tension+=dt*SPEED/60*(.35+.65*stab)/epochLen;
+  const epochAge=(elapsed-epochStart)*SPEED;
+  if(tension>1 && rng()<.03) planRupture('accumulated stability');
+  if(cov<.004 && epochAge>120){ collapseT+=dt; if(collapseT>20) planRupture('collapse'); } else collapseT=0;
+  if(cov>.9 && epochAge>120){ floodT+=dt; if(floodT>40) planRupture('saturation'); } else floodT=0;
+  // memory
+  if(stab>.72){ stableRun+=dt*SPEED; } else stableRun=0;
+  if(stableRun>180 && (elapsed-lastImp)*SPEED>360 && cov>.01){ lastImp=elapsed; impress(sig); }
+  if((elapsed-lastRecallCheck)*SPEED>20){ lastRecallCheck=elapsed; tryRecall(sig); }
+  if(recall!=null){ recallW=Math.max(0,recallW-dt*SPEED/400); palTarget(M.pal,recall,recallW); if(recallW<=0){ recall=null; palTarget(M.pal); } }
+  if(palFastUntil && elapsed>palFastUntil){ field.palTau=40; palFastUntil=0; }
+  // structure detectors (hysteresis via discrete states)
+  detector('aniso', aniso>.2?1:aniso<-.2?-1:(Math.abs(aniso)<.08?0:det.aniso), aniso>.2?'FIELD striates · horizontal':aniso<-.2?'FIELD striates · vertical':'isotropy restored');
+  detector('mass', cx>.22?1:cx<-.22?-1:(Math.abs(cx)<.1?0:det.mass), cx>.22?'mass drifts east':cx<-.22?'mass drifts west':'mass recentres');
+  detector('dens', cov<.06?0:cov>.45?2:1, cov<.06?'density · sparse':cov>.45?'density · dense':'density · medium');
+  // mapping
+  const tide=tideV();
+  AP.sub=.1+.24*Math.sqrt(cov)+.05*tide; AP.kp=clamp(.18+edge*1.7,.12,.95); AP.band=clamp(420*2**(aniso*1.6),200,1200); AP.pan=clamp(cx*.9,-.9,.9);
+  AP.fb=clamp(.42+.28*stab,.4,.72); AP.rev=.18+.5*clamp(sed*1.6,0,1); AP.drv=1+1.4*clamp(tension,0,1.2);
+  AP.cut=110+650*cov+140*tide; AP.depth=50+700*edge; AP.bassP=.45+.35*tide;
+  if(audioOn){ const t=A.ctx.currentTime;
+    A.droneG.gain.setTargetAtTime(AP.sub,t,2); A.fb.gain.setTargetAtTime(AP.fb,t,2); A.revIn.gain.setTargetAtTime(AP.rev,t,3);
+    A.drvIn.gain.setTargetAtTime(AP.drv,t,3); A.bF.frequency.setTargetAtTime(AP.cut,t,1.5); A.lfoG.gain.setTargetAtTime(AP.depth,t,1.5);
+    A.droneLp.frequency.setTargetAtTime(160+500*cov,t,2); }
+  field.windMag=(.004+.004*tide)*(REDUCED?.5:1);
+  // HUD values
+  const deg=Math.round(((field.windAng+field.nudge)*180/Math.PI%360+360)%360);
+  Object.assign(MAP,{cov:cov.toFixed(3),sub:AP.sub.toFixed(2),edge:edge.toFixed(3),kp:AP.kp.toFixed(2),
+    aniso:(aniso>=0?'+':'')+aniso.toFixed(2),band:Math.round(AP.band)+' Hz',cx:(cx>=0?'+':'')+cx.toFixed(2),pan:(AP.pan>=0?'+':'')+AP.pan.toFixed(2),
+    stab:stab.toFixed(2),fb:AP.fb.toFixed(2),sed:sed.toFixed(3),rev:AP.rev.toFixed(2),ten:tension.toFixed(2),drv:'+'+Math.round((AP.drv-1)*100)+'%',
+    drift:deg+'°',reg:M.regime,fk:`.${field.F.toFixed(4).slice(2)} / .${field.k.toFixed(4).slice(2)}`,met:`E(${seq.kk},${seq.n}) · E(${seq.nk},${seq.nn})`,bpm:Math.round(seq.bpm)});
+  MAP.edge=+edge;
+}
+function drawHUD(){
+  for(const r of ROWS){ for(const k of [r[0],r[2]]){ const el=$('m-'+k); if(el && MAP[k]!==undefined) el.textContent= k==='edge'? (+MAP.edge).toFixed(3) : MAP[k]; } }
+  $('tension').style.width=(clamp(tension,0,1)*100).toFixed(1)+'%';
+  $('elapsed').textContent=hms(elapsed);
+  const now=new Date(), f=tz=>now.toLocaleTimeString('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit'});
+  try{ $('cities').textContent=`BAL ${f('America/New_York')} · GAL ${f('Europe/Dublin')} · LON ${f('Europe/London')}`; }catch(e){}
+  $('epoch').textContent=`EPOCH ${M.epoch} · MEMORY ${M.bank.length} · RUN ${M.runs} · ${MODES[M.mode]}`;
+  const r=document.documentElement.style; for(let j=0;j<4;j++){ r.setProperty('--c'+j,`rgb(${Math.round(field.pal[j*3]*255)},${Math.round(field.pal[j*3+1]*255)},${Math.round(field.pal[j*3+2]*255)})`); }
+}
+
+// ---------- events from the sequencer --------------------------------
+function processEvents(){
+  const now=clockNow();
+  EVQ.sort((a,b)=>a.t-b.t);
+  while(EVQ.length && EVQ[0].t<=now){ const e=EVQ.shift();
+    if(e.type==='kick'){ const [wx,wy]=wanderer(elapsed); const j=.06;
+      addDrop((wx+(rng()-.5)*j+1)%1,(wy+(rng()-.5)*j+1)%1, e.data.acc?.03:.014+rng()*.01, e.data.acc?.7:.45);
+      if(e.data.acc && !REDUCED) field.ring=[wx,wy,0,.8]; }
+    else if(e.type==='bass'){ field.tNudge=(e.data.deg-3)*.28; setMap('bass',NOTE[e.data.deg]); }
+    else if(e.type==='shear'){ field.tShear=1; }
+    else if(e.type==='rupture'){ applyRupture(e.data); }
+    else if(e.type==='log'){ log(e.data, true); }
+  }
+  if(EVQ.length>400) EVQ.splice(0,EVQ.length-400);
+}
+
+// ---------- frame loop -----------------------------------------------
+const dropArr=new Float32Array(32);
+let last=performance.now(), simAcc=0, sedAcc=0, readAcc=0, hudAcc=0, saveAcc=0, simT=0;
+function simStep(nd, sedOn){
+  gl.useProgram(P_SIM.p); const u=P_SIM.u;
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,sim.a.t); gl.uniform1i(u.S,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,sim.b.fb); gl.viewport(0,0,sim.w,sim.h);
+  gl.uniform2f(u.px,1/sim.w,1/sim.h); gl.uniform1f(u.aspect,sim.w/sim.h); gl.uniform1f(u.t,simT); gl.uniform1f(u.seed,field.seed);
+  const tide=tideV();
+  gl.uniform1f(u.F0,field.F+(tide-.5)*.0016); gl.uniform1f(u.K0,field.k); gl.uniform1f(u.fA,field.fA); gl.uniform1f(u.kA,field.kA); gl.uniform1f(u.memPol,field.memPol);
+  const a=field.windAng+field.nudge; gl.uniform2f(u.wind,Math.cos(a)*field.windMag,Math.sin(a)*field.windMag);
+  gl.uniform1f(u.curl,field.curl+field.shear*.06);
+  gl.uniform1i(u.nDrops,nd); if(nd) gl.uniform4fv(u.drops,dropArr);
+  gl.uniform1f(u.sedK, sedOn? SPEED/2400 : 0); gl.uniform1f(u.sedD, sedOn? (erodeNext?.5:SPEED/(FULL?10800:1500)) : 0);
+  if(sedOn) erodeNext=false;
+  gl.drawArrays(gl.TRIANGLES,0,3); const t=sim.a; sim.a=sim.b; sim.b=t;
+}
+function render(){
+  gl.useProgram(P_REN.p); const u=P_REN.u; gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,cv.width,cv.height);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,sim.a.t); gl.uniform1i(u.S,0);
+  gl.uniform2f(u.res,cv.width,cv.height); gl.uniform2f(u.spx,1/sim.w,1/sim.h); gl.uniform3fv(u.pal,field.pal);
+  const ds=[2,5.5,4.5][field.mode]*DPR*(cv.width/DPR>1400?1.25:1); gl.uniform1f(u.dotSz,Math.max(1,Math.round(ds)));
+  gl.uniform1f(u.th1,.16); gl.uniform1f(u.th2,field.th2); gl.uniform1i(u.mode,field.mode); gl.uniform1i(u.coreMode,field.coreMode);
+  gl.uniform4f(u.ring,...field.ring); gl.drawArrays(gl.TRIANGLES,0,3);
+}
+function frame(now){
+  const dt=Math.min(.1,(now-last)/1000); last=now; elapsed+=dt;
+  processEvents();
+  const e=1-Math.exp(-dt/6); field.F=lerp(field.F,field.tF,e); field.k=lerp(field.k,field.tk,e);
+  field.shear=lerp(field.shear,field.tShear,1-Math.exp(-dt/2.5)); field.nudge=lerp(field.nudge,field.tNudge,1-Math.exp(-dt/8));
+  field.windAng+=(rng()-.5)*.04*dt*SPEED;
+  const pe=1-Math.exp(-dt/field.palTau); for(let i=0;i<12;i++) field.pal[i]=lerp(field.pal[i],field.tpal[i],pe);
+  field.ring[2]+=dt;
+  simAcc+=dt*field.sps; let steps=Math.min(24,Math.floor(simAcc)); simAcc-=steps; if(simAcc>4) simAcc=0;
+  sedAcc+=dt; const sedOn=sedAcc>=1;
+  for(let i=0;i<steps;i++){
+    let nd=0; if(i===0 && pendingDrops.length){ nd=pendingDrops.length; dropArr.fill(0); pendingDrops.forEach((d,j)=>dropArr.set(d,j*4)); pendingDrops=[]; }
+    const so = sedOn && i===0; if(so) sedAcc-=1;
+    simStep(nd, so); simT+=1/field.sps;
+  }
+  render();
+  readAcc+=dt; if(readAcc>=.5){ readAcc-=.5; readback(); control(.5); }
+  hudAcc+=dt; if(hudAcc>=.5){ hudAcc=0; if(!hud.hidden) drawHUD(); }
+  saveAcc+=dt; if(saveAcc>=30){ saveAcc=0; save(); }
+  requestAnimationFrame(frame);
+}
+
+// ---------- start, keys ----------------------------------------------
+async function enter(){
+  try{ initAudio(); await A.ctx.resume(); }catch(e){}
+  if(A.ctx && A.ctx.state==='running' && !audioOn){
+    audioOn=true; EVQ.length=0; seq.nextT=A.ctx.currentTime+.12;
+    A.master.gain.setTargetAtTime(muted?0:.85,A.ctx.currentTime,1.5);
+    $('gate').hidden=true; log('audio field open');
+  }
+}
+$('enter').addEventListener('click',enter);
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k==='h'){ hud.hidden=!hud.hidden; if(!hud.hidden) drawHUD(); }
+  else if(k==='r'){ log('human intervention'); planRupture('provoked'); }
+  else if(k==='m' && audioOn){ muted=!muted; A.master.gain.setTargetAtTime(muted?0:.85,A.ctx.currentTime,.2); }
+  else if(k==='enter' && !audioOn) enter();
+});
+addEventListener('pagehide',save);
+if(resumed){ log(`transmission resumes · run ${M.runs} · ${M.bank.length} impressions held`); if(M.sed) log('sediment restored from previous runs'); }
+else log('transmission begins · epoch 0');
+log(`regime <b>${M.regime}</b> · palette ${PALETTES[M.pal].name}`);
+if(Q.get('autostart')==='1'){ enter(); }
+else { try{ initAudio(); if(A.ctx.state==='running') enter(); }catch(e){} }
+drawHUD();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
