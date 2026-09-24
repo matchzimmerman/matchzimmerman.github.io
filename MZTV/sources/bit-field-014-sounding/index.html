@@ -1,0 +1,1224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOUNDING · MZTV</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#120e24;cursor:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+#info{position:fixed;left:22px;bottom:20px;font:11px/1.55 "JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  padding:7px 11px 8px;white-space:pre;letter-spacing:.02em;pointer-events:none;max-width:calc(100vw - 44px);overflow:hidden;
+  border:1px solid;display:none}
+#info .k{opacity:.62}
+#info .hi{font-weight:700}
+#info .lo{opacity:.4}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info"></div>
+<script>
+'use strict';
+/* =====================================================================
+   SOUNDING — MZTV
+   A low camera drifts across a ground that remembers where it has been.
+   The ground is a live field simulation on a torus (no edge, no centre).
+   Its governing operators mutate over hours under accumulated pressure;
+   the camera's path, impacts and eras are written into the field and
+   change what becomes possible next.
+
+   URL params:
+     ?info=0      hide the disclosure box      (key: i)
+     ?audio=0     no sound
+     ?fresh=1     ignore saved state, start a new ground
+     ?seed=N      fixed seed for a fresh start
+     ?rate=N      evolution clock multiplier (testing: 60 = an hour per minute)
+     ?lines=270   internal vertical resolution (pixel size)
+     ?ff=H        simulate H hours before first frame (slow: ~3 min per hour; testing only)
+   Keys: i info · t force transition · (any key/click resumes audio in a normal browser)
+   ===================================================================== */
+(() => {
+const Q = new URLSearchParams(location.search);
+const RATE = Math.max(0.01, parseFloat(Q.get('rate') || '1'));
+let SHOW_INFO = Q.get('info') !== '0';
+const FRESH = Q.get('fresh') === '1';
+const MUTE = Q.get('audio') === '0';
+const LINES = Math.max(120, parseInt(Q.get('lines') || '270', 10));
+const KEY = 'mztv-sounding-v1';
+
+/* ---------------- utilities ---------------- */
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const TAU = Math.PI * 2;
+const wrapA = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
+const angLerp = (a, b, t) => a + wrapA(b - a) * t;
+const R = { s: 1, next() { let t = (this.s = (this.s + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; } };
+const rnd = () => R.next();
+const gauss = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * rnd()); };
+let NSEED = 1;
+function hash1(i) { let x = Math.imul(i | 0, 374761393) ^ Math.imul(NSEED | 0, 668265263); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; }
+function vnoise(t, ch) { const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f); return lerp(hash1(i * 7 + ch * 1013), hash1((i + 1) * 7 + ch * 1013), u) * 2 - 1; }
+function fbm(t, ch) { return vnoise(t, ch) * 0.6 + vnoise(t * 2.13 + 5.1, ch + 1) * 0.28 + vnoise(t * 4.7 + 1.7, ch + 2) * 0.12; }
+
+/* ---------------- field ---------------- */
+const N = 256, M = N - 1, NN = N * N;
+let h = new Float32Array(NN), hn = new Float32Array(NN);
+const w = new Float32Array(NN), wv = new Float32Array(NN);
+const m = new Float32Array(NN), e = new Float32Array(NN);
+const ta = new Float32Array(NN), tb = new Float32Array(NN), tc = new Float32Array(NN);
+
+function samp(a, x, z) {
+  x -= 0.5; z -= 0.5;
+  const x0 = Math.floor(x), z0 = Math.floor(z), fx = x - x0, fz = z - z0;
+  const i0 = x0 & M, i1 = (x0 + 1) & M, j0 = (z0 & M) * N, j1 = ((z0 + 1) & M) * N;
+  return (a[j0 + i0] * (1 - fx) + a[j0 + i1] * fx) * (1 - fz) + (a[j1 + i0] * (1 - fx) + a[j1 + i1] * fx) * fz;
+}
+function blur(src, dst, r) {
+  const inv = 1 / (2 * r + 1);
+  for (let y = 0; y < N; y++) {
+    const row = y * N; let s = 0;
+    for (let k = -r; k <= r; k++) s += src[row + (k & M)];
+    for (let x = 0; x < N; x++) { tc[row + x] = s * inv; s += src[row + ((x + r + 1) & M)] - src[row + ((x - r) & M)]; }
+  }
+  for (let x = 0; x < N; x++) {
+    let s = 0;
+    for (let k = -r; k <= r; k++) s += tc[(k & M) * N + x];
+    for (let y = 0; y < N; y++) { dst[y * N + x] = s * inv; s += tc[((y + r + 1) & M) * N + x] - tc[((y - r) & M) * N + x]; }
+  }
+}
+function stamp(a, cx, cz, r, amt, sat) {
+  const ext = Math.ceil(r * 3), inv = 1 / (2 * r * r);
+  const ix = Math.floor(cx), iz = Math.floor(cz);
+  for (let dz = -ext; dz <= ext; dz++) for (let dx = -ext; dx <= ext; dx++) {
+    const px = ix + dx + 0.5 - cx, pz = iz + dz + 0.5 - cz;
+    const g = Math.exp(-(px * px + pz * pz) * inv) * amt;
+    const i = ((iz + dz) & M) * N + ((ix + dx) & M);
+    if (sat) a[i] = Math.min(1, a[i] + g * (1 - a[i])); else a[i] += g;
+  }
+}
+function ring(a, cx, cz, rad, wid, amt) {
+  const ext = Math.ceil(rad + wid * 3), inv = 1 / (2 * wid * wid);
+  const ix = Math.floor(cx), iz = Math.floor(cz);
+  for (let dz = -ext; dz <= ext; dz++) for (let dx = -ext; dx <= ext; dx++) {
+    const px = ix + dx + 0.5 - cx, pz = iz + dz + 0.5 - cz;
+    const d = Math.sqrt(px * px + pz * pz) - rad;
+    const i = ((iz + dz) & M) * N + ((ix + dx) & M);
+    a[i] = Math.min(1, a[i] + amt * Math.exp(-d * d * inv));
+  }
+}
+
+/* ---------------- genome ---------------- */
+const OPS = ['ridges', 'erosion', 'drift', 'waves', 'terraces', 'uplift', 'faults', 'flood', 'canopy'];
+const GR = {
+  ridges: [0, 1], erosion: [0, 1], drift: [0, 1], waves: [0, 1], terraces: [0, 1], uplift: [-1, 1], faults: [0, 1], flood: [0, 1], canopy: [0, 1],
+  r2: [3, 9], tk: [2, 12], waveC: [3.5, 8], waveDamp: [0.2, 0.95], tStep: [0.2, 0.55], flowSpd: [0.2, 1.4], swirl: [0, 1],
+  seek: [-1, 1], speed: [1.8, 4.6], clear: [2, 6], pitch: [-0.42, -0.1], survey: [0, 1], hS: [5.5, 13], fov: [0.5, 0.72],
+  cDen: [0.3, 1.5], contour: [0.2, 1], fog: [0.007, 0.018], light: [-Math.PI, Math.PI], echo: [0.05, 0.7], reg: [0, 1.4], evRate: [0.5, 1.6],
+  bpm: [66, 84], swing: [0, 0.26], kickDen: [0.3, 1], chordDen: [0, 0.75], percDen: [0, 0.6], bassDen: [0.25, 0.75], drone: [0.2, 1]
+};
+const GD = { dither: 3, inkMap: 6, root: 6, mode: 3, drop: 2 };
+const INKMAPS = [[3, 2, 3], [1, 3, 2], [2, 3, 1], [3, 1, 2], [2, 1, 3], [1, 2, 3]]; // contour, scar, crest
+const ROOTS = [0, -2, 3, -4, -5, 2];
+const MODES = [[0, 1, 3, 5, 7, 8, 10], [0, 2, 3, 5, 7, 8, 10], [0, 2, 3, 5, 7, 9, 10]];
+const MODE_NAMES = ['phrygian', 'aeolian', 'dorian'];
+const DITHER_NAMES = ['ordered', 'halftone', 'grain'];
+const DESC = {
+  ridges: 'ridges self-organise out of local contrast',
+  erosion: 'the ground softens; worn paths resist',
+  drift: 'the ground migrates and piles against old paths',
+  waves: 'impacts ring outward; waves slow in worn ground',
+  terraces: 'the ground settles into strata',
+  upliftUp: 'worn paths rise into walls',
+  upliftDown: 'worn paths sink into canyons',
+  faults: 'strata crack along worn paths',
+  flood: 'water fills the low ground',
+  canopy: 'a second ground closes overhead'
+};
+
+function initialGenome() {
+  return {
+    ridges: 0.85, erosion: 0.12, drift: 0.4, waves: 0, terraces: 0, uplift: 0, faults: 0, flood: 0, canopy: 0,
+    r2: 6, tk: 6, waveC: 5.5, waveDamp: 0.6, tStep: 0.33, flowSpd: 0.55, swirl: 0.5,
+    seek: -0.7, speed: 3.0, clear: 3.0, pitch: -0.2, survey: 0.4, hS: 8, fov: 0.6,
+    cDen: 0.7, contour: 0.85, fog: 0.011, light: 0.8, echo: 0.25, reg: 0.35, evRate: 1,
+    bpm: 74, swing: 0.12, kickDen: 0.6, chordDen: 0.3, percDen: 0.25, bassDen: 0.55, drone: 0.5,
+    dither: 0, inkMap: 0, root: 0, mode: 0, drop: 0,
+    pal: [[0.16, 0.07, 4.9], [0.52, 0.11, 3.4], [0.77, 0.16, 1.25], [0.9, 0.19, 2.4]],
+    dom: 'ridges'
+  };
+}
+const cloneG = g => JSON.parse(JSON.stringify(g));
+function mixG(a, b, s) {
+  const o = {};
+  for (const k in GR) o[k] = lerp(a[k], b[k], s);
+  o.light = angLerp(a.light, b.light, s);
+  for (const k in GD) o[k] = s < 0.5 ? a[k] : b[k];
+  o.pal = a.pal.map((c, i) => [lerp(c[0], b.pal[i][0], s), lerp(c[1], b.pal[i][1], s), angLerp(c[2], b.pal[i][2], s)]);
+  o.dom = s < 0.5 ? a.dom : b.dom;
+  return o;
+}
+
+/* ---------------- state ---------------- */
+let S;
+function freshState(seed) {
+  R.s = seed | 0; NSEED = seed | 0;
+  S = {
+    v: 1, seed, t: 1000 + (seed % 100000), clock: 0, real: 0, era: 1, transitions: 0, P: 0.35,
+    phase: 'era', tr0: 0, trDur: 160, trS: 0, instab: 0,
+    base: initialGenome(), from: null, to: null, G: null,
+    caps: { ridges: 1, erosion: 1, drift: 1, waves: 0, terraces: 0, uplift: 0, faults: 0, flood: 0, canopy: 0 },
+    lastDom: { ridges: 1 }, opHue: {}, history: [{ era: 1, dom: 'ridges', at: 0 }], events: 0, newCap: null,
+    cam: { x: rnd() * N, z: rnd() * N, y: 8, vy: 0, yaw: rnd() * TAU, yawV: 0, pitch: -0.2, roll: 0, spd: 3 },
+    dive: 0, stats: { hMean: 0, hStd: 0.6, mMean: 0, eMean: 0 },
+    flowAng: rnd() * TAU, flowPh: rnd() * 10, imps: [], evT: 6, dripT: 2, near: 0.5, open: 0.3, traj: null,
+    sunPh: 2.6 + rnd() * 0.6, wind: [0, 0], cloud: 0, rain: 0, haze: 0.3, sunEl: 0.3, sunAz: 0
+  };
+  S.traj = newTraj();
+  S.G = S.base;
+  for (let i = 0; i < NN; i++) { h[i] = (rnd() - 0.5) * 0.6; w[i] = wv[i] = m[i] = e[i] = 0; }
+}
+
+/* ---------------- evolution ---------------- */
+function checkUnlock() {
+  const c = S.caps, st = S.stats, n = S.transitions;
+  if (!c.waves) return 'waves';
+  if (!c.terraces && n >= 1 && st.mMean > 0.04) return 'terraces';
+  if (!c.uplift && n >= 2 && st.mMean > 0.07) return 'uplift';
+  if (!c.flood && n >= 3) return 'flood';
+  if (!c.faults && c.terraces && c.uplift && st.eMean > 0.004) return 'faults';
+  if (!c.canopy && n >= 5 && st.mMean > 0.1) return 'canopy';
+  return null;
+}
+function mutatePal(p, dom) {
+  const q = p.map(c => c.slice());
+  q[0][2] = wrapA(p[0][2] + gauss() * 0.4);
+  q[0][0] = clamp(p[0][0] + gauss() * 0.02, 0.12, 0.2);
+  q[0][1] = clamp(p[0][1] + gauss() * 0.015, 0.035, 0.09);
+  const bands = [[0.44, 0.6], [0.64, 0.8], [0.84, 0.94]];
+  for (let k = 1; k <= 3; k++) {
+    q[k][2] = wrapA(p[k][2] + gauss() * 0.45);
+    q[k][0] = clamp(p[k][0] + gauss() * 0.04, bands[k - 1][0], bands[k - 1][1]);
+    q[k][1] = clamp(p[k][1] + gauss() * 0.03, 0.09, 0.21);
+  }
+  // colour acquires behavioural association: an operator brings back its hue
+  const home = initialGenome().pal;
+  for (let k = 0; k < 4; k++) q[k][2] = angLerp(q[k][2], home[k][2], 0.3);
+  if (S.opHue[dom] === undefined) S.opHue[dom] = q[3][2];
+  else q[3][2] = angLerp(q[3][2], S.opHue[dom], 0.75);
+  for (let k = 1; k <= 3; k++) for (let j = k + 1; j <= 3; j++) {
+    if (Math.abs(wrapA(q[k][2] - q[j][2])) < 0.5) q[j][2] = wrapA(q[j][2] + 0.9);
+  }
+  return q;
+}
+function mutate(g) {
+  const n = cloneG(g), st = S.stats;
+  let nc = checkUnlock();
+  if (S.forceDom) { nc = S.caps[S.forceDom] ? null : S.forceDom; }
+  if (nc) { S.caps[nc] = 1; S.newCap = nc; } else S.newCap = null;
+  let dom = S.forceDom || nc; S.forceDom = null;
+  if (!dom) {
+    const opts = OPS.filter(o => S.caps[o] && o !== g.dom);
+    const wts = opts.map(o => 1 + (S.era - (S.lastDom[o] || 0)) * 1.5);
+    let tot = wts.reduce((a, b) => a + b, 0), r = rnd() * tot;
+    dom = opts[opts.length - 1];
+    for (let i = 0; i < opts.length; i++) { r -= wts[i]; if (r <= 0) { dom = opts[i]; break; } }
+  }
+  S.lastDom[dom] = S.era + 1;
+  let usign = Math.sign(g.uplift) || (rnd() < 0.5 ? 1 : -1);
+  if (dom === 'uplift') usign = (st.eMean > 0.02 && rnd() < 0.6) ? -1 : (rnd() < 0.55 ? 1 : -1);
+  for (const o of OPS) {
+    if (!S.caps[o]) { n[o] = 0; continue; }
+    const mag = Math.abs(g[o]);
+    let v = mag * 0.5 + rnd() * 0.22;
+    if (o === 'flood' || o === 'canopy') v = mag * 0.35 + (rnd() < 0.2 ? rnd() * 0.35 : 0);
+    if (o === dom) v = 0.75 + rnd() * 0.25;
+    n[o] = o === 'uplift' ? v * usign : v;
+  }
+  if (st.hStd < 0.3) n.ridges = Math.max(n.ridges, 0.6);
+  if (Math.max(n.ridges, Math.abs(n.uplift), n.terraces) < 0.35) n.ridges = Math.max(n.ridges, 0.5);
+  if (st.hStd > 1.1) n.erosion = Math.max(n.erosion, 0.5);
+  const mut = (k, s) => { const [a, b] = GR[k]; n[k] = clamp(g[k] + gauss() * s * (b - a), a, b); };
+  for (const k of ['r2', 'tk', 'waveC', 'waveDamp', 'tStep', 'flowSpd', 'swirl', 'speed', 'clear', 'pitch', 'survey', 'hS', 'fov',
+    'cDen', 'contour', 'fog', 'echo', 'reg', 'evRate', 'bpm', 'swing', 'kickDen', 'chordDen', 'percDen', 'bassDen', 'drone']) mut(k, 0.17);
+  n.light = wrapA(g.light + gauss() * 1.1);
+  // worn world -> the camera begins to return to its own paths
+  n.seek = clamp(g.seek * 0.3 + (rnd() < 0.25 + st.mMean ? 0.75 : -0.75) + gauss() * 0.2, -1, 1);
+  // each era has a character
+  const bump = (k, v, s = 0.6) => { n[k] = clamp(lerp(n[k], v, s), GR[k][0], GR[k][1]); };
+  switch (dom) {
+    case 'ridges': bump('tk', 9); bump('r2', 3 + rnd() * 6, 0.8); break;
+    case 'erosion': bump('tk', 3); bump('fog', 0.016); bump('speed', 2.2, 0.4); break;
+    case 'drift': bump('flowSpd', 1.3); bump('swirl', 0.9, 0.5); break;
+    case 'waves': bump('waveDamp', 0.9); bump('echo', 0.6, 0.5); bump('evRate', 1.5, 0.6); n.ridges *= 0.6; n.erosion = Math.max(n.erosion, 0.45); bump('tk', 3, 0.5); break;
+    case 'terraces': bump('tk', 2.5); bump('contour', 1); bump('cDen', 1.2, 0.4); break;
+    case 'uplift': bump('hS', 12, 0.5); break;
+    case 'faults': bump('reg', 1.2); bump('tStep', 0.45, 0.4); break;
+    case 'flood': bump('survey', 0.1); bump('pitch', -0.14, 0.5); break;
+    case 'canopy': bump('clear', 2.2); bump('speed', 2.2, 0.6); bump('survey', 0, 0.8); break;
+  }
+  if (rnd() < 0.35) n.dither = (g.dither + 1 + Math.floor(rnd() * 2)) % GD.dither;
+  if (rnd() < 0.4) n.inkMap = Math.floor(rnd() * GD.inkMap);
+  if (rnd() < 0.3) n.mode = Math.floor(rnd() * GD.mode);
+  if (rnd() < 0.35) n.root = Math.floor(rnd() * GD.root);
+  if (rnd() < 0.3) n.drop = 1 - g.drop;
+  n.pal = mutatePal(g.pal, dom);
+  n.dom = dom;
+  return n;
+}
+function newTraj() {
+  const t = {};
+  for (const k of ['r2', 'tk', 'tStep', 'waveC', 'flowSpd', 'hS', 'cDen', 'fog', 'bpm', 'swing', 'echo', 'pitch', 'speed']) t[k] = gauss() * (GR[k][1] - GR[k][0]) * 0.3 / 1800;
+  return t;
+}
+function beginTransition() {
+  S.phase = 'trans'; S.tr0 = S.clock; S.trDur = 160;
+  S.from = cloneG(S.base); S.to = mutate(S.base); S.P = 1;
+}
+function endTransition() {
+  S.base = S.to; S.G = S.base; S.from = S.to = null;
+  S.phase = 'era'; S.transitions++; S.era++; S.traj = newTraj();
+  S.P = 0.08 + 0.12 * rnd(); S.trS = 0;
+  S.history.push({ era: S.era, dom: S.base.dom, at: S.clock });
+  if (S.history.length > 60) S.history.shift();
+}
+
+/* ---------------- height helpers ---------------- */
+const Hraw = (x, z) => samp(h, x, z) + 0.8 * samp(w, x, z);
+const Hg = (x, z) => Hraw(x, z) * S.G.hS;
+const canY = () => S.stats.hMean * S.G.hS + lerp(46, 8.5, S.G.canopy);
+const Hc = (x, z) => canY() - Hraw(z + 71, 19 - x) * S.G.hS * 0.9;
+const floodY = () => S.stats.hMean * S.G.hS + lerp(-15, 3, S.G.flood);
+
+/* ---------------- simulation ---------------- */
+let advCount = 0;
+// self-repair: if anything ever goes non-finite, regrow the ground from memory instead of dying
+function heal() {
+  for (let i = 0; i < NN; i++) {
+    if (!Number.isFinite(m[i])) m[i] = 0; if (!Number.isFinite(e[i])) e[i] = 0;
+    h[i] = (m[i] - 0.3) * 0.8 + (rnd() - 0.5) * 0.3; w[i] = wv[i] = 0;
+  }
+  const c = S.cam; if (!Number.isFinite(c.x + c.z + c.y + c.yaw)) { c.x = rnd() * N; c.z = rnd() * N; c.yaw = 0; c.yawV = 0; c.y = 8; c.vy = 0; }
+  S.stats.hMean = 0; S.stats.hStd = 0.5;
+}
+function slowStep(dt) {
+  const G = S.G, st = S.stats;
+  const r2 = Math.round(G.r2), r1 = Math.max(1, Math.round(G.r2 * 0.38));
+  const doT = G.ridges > 0.01;
+  if (doT) { blur(h, ta, r1); blur(h, tb, r2); }
+  const kD = G.erosion * 1.6, kT = G.ridges * 0.5, kU = G.uplift * 0.6, kQ = G.terraces * 1.1, step = G.tStep, fault = G.faults * 2.5, tk = G.tk;
+  const mDecay = 1 - dt * RATE / 18000, eDecay = 1 - dt * RATE / 10800, mM = st.mMean;
+  let hs = 0, h2 = 0, ms = 0, es = 0;
+  for (let y = 0; y < N; y++) {
+    const row = y * N, yu = ((y - 1) & M) * N, yd = ((y + 1) & M) * N;
+    for (let x = 0; x < N; x++) {
+      const i = row + x, hi = h[i], mi = m[i];
+      const lap = h[row + ((x + 1) & M)] + h[row + ((x - 1) & M)] + h[yu + x] + h[yd + x] - 4 * hi;
+      let dh = kD * lap * (1 - 0.85 * mi);
+      if (doT) dh += kT * (Math.tanh(tk * (ta[i] - tb[i])) - hi);
+      if (kU !== 0) dh += kU * (mi - mM) * 1.6;
+      if (kQ > 0) { const off = fault * mi; const q = step * Math.round((hi + off) / step) - off; dh += kQ * (q - hi); }
+      dh -= 0.05 * hi * hi * hi;
+      const v = hi + dt * dh;
+      hn[i] = v;
+      m[i] = mi * mDecay; e[i] *= eDecay;
+      hs += v; h2 += v * v; ms += mi; es += e[i];
+    }
+  }
+  const t = h; h = hn; hn = t;
+  st.hMean = hs / NN; st.hStd = Math.sqrt(Math.max(0, h2 / NN - st.hMean * st.hMean)); st.mMean = ms / NN; st.eMean = es / NN;
+  if (!Number.isFinite(st.hStd) || !Number.isFinite(st.mMean)) heal();
+  if (++advCount % 3 === 0) advect(dt * 3);
+  // the camera writes itself into the ground
+  const c = S.cam;
+  stamp(m, c.x, c.z, 3.5, 0.15 * dt * RATE * (1 - 0.6 * S.dive), true);
+}
+const sxA = new Float32Array(N), cxA = new Float32Array(N), syA = new Float32Array(N), cyA = new Float32Array(N);
+function advect(dt) {
+  const G = S.G; const sp = G.drift * G.flowSpd * 2; if (sp < 0.02) return;
+  const ux = Math.cos(S.flowAng) * sp, uy = Math.sin(S.flowAng) * sp, sw = G.swirl * sp * 1.4, k = TAU / N;
+  for (let i = 0; i < N; i++) {
+    sxA[i] = Math.sin(2 * k * i + S.flowPh); cxA[i] = Math.cos(2 * k * i + S.flowPh);
+    syA[i] = Math.sin(3 * k * i + S.flowPh * 0.7); cyA[i] = Math.cos(3 * k * i + S.flowPh * 0.7);
+  }
+  for (let y = 0; y < N; y++) {
+    const row = y * N;
+    for (let x = 0; x < N; x++) {
+      const i = row + x, f = (1 - 0.8 * m[i]) * dt;
+      const vx = ux + sw * sxA[x] * cyA[y], vy = uy - sw * cxA[x] * syA[y] * 0.67;
+      let px = x - vx * f, py = y - vy * f;
+      const x0 = Math.floor(px), y0 = Math.floor(py), fx = px - x0, fy = py - y0;
+      const a = h[(y0 & M) * N + (x0 & M)], b = h[(y0 & M) * N + ((x0 + 1) & M)], c = h[((y0 + 1) & M) * N + (x0 & M)], d = h[((y0 + 1) & M) * N + ((x0 + 1) & M)];
+      hn[i] = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+    }
+  }
+  const t = h; h = hn; hn = t;
+}
+let wE = 0;
+function waveStep(dt) {
+  const G = S.G, on = S.caps.waves && G.waves > 0.004;
+  if (!on) { if (wE > 1e-5) { let s = 0; for (let i = 0; i < NN; i++) { w[i] *= 0.97; wv[i] *= 0.97; s += w[i] * w[i]; } wE = s / NN; } return; }
+  const c = G.waveC, n = Math.max(1, Math.ceil(dt * c / 0.45)), sdt = dt / n;
+  const damp = Math.exp(-sdt * (0.12 + (1 - G.waveDamp) * 1.4));
+  const c2 = c * c;
+  let s = 0;
+  for (let it = 0; it < n; it++) {
+    for (let y = 0; y < N; y++) {
+      const row = y * N, yu = ((y - 1) & M) * N, yd = ((y + 1) & M) * N;
+      for (let x = 0; x < N; x++) {
+        const i = row + x;
+        const lap = w[row + ((x + 1) & M)] + w[row + ((x - 1) & M)] + w[yu + x] + w[yd + x] - 4 * w[i];
+        wv[i] = (wv[i] + sdt * c2 * (1 - 0.75 * m[i]) * lap) * damp;
+      }
+    }
+    for (let i = 0; i < NN; i++) { let v = w[i] + sdt * wv[i]; v = v > 3 ? 3 : v < -3 ? -3 : v; w[i] = v; }
+  }
+  for (let i = 0; i < NN; i += 7) s += w[i] * w[i];
+  wE = s / (NN / 7);
+}
+
+/* ---------------- events ---------------- */
+function spawnEvent(str) {
+  const c = S.cam; let best = null, bs = -1;
+  for (let k = 0; k < 5; k++) {
+    const d = 16 + rnd() * 62, a = c.yaw + (rnd() - 0.5) * 1.3;
+    const x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
+    const sc = samp(e, x, z) + 0.12 * rnd();          // old scars attract new impacts
+    if (sc > bs) { bs = sc; best = { x, z, d, a }; }
+  }
+  const { x, z, d, a } = best;
+  if (S.caps.waves && S.G.waves > 0.05) stamp(wv, x, z, 2.2, -str * 6 * (0.4 + S.G.waves), false);
+  else { stamp(h, x, z, 2.4, -str * 0.9, false); ring(h, x, z, 4.5, 1.2, 0); }
+  if (!(S.caps.waves && S.G.waves > 0.05)) { for (let k = 0; k < 1; k++) stamp(h, x + 4, z, 1.5, str * 0.15, false); }
+  ring(e, x, z, 4 + str * 2, 1.1, str * 0.7);
+  S.imps.push({ x, z, age: 0, s: str });
+  if (S.imps.length > 4) S.imps.shift();
+  S.events++;
+  audioPing(d, str, wrapA(a - c.yaw - (c.gaze || 0)), samp(h, x, z), samp(e, x, z));
+}
+function drip() {
+  const c = S.cam, d = 14 + rnd() * 80, a = c.yaw + (rnd() - 0.5) * 1.7;
+  const x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
+  // drips fall preferentially on worn ground: the path keeps ringing
+  const k = 0.5 + samp(m, x, z);
+  stamp(wv, x, z, 1.8, -(2.4 + rnd() * 3) * S.G.waves * k, false);
+}
+
+/* ---------------- camera ---------------- */
+function camStep(dt) {
+  const c = S.cam, G = S.G;
+  const spd = G.speed * (1 + 0.25 * fbm(S.t * 0.02, 11)) * (1 - 0.3 * S.instab);
+  c.spd = spd;
+  const la = 12, aL = c.yaw - 0.55, aR = c.yaw + 0.55;
+  const mL = samp(m, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la) + 0.5 * samp(e, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la);
+  const mR = samp(m, c.x + Math.cos(aR) * la, c.z + Math.sin(aR) * la) + 0.5 * samp(e, c.x + Math.cos(aR) * la, c.z + Math.sin(aR) * la);
+  let turn = G.seek * (mR - mL) * 1.8 + 0.24 * fbm(S.t * 0.013, 3);
+  c.yawV = lerp(c.yawV, clamp(turn, -0.45, 0.45), 1 - Math.exp(-dt * 0.5));
+  c.yaw = wrapA(c.yaw + c.yawV * dt);
+  const fx = Math.cos(c.yaw), fz = Math.sin(c.yaw);
+  c.x = (c.x + fx * spd * dt + N) % N; c.z = (c.z + fz * spd * dt + N) % N;
+  let gmax = -1e9, cmin = 1e9;
+  for (const d of [0, 3, 7, 12]) {
+    const x = c.x + fx * d, z = c.z + fz * d;
+    gmax = Math.max(gmax, Hg(x, z));
+    if (G.canopy > 0.01) cmin = Math.min(cmin, Hc(x, z));
+  }
+  const dv = fbm(S.t * 0.0035, 7) * 0.5 + 0.5 + (G.survey - 0.5) * 0.45;
+  S.dive = lerp(S.dive, sstep(0.52, 0.78, dv) * (1 - G.canopy), 1 - Math.exp(-dt * 0.3));
+  let ty = gmax + G.clear + S.dive * 30;
+  if (G.flood > 0.02) ty = Math.max(ty, floodY() + G.clear * 0.8);
+  if (G.canopy > 0.01) { ty = Math.min(ty, cmin - 1.4); if (cmin - gmax < 3) ty = (cmin + gmax) * 0.5; }
+  c.vy += ((ty - c.y) * 2.0 - c.vy * 2.6) * dt;
+  c.y += c.vy * dt;
+  const floor = Hg(c.x, c.z) + 0.7; if (c.y < floor) { c.y = floor; c.vy = Math.max(0, c.vy); }
+  const tp = lerp(G.pitch + 0.08 * fbm(S.t * 0.02, 5), -1.32, S.dive);
+  c.pitch = lerp(c.pitch, tp, 1 - Math.exp(-dt * 0.45));
+  const warmG = S.sunEl !== undefined ? Math.exp(-((S.sunEl - 0.05) ** 2) / 0.02) : 0;
+  const toSun = clamp(wrapA((S.sunAz || 0) - c.yaw), -1.2, 1.2);
+  c.gaze = lerp(c.gaze || 0, lerp(1.0 * fbm(S.t * 0.0045, 41), toSun, warmG * 0.85) * (1 - S.dive), 1 - Math.exp(-dt * 0.25));
+  c.roll = lerp(c.roll, -c.yawV * 0.55 + 0.05 * fbm(S.t * 0.03, 9) + S.instab * 0.06 * Math.sin(S.t * 0.7), 1 - Math.exp(-dt * 1.5));
+  const clear = c.y - Hg(c.x, c.z);
+  S.near = clamp(1 - (clear - 1) / 8, 0, 1); S.open = clamp((clear - 1) / 14, 0, 1);
+}
+
+/* ---------------- sky: an orbiting sun and drifting weather ---------------- */
+const DAY = 2280;            // one orbit of the sun, seconds (38 min)
+function skyStep(dt) {
+  if (S.sunPh === undefined) { S.sunPh = 2.6; S.wind = [0, 0]; S.cloud = 0; S.rain = 0; S.haze = 0.3; }
+  S.sunPh = (S.sunPh + dt * TAU / DAY) % TAU;
+  S.sunEl = Math.asin(clamp(Math.sin(S.sunPh) * 0.82 - 0.06, -1, 1));
+  S.sunAz = S.sunPh + S.G.light;
+  const w1 = fbm(S.t * 0.0011, 51), w2 = fbm(S.t * 0.0017, 61), w3 = fbm(S.t * 0.0009, 71);
+  // weather fronts gather when the rules are deforming
+  S.cloud = clamp(sstep(-0.3, 0.45, w1) + 0.35 * S.instab, 0, 1);
+  S.rain = clamp(sstep(0.2, 0.6, w2) * sstep(0.35, 0.75, S.cloud) + 0.3 * S.instab * S.cloud, 0, 1);
+  S.haze = clamp(0.3 + 0.55 * w3, 0, 1);
+  if (S._wx && S._wx[0] !== undefined) { S.cloud = S._wx[0]; S.rain = S._wx[1] || 0; }
+  const ws = 1.5 + 3.5 * S.cloud;
+  S.wind[0] = (S.wind[0] + Math.cos(S.flowAng) * ws * dt + 2560) % 2560;
+  S.wind[1] = (S.wind[1] + Math.sin(S.flowAng) * ws * dt + 2560) % 2560;
+}
+function displayPal(G) {
+  const el = S.sunEl, warm = Math.exp(-((el - 0.05) ** 2) / 0.02), night = sstep(0.02, -0.22, el), cl = S.cloud;
+  const WH = [0.3, 0.42, 6.05, 1.25];           // sunset: maroon dark, terracotta rust, rose, amber gold
+  return G.pal.map((c, k) => {
+    let [L, C, hh] = c;
+    hh = angLerp(hh, WH[k], warm * 0.8); C *= 1 + 0.35 * warm; if (k === 0) C = Math.max(C, 0.075 * warm); if (k > 0) L += 0.03 * warm;
+    hh = angLerp(hh, 4.35, night * 0.4);
+    L = k === 0 ? L - 0.045 * night : L * (1 - 0.22 * night);
+    C *= (1 - 0.45 * night) * (1 - 0.3 * cl);
+    return [clamp(L, 0.05, 0.97), C, hh];
+  });
+}
+
+/* ---------------- per-frame evolution ---------------- */
+function evoStep(dt) {
+  const ed = dt * RATE; S.clock += ed; S.real += dt; S.t += dt;
+  const st = S.stats, c = S.cam;
+  if (S.phase === 'era') {
+    const revisit = samp(m, c.x, c.z), rough = st.hStd;
+    S.P += ed * (1 / 3000 + revisit / 2400 + ((rough < 0.3 || rough > 1.0) ? 1 / 3000 : 0));
+    // an era is not static: its rules keep developing along their own trajectory
+    if (S.traj) for (const k in S.traj) S.base[k] = clamp(S.base[k] + S.traj[k] * ed, GR[k][0], GR[k][1]);
+    S.instab = Math.max(0, S.instab - dt * 0.2);
+    if (S.P >= 1) beginTransition();
+  } else {
+    const s = clamp((S.clock - S.tr0) / S.trDur, 0, 1);
+    S.trS = s;
+    S.G = mixG(S.from, S.to, sstep(0.18, 0.85, s));
+    S.instab = Math.pow(Math.sin(Math.PI * s), 1.5);
+    if (s >= 1) endTransition();
+  }
+  S.flowAng = wrapA(S.flowAng + dt * 0.012 * fbm(S.t * 0.01, 21));
+  skyStep(dt);
+  S.flowPh += dt * 0.004;
+  const G = S.G;
+  S.evT -= dt * (1 + S.instab * 3 + S.rain * 1.2) * G.evRate;
+  if (S.evT <= 0) { S.evT = 22 + rnd() * 50; spawnEvent(0.5 + rnd() * 0.5); }
+  if (S.caps.waves && (G.waves > 0.2 || (S.rain > 0.2 && G.waves > 0.03))) { S.dripT -= dt * Math.max(G.waves, 0.3) * (1 + 3 * S.rain); if (S.dripT <= 0) { S.dripT = 0.7 + rnd() * 2.6; drip(); } }
+  for (const im of S.imps) im.age += dt;
+  while (S.imps.length && S.imps[0].age > 4) S.imps.shift();
+}
+
+/* ---------------- colour ---------------- */
+function oklch(L, C, hh) {
+  const a = C * Math.cos(hh), b = C * Math.sin(hh);
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b, m_ = L - 0.1055613458 * a - 0.0638541728 * b, s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const l = l_ ** 3, mm = m_ ** 3, s = s_ ** 3;
+  const lin = [4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * mm + 1.7076147010 * s];
+  return lin.map(v => { v = clamp(v, 0, 1); return v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; });
+}
+
+/* ---------------- WebGL ---------------- */
+const cv = document.getElementById('c');
+let gl = null, glOK = false, P1, P2, P3, texF, fieldFmt = null, scene = null, echo = [null, null], eIdx = 0, lowW = 0, lowH = 0, scale = 4, vao = null;
+let pack32 = new Float32Array(NN * 4), pack16 = null;
+const VS = `#version 300 es
+void main(){ vec2 p=vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2)); gl_Position=vec4(p*2.-1.,0.,1.); }`;
+const FS_SCENE = `#version 300 es
+precision highp float;
+uniform sampler2D uF;
+uniform vec2 uRes;
+uniform vec3 uCam, uFwd, uRt, uUp, uLight, uSun;
+uniform float uLI, uNight, uCloud, uRain, uHaze, uRT, uSlant;
+uniform vec2 uWind;
+uniform float uTanF, uHS, uFar, uFog, uCanOn, uCanY, uFloodOn, uFloodY, uCDen, uContour, uTime, uComp, uDither, uSkyGlow, uWaveVis, uAspect;
+uniform vec3 uInk;
+uniform vec4 uImp[4];
+out vec4 o;
+const float NF=256.0;
+vec4 F(vec2 p){ return texture(uF, p/NF); }
+float Hg(vec2 p){ return texture(uF, p/NF).r*uHS; }
+float Hc(vec2 p){ return uCanY - texture(uF, vec2(p.y+71.0, 19.0-p.x)/NF).r*uHS*0.9; }
+float hash(vec2 p){ p=fract(p*vec2(443.897,441.423)); p+=dot(p,p.yx+19.19); return fract((p.x+p.y)*p.x); }
+float bayer4(vec2 c){ ivec2 i=ivec2(mod(c,4.0)); const int b[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5); return (float(b[i.y*4+i.x])+0.5)/16.0; }
+float halftone(vec2 c, float s){ const float a=0.785; vec2 r=mat2(cos(a),-sin(a),sin(a),cos(a))*c/s; vec2 f=fract(r)-0.5; return clamp(length(f)*1.4,0.0,1.0); }
+// periodic value noise (period 64 cells) so drifting weather never pops
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  vec2 i0=mod(i,64.0), i1=mod(i+1.0,64.0);
+  float a=hash(vec2(i0.x,i0.y)*0.173), b=hash(vec2(i1.x,i0.y)*0.173), c=hash(vec2(i0.x,i1.y)*0.173), d=hash(vec2(i1.x,i1.y)*0.173);
+  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }
+float clouds(vec2 p){ return vn(p)*0.62+vn(p*2.0+vec2(17.0,5.0))*0.28+vn(p*4.0+vec2(3.0,29.0))*0.1; }
+float cover(float cl){ float th=1.0-uCloud*0.85; return smoothstep(th-0.08, th+0.18, cl); }
+float sky(vec3 rd){
+  float el=rd.y;
+  vec3 sd=uSun;
+  float sdot=dot(rd,sd);
+  float horiz=exp(-abs(el)*9.0);
+  float az=0.5+0.5*dot(normalize(rd.xz+1e-4), normalize(sd.xz+1e-4));
+  float low=exp(-sd.y*sd.y*16.0);
+  float glow=horiz*uSkyGlow*(0.5+low*1.3*pow(az,3.0))*(1.0-0.75*uNight);
+  float v=0.01+glow*0.55+uHaze*0.05*horiz;
+  float day=1.0-uNight;
+  v+=(smoothstep(0.996,0.998,sdot)*1.3+pow(max(sdot,0.0),24.0)*0.45)*day*(1.0-0.7*uCloud);
+  if(el>0.005){
+    vec2 cp=rd.xz/(el+0.1)*2.2+uWind*0.025;
+    float cv=cover(clouds(cp))*smoothstep(0.005,0.12,el);
+    float lit=0.12+0.65*low*az*day+0.25*day*max(sd.y,0.0);
+    v=mix(v, lit, cv*0.92);
+  }
+  if(uNight>0.25 && el>0.04){ vec2 sp=floor(rd.xz/(el+0.35)*150.0); if(hash(sp*0.731)>0.9965) v=max(v,uNight*0.95*(1.0-uCloud)); }
+  float bands=step(0.8, fract(el*14.0 - uTime*0.003))*0.08*smoothstep(0.03,0.3,el)*(1.0-smoothstep(0.3,0.7,el))*(1.0-uCloud);
+  return clamp(v+bands,0.0,1.0);
+}
+void main(){
+  vec2 uv=(gl_FragCoord.xy/uRes)*2.0-1.0; uv.x*=uAspect;
+  vec3 rd=normalize(uFwd + uv.x*uTanF*uRt + uv.y*uTanF*uUp);
+  vec3 ro=uCam;
+  float t=0.2, lastT=0.2; int kind=0;
+  for(int i=0;i<128;i++){
+    vec3 p=ro+rd*t;
+    float d=p.y-Hg(p.xz);
+    if(d<0.0){ kind=1; break; }
+    if(uCanOn>0.5){ float dc=Hc(p.xz)-p.y; if(dc<0.0){ kind=2; break; } d=min(d,dc); }
+    lastT=t;
+    t+=max(0.05+t*0.008, d*0.42);
+    if(t>uFar) break;
+  }
+  if(kind>0){
+    float a=lastT, b=t;
+    for(int k=0;k<5;k++){ float mid=(a+b)*0.5; vec3 p=ro+rd*mid; bool inside = kind==1 ? (p.y<Hg(p.xz)) : (p.y>Hc(p.xz)); if(inside) b=mid; else a=mid; }
+    t=b;
+  } else t=uFar;
+  if(uFloodOn>0.5 && rd.y<0.0){ float tw=(uFloodY-ro.y)/rd.y; if(tw>0.0 && tw<t){ t=tw; kind=3; } }
+  vec3 p=ro+rd*t;
+  float ct=p.y*uCDen; float fw=fwidth(ct);
+  float fogF=exp(-t*uFog*(1.0+uHaze*1.2+uRain*0.9));
+  float lvl=step(26.0,t)+step(64.0,t)+uComp;
+  if(kind==0) lvl=min(lvl,1.0);
+  float cs=exp2(floor(lvl));
+  vec2 cell=floor(gl_FragCoord.xy/cs);
+  float v=0.0, ink=-1.0;
+  float fogV=sky(normalize(vec3(rd.x,0.015,rd.z)))*0.95;
+  if(kind==1||kind==2){
+    vec2 q=p.xz; vec4 f=F(q); float ee=0.7;
+    vec3 n;
+    if(kind==1){ n=normalize(vec3(Hg(q-vec2(ee,0))-Hg(q+vec2(ee,0)), 2.0*ee, Hg(q-vec2(0,ee))-Hg(q+vec2(0,ee)))); }
+    else { n=normalize(vec3(Hc(q+vec2(ee,0))-Hc(q-vec2(ee,0)), -2.0*ee, Hc(q+vec2(0,ee))-Hc(q-vec2(0,ee)))); }
+    float lam=clamp(dot(n,uLight),0.0,1.0)*uLI;
+    // long shadows from a low sun
+    if(kind==1 && lam>0.0){
+      float sh=1.0, st=0.4; vec3 sp=p+n*0.25;
+      for(int j=0;j<24;j++){ vec3 q2=sp+uLight*st; float hh=q2.y-Hg(q2.xz); if(hh<0.0){ sh=0.0; break; } sh=min(sh, 5.0*hh/st); st+=max(0.35, hh*0.5); if(st>70.0) break; }
+      lam*=clamp(sh,0.0,1.0);
+    }
+    // cloud shadows drifting across the land, carried by the same wind as the dunes
+    lam*=1.0-0.75*cover(clouds(q*0.025+uWind*0.025));
+    float gold=exp(-uSun.y*uSun.y*30.0)*(1.0-uNight);
+    v=0.07+0.75*lam+0.12*clamp(f.r*0.5+0.5,0.0,1.0)*(0.4+0.6*uLI)+0.16*gold*clamp(n.y,0.0,1.0);
+    if(kind==2) v*=0.6;
+    float dl=min(fract(ct),1.0-fract(ct));
+    float line=1.0-smoothstep(fw*0.55, fw*1.35, dl);
+    if(line>0.5 && fw<0.55 && hash(cell*0.37+3.1)<uContour) ink=uInk.x;
+    float ct2=ct*4.0; float fw2=fw*4.0; float dl2=min(fract(ct2),1.0-fract(ct2));
+    if(fw2<0.45 && dl2<fw2*0.9) v*=0.5;
+    // memory: worn ground is etched with world-space hatching
+    float mm=f.g;
+    if(mm>0.1 && kind==1){ float hl=fract((q.x-q.y)*0.55); if(hl<mm*0.32) v*=0.45; }
+    // impact scars: stipple in world space
+    if(f.a>0.25 && hash(floor(q*3.0))<(f.a-0.2)*0.8 && fw<0.8) ink=uInk.y;
+    // wave crests
+    if(uWaveVis>0.0 && f.b>0.07 && kind==1 && hash(cell*0.71)<smoothstep(0.07,0.2,f.b)) ink=uInk.z;
+  } else if(kind==3){
+    vec4 f=F(p.xz);
+    vec2 g=vec2(F(p.xz+vec2(0.8,0)).b-f.b, F(p.xz+vec2(0,0.8)).b-f.b)*2.5;
+    vec3 n=normalize(vec3(-g.x,1.0,-g.y));
+    float ref=sky(reflect(rd,n));
+    float len=cs*(2.0+70.0/max(t,1.0));
+    float streak=hash(vec2(floor(gl_FragCoord.x/len+uTime*0.15), floor(gl_FragCoord.y/cs)));
+    v=0.04+ref*0.9+0.28*step(0.86,streak)*fogF;
+    float dep=uFloodY-Hg(p.xz);
+    if(dep<0.35) ink=uInk.z;
+  } else {
+    v=sky(rd);
+  }
+  if(kind!=0){
+    v=mix(fogV, v, fogF);
+    if(ink>=0.0 && hash(cell+7.7)>fogF*1.5) ink=-1.0;
+  }
+  // impacts: a plumb line drops, the ground flashes
+  for(int k=0;k<4;k++){
+    vec4 im=uImp[k]; if(im.w<=0.0) continue;
+    float age=im.z;
+    if(kind>0 && kind<3 && age<1.0){ vec2 dd=p.xz-im.xy; float r=age*38.0; if(abs(length(dd)-r)<0.8+age*2.5) ink=3.0; }
+    if(age<1.6){
+      vec2 rel=im.xy-ro.xz; vec2 rh=rd.xz; float rr=dot(rh,rh);
+      if(rr>1e-4){
+        float ts=dot(rel,rh)/rr;
+        if(ts>0.0 && ts<t+0.5){
+          float hd=length(ro.xz+rh*ts-im.xy);
+          float y=ro.y+rd.y*ts; float top=Hg(im.xy)+40.0*(1.0-age/1.6);
+          if(hd<0.18+ts*0.0035 && y>Hg(im.xy) && y<top) ink=3.0;
+        }
+      }
+    }
+  }
+  // rain: two sheets of streaks slanted by the wind
+  if(uRain>0.02){
+    for(int L=0;L<2;L++){
+      float sc=L==0?1.0:2.0, spd=L==0?90.0:160.0, len=L==0?4.0:8.0;
+      vec2 g2=gl_FragCoord.xy/sc; g2.x+=g2.y*uSlant*0.4;
+      float col=floor(g2.x);
+      float yy=g2.y+uRT*spd/sc+hash(vec2(col*0.37,float(L)*3.1))*300.0;
+      float seg=floor(yy/37.0);
+      if(hash(vec2(col*0.113+float(L)*7.0, seg*0.071))<uRain*(L==0?0.3:0.16) && mod(yy,37.0)<len) ink=1.0;
+    }
+  }
+  float th;
+  if(uDither<0.5) th=bayer4(cell);
+  else if(uDither<1.5) th=halftone(gl_FragCoord.xy, 2.5*cs);
+  else th=hash(cell+floor(uTime*5.0)*vec2(0.37,0.71))*0.75+bayer4(cell)*0.25;
+  if(kind!=0 && t>uFar*0.5) th=mix(th, halftone(gl_FragCoord.xy, 3.0*cs), 0.6);
+  float idx=clamp(floor(v*3.0+th*0.985),0.0,3.0);
+  if(ink>=0.0) idx=ink;
+  o=vec4(idx/3.0, v, clamp(t/uFar,0.0,1.0), 1.0);
+}`;
+const FS_ECHO = `#version 300 es
+precision highp float;
+uniform sampler2D uCur, uPrev; uniform float uEcho, uFrame; uniform vec2 uShift, uRes;
+out vec4 o;
+float hash(vec2 p){ p=fract(p*vec2(443.897,441.423)); p+=dot(p,p.yx+19.19); return fract((p.x+p.y)*p.x); }
+void main(){
+  vec2 fc=gl_FragCoord.xy;
+  vec4 c=texelFetch(uCur, ivec2(fc), 0);
+  vec2 pc=mod(floor(fc+uShift), uRes);
+  vec4 p=texelFetch(uPrev, ivec2(pc), 0);
+  float hsh=hash(fc+vec2(uFrame*0.618, uFrame*0.271));
+  if(p.r>c.r+0.01 && hsh<uEcho){ c.r = hsh<uEcho*0.55 ? p.r : max(c.r, p.r-1.0/3.0); }
+  o=c;
+}`;
+const FS_OUT = `#version 300 es
+precision highp float;
+uniform sampler2D uLow; uniform vec2 uLowRes; uniform float uScale; uniform vec3 uPal[4]; uniform vec2 uReg[4];
+out vec4 o;
+void main(){
+  vec2 lp=gl_FragCoord.xy/uScale;
+  int top=0;
+  for(int k=1;k<4;k++){
+    vec2 q=floor(lp+uReg[k]);
+    q=mod(q,uLowRes);
+    float id=texelFetch(uLow, ivec2(q), 0).r*3.0+0.5;
+    if(int(id)>=k) top=k;
+  }
+  o=vec4(uPal[top],1.0);
+}`;
+
+function compile(fs) {
+  const mk = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const p = gl.createProgram(); gl.attachShader(p, mk(gl.VERTEX_SHADER, VS)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+function makeRT(wd, ht) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, wd, ht, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { t, f };
+}
+function freeRT(r) { if (r) { gl.deleteTexture(r.t); gl.deleteFramebuffer(r.f); } }
+function initGL() {
+  gl = cv.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  if (!gl) { glOK = false; return; }
+  const lin = gl.getExtension('OES_texture_float_linear');
+  fieldFmt = lin ? 'f32' : 'f16';
+  if (!lin && !pack16) pack16 = new Uint16Array(NN * 4);
+  P1 = compile(FS_SCENE); P2 = compile(FS_ECHO); P3 = compile(FS_OUT);
+  vao = gl.createVertexArray();
+  texF = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texF);
+  if (fieldFmt === 'f32') gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, N, N, 0, gl.RGBA, gl.FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, N, N, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  lowW = 0; scene = null; echo = [null, null];
+  glOK = true;
+  resize(true);
+}
+function resize(force) {
+  if (!glOK) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.max(2, Math.round(innerWidth * dpr)), H = Math.max(2, Math.round(innerHeight * dpr));
+  if (!force && cv.width === W && cv.height === H && lowW) return;
+  cv.width = W; cv.height = H;
+  scale = Math.max(2, Math.round(H / LINES));
+  lowW = Math.ceil(W / scale); lowH = Math.ceil(H / scale);
+  freeRT(scene); freeRT(echo[0]); freeRT(echo[1]);
+  scene = makeRT(lowW, lowH); echo = [makeRT(lowW, lowH), makeRT(lowW, lowH)];
+}
+const _f = new Float32Array(1), _u = new Uint32Array(_f.buffer);
+function toHalf(v) {
+  _f[0] = v; const x = _u[0]; const s = (x >>> 16) & 0x8000; const ex = ((x >>> 23) & 0xff) - 112;
+  if (ex <= 0) return s; if (ex >= 31) return s | 0x7bff; return s | (ex << 10) | ((x >>> 13) & 0x3ff);
+}
+function uploadField() {
+  for (let i = 0, j = 0; i < NN; i++, j += 4) { pack32[j] = h[i] + 0.8 * w[i]; pack32[j + 1] = m[i]; pack32[j + 2] = w[i]; pack32[j + 3] = e[i]; }
+  gl.bindTexture(gl.TEXTURE_2D, texF);
+  if (fieldFmt === 'f32') gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RGBA, gl.FLOAT, pack32);
+  else { for (let i = 0; i < pack32.length; i++) pack16[i] = toHalf(pack32[i]); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RGBA, gl.HALF_FLOAT, pack16); }
+}
+let frameNo = 0;
+const impBuf = new Float32Array(16), palBuf = new Float32Array(12), regBuf = new Float32Array(8);
+let palRGB = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+function render() {
+  if (!glOK || gl.isContextLost()) return;
+  resize(false);
+  uploadField();
+  const G = S.G, c = S.cam;
+  const vy = c.yaw + (c.gaze || 0);
+  const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch), cy = Math.cos(vy), sy = Math.sin(vy);
+  const f = [cy * cp, sp, sy * cp];
+  let r = [-f[2], 0, f[0]]; const rl = Math.hypot(r[0], r[2]) || 1; r = [r[0] / rl, 0, r[2] / rl];
+  let u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  const cr = Math.cos(c.roll), sr = Math.sin(c.roll);
+  const r2 = [r[0] * cr + u[0] * sr, r[1] * cr + u[1] * sr, r[2] * cr + u[2] * sr];
+  const u2 = [u[0] * cr - r[0] * sr, u[1] * cr - r[1] * sr, u[2] * cr - r[2] * sr];
+  const se = S.sunEl, sa = S.sunAz;
+  const sun = [Math.cos(se) * Math.cos(sa), Math.sin(se), Math.cos(se) * Math.sin(sa)];
+  const sunI = sstep(-0.04, 0.12, se), moonI = 0.28 * sstep(0.0, -0.2, se);
+  const me = Math.max(0.15, -se), ma = sa + Math.PI;
+  const L = sunI >= moonI ? [sun[0], Math.max(sun[1], 0.02), sun[2]] : [Math.cos(me) * Math.cos(ma), Math.sin(me), Math.cos(me) * Math.sin(ma)];
+  const Ll = Math.hypot(L[0], L[1], L[2]); L[0] /= Ll; L[1] /= Ll; L[2] /= Ll;
+  const night = sstep(0.02, -0.22, se);
+  impBuf.fill(0);
+  S.imps.forEach((im, k) => {
+    impBuf[k * 4] = c.x + wrapA((im.x - c.x) / N * TAU) / TAU * N;
+    impBuf[k * 4 + 1] = c.z + wrapA((im.z - c.z) / N * TAU) / TAU * N;
+    impBuf[k * 4 + 2] = im.age; impBuf[k * 4 + 3] = im.s;
+  });
+  const inks = INKMAPS[G.inkMap];
+  gl.bindVertexArray(vao);
+  // pass 1: scene
+  gl.bindFramebuffer(gl.FRAMEBUFFER, scene.f); gl.viewport(0, 0, lowW, lowH);
+  gl.useProgram(P1.p); const U = P1.u;
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texF); gl.uniform1i(U.uF, 0);
+  gl.uniform2f(U.uRes, lowW, lowH); gl.uniform1f(U.uAspect, lowW / lowH);
+  gl.uniform3f(U.uCam, c.x, c.y, c.z); gl.uniform3fv(U.uFwd, f); gl.uniform3fv(U.uRt, r2); gl.uniform3fv(U.uUp, u2); gl.uniform3fv(U.uLight, L); gl.uniform3fv(U.uSun, sun);
+  gl.uniform1f(U.uLI, Math.max(sunI, moonI)); gl.uniform1f(U.uNight, night); gl.uniform1f(U.uCloud, S.cloud); gl.uniform1f(U.uRain, S.rain); gl.uniform1f(U.uHaze, S.haze);
+  gl.uniform1f(U.uRT, S.t % 370); gl.uniform1f(U.uSlant, Math.sin(S.flowAng - vy)); gl.uniform2f(U.uWind, S.wind[0], S.wind[1]);
+  gl.uniform1f(U.uTanF, G.fov + 0.06 * clamp((c.spd - 2) / 3, 0, 1));
+  gl.uniform1f(U.uHS, G.hS); gl.uniform1f(U.uFar, 170); gl.uniform1f(U.uFog, G.fog * (1 + 0.5 * S.instab));
+  gl.uniform1f(U.uCanOn, G.canopy > 0.01 ? 1 : 0); gl.uniform1f(U.uCanY, canY());
+  gl.uniform1f(U.uFloodOn, G.flood > 0.02 ? 1 : 0); gl.uniform1f(U.uFloodY, floodY());
+  gl.uniform1f(U.uCDen, G.cDen); gl.uniform1f(U.uContour, G.contour); gl.uniform1f(U.uTime, S.t % 2000);
+  gl.uniform1f(U.uComp, Math.floor(S.instab * 2.2 + (S.phase === 'era' ? S.P * 0.6 : 0)));
+  gl.uniform1f(U.uDither, G.dither); gl.uniform1f(U.uSkyGlow, 0.35 + 0.25 * S.instab + 0.1 * S.dive + 0.1 * S.haze);
+  gl.uniform1f(U.uWaveVis, S.caps.waves ? 1 : 0);
+  gl.uniform3f(U.uInk, inks[0], inks[1], inks[2]);
+  gl.uniform4fv(U.uImp, impBuf);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // pass 2: echo / smear
+  const cur = echo[eIdx], prev = echo[1 - eIdx];
+  gl.bindFramebuffer(gl.FRAMEBUFFER, cur.f);
+  gl.useProgram(P2.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, scene.t); gl.uniform1i(P2.u.uCur, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, prev.t); gl.uniform1i(P2.u.uPrev, 1);
+  gl.uniform1f(P2.u.uEcho, clamp(G.echo * 0.55 + S.instab * 0.35, 0, 0.9)); gl.uniform1f(P2.u.uFrame, frameNo % 997);
+  gl.uniform2f(P2.u.uShift, clamp(c.yawV * 5, -2, 2), -S.instab * 1.2); gl.uniform2f(P2.u.uRes, lowW, lowH);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // pass 3: inks with registration
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
+  gl.useProgram(P3.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, cur.t); gl.uniform1i(P3.u.uLow, 0);
+  gl.uniform2f(P3.u.uLowRes, lowW, lowH); gl.uniform1f(P3.u.uScale, scale);
+  palRGB = displayPal(G).map(p => oklch(p[0], p[1], p[2]));
+  palRGB.forEach((p, i) => { palBuf[i * 3] = p[0]; palBuf[i * 3 + 1] = p[1]; palBuf[i * 3 + 2] = p[2]; });
+  gl.uniform3fv(P3.u.uPal, palBuf);
+  const regAmt = G.reg * 0.8 + S.instab * 3.2 + (S.phase === 'era' ? S.P * 0.7 : 0);
+  for (let k = 0; k < 4; k++) { const a = k * 2.1 + S.t * 0.011; regBuf[k * 2] = k ? Math.cos(a) * regAmt * (k / 3) : 0; regBuf[k * 2 + 1] = k ? Math.sin(a) * regAmt * (k / 3) : 0; }
+  gl.uniform2fv(P3.u.uReg, regBuf);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  eIdx = 1 - eIdx; frameNo++;
+}
+cv.addEventListener('webglcontextlost', ev => { ev.preventDefault(); glOK = false; }, false);
+cv.addEventListener('webglcontextrestored', () => { const FF = parseFloat(Q.get('ff') || '0');
+if (FF > 0) { const steps = Math.round(FF * 36000); for (let i = 0; i < steps; i++) { evoStep(0.1); camStep(0.1); slowStep(0.1); waveStep(0.1); } S.imps = []; }
+try { initGL(); } catch (err) { console.error(err); } }, false);
+addEventListener('resize', () => resize(false));
+
+/* ---------------- audio ---------------- */
+const AU = { ctx: null, g: null, worklet: false, step: 0, nextT: 0, bar: 0, pat: null, lastCT: -1, stall: 0, silent: 0, builtAt: 0, abuf: new Float32Array(2048), busy: false, noiseBuf: null, ir: null, ctl: 0 };
+const NOISE_SRC = `class MZNoise extends AudioWorkletProcessor{constructor(){super();this.s=(Math.random()*4294967295)>>>0;this.b=[0,0];}
+process(i,out){const o=out[0];for(let c=0;c<o.length;c++){const a=o[c];let b=this.b[c]||0;for(let k=0;k<a.length;k++){this.s=(Math.imul(this.s,1664525)+1013904223)>>>0;const w=this.s/2147483648-1;b=b*0.992+w*0.1;a[k]=b*0.5;}this.b[c]=b;}return true;}}
+registerProcessor('mz-noise',MZNoise);`;
+function tanhCurve(n, k) { const c = new Float32Array(n), d = Math.tanh(k); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; } return c; }
+function makeNoiseBuffer(ctx, secs) { const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * secs), ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+function makeIR(ctx, secs) {
+  const len = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = b.getChannelData(ch); let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / ctx.sampleRate; const white = Math.random() * 2 - 1;
+      const k = 0.25 + 0.6 * Math.exp(-t * 1.2); lp += (white - lp) * k;
+      d[i] = t < 0.02 ? 0 : lp * Math.exp(-t * 5.5 / secs) * 0.6;
+    }
+  }
+  return b;
+}
+function buildGraph(ctx) {
+  const nodes = [], mk = n => (nodes.push(n), n);
+  const out = mk(ctx.createGain()); out.gain.value = 0; out.connect(ctx.destination);
+  const an = mk(ctx.createAnalyser()); an.fftSize = 2048; out.connect(an);
+  const comp = mk(ctx.createDynamicsCompressor()); comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 4; comp.attack.value = 0.012; comp.release.value = 0.3;
+  const clip = mk(ctx.createWaveShaper()); clip.curve = tanhCurve(4096, 1.4); clip.oversample = '2x';
+  const tone = mk(ctx.createBiquadFilter()); tone.type = 'lowpass'; tone.frequency.value = 2200; tone.Q.value = 0.4;
+  const hp = mk(ctx.createBiquadFilter()); hp.type = 'highpass'; hp.frequency.value = 24; hp.Q.value = 0.7;
+  const mix = mk(ctx.createGain()); mix.gain.value = 0.85;
+  mix.connect(hp); hp.connect(tone); tone.connect(clip); clip.connect(comp); comp.connect(out);
+  // dub delay: ping-pong, filtered + saturated inside the loop so it can never run away
+  const send = mk(ctx.createGain()); send.gain.value = 1;
+  const dL = mk(ctx.createDelay(5)), dR = mk(ctx.createDelay(5)); dL.delayTime.value = 0.61; dR.delayTime.value = 0.4;
+  const fbL = mk(ctx.createGain()), fbR = mk(ctx.createGain()); fbL.gain.value = 0.45; fbR.gain.value = 0.45;
+  const sat = mk(ctx.createWaveShaper()); sat.curve = tanhCurve(2048, 1.15);
+  const lpD = mk(ctx.createBiquadFilter()); lpD.type = 'lowpass'; lpD.frequency.value = 1700; lpD.Q.value = 0.6;
+  const hpD = mk(ctx.createBiquadFilter()); hpD.type = 'highpass'; hpD.frequency.value = 170; hpD.Q.value = 0.6;
+  send.connect(dL); dL.connect(sat); sat.connect(lpD); lpD.connect(hpD); hpD.connect(fbL); fbL.connect(dR); dR.connect(fbR); fbR.connect(dL);
+  const pL = mk(ctx.createStereoPanner()), pR = mk(ctx.createStereoPanner()); pL.pan.value = -0.75; pR.pan.value = 0.75;
+  const wet = mk(ctx.createGain()); wet.gain.value = 0.65;
+  hpD.connect(pL); dR.connect(pR); pL.connect(wet); pR.connect(wet); wet.connect(mix);
+  // space
+  const verb = mk(ctx.createGain()); verb.gain.value = 1;
+  const conv = mk(ctx.createConvolver()); conv.buffer = AU.ir;
+  const verbOut = mk(ctx.createGain()); verbOut.gain.value = 0.42;
+  verb.connect(conv); conv.connect(verbOut); verbOut.connect(mix);
+  const wv2 = mk(ctx.createGain()); wv2.gain.value = 0.25; wet.connect(wv2); wv2.connect(verb);
+  // wind / ground noise — continuously synthesised, never a loop
+  let noise;
+  if (AU.worklet) { noise = mk(new AudioWorkletNode(ctx, 'mz-noise', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] })); }
+  else { noise = mk(ctx.createGain()); noise.gain.value = 1; }   // fed by overlapping one-shot segments (see noiseSegments)
+  const nBP = mk(ctx.createBiquadFilter()); nBP.type = 'lowpass'; nBP.frequency.value = 260; nBP.Q.value = 0.5;
+  const nLP = mk(ctx.createBiquadFilter()); nLP.type = 'lowpass'; nLP.frequency.value = 520; nLP.Q.value = 0.5;
+  const nG = mk(ctx.createGain()); nG.gain.value = 0.05;
+  const nPan = mk(ctx.createStereoPanner());
+  noise.connect(nBP); nBP.connect(nLP); nLP.connect(nG); nG.connect(nPan); nPan.connect(mix);
+  const nS = mk(ctx.createGain()); nS.gain.value = 0.06; nG.connect(nS); nS.connect(verb);
+  // drone
+  const dr1 = mk(ctx.createOscillator()), dr2 = mk(ctx.createOscillator()); dr1.type = 'sine'; dr2.type = 'triangle';
+  dr1.frequency.value = 110; dr2.frequency.value = 165;
+  const drLP = mk(ctx.createBiquadFilter()); drLP.type = 'lowpass'; drLP.frequency.value = 420; drLP.Q.value = 0.9;
+  const drG = mk(ctx.createGain()); drG.gain.value = 0.0;
+  dr1.connect(drLP); dr2.connect(drLP); drLP.connect(drG); drG.connect(mix);
+  const drS = mk(ctx.createGain()); drS.gain.value = 0.5; drG.connect(drS); drS.connect(verb);
+  // sub
+  const sub = mk(ctx.createOscillator()), sub2 = mk(ctx.createOscillator()); sub.type = 'sine'; sub2.type = 'triangle';
+  sub.frequency.value = 55; sub2.frequency.value = 110;
+  const s2g = mk(ctx.createGain()); s2g.gain.value = 0.12;
+  const subLP = mk(ctx.createBiquadFilter()); subLP.type = 'lowpass'; subLP.frequency.value = 190; subLP.Q.value = 0.5;
+  const subG = mk(ctx.createGain()); subG.gain.value = 0;
+  sub.connect(subLP); sub2.connect(s2g); s2g.connect(subLP); subLP.connect(subG); subG.connect(mix);
+  const t0 = ctx.currentTime;
+  for (const o of [dr1, dr2, sub, sub2]) o.start(t0);
+  const g = { noise, nNext: 0, out, an, tone, mix, send, verb, dL, dR, fbL, fbR, lpD, nBP, nG, nPan, dr1, dr2, drG, drLP, sub, sub2, subG, nodes };
+  g.stop = () => {
+    const t = ctx.currentTime;
+    for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (err) { } }
+    setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (err) { } } }, 400);
+  };
+  return g;
+}
+async function createContext() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ctx = new AC({ latencyHint: 'playback' });
+  AU.worklet = false;
+  try {
+    await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true;
+  } catch (err) {
+    try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_SRC], { type: 'application/javascript' }))); AU.worklet = true; } catch (err2) { AU.worklet = false; }
+  }
+  AU.ir = makeIR(ctx, 4.5); AU.noiseBuf = makeNoiseBuffer(ctx, 2);
+  AU.ctx = ctx;
+  AU.g = buildGraph(ctx); AU.builtAt = ctx.currentTime;
+  const t = ctx.currentTime; AU.g.out.gain.setValueAtTime(0, t); AU.g.out.gain.linearRampToValueAtTime(1, t + 1.5);
+  AU.nextT = t + 0.1; AU.step = 0; AU.lastCT = -1; AU.stall = 0; AU.silent = 0;
+  try { await ctx.resume(); } catch (err) { }
+}
+function rebuildGraph() {
+  const ctx = AU.ctx; if (!ctx) return;
+  const old = AU.g, t = ctx.currentTime;
+  const ng = buildGraph(ctx); ng.out.gain.setValueAtTime(0, t); ng.out.gain.linearRampToValueAtTime(1, t + 4);
+  if (old) { try { old.out.gain.cancelScheduledValues(t); old.out.gain.setValueAtTime(old.out.gain.value, t); old.out.gain.linearRampToValueAtTime(0, t + 4); } catch (err) { } setTimeout(() => old.stop(), 4500); }
+  AU.g = ng; AU.builtAt = t; AU.silent = 0;
+}
+async function recreateContext() {
+  if (AU.busy) return; AU.busy = true;
+  try { const old = AU.ctx; AU.ctx = null; AU.g = null; if (old) { try { await old.close(); } catch (err) { } } await createContext(); }
+  finally { AU.busy = false; }
+}
+function audioWatch() {
+  const ctx = AU.ctx; if (!ctx || AU.busy) return;
+  if (ctx.state === 'closed') { recreateContext(); return; }
+  if (ctx.state !== 'running') { ctx.resume().catch(() => { }); return; }
+  const ct = ctx.currentTime;
+  if (ct === AU.lastCT) { if (++AU.stall > 6) { recreateContext(); return; } } else AU.stall = 0;
+  AU.lastCT = ct;
+  if (!AU.g) return;
+  const b = AU.abuf; AU.g.an.getFloatTimeDomainData(b);
+  let mx = 0, bad = false;
+  for (let i = 0; i < b.length; i++) { const v = b[i]; if (!Number.isFinite(v)) { bad = true; break; } const a = v < 0 ? -v : v; if (a > mx) mx = a; }
+  if (bad) { rebuildGraph(); return; }
+  AU.silent = mx < 1e-5 ? AU.silent + 1 : 0;
+  if (AU.silent > 20) rebuildGraph();
+  else if (ct - AU.builtAt > 3 * 3600) rebuildGraph();
+}
+// smooth parameter moves only; skip redundant automation so timelines stay short
+function setP(p, v, tc) { if (!Number.isFinite(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, AU.ctx.currentTime, tc); }
+function baseFreq() { return 55 * Math.pow(2, ROOTS[S.G.root] / 12); }
+function degFreq(deg, oct) { const md = MODES[S.G.mode]; const o = Math.floor(deg / 7); const s = md[((deg % 7) + 7) % 7] + 12 * o; return baseFreq() * Math.pow(2, s / 12 + oct); }
+function done(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (err) { } } }; }
+function vKick(t, amp) {
+  const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), v = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(112, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.13); o.frequency.exponentialRampToValueAtTime(37, t + 0.7);
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.006); v.gain.exponentialRampToValueAtTime(amp * 0.3, t + 0.2);
+  v.gain.exponentialRampToValueAtTime(0.0006, t + 0.78); v.gain.linearRampToValueAtTime(0, t + 0.82);
+  o.connect(v); v.connect(g.mix); o.start(t); o.stop(t + 0.85); done(o, [o, v]);
+}
+function vTom(t, f, amp) {
+  const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), v = ctx.createGain(), s = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.72, t + 0.3);
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.008); v.gain.exponentialRampToValueAtTime(0.0006, t + 0.42); v.gain.linearRampToValueAtTime(0, t + 0.45);
+  s.gain.value = 0.55; o.connect(v); v.connect(g.mix); v.connect(s); s.connect(g.send); o.start(t); o.stop(t + 0.47); done(o, [o, v, s]);
+}
+function vChord(t, fs, amp, cut) {
+  const ctx = AU.ctx, g = AU.g, lp = ctx.createBiquadFilter(), v = ctx.createGain(), s = ctx.createGain(), dry = ctx.createGain();
+  lp.type = 'lowpass'; lp.frequency.value = clamp(cut, 200, 5000); lp.Q.value = 1.2;
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.006); v.gain.setValueAtTime(amp, t + 0.06); v.gain.exponentialRampToValueAtTime(0.0005, t + 0.2); v.gain.linearRampToValueAtTime(0, t + 0.22);
+  s.gain.value = 1.0; dry.gain.value = 0.35;
+  const os = fs.map(f => { const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 8; o.connect(lp); o.start(t); o.stop(t + 0.24); return o; });
+  lp.connect(v); v.connect(dry); dry.connect(g.mix); v.connect(s); s.connect(g.send);
+  done(os[0], [...os, lp, v, s, dry]);
+}
+function vRim(t, amp) {
+  const ctx = AU.ctx, g = AU.g, src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), v = ctx.createGain(), s = ctx.createGain();
+  src.buffer = AU.noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 420 + Math.random() * 160; bp.Q.value = 1.1;
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.003); v.gain.exponentialRampToValueAtTime(0.0004, t + 0.07); v.gain.linearRampToValueAtTime(0, t + 0.075);
+  s.gain.value = 1.2; src.connect(bp); bp.connect(v); v.connect(s); s.connect(g.send);
+  const dry = ctx.createGain(); dry.gain.value = 0.2; v.connect(dry); dry.connect(g.mix);
+  src.start(t, Math.random() * 1.5, 0.08); done(src, [src, bp, v, s, dry]);
+}
+function vBass(t, f, dur, amp) {
+  const g = AU.g;
+  g.sub.frequency.setTargetAtTime(f, t, 0.02); g.sub2.frequency.setTargetAtTime(f * 2, t, 0.02);
+  g.subG.gain.setTargetAtTime(amp, t, 0.012); g.subG.gain.setTargetAtTime(0, t + dur, 0.06);
+  g.sub.frequency._v = g.sub2.frequency._v = g.subG.gain._v = undefined;
+}
+function audioPing(dist, str, bearing, hLocal, scar) {
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const t = ctx.currentTime + 0.03 + dist / 42;        // light first, sound later
+  const deg = Math.floor(clamp((hLocal + 1.2) / 2.4, 0, 0.999) * 7) + (scar > 0.4 ? 7 : 0);
+  const f = degFreq(deg, 2);
+  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), g2 = ctx.createGain(), lp = ctx.createBiquadFilter(), v = ctx.createGain(), pan = ctx.createStereoPanner(), s = ctx.createGain(), rv = ctx.createGain();
+  o1.type = 'sine'; o2.type = 'sine'; o1.frequency.value = f; o2.frequency.value = f * 2.76; g2.gain.value = 0.22;
+  lp.type = 'lowpass'; lp.frequency.value = clamp(2600 * Math.exp(-dist / 55), 250, 4000); lp.Q.value = 2.2;
+  const amp = 0.3 * str * (0.55 + 0.45 * Math.exp(-dist / 70));
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.01); v.gain.exponentialRampToValueAtTime(0.0004, t + 3.3); v.gain.linearRampToValueAtTime(0, t + 3.4);
+  pan.pan.value = clamp(Math.sin(bearing) * 0.9, -0.9, 0.9); s.gain.value = 0.7; rv.gain.value = 0.3 + dist / 120;
+  o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(v); v.connect(pan); pan.connect(g.mix); pan.connect(s); s.connect(g.send); pan.connect(rv); rv.connect(g.verb);
+  o1.start(t); o2.start(t); o1.stop(t + 3.45); o2.stop(t + 3.45); done(o1, [o1, o2, g2, lp, v, pan, s, rv]);
+  // the impact also thumps the ground
+  vTom(t, degFreq(0, 1) * 1.5, 0.22 * str);
+}
+function stepProb(voice, k) {
+  const G = S.G;
+  switch (voice) {
+    case 'kick': if (G.drop === 1) return k === 8 ? 0.97 : k === 0 ? 0.12 : k === 14 ? 0.08 : 0.01; return k % 4 === 0 ? clamp(0.35 + G.kickDen * 0.7, 0, 0.98) : (k === 14 || k === 7 ? 0.06 : 0.01);
+    case 'bass': return k === 0 ? 0.92 : [3, 6, 10, 14].includes(k) ? G.bassDen : (k === 8 || k === 11) ? G.bassDen * 0.5 : G.bassDen * 0.04;
+    case 'chord': return (k === 4 || k === 12) ? G.chordDen * 1.25 : (k === 6 || k === 14) ? G.chordDen * 0.3 : 0;
+    case 'tom': return [7, 13, 15, 10].includes(k) ? G.percDen * 0.6 : G.percDen * 0.04;
+    case 'rim': return [2, 6, 10, 14].includes(k) ? G.percDen * 0.45 : 0;
+  }
+  return 0;
+}
+const VOICES = ['kick', 'bass', 'chord', 'tom', 'rim'];
+function evolvePattern() {
+  if (!AU.pat) { AU.pat = {}; for (const v of VOICES) AU.pat[v] = Array.from({ length: 16 }, (_, k) => Math.random() < stepProb(v, k)); }
+  else {
+    const pm = 0.03 + 0.22 * S.instab;
+    for (const v of VOICES) for (let k = 0; k < 16; k++) if (Math.random() < pm) AU.pat[v][k] = Math.random() < stepProb(v, k);
+  }
+  const b = AU.pat.bass; AU.pat.blen = b.map((on, k) => { if (!on) return 0; let d = 1; while (d < 16 && !b[(k + d) % 16]) d++; return d; });
+}
+function playStep(k, t, spb) {
+  const G = S.G, br = S.instab > 0.45, P = AU.pat, c = S.cam;
+  if (P.kick[k] && !br) vKick(t, 0.62 * (0.6 + 0.4 * S.near));
+  if (P.bass[k] && (!br || k === 0)) {
+    const lead = Math.max(0, t - AU.ctx.currentTime), d = 6 + c.spd * lead;
+    const hh = Hraw(c.x + Math.cos(c.yaw) * d, c.z + Math.sin(c.yaw) * d);   // the ground ahead is the score
+    const idx = clamp(Math.round((hh + 1) / 2 * 4), 0, 4);
+    const deg = [0, 2, 3, 4, 6][idx] - (idx >= 3 && S.stats.mMean > 0.3 ? 7 : 0);
+    vBass(t, degFreq(deg, 0), P.blen[k] * spb * (0.4 + 0.3 * Math.random()), 0.2 * (1 - 0.35 * S.dive));
+  }
+  if (P.chord[k]) {
+    const r = Math.floor(fbm(S.t * 0.01, 31) * 2 + 2);
+    const fs = [degFreq(r, 2), degFreq(r + 2, 2), degFreq(r + 4, 2)]; if (S.P > 0.6 && S.phase === 'era') fs.push(degFreq(r + 6, 2));
+    vChord(t, fs, br ? 0.09 : 0.12, br ? 500 : 800 + 1800 * S.open);
+  }
+  if (P.tom[k] && !br) vTom(t, degFreq(k % 5, 1) * 1.2, 0.3);
+  if (P.rim[k] && !br) vRim(t, 0.05 + 0.02 * S.open);
+}
+// fallback wind source when AudioWorklet is unavailable: never loops, each segment is a fresh
+// stretch of noise, equal-power crossfaded into the next, so there is no seam to hear
+const FADE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2));
+const FADE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
+function noiseSegments() {
+  const ctx = AU.ctx, g = AU.g; if (AU.worklet || !g) return;
+  if (!AU.longNoise) AU.longNoise = makeNoiseBuffer(ctx, 20);
+  if (g.nNext < ctx.currentTime) g.nNext = ctx.currentTime + 0.05;
+  while (g.nNext < ctx.currentTime + 1.0) {
+    const t = g.nNext, len = 7, xf = 1.5;
+    const src = ctx.createBufferSource(), v = ctx.createGain();
+    src.buffer = AU.longNoise; src.playbackRate.value = 0.5 + Math.random() * 0.05;
+    v.gain.value = 0; v.gain.setValueCurveAtTime(FADE_IN, t, xf); v.gain.setValueCurveAtTime(FADE_OUT, t + len - xf, xf);
+    src.connect(v); v.connect(g.noise); src.start(t, Math.random() * 12); src.stop(t + len + 0.05); done(src, [src, v]);
+    g.nNext = t + len - xf;
+  }
+}
+function audioSchedule() {
+  const ctx = AU.ctx; if (!ctx || !AU.g || ctx.state !== 'running' || !S) return;
+  noiseSegments();
+  const spb = 60 / S.G.bpm / 4, ahead = 0.4;
+  if (AU.nextT < ctx.currentTime - 0.2) AU.nextT = ctx.currentTime + 0.05;   // after any stall: skip, never burst
+  let guard = 0;
+  while (AU.nextT < ctx.currentTime + ahead && guard++ < 24) {
+    const k = AU.step % 16;
+    if (k === 0) { AU.bar++; evolvePattern(); }
+    try { playStep(k, AU.nextT, spb); } catch (err) { }
+    AU.nextT += spb * (k % 2 === 0 ? 1 + S.G.swing : 1 - S.G.swing);
+    AU.step = (AU.step + 1) % 16;
+  }
+}
+function audioControl() {
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const G = S.G, c = S.cam, br = S.instab;
+  setP(g.tone.frequency, clamp((1100 + 5200 * Math.pow(S.open, 1.5) + 1500 * S.dive) * (1 - 0.5 * br) * (1 - 0.25 * S.cloud), 350, 9000), 0.35);
+  const fb = clamp(0.3 + G.echo * 0.5 + br * 0.25 + S.rain * 0.08, 0, 0.86);
+  setP(g.fbL.gain, fb, 0.6); setP(g.fbR.gain, fb, 0.6);
+  const beat = 60 / G.bpm;
+  setP(g.dL.delayTime, beat * 0.75, 2.5); setP(g.dR.delayTime, beat * 0.5, 2.5);
+  setP(g.lpD.frequency, clamp(900 + 1600 * S.open - br * 500, 300, 4000), 0.5);
+  setP(g.nBP.frequency, clamp(90 + 40 * c.spd + 220 * S.dive + 120 * br, 70, 480), 1.2);
+  setP(g.nG.gain, 0.05 + 0.04 * S.dive + 0.04 * br + 0.02 * clamp(c.spd / 4, 0, 1), 1.2);
+  setP(g.nPan.pan, clamp(c.yawV * 1.6, -0.8, 0.8), 0.8);
+  const bf = baseFreq();
+  const detune = (S.phase === 'era' ? S.P : 1) * 18 + br * 25;
+  setP(g.dr1.frequency, bf * 2, 4); setP(g.dr2.frequency, bf * 3 * Math.pow(2, detune / 1200), 4);
+  const close = G.canopy > 0.01 ? clamp(1 - (canY() - c.y) / 10, 0, 1) : 0;
+  const nightA = sstep(0.02, -0.22, S.sunEl);
+  setP(g.drG.gain, 0.012 + G.drone * 0.035 * (0.5 + 0.5 * close + 0.5 * br + 0.6 * nightA), 2);
+  setP(g.drLP.frequency, 300 + 500 * close + 400 * S.open, 1.5);
+}
+function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
+addEventListener('pointerdown', audioUnlock); addEventListener('keydown', audioUnlock);
+
+/* ---------------- persistence ---------------- */
+function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function unb64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function save() {
+  try {
+    const hi = new Int16Array(NN), mi = new Uint8Array(NN), ei = new Uint8Array(NN);
+    for (let i = 0; i < NN; i++) { hi[i] = Math.round(clamp(h[i], -4, 4) * 8000); mi[i] = Math.round(m[i] * 255); ei[i] = Math.round(e[i] * 255); }
+    const st = Object.assign({}, S, { imps: [], rs: R.s });
+    localStorage.setItem(KEY, JSON.stringify({ st, h: b64(new Uint8Array(hi.buffer)), m: b64(mi), e: b64(ei), savedAt: Date.now() }));
+  } catch (err) { }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY); if (!raw) return false;
+    const d = JSON.parse(raw); if (!d.st || d.st.v !== 1) return false;
+    const hi = new Int16Array(unb64(d.h).buffer), mi = unb64(d.m), ei = unb64(d.e);
+    if (hi.length !== NN) return false;
+    for (let i = 0; i < NN; i++) { h[i] = hi[i] / 8000; m[i] = mi[i] / 255; e[i] = ei[i] / 255; w[i] = wv[i] = 0; }
+    S = d.st; R.s = d.st.rs | 0; NSEED = S.seed | 0; delete S.rs;
+    S.G = S.phase === 'trans' && S.from && S.to ? mixG(S.from, S.to, sstep(0.18, 0.85, S.trS)) : S.base;
+    return true;
+  } catch (err) { return false; }
+}
+
+/* ---------------- disclosure box ---------------- */
+const info = document.getElementById('info');
+const pad = (s, n) => (s + ' '.repeat(n)).slice(0, n);
+function fmtT(s) { s = Math.floor(s); const hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ss = s % 60; return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`; }
+function updateInfo() {
+  const [bg, i1, i2, i3] = palRGB.map(c => c.map(v => Math.round(v * 255)));
+  document.body.style.background = `rgb(${bg})`;
+  if (!SHOW_INFO) { info.style.display = 'none'; return; }
+  info.style.display = 'block';
+  info.style.background = `rgba(${bg},0.84)`; info.style.borderColor = `rgb(${i1})`; info.style.color = `rgb(${i3})`;
+  const G = S.G, st = S.stats;
+  const dom = G.dom === 'uplift' ? (G.uplift >= 0 ? 'upliftUp' : 'upliftDown') : G.dom;
+  const rules = OPS.filter(o => S.caps[o]).map(o => { const v = Math.abs(G[o]); return v > 0.6 ? `<span class="hi">${o.toUpperCase()}</span>` : v > 0.12 ? o : `<span class="lo">${o}</span>`; }).join(' ');
+  const locked = OPS.filter(o => !S.caps[o]).length;
+  const bar = n => { const f = Math.round(clamp(n, 0, 1) * 12); return '▮'.repeat(f) + '▯'.repeat(12 - f); };
+  const now = S.phase === 'trans'
+    ? `rules deforming → ${S.to.dom === 'uplift' ? (S.to.uplift >= 0 ? DESC.upliftUp : DESC.upliftDown) : DESC[S.to.dom]}${S.newCap ? '  [new rule: ' + S.newCap + ']' : ''}`
+    : DESC[dom];
+  const seek = G.seek > 0.25 ? 'camera returns to worn ground' : G.seek < -0.25 ? 'camera avoids worn ground' : 'camera indifferent to its paths';
+  const L = [];
+  L.push(`<span style="color:rgb(${i2})">MZTV / SOUNDING</span>   era ${String(S.era).padStart(2, '0')} · running ${fmtT(S.real)}${RATE !== 1 ? ' · evolution ×' + RATE : ''}`);
+  L.push(`<span class="k">now      </span>${now}`);
+  L.push(`<span class="k">rules    </span>${rules}${locked ? `<span class="lo">  +${locked} not yet possible</span>` : ''}`);
+  L.push(`<span class="k">memory   </span>${Math.round(st.mMean * 100)}% of ground worn · ${S.events} impact scars · ${seek}`);
+  L.push(S.phase === 'trans'
+    ? `<span class="k">pressure </span><span style="color:rgb(${i2})">${bar(S.trS)}</span> transition ${Math.round(S.trS * 100)}%`
+    : `<span class="k">pressure </span>${bar(S.P)} rises with revisiting worn ground`);
+  const deg = Math.round(S.sunEl * 180 / Math.PI), rising = Math.cos(S.sunPh) > 0;
+  const sunTxt = S.sunEl < -0.05 ? `night · sun ${deg}°` : `sun ${deg}° ${rising ? 'rising' : 'setting'}`;
+  const wx = [S.cloud > 0.15 ? `clouds ${Math.round(S.cloud * 100)}%` : 'clear', S.rain > 0.15 ? 'rain' : '', S.haze > 0.6 ? 'haze' : ''].filter(Boolean).join(' · ');
+  L.push(`<span class="k">sky      </span>${sunTxt} · ${wx} · wind moves clouds and dunes alike`);
+  L.push(`<span class="k">sound    </span>bass reads the ground ahead · height above ground opens the filter`);
+  L.push(`<span class="k">         </span>pressure detunes + misregisters · echo = delay feedback + image smear`);
+  L.push(`<span class="k">         </span>impacts are seen first, heard later (distance) · ${MODE_NAMES[G.mode]} · ${Math.round(G.bpm)} bpm · ${DITHER_NAMES[G.dither]} dither`);
+  info.innerHTML = L.join('\n');
+}
+addEventListener('keydown', ev => {
+  if (ev.key === 'i') { SHOW_INFO = !SHOW_INFO; updateInfo(); }
+  if (ev.key === 't' && S.phase === 'era') S.P = 1;
+});
+
+/* ---------------- boot ---------------- */
+let seed = Q.get('seed') ? (parseInt(Q.get('seed'), 10) >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
+if (FRESH || !load()) {
+  freshState(seed);
+  // pre-history: the ground has been forming, and something has already passed through
+  for (let i = 0; i < 160; i++) { slowStep(0.1); camStep(0.1); S.t += 0.1; if (i % 50 === 25) spawnEvent(0.6 + rnd() * 0.4); }
+  S.imps = []; S.events = Math.max(S.events, 3);
+}
+const FF = parseFloat(Q.get('ff') || '0');
+if (FF > 0) { const steps = Math.round(FF * 36000); for (let i = 0; i < steps; i++) { evoStep(0.1); camStep(0.1); slowStep(0.1); waveStep(0.1); } S.imps = []; }
+try { initGL(); } catch (err) { console.error(err); glOK = false; }
+if (!MUTE) { createContext().catch(() => { }); }
+setInterval(audioSchedule, 40);
+setInterval(audioWatch, 1000);
+setInterval(save, 60000);
+addEventListener('pagehide', save);
+
+let last = performance.now(), slowAcc = 0, ctlAcc = 0, infoAcc = 1;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000; last = now;
+  if (!(dt > 0)) dt = 1 / 60; dt = Math.min(dt, 0.1);
+  const p0 = performance.now();
+  try {
+    evoStep(dt);
+    camStep(dt);
+    slowAcc += dt; let n = 0;
+    while (slowAcc >= 0.1 && n++ < 2) { slowAcc -= 0.1; slowStep(0.1); }
+    if (slowAcc > 0.3) slowAcc = 0;
+    waveStep(dt);
+    render();
+    ctlAcc += dt; if (ctlAcc > 0.1) { ctlAcc = 0; audioControl(); }
+    infoAcc += dt; if (infoAcc > 1) { infoAcc = 0; updateInfo(); }
+  } catch (err) { console.error(err); }
+  PERF.ms = PERF.ms * 0.95 + (performance.now() - p0) * 0.05;
+}
+const PERF = { ms: 0 };
+requestAnimationFrame(frame);
+window.MZ = { rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
+})();
+</script>
+</body>
+</html>
