@@ -17,7 +17,7 @@ jobs:
       - name: Fetch foundry start response
         shell: bash
         run: |
-          sleep 10
+          sleep 2
           code=$(curl --silent --show-error --max-time 30             -w "%{http_code}"             "https://mzcmg-shop-api.vercel.app/api/foundry-start?seed=47"             -o /tmp/debug.json || true)
           jq -n             --arg http_code "$code"             --rawfile body /tmp/debug.json             '{http_code:$http_code, body:$body}' > /tmp/debug-wrapper.json
           cat /tmp/debug-wrapper.json
