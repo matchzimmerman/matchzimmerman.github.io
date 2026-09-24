@@ -20,8 +20,8 @@ function pickVariant(payload, preference) {
 
 async function waitForTask(storeId, taskKey) {
   var result = null;
-  for (var i = 0; i < 8; i += 1) {
-    await sleep(1800);
+  for (var i = 0; i < 12; i += 1) {
+    await sleep(1000);
     var payload = await printful.getMockupTask(storeId, taskKey);
     result = payload.result;
     if (result && (result.status === "completed" || result.status === "failed")) {
@@ -77,21 +77,25 @@ module.exports = async function handler(req, res) {
     var shirtSource = "https://" + host + "/api/obas-source.png?mode=shirt&seed=" + seed;
     var mugSource = "https://" + host + "/api/obas-source.png?mode=mug&seed=" + seed;
 
-    var shirt = await generateOne(
-      store.id,
-      shirtProductId,
-      shirtVariant.id,
-      "front",
-      shirtSource
-    );
+    var generated = await Promise.all([
+      generateOne(
+        store.id,
+        shirtProductId,
+        shirtVariant.id,
+        "front",
+        shirtSource
+      ),
+      generateOne(
+        store.id,
+        mugProductId,
+        mugVariant.id,
+        "default",
+        mugSource
+      )
+    ]);
 
-    var mug = await generateOne(
-      store.id,
-      mugProductId,
-      mugVariant.id,
-      "default",
-      mugSource
-    );
+    var shirt = generated[0];
+    var mug = generated[1];
 
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json; charset=utf-8");
