@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOUNDING · MIXER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#141026;--i1:#1f7f86;--i2:#e6a23a;--i3:#b9f27c;--ink:#e9f3e0;--dim:rgba(233,243,224,.45);--line:rgba(233,243,224,.14);--panel:rgba(0,0,0,.22)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:12px/1.4 "JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.02em}
+body.embed{background:color-mix(in srgb,var(--bg) 92%,transparent)}
+button,select{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 14px 9px}
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.title{color:var(--i2);font-weight:700;letter-spacing:.08em}
+.dot{width:8px;height:8px;border-radius:50%;background:#555;display:inline-block;margin-right:6px}
+.dot.on{background:var(--i3);box-shadow:0 0 8px var(--i3)}
+.conn{color:var(--dim)}
+.spacer{flex:1}
+.btn{background:transparent;border:1px solid var(--line);padding:4px 9px;cursor:pointer;text-transform:uppercase;letter-spacing:.08em;font-size:11px}
+.btn:hover{border-color:var(--i3)}
+.btn.hot{background:var(--i2);color:var(--bg);border-color:var(--i2);font-weight:700}
+.btn.big{padding:6px 12px}
+select{background:var(--bg);border:1px solid var(--line);padding:3px 5px}
+.status{margin-top:7px;color:var(--dim);display:grid;grid-template-columns:auto 1fr;gap:1px 10px}
+.status b{color:var(--ink);font-weight:400}
+.status .k{color:var(--dim)}
+.pbar{display:inline-block;vertical-align:middle;width:120px;height:6px;border:1px solid var(--line);margin-left:6px;position:relative}
+.pbar i{position:absolute;inset:0 auto 0 0;background:var(--i3)}
+.pbar.tr i{background:var(--i2)}
+main{padding:10px 14px 30px;display:grid;gap:12px}
+section{border:1px solid var(--line);background:var(--panel)}
+.gh{display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line)}
+.gh h2{margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--i3);font-weight:700}
+.gh .note{color:var(--dim);font-size:11px}
+.seg{display:inline-flex;border:1px solid var(--line)}
+.seg button{background:transparent;border:0;border-right:1px solid var(--line);padding:3px 8px;cursor:pointer;font-size:10.5px;letter-spacing:.1em;color:var(--dim)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--i3);color:var(--bg);font-weight:700}
+.seg button.on.man{background:var(--i2)}
+.seg button.on.dub{background:var(--i1);color:var(--ink)}
+.strips{display:flex;gap:6px;padding:10px;overflow-x:auto}
+.strip{flex:1 0 58px;max-width:78px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 4px;border:1px solid transparent}
+.strip.ret{border-left:1px solid var(--line)}
+.strip .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;text-align:center;min-height:15px;white-space:nowrap}
+.fwrap{display:flex;gap:5px;height:170px}
+.meter{width:6px;height:100%;background:rgba(255,255,255,.06);position:relative;overflow:hidden}
+.meter i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--i3) 70%,var(--i2) 88%,#ff5a4a)}
+.vf{width:26px;height:100%;position:relative;cursor:ns-resize;touch-action:none}
+.vf .rail{position:absolute;left:12px;width:2px;top:0;bottom:0;background:var(--line)}
+.vf .unity{position:absolute;left:4px;right:4px;height:1px;background:var(--dim)}
+.vf .ghost{position:absolute;left:3px;right:3px;height:2px;background:var(--dim);display:none}
+.vf .cap{position:absolute;left:1px;right:1px;height:12px;margin-top:-6px;background:var(--ink);border:1px solid var(--bg)}
+.strip.auto .vf .cap{background:var(--dim)}
+.strip .val{font-size:10px;color:var(--dim)}
+.ms{display:flex;gap:3px}
+.ms button{width:22px;height:18px;padding:0;border:1px solid var(--line);background:transparent;cursor:pointer;font-size:10px}
+.ms button.m.on{background:#d9534f;color:#fff;border-color:#d9534f}
+.ms button.s.on{background:var(--i2);color:var(--bg);border-color:var(--i2)}
+.gate{font-size:9px;letter-spacing:.1em;color:var(--dim);height:11px}
+.gate.off{color:var(--i2)}
+.rows{padding:6px 10px 10px;display:grid;gap:8px}
+.row{display:grid;grid-template-columns:minmax(120px,210px) 1fr 58px;align-items:center;gap:10px}
+.row .lab{color:var(--ink)}
+.row .val{color:var(--dim);text-align:right;font-size:11px}
+.hf{height:18px;position:relative;cursor:ew-resize;touch-action:none}
+.hf .rail{position:absolute;left:0;right:0;top:8px;height:2px;background:var(--line)}
+.hf .fill{position:absolute;left:0;top:8px;height:2px;background:var(--i3)}
+.hf .ghost{position:absolute;top:2px;bottom:2px;width:2px;background:var(--dim);display:none;margin-left:-1px}
+.hf .cap{position:absolute;top:2px;width:10px;height:14px;margin-left:-5px;background:var(--ink)}
+.auto .hf .cap{background:var(--dim)}
+.auto .hf .fill{background:var(--dim)}
+.opts{display:flex;gap:4px;flex-wrap:wrap}
+.opts button{border:1px solid var(--line);background:transparent;padding:2px 8px;cursor:pointer;font-size:11px;color:var(--dim)}
+.opts button.on{color:var(--bg);background:var(--ink)}
+.auto .opts button.on{background:var(--dim)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 10px 10px}
+.wait{padding:40px 14px;color:var(--dim);line-height:1.7}
+.wait b{color:var(--i2);font-weight:400}
+footer{padding:0 14px 20px;color:var(--dim);font-size:11px;line-height:1.6}
+@media (max-width:560px){.row{grid-template-columns:1fr 54px}.row .lab{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <span class="title">MZTV / SOUNDING · MIXER</span>
+    <span class="conn"><span class="dot" id="dot"></span><span id="connTxt">looking for the piece…</span></span>
+    <span class="spacer"></span>
+    <label class="conn">release
+      <select id="release" title="Anything you touch hands itself back to the piece after this long without being touched">
+        <option value="0">never</option><option value="2">2 min</option><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option>
+      </select></label>
+    <button class="btn" id="infoBtn" title="On-screen disclosure box">info box</button>
+    <button class="btn big hot" id="autopilot" title="Hand every group back to the piece and clear mutes/solos">autopilot</button>
+  </div>
+  <div class="status" id="status"></div>
+</header>
+<main id="main"><div class="wait">Waiting for <b>SOUNDING</b>.<br>The mixer talks to the piece inside one browser, with no server between them. Open the piece in this same browser, or add this page to OBS as a <b>custom browser dock</b> (Docks → Custom Browser Docks) so it sits next to the browser source running the piece.</div></main>
+<footer>AUTO: the piece is running itself, and the handles show what it's doing. MANUAL: you're driving; the thin tick shows what the piece would do. DUB: the piece mixes its own sound, dropping voices and throwing echoes on the bar. Touching any control takes that group to MANUAL. Double-click a control to reset it.</footer>
+<script>
+'use strict';
+const EMBED = new URLSearchParams(location.search).get('embed') === '1';
+if (EMBED) document.body.classList.add('embed');
+const CH = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mztv-sounding') : null;
+const post = m => { try { if (CH) CH.postMessage(m); else localStorage.setItem('mztv-sounding-bus', JSON.stringify({ ...m, _n: Math.random() })); } catch (e) { } };
+let schema = null, groups = null, ops = [], state = null, lastState = 0, built = false;
+const UI = {};             // id -> {set(state)}
+const dragging = new Set();
+const GROUP_NOTE = {
+  audio: 'one channel per voice · meters show the level after the fader',
+  influence: 'how strongly one force drives another · 1 = the piece as designed',
+  sky: 'the orbiting sun and the weather',
+  camera: 'how the viewer moves through the field',
+  look: 'surface, print and colour',
+  evolution: 'how fast the rules change'
+};
+function onMsg(m) {
+  if (!m || m.to !== 'mixer') return;
+  if (m.t === 'schema') { if (!built) { schema = m.schema; groups = m.groups; ops = m.ops; build(); } }
+  if (m.t === 'state') { state = m; lastState = performance.now(); if (!built) post({ t: 'hello' }); else render(); }
+}
+if (CH) CH.onmessage = e => onMsg(e.data);
+addEventListener('storage', e => { if (e.key === 'mztv-sounding-bus' && e.newValue) { try { onMsg(JSON.parse(e.newValue)); } catch (err) { } } });
+post({ t: 'hello' });
+setInterval(() => { if (!built) post({ t: 'hello' }); const live = performance.now() - lastState < 1500; document.getElementById('dot').classList.toggle('on', live); document.getElementById('connTxt').textContent = live ? 'connected to the piece' : (built ? 'piece not responding (is the source running?)' : 'looking for the piece…'); }, 700);
+
+const fmt = (p, v) => {
+  if (p.options) return p.options[v] ?? '';
+  if (p.fader) return v <= 0.001 ? '−∞' : (20 * Math.log10(v)).toFixed(1) + ' dB';
+  if (p.fmt === 'sun') { const h = (v * 24 + 6) % 24; return String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.floor(h % 1 * 60)).padStart(2, '0'); }
+  if (p.fmt === 'x') return '×' + v.toFixed(2);
+  return v.toFixed(2);
+};
+const norm = (p, v) => (v - p.min) / (p.max - p.min);
+function dragCtl(el, p, vertical) {
+  const setFrom = ev => {
+    const r = el.getBoundingClientRect();
+    let t = vertical ? 1 - (ev.clientY - r.top) / r.height : (ev.clientX - r.left) / r.width;
+    t = Math.min(1, Math.max(0, t));
+    let v = p.min + t * (p.max - p.min);
+    if (p.fader && Math.abs(v - 1) < 0.03) v = 1;          // detent at unity
+    post({ t: 'set', id: p.id, v });
+    UI[p.id].local = v; UI[p.id].localT = performance.now();
+    UI[p.id].set();
+  };
+  el.addEventListener('pointerdown', ev => { el.setPointerCapture(ev.pointerId); dragging.add(p.id); setFrom(ev); });
+  el.addEventListener('pointermove', ev => { if (dragging.has(p.id)) setFrom(ev); });
+  const end = () => dragging.delete(p.id);
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('dblclick', () => { post({ t: 'set', id: p.id, v: p.def }); UI[p.id].local = p.def; UI[p.id].localT = performance.now(); });
+}
+function modeSeg(g) {
+  const seg = document.createElement('span'); seg.className = 'seg';
+  const modes = g === 'audio' ? [['auto', 'auto'], ['manual', 'manual'], ['dub', 'dub']] : [['auto', 'auto'], ['manual', 'manual']];
+  for (const [m, l] of modes) {
+    const b = document.createElement('button'); b.textContent = l; b.dataset.mode = m;
+    b.className = m === 'manual' ? 'man' : m === 'dub' ? 'dub' : '';
+    b.onclick = () => post({ t: 'mode', g, mode: m });
+    seg.appendChild(b);
+  }
+  UI['mode:' + g] = { set() { const cur = state.mode[g]; seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === cur)); } };
+  return seg;
+}
+function build() {
+  built = true;
+  const main = document.getElementById('main'); main.innerHTML = '';
+  for (const g of groups) {
+    const sec = document.createElement('section'); sec.dataset.g = g;
+    const gh = document.createElement('div'); gh.className = 'gh';
+    gh.innerHTML = `<h2>${g}</h2>`; gh.appendChild(modeSeg(g));
+    const note = document.createElement('span'); note.className = 'note'; note.textContent = GROUP_NOTE[g] || ''; gh.appendChild(note);
+    sec.appendChild(gh);
+    const params = schema.filter(p => p.g === g);
+    if (g === 'audio') {
+      const strips = document.createElement('div'); strips.className = 'strips';
+      for (const p of params) strips.appendChild(strip(p));
+      sec.appendChild(strips);
+    } else {
+      const rows = document.createElement('div'); rows.className = 'rows';
+      for (const p of params) rows.appendChild(row(p));
+      sec.appendChild(rows);
+      if (g === 'evolution') sec.appendChild(evoActions());
+    }
+    UI['sec:' + g] = { el: sec };
+    main.appendChild(sec);
+  }
+  document.getElementById('autopilot').onclick = () => post({ t: 'autopilot' });
+  document.getElementById('release').onchange = e => post({ t: 'release', v: +e.target.value });
+  document.getElementById('infoBtn').onclick = () => post({ t: 'info' });
+  if (state) render();
+}
+function strip(p) {
+  const el = document.createElement('div'); el.className = 'strip' + (p.ret ? ' ret' : '');
+  const isVoice = !p.ret || p.id !== 'master';
+  el.innerHTML = `<div class="lab">${p.label}</div><div class="gate"></div>
+    <div class="fwrap"><div class="meter"><i></i></div><div class="vf"><div class="rail"></div><div class="unity"></div><div class="ghost"></div><div class="cap"></div></div></div>
+    <div class="val"></div><div class="ms"><button class="m" title="mute">M</button>${p.ret ? '' : '<button class="s" title="solo">S</button>'}</div>`;
+  const vf = el.querySelector('.vf'), cap = el.querySelector('.cap'), ghost = el.querySelector('.ghost'), val = el.querySelector('.val'), mi = el.querySelector('.meter i'), gate = el.querySelector('.gate');
+  const unity = el.querySelector('.unity'); unity.style.top = (1 - norm(p, 1)) * 100 + '%';
+  dragCtl(vf, p, true);
+  const mb = el.querySelector('.m'), sb = el.querySelector('.s');
+  mb.onclick = () => post({ t: 'mute', id: p.id, v: !(state.mute || {})[p.id] });
+  if (sb) sb.onclick = () => post({ t: 'solo', id: p.id, v: !(state.solo || {})[p.id] });
+  const meterId = p.id === 'master' ? 'master' : p.id;
+  UI[p.id] = { el, set() {
+    if (!state) return;
+    const manual = state.mode.audio === 'manual';
+    el.classList.toggle('auto', !manual);
+    const recent = UI[p.id].localT && performance.now() - UI[p.id].localT < 400;
+    const v = recent ? UI[p.id].local : state.eff[p.id];
+    cap.style.top = (1 - norm(p, v)) * 100 + '%';
+    ghost.style.display = manual ? 'block' : 'none'; ghost.style.top = (1 - norm(p, state.auto[p.id])) * 100 + '%';
+    val.textContent = fmt(p, v);
+    const db = (state.meters || {})[meterId]; mi.style.height = db === undefined ? '0' : Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
+    mb.classList.toggle('on', !!(state.mute || {})[p.id]); if (sb) sb.classList.toggle('on', !!(state.solo || {})[p.id]);
+    const gOn = (state.gate || {})[p.id];
+    gate.textContent = state.mode.audio === 'dub' && gOn !== undefined ? (gOn ? 'IN' : 'DROPPED') : '';
+    gate.classList.toggle('off', gOn === 0);
+  } };
+  return el;
+}
+function row(p) {
+  const el = document.createElement('div'); el.className = 'row';
+  el.innerHTML = `<div class="lab">${p.label}</div>`;
+  const val = document.createElement('div'); val.className = 'val';
+  if (p.options) {
+    const o = document.createElement('div'); o.className = 'opts';
+    p.options.forEach((name, i) => { const b = document.createElement('button'); b.textContent = name; b.onclick = () => post({ t: 'set', id: p.id, v: i }); o.appendChild(b); });
+    el.appendChild(o); el.appendChild(val);
+    UI[p.id] = { el, set() { const manual = state.mode[p.g] === 'manual'; el.classList.toggle('auto', !manual); const v = Math.round(state.eff[p.id]); o.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === v)); val.textContent = manual ? '' : 'auto'; } };
+    return el;
+  }
+  const hf = document.createElement('div'); hf.className = 'hf';
+  hf.innerHTML = '<div class="rail"></div><div class="fill"></div><div class="ghost"></div><div class="cap"></div>';
+  el.appendChild(hf); el.appendChild(val);
+  const cap = hf.querySelector('.cap'), fill = hf.querySelector('.fill'), ghost = hf.querySelector('.ghost');
+  dragCtl(hf, p, false);
+  UI[p.id] = { el, set() {
+    if (!state) return;
+    const manual = state.mode[p.g] === 'manual';
+    el.classList.toggle('auto', !manual);
+    const recent = UI[p.id].localT && performance.now() - UI[p.id].localT < 400;
+    const v = recent ? UI[p.id].local : state.eff[p.id];
+    const x = Math.min(1, Math.max(0, norm(p, v))) * 100;
+    cap.style.left = x + '%'; fill.style.width = x + '%';
+    ghost.style.display = manual ? 'block' : 'none'; ghost.style.left = Math.min(1, Math.max(0, norm(p, state.auto[p.id]))) * 100 + '%';
+    val.textContent = fmt(p, v);
+  } };
+  return el;
+}
+function evoActions() {
+  const d = document.createElement('div'); d.className = 'actions';
+  const sel = document.createElement('select'); sel.id = 'nextRule';
+  sel.innerHTML = '<option value="">next rule: let the piece choose</option>' + ops.map(o => `<option value="${o}">next rule: ${o}</option>`).join('');
+  const tb = document.createElement('button'); tb.className = 'btn'; tb.textContent = 'transition now';
+  tb.onclick = () => post({ t: 'transition', op: sel.value || null });
+  const ib = document.createElement('button'); ib.className = 'btn'; ib.textContent = 'drop an impact';
+  ib.onclick = () => post({ t: 'impact' });
+  d.append(sel, tb, ib);
+  UI['evoActions'] = { set() { const caps = state.status.caps; [...sel.options].forEach(o => { if (o.value) o.textContent = 'next rule: ' + o.value + (caps.includes(o.value) ? '' : ' (not yet unlocked; forces it)'); }); tb.disabled = state.status.phase !== 'era'; tb.textContent = state.status.phase === 'era' ? 'transition now' : 'transition running…'; } };
+  return d;
+}
+function hms(s) { s = Math.floor(s); return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(n => String(n).padStart(2, '0')).join(':'); }
+function render() {
+  if (!state || !built) return;
+  const st = state.status, pal = st.pal || [];
+  if (pal.length === 4) { const r = document.documentElement.style; r.setProperty('--bg', pal[0]); r.setProperty('--i1', pal[1]); r.setProperty('--i2', pal[2]); r.setProperty('--i3', pal[3]); }
+  const tr = st.phase === 'trans';
+  const wx = [st.cloud > 0.15 ? `clouds ${Math.round(st.cloud * 100)}%` : 'clear', st.rain > 0.15 ? `rain ${Math.round(st.rain * 100)}%` : '', st.haze > 0.6 ? 'haze' : ''].filter(Boolean).join(' · ');
+  document.getElementById('status').innerHTML =
+    `<span class="k">now</span><span><b>era ${String(st.era).padStart(2, '0')}</b> · ${st.desc || ''}</span>` +
+    `<span class="k">pressure</span><span><span class="pbar${tr ? ' tr' : ''}"><i style="width:${Math.round((tr ? st.trS : st.P) * 100)}%"></i></span> ${tr ? 'transition ' + Math.round(st.trS * 100) + '%' : Math.round(st.P * 100) + '%'}</span>` +
+    `<span class="k">rules</span><span>${st.caps.join(' · ')}</span>` +
+    `<span class="k">sky</span><span>sun ${st.sunDeg}° ${st.sunDeg < -3 ? '(night)' : st.rising ? 'rising' : 'setting'} · ${wx}</span>` +
+    `<span class="k">ground</span><span>${Math.round(st.worn * 100)}% worn · ${st.scars} scars · ${st.mode} · ${st.bpm} bpm · running ${hms(st.running)}${state.audio !== 'running' ? ' · <b style="color:var(--i2)">audio ' + state.audio + ' (click the piece once)</b>' : ''}</span>`;
+  document.getElementById('infoBtn').classList.toggle('hot', !!st.info);
+  const rel = document.getElementById('release'); if (document.activeElement !== rel) rel.value = String(state.release || 0);
+  for (const k in UI) if (UI[k].set) UI[k].set();
+}
+</script>
+</body>
+</html>

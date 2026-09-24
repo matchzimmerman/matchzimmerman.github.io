@@ -36,7 +36,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-renderi
      ?rate=N      evolution clock multiplier (testing: 60 = an hour per minute)
      ?lines=270   internal vertical resolution (pixel size)
      ?ff=H        simulate H hours before first frame (slow: ~3 min per hour; testing only)
-   Keys: i info · t force transition · (any key/click resumes audio in a normal browser)
+   Keys: i info · t force transition · m mixer overlay · (any key/click resumes audio in a normal browser)
+   Mixer: mixer.html in the same browser / as an OBS custom dock (BroadcastChannel 'mztv-sounding')
    ===================================================================== */
 (() => {
 const Q = new URLSearchParams(location.search);
@@ -408,7 +409,7 @@ function drip() {
 /* ---------------- camera ---------------- */
 function camStep(dt) {
   const c = S.cam, G = S.G;
-  const spd = G.speed * (1 + 0.25 * fbm(S.t * 0.02, 11)) * (1 - 0.3 * S.instab);
+  const spd = G.speed * (1 + 0.25 * fbm(S.t * 0.02, 11)) * (1 - 0.3 * S.instab) * ctlV('speed');
   c.spd = spd;
   const la = 12, aL = c.yaw - 0.55, aR = c.yaw + 0.55;
   const mL = samp(m, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la) + 0.5 * samp(e, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la);
@@ -425,7 +426,8 @@ function camStep(dt) {
     if (G.canopy > 0.01) cmin = Math.min(cmin, Hc(x, z));
   }
   const dv = fbm(S.t * 0.0035, 7) * 0.5 + 0.5 + (G.survey - 0.5) * 0.45;
-  S.dive = lerp(S.dive, sstep(0.52, 0.78, dv) * (1 - G.canopy), 1 - Math.exp(-dt * 0.3));
+  S.aDive = lerp(S.aDive ?? S.dive, sstep(0.52, 0.78, dv) * (1 - G.canopy), 1 - Math.exp(-dt * 0.3));
+  S.dive = CTL.w.camera > 0 ? lerp(S.aDive, CTL.man.overhead * (1 - G.canopy), CTL.w.camera) : S.aDive;
   let ty = gmax + G.clear + S.dive * 30;
   if (G.flood > 0.02) ty = Math.max(ty, floodY() + G.clear * 0.8);
   if (G.canopy > 0.01) { ty = Math.min(ty, cmin - 1.4); if (cmin - gmax < 3) ty = (cmin + gmax) * 0.5; }
@@ -436,7 +438,8 @@ function camStep(dt) {
   c.pitch = lerp(c.pitch, tp, 1 - Math.exp(-dt * 0.45));
   const warmG = S.sunEl !== undefined ? Math.exp(-((S.sunEl - 0.05) ** 2) / 0.02) : 0;
   const toSun = clamp(wrapA((S.sunAz || 0) - c.yaw), -1.2, 1.2);
-  c.gaze = lerp(c.gaze || 0, lerp(1.0 * fbm(S.t * 0.0045, 41), toSun, warmG * 0.85) * (1 - S.dive), 1 - Math.exp(-dt * 0.25));
+  c.aGaze = lerp(c.aGaze ?? c.gaze ?? 0, lerp(1.0 * fbm(S.t * 0.0045, 41), toSun, warmG * 0.85) * (1 - S.dive), 1 - Math.exp(-dt * 0.25));
+  c.gaze = CTL.w.camera > 0 ? lerp(c.aGaze, CTL.man.gaze, CTL.w.camera) : c.aGaze;
   c.roll = lerp(c.roll, -c.yawV * 0.55 + 0.05 * fbm(S.t * 0.03, 9) + S.instab * 0.06 * Math.sin(S.t * 0.7), 1 - Math.exp(-dt * 1.5));
   const clear = c.y - Hg(c.x, c.z);
   S.near = clamp(1 - (clear - 1) / 8, 0, 1); S.open = clamp((clear - 1) / 14, 0, 1);
@@ -447,25 +450,30 @@ const DAY = 2280;            // one orbit of the sun, seconds (38 min)
 function skyStep(dt) {
   if (S.sunPh === undefined) { S.sunPh = 2.6; S.wind = [0, 0]; S.cloud = 0; S.rain = 0; S.haze = 0.3; }
   S.sunPh = (S.sunPh + dt * TAU / DAY) % TAU;
-  S.sunEl = Math.asin(clamp(Math.sin(S.sunPh) * 0.82 - 0.06, -1, 1));
-  S.sunAz = S.sunPh + S.G.light;
+  const ph = CTL.w.sky > 0 ? angLerp(S.sunPh, CTL.skyPh ?? S.sunPh, CTL.w.sky) : S.sunPh;
+  S.sunPhE = ph;
+  S.sunEl = Math.asin(clamp(Math.sin(ph) * 0.82 - 0.06, -1, 1));
+  S.sunAz = ph + S.G.light;
   const w1 = fbm(S.t * 0.0011, 51), w2 = fbm(S.t * 0.0017, 61), w3 = fbm(S.t * 0.0009, 71);
   // weather fronts gather when the rules are deforming
   S.cloud = clamp(sstep(-0.3, 0.45, w1) + 0.35 * S.instab, 0, 1);
   S.rain = clamp(sstep(0.2, 0.6, w2) * sstep(0.35, 0.75, S.cloud) + 0.3 * S.instab * S.cloud, 0, 1);
   S.haze = clamp(0.3 + 0.55 * w3, 0, 1);
   if (S._wx && S._wx[0] !== undefined) { S.cloud = S._wx[0]; S.rain = S._wx[1] || 0; }
+  S.aCloud = S.cloud; S.aRain = S.rain; S.aHaze = S.haze;
+  if (CTL.w.sky > 0) { S.cloud = ctlV('cloud'); S.rain = ctlV('rain'); S.haze = ctlV('haze'); }
   const ws = 1.5 + 3.5 * S.cloud;
   S.wind[0] = (S.wind[0] + Math.cos(S.flowAng) * ws * dt + 2560) % 2560;
   S.wind[1] = (S.wind[1] + Math.sin(S.flowAng) * ws * dt + 2560) % 2560;
 }
 function displayPal(G) {
-  const el = S.sunEl, warm = Math.exp(-((el - 0.05) ** 2) / 0.02), night = sstep(0.02, -0.22, el), cl = S.cloud;
+  const el = S.sunEl, night = sstep(0.02, -0.22, el), cl = S.cloud, wm = ctlV('warmth');
+  const warm = clamp(Math.exp(-((el - 0.05) ** 2) / 0.02) + Math.max(0, wm) * (1 - night * 0.5), 0, 1);
   const WH = [0.3, 0.42, 6.05, 1.25];           // sunset: maroon dark, terracotta rust, rose, amber gold
   return G.pal.map((c, k) => {
     let [L, C, hh] = c;
     hh = angLerp(hh, WH[k], warm * 0.8); C *= 1 + 0.35 * warm; if (k === 0) C = Math.max(C, 0.075 * warm); if (k > 0) L += 0.03 * warm;
-    hh = angLerp(hh, 4.35, night * 0.4);
+    hh = angLerp(hh, 4.35, clamp(night * 0.4 + Math.max(0, -wm) * 0.45, 0, 1));
     L = k === 0 ? L - 0.045 * night : L * (1 - 0.22 * night);
     C *= (1 - 0.45 * night) * (1 - 0.3 * cl);
     return [clamp(L, 0.05, 0.97), C, hh];
@@ -474,11 +482,12 @@ function displayPal(G) {
 
 /* ---------------- per-frame evolution ---------------- */
 function evoStep(dt) {
-  const ed = dt * RATE; S.clock += ed; S.real += dt; S.t += dt;
+  ctlStep(dt);
+  const ed = dt * RATE * ctlV('rate'); S.clock += ed; S.real += dt; S.t += dt;
   const st = S.stats, c = S.cam;
   if (S.phase === 'era') {
     const revisit = samp(m, c.x, c.z), rough = st.hStd;
-    S.P += ed * (1 / 3000 + revisit / 2400 + ((rough < 0.3 || rough > 1.0) ? 1 / 3000 : 0));
+    if (ctlV('freeze') < 0.5) S.P += ed * (1 / 3000 + revisit / 2400 + ((rough < 0.3 || rough > 1.0) ? 1 / 3000 : 0));
     // an era is not static: its rules keep developing along their own trajectory
     if (S.traj) for (const k in S.traj) S.base[k] = clamp(S.base[k] + S.traj[k] * ed, GR[k][0], GR[k][1]);
     S.instab = Math.max(0, S.instab - dt * 0.2);
@@ -802,12 +811,12 @@ function render() {
   gl.uniform1f(U.uLI, Math.max(sunI, moonI)); gl.uniform1f(U.uNight, night); gl.uniform1f(U.uCloud, S.cloud); gl.uniform1f(U.uRain, S.rain); gl.uniform1f(U.uHaze, S.haze);
   gl.uniform1f(U.uRT, S.t % 370); gl.uniform1f(U.uSlant, Math.sin(S.flowAng - vy)); gl.uniform2f(U.uWind, S.wind[0], S.wind[1]);
   gl.uniform1f(U.uTanF, G.fov + 0.06 * clamp((c.spd - 2) / 3, 0, 1));
-  gl.uniform1f(U.uHS, G.hS); gl.uniform1f(U.uFar, 170); gl.uniform1f(U.uFog, G.fog * (1 + 0.5 * S.instab));
+  gl.uniform1f(U.uHS, G.hS); gl.uniform1f(U.uFar, 170); gl.uniform1f(U.uFog, G.fog * (1 + 0.5 * S.instab) * ctlV('fog'));
   gl.uniform1f(U.uCanOn, G.canopy > 0.01 ? 1 : 0); gl.uniform1f(U.uCanY, canY());
   gl.uniform1f(U.uFloodOn, G.flood > 0.02 ? 1 : 0); gl.uniform1f(U.uFloodY, floodY());
-  gl.uniform1f(U.uCDen, G.cDen); gl.uniform1f(U.uContour, G.contour); gl.uniform1f(U.uTime, S.t % 2000);
-  gl.uniform1f(U.uComp, Math.floor(S.instab * 2.2 + (S.phase === 'era' ? S.P * 0.6 : 0)));
-  gl.uniform1f(U.uDither, G.dither); gl.uniform1f(U.uSkyGlow, 0.35 + 0.25 * S.instab + 0.1 * S.dive + 0.1 * S.haze);
+  gl.uniform1f(U.uCDen, G.cDen); gl.uniform1f(U.uContour, Math.min(1.2, G.contour * ctlV('contours'))); gl.uniform1f(U.uTime, S.t % 2000);
+  gl.uniform1f(U.uComp, Math.floor(S.instab * 2.2 + (S.phase === 'era' ? S.P * 0.6 * ctlV('c_pressure') : 0)));
+  gl.uniform1f(U.uDither, ctlV('dither')); gl.uniform1f(U.uSkyGlow, 0.35 + 0.25 * S.instab + 0.1 * S.dive + 0.1 * S.haze);
   gl.uniform1f(U.uWaveVis, S.caps.waves ? 1 : 0);
   gl.uniform3f(U.uInk, inks[0], inks[1], inks[2]);
   gl.uniform4fv(U.uImp, impBuf);
@@ -818,7 +827,7 @@ function render() {
   gl.useProgram(P2.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, scene.t); gl.uniform1i(P2.u.uCur, 0);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, prev.t); gl.uniform1i(P2.u.uPrev, 1);
-  gl.uniform1f(P2.u.uEcho, clamp(G.echo * 0.55 + S.instab * 0.35, 0, 0.9)); gl.uniform1f(P2.u.uFrame, frameNo % 997);
+  gl.uniform1f(P2.u.uEcho, clamp((G.echo * 0.55 * ctlV('c_echo') + S.instab * 0.35) * ctlV('smear'), 0, 0.92)); gl.uniform1f(P2.u.uFrame, frameNo % 997);
   gl.uniform2f(P2.u.uShift, clamp(c.yawV * 5, -2, 2), -S.instab * 1.2); gl.uniform2f(P2.u.uRes, lowW, lowH);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   // pass 3: inks with registration
@@ -829,7 +838,7 @@ function render() {
   palRGB = displayPal(G).map(p => oklch(p[0], p[1], p[2]));
   palRGB.forEach((p, i) => { palBuf[i * 3] = p[0]; palBuf[i * 3 + 1] = p[1]; palBuf[i * 3 + 2] = p[2]; });
   gl.uniform3fv(P3.u.uPal, palBuf);
-  const regAmt = G.reg * 0.8 + S.instab * 3.2 + (S.phase === 'era' ? S.P * 0.7 : 0);
+  const regAmt = (G.reg * 0.8 + S.instab * 3.2 + (S.phase === 'era' ? S.P * 0.7 * ctlV('c_pressure') : 0)) * ctlV('reg');
   for (let k = 0; k < 4; k++) { const a = k * 2.1 + S.t * 0.011; regBuf[k * 2] = k ? Math.cos(a) * regAmt * (k / 3) : 0; regBuf[k * 2 + 1] = k ? Math.sin(a) * regAmt * (k / 3) : 0; }
   gl.uniform2fv(P3.u.uReg, regBuf);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -895,25 +904,37 @@ function buildGraph(ctx) {
   const nLP = mk(ctx.createBiquadFilter()); nLP.type = 'lowpass'; nLP.frequency.value = 520; nLP.Q.value = 0.5;
   const nG = mk(ctx.createGain()); nG.gain.value = 0.05;
   const nPan = mk(ctx.createStereoPanner());
-  noise.connect(nBP); nBP.connect(nLP); nLP.connect(nG); nG.connect(nPan); nPan.connect(mix);
-  const nS = mk(ctx.createGain()); nS.gain.value = 0.06; nG.connect(nS); nS.connect(verb);
+  // one bus per voice. Each has three inputs (dry / echo send / reverb send); each input passes a
+  // gate (driven by the dub mixer, sample-accurate) and a fader (driven by the mixer), then joins the mix.
+  const B = {};
+  for (const name of ['kick', 'bass', 'chords', 'perc', 'pings', 'wind', 'drone']) {
+    const bus = { gates: [], faders: [] };
+    for (const [key, dest] of [['dry', mix], ['send', send], ['verb', verb]]) {
+      const gt = mk(ctx.createGain()), fd = mk(ctx.createGain());
+      gt.connect(fd); fd.connect(dest); bus[key] = gt; bus.gates.push(gt); bus.faders.push(fd);
+    }
+    bus.a = mk(ctx.createAnalyser()); bus.a.fftSize = 512; bus.faders[0].connect(bus.a);
+    B[name] = bus;
+  }
+  noise.connect(nBP); nBP.connect(nLP); nLP.connect(nG); nG.connect(nPan); nPan.connect(B.wind.dry);
+  const nS = mk(ctx.createGain()); nS.gain.value = 0.06; nG.connect(nS); nS.connect(B.wind.verb);
   // drone
   const dr1 = mk(ctx.createOscillator()), dr2 = mk(ctx.createOscillator()); dr1.type = 'sine'; dr2.type = 'triangle';
   dr1.frequency.value = 110; dr2.frequency.value = 165;
   const drLP = mk(ctx.createBiquadFilter()); drLP.type = 'lowpass'; drLP.frequency.value = 420; drLP.Q.value = 0.9;
   const drG = mk(ctx.createGain()); drG.gain.value = 0.0;
-  dr1.connect(drLP); dr2.connect(drLP); drLP.connect(drG); drG.connect(mix);
-  const drS = mk(ctx.createGain()); drS.gain.value = 0.5; drG.connect(drS); drS.connect(verb);
+  dr1.connect(drLP); dr2.connect(drLP); drLP.connect(drG); drG.connect(B.drone.dry);
+  const drS = mk(ctx.createGain()); drS.gain.value = 0.5; drG.connect(drS); drS.connect(B.drone.verb);
   // sub
   const sub = mk(ctx.createOscillator()), sub2 = mk(ctx.createOscillator()); sub.type = 'sine'; sub2.type = 'triangle';
   sub.frequency.value = 55; sub2.frequency.value = 110;
   const s2g = mk(ctx.createGain()); s2g.gain.value = 0.12;
   const subLP = mk(ctx.createBiquadFilter()); subLP.type = 'lowpass'; subLP.frequency.value = 190; subLP.Q.value = 0.5;
   const subG = mk(ctx.createGain()); subG.gain.value = 0;
-  sub.connect(subLP); sub2.connect(s2g); s2g.connect(subLP); subLP.connect(subG); subG.connect(mix);
+  sub.connect(subLP); sub2.connect(s2g); s2g.connect(subLP); subLP.connect(subG); subG.connect(B.bass.dry);
   const t0 = ctx.currentTime;
   for (const o of [dr1, dr2, sub, sub2]) o.start(t0);
-  const g = { noise, nNext: 0, out, an, tone, mix, send, verb, dL, dR, fbL, fbR, lpD, nBP, nG, nPan, dr1, dr2, drG, drLP, sub, sub2, subG, nodes };
+  const g = { B, wet, verbOut, noise, nNext: 0, out, an, tone, mix, send, verb, dL, dR, fbL, fbR, lpD, nBP, nG, nPan, dr1, dr2, drG, drLP, sub, sub2, subG, nodes };
   g.stop = () => {
     const t = ctx.currentTime;
     for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (err) { } }
@@ -975,13 +996,14 @@ function vKick(t, amp) {
   o.type = 'sine'; o.frequency.setValueAtTime(112, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.13); o.frequency.exponentialRampToValueAtTime(37, t + 0.7);
   v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.006); v.gain.exponentialRampToValueAtTime(amp * 0.3, t + 0.2);
   v.gain.exponentialRampToValueAtTime(0.0006, t + 0.78); v.gain.linearRampToValueAtTime(0, t + 0.82);
-  o.connect(v); v.connect(g.mix); o.start(t); o.stop(t + 0.85); done(o, [o, v]);
+  o.connect(v); v.connect(g.B.kick.dry); o.start(t); o.stop(t + 0.85); done(o, [o, v]);
 }
-function vTom(t, f, amp) {
+function vTom(t, f, amp, bus) {
+  bus = bus || 'perc';
   const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), v = ctx.createGain(), s = ctx.createGain();
   o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.72, t + 0.3);
   v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.008); v.gain.exponentialRampToValueAtTime(0.0006, t + 0.42); v.gain.linearRampToValueAtTime(0, t + 0.45);
-  s.gain.value = 0.55; o.connect(v); v.connect(g.mix); v.connect(s); s.connect(g.send); o.start(t); o.stop(t + 0.47); done(o, [o, v, s]);
+  s.gain.value = 0.55; o.connect(v); v.connect(g.B[bus].dry); v.connect(s); s.connect(g.B[bus].send); o.start(t); o.stop(t + 0.47); done(o, [o, v, s]);
 }
 function vChord(t, fs, amp, cut) {
   const ctx = AU.ctx, g = AU.g, lp = ctx.createBiquadFilter(), v = ctx.createGain(), s = ctx.createGain(), dry = ctx.createGain();
@@ -989,15 +1011,15 @@ function vChord(t, fs, amp, cut) {
   v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.006); v.gain.setValueAtTime(amp, t + 0.06); v.gain.exponentialRampToValueAtTime(0.0005, t + 0.2); v.gain.linearRampToValueAtTime(0, t + 0.22);
   s.gain.value = 1.0; dry.gain.value = 0.35;
   const os = fs.map(f => { const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 8; o.connect(lp); o.start(t); o.stop(t + 0.24); return o; });
-  lp.connect(v); v.connect(dry); dry.connect(g.mix); v.connect(s); s.connect(g.send);
+  lp.connect(v); v.connect(dry); dry.connect(g.B.chords.dry); v.connect(s); s.connect(g.B.chords.send);
   done(os[0], [...os, lp, v, s, dry]);
 }
 function vRim(t, amp) {
   const ctx = AU.ctx, g = AU.g, src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), v = ctx.createGain(), s = ctx.createGain();
   src.buffer = AU.noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 420 + Math.random() * 160; bp.Q.value = 1.1;
   v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.003); v.gain.exponentialRampToValueAtTime(0.0004, t + 0.07); v.gain.linearRampToValueAtTime(0, t + 0.075);
-  s.gain.value = 1.2; src.connect(bp); bp.connect(v); v.connect(s); s.connect(g.send);
-  const dry = ctx.createGain(); dry.gain.value = 0.2; v.connect(dry); dry.connect(g.mix);
+  s.gain.value = 1.2; src.connect(bp); bp.connect(v); v.connect(s); s.connect(g.B.perc.send);
+  const dry = ctx.createGain(); dry.gain.value = 0.2; v.connect(dry); dry.connect(g.B.perc.dry);
   src.start(t, Math.random() * 1.5, 0.08); done(src, [src, bp, v, s, dry]);
 }
 function vBass(t, f, dur, amp) {
@@ -1008,7 +1030,7 @@ function vBass(t, f, dur, amp) {
 }
 function audioPing(dist, str, bearing, hLocal, scar) {
   const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
-  const t = ctx.currentTime + 0.03 + dist / 42;        // light first, sound later
+  const t = ctx.currentTime + 0.03 + dist / 42 * ctlV('c_distance');        // light first, sound later
   const deg = Math.floor(clamp((hLocal + 1.2) / 2.4, 0, 0.999) * 7) + (scar > 0.4 ? 7 : 0);
   const f = degFreq(deg, 2);
   const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), g2 = ctx.createGain(), lp = ctx.createBiquadFilter(), v = ctx.createGain(), pan = ctx.createStereoPanner(), s = ctx.createGain(), rv = ctx.createGain();
@@ -1017,10 +1039,10 @@ function audioPing(dist, str, bearing, hLocal, scar) {
   const amp = 0.3 * str * (0.55 + 0.45 * Math.exp(-dist / 70));
   v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.01); v.gain.exponentialRampToValueAtTime(0.0004, t + 3.3); v.gain.linearRampToValueAtTime(0, t + 3.4);
   pan.pan.value = clamp(Math.sin(bearing) * 0.9, -0.9, 0.9); s.gain.value = 0.7; rv.gain.value = 0.3 + dist / 120;
-  o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(v); v.connect(pan); pan.connect(g.mix); pan.connect(s); s.connect(g.send); pan.connect(rv); rv.connect(g.verb);
+  o1.connect(lp); o2.connect(g2); g2.connect(lp); lp.connect(v); v.connect(pan); pan.connect(g.B.pings.dry); pan.connect(s); s.connect(g.B.pings.send); pan.connect(rv); rv.connect(g.B.pings.verb);
   o1.start(t); o2.start(t); o1.stop(t + 3.45); o2.stop(t + 3.45); done(o1, [o1, o2, g2, lp, v, pan, s, rv]);
   // the impact also thumps the ground
-  vTom(t, degFreq(0, 1) * 1.5, 0.22 * str);
+  vTom(t, degFreq(0, 1) * 1.5, 0.22 * str, 'pings');
 }
 function stepProb(voice, k) {
   const G = S.G;
@@ -1049,7 +1071,7 @@ function playStep(k, t, spb) {
     const lead = Math.max(0, t - AU.ctx.currentTime), d = 6 + c.spd * lead;
     const hh = Hraw(c.x + Math.cos(c.yaw) * d, c.z + Math.sin(c.yaw) * d);   // the ground ahead is the score
     const idx = clamp(Math.round((hh + 1) / 2 * 4), 0, 4);
-    const deg = [0, 2, 3, 4, 6][idx] - (idx >= 3 && S.stats.mMean > 0.3 ? 7 : 0);
+    const deg = Math.round(([0, 2, 3, 4, 6][idx] - (idx >= 3 && S.stats.mMean > 0.3 ? 7 : 0)) * ctlV('c_terrain'));
     vBass(t, degFreq(deg, 0), P.blen[k] * spb * (0.4 + 0.3 * Math.random()), 0.2 * (1 - 0.35 * S.dive));
   }
   if (P.chord[k]) {
@@ -1085,7 +1107,7 @@ function audioSchedule() {
   let guard = 0;
   while (AU.nextT < ctx.currentTime + ahead && guard++ < 24) {
     const k = AU.step % 16;
-    if (k === 0) { AU.bar++; evolvePattern(); }
+    if (k === 0) { AU.bar++; evolvePattern(); dubBar(AU.nextT, spb); }
     try { playStep(k, AU.nextT, spb); } catch (err) { }
     AU.nextT += spb * (k % 2 === 0 ? 1 + S.G.swing : 1 - S.G.swing);
     AU.step = (AU.step + 1) % 16;
@@ -1094,8 +1116,10 @@ function audioSchedule() {
 function audioControl() {
   const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
   const G = S.G, c = S.cam, br = S.instab;
-  setP(g.tone.frequency, clamp((1100 + 5200 * Math.pow(S.open, 1.5) + 1500 * S.dive) * (1 - 0.5 * br) * (1 - 0.25 * S.cloud), 350, 9000), 0.35);
-  const fb = clamp(0.3 + G.echo * 0.5 + br * 0.25 + S.rain * 0.08, 0, 0.86);
+  const thr = ctlAudioApply(), kW = ctlV('c_weather');
+  const toneAuto = (1100 + 5200 * Math.pow(S.open, 1.5) + 1500 * S.dive) * (1 - 0.5 * br);
+  setP(g.tone.frequency, clamp(lerp(2400, toneAuto, Math.min(1, ctlV('c_height'))) * (1 + Math.max(0, ctlV('c_height') - 1) * S.open) * (1 - 0.25 * S.cloud * kW), 350, 9000), 0.35);
+  const fb = clamp(0.3 + G.echo * 0.5 + br * 0.25 + S.rain * 0.08 * kW + thr * 0.18, 0, 0.88);
   setP(g.fbL.gain, fb, 0.6); setP(g.fbR.gain, fb, 0.6);
   const beat = 60 / G.bpm;
   setP(g.dL.delayTime, beat * 0.75, 2.5); setP(g.dR.delayTime, beat * 0.5, 2.5);
@@ -1104,15 +1128,193 @@ function audioControl() {
   setP(g.nG.gain, 0.05 + 0.04 * S.dive + 0.04 * br + 0.02 * clamp(c.spd / 4, 0, 1), 1.2);
   setP(g.nPan.pan, clamp(c.yawV * 1.6, -0.8, 0.8), 0.8);
   const bf = baseFreq();
-  const detune = (S.phase === 'era' ? S.P : 1) * 18 + br * 25;
+  const detune = ((S.phase === 'era' ? S.P : 1) * 18 + br * 25) * ctlV('c_pressure');
   setP(g.dr1.frequency, bf * 2, 4); setP(g.dr2.frequency, bf * 3 * Math.pow(2, detune / 1200), 4);
   const close = G.canopy > 0.01 ? clamp(1 - (canY() - c.y) / 10, 0, 1) : 0;
-  const nightA = sstep(0.02, -0.22, S.sunEl);
+  const nightA = sstep(0.02, -0.22, S.sunEl) * Math.min(1.5, kW);
   setP(g.drG.gain, 0.012 + G.drone * 0.035 * (0.5 + 0.5 * close + 0.5 * br + 0.6 * nightA), 2);
   setP(g.drLP.frequency, 300 + 500 * close + 400 * S.open, 1.5);
 }
 function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
 addEventListener('pointerdown', audioUnlock); addEventListener('keydown', audioUnlock);
+
+
+/* ---------------- control layer: the mixer's hands on the piece ----------------
+   Every controllable value has an autonomous value (what the piece does by itself) and a manual
+   value (what the mixer sets). Each group crossfades between them: AUTO -> the piece, MANUAL -> you.
+   The audio group also has DUB: the piece performs its own mix, dropping voices and throwing echoes. */
+const CTL_GROUPS = ['audio', 'influence', 'sky', 'camera', 'look', 'evolution'];
+const CTL_SCHEMA = [
+  { id: 'kick', g: 'audio', label: 'kick', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'bass', g: 'audio', label: 'sub bass', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'chords', g: 'audio', label: 'chords', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'perc', g: 'audio', label: 'perc', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'pings', g: 'audio', label: 'impacts', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'wind', g: 'audio', label: 'wind', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'drone', g: 'audio', label: 'drone', min: 0, max: 1.5, def: 1, fader: 1 },
+  { id: 'echo', g: 'audio', label: 'echo', min: 0, max: 1.5, def: 1, fader: 1, ret: 1 },
+  { id: 'space', g: 'audio', label: 'reverb', min: 0, max: 1.5, def: 1, fader: 1, ret: 1 },
+  { id: 'master', g: 'audio', label: 'master', min: 0, max: 1.5, def: 1, fader: 1, ret: 1 },
+  { id: 'c_terrain', g: 'influence', label: 'terrain → bass line', min: 0, max: 1, def: 1 },
+  { id: 'c_height', g: 'influence', label: 'height → filter', min: 0, max: 1.5, def: 1 },
+  { id: 'c_pressure', g: 'influence', label: 'pressure → detune + misregistration', min: 0, max: 2, def: 1 },
+  { id: 'c_echo', g: 'influence', label: 'echo → image smear', min: 0, max: 2, def: 1 },
+  { id: 'c_distance', g: 'influence', label: 'distance → impact sound delay', min: 0, max: 2, def: 1 },
+  { id: 'c_weather', g: 'influence', label: 'weather → sound', min: 0, max: 2, def: 1 },
+  { id: 'sunTime', g: 'sky', label: 'time of day', min: 0, max: 1, def: 0.3, fmt: 'sun' },
+  { id: 'sunSpeed', g: 'sky', label: 'sun speed', min: 0, max: 8, def: 1, fmt: 'x' },
+  { id: 'cloud', g: 'sky', label: 'clouds', min: 0, max: 1, def: 0.2 },
+  { id: 'rain', g: 'sky', label: 'rain', min: 0, max: 1, def: 0 },
+  { id: 'haze', g: 'sky', label: 'haze', min: 0, max: 1, def: 0.3 },
+  { id: 'speed', g: 'camera', label: 'speed', min: 0, max: 3, def: 1, fmt: 'x' },
+  { id: 'overhead', g: 'camera', label: 'overhead view', min: 0, max: 1, def: 0 },
+  { id: 'gaze', g: 'camera', label: 'look sideways', min: -1.2, max: 1.2, def: 0 },
+  { id: 'dither', g: 'look', label: 'dither', options: ['ordered', 'halftone', 'grain'], def: 0 },
+  { id: 'reg', g: 'look', label: 'misregistration', min: 0, max: 3, def: 1, fmt: 'x' },
+  { id: 'smear', g: 'look', label: 'smear', min: 0, max: 2, def: 1, fmt: 'x' },
+  { id: 'fog', g: 'look', label: 'fog', min: 0.3, max: 3, def: 1, fmt: 'x' },
+  { id: 'contours', g: 'look', label: 'contours', min: 0, max: 2, def: 1, fmt: 'x' },
+  { id: 'warmth', g: 'look', label: 'warmth', min: -1, max: 1, def: 0 },
+  { id: 'rate', g: 'evolution', label: 'evolution speed', min: 0, max: 20, def: 1, fmt: 'x' },
+  { id: 'freeze', g: 'evolution', label: 'hold pressure', options: ['off', 'on'], def: 0 }
+];
+const CTL_BY = {}; CTL_SCHEMA.forEach(p => CTL_BY[p.id] = p);
+const VOICE_BUSES = ['kick', 'bass', 'chords', 'perc', 'pings', 'wind', 'drone'];
+const CTL = { mode: {}, w: {}, man: {}, mute: {}, solo: {}, touched: {}, release: 0, gate: {}, throwUntil: 0, dropUntil: 0, skyPh: null, log: [] };
+CTL_GROUPS.forEach(gr => { CTL.mode[gr] = 'auto'; CTL.w[gr] = 0; CTL.touched[gr] = 0; });
+CTL_SCHEMA.forEach(p => { CTL.man[p.id] = p.def; });
+VOICE_BUSES.forEach(v => CTL.gate[v] = 1);
+try { const saved = JSON.parse(localStorage.getItem('mztv-sounding-ctl') || 'null'); if (saved && !FRESH) { Object.assign(CTL.mode, saved.mode || {}); Object.assign(CTL.man, saved.man || {}); Object.assign(CTL.mute, saved.mute || {}); Object.assign(CTL.solo, saved.solo || {}); CTL.release = saved.release || 0; for (const gr of CTL_GROUPS) CTL.w[gr] = CTL.mode[gr] === 'manual' ? 1 : 0; } } catch (err) { }
+function ctlSave() { try { localStorage.setItem('mztv-sounding-ctl', JSON.stringify({ mode: CTL.mode, man: CTL.man, mute: CTL.mute, solo: CTL.solo, release: CTL.release })); } catch (err) { } }
+function ctlAuto(id) {
+  switch (id) {
+    case 'sunTime': return ((S.sunPh % TAU) + TAU) % TAU / TAU;
+    case 'cloud': return S.aCloud ?? S.cloud; case 'rain': return S.aRain ?? S.rain; case 'haze': return S.aHaze ?? S.haze;
+    case 'overhead': return S.aDive ?? S.dive; case 'gaze': return S.cam.aGaze ?? 0;
+    case 'dither': return S.G.dither; case 'warmth': return 0; case 'freeze': return 0;
+  }
+  return 1;
+}
+function ctlV(id) {
+  const p = CTL_BY[id], w = CTL.w[p.g];
+  if (w <= 0.0005) return ctlAuto(id);
+  if (p.options) return w > 0.5 ? CTL.man[id] : ctlAuto(id);
+  if (id === 'sunTime') return (angLerp(S.sunPh, CTL.skyPh ?? S.sunPh, w) / TAU % 1 + 1) % 1;
+  return lerp(ctlAuto(id), CTL.man[id], w);
+}
+function ctlSetMode(gr, mode) {
+  if (!CTL_GROUPS.includes(gr)) return;
+  const prev = CTL.mode[gr];
+  if (gr === 'sky') {
+    // handing the sky back keeps it where you left it; taking it starts from where it is
+    if (mode !== 'manual' && prev === 'manual') S.sunPh = angLerp(S.sunPh, CTL.skyPh ?? S.sunPh, CTL.w.sky);
+    if (mode === 'manual' && prev !== 'manual') { CTL.skyPh = S.sunPh; for (const k of ['cloud', 'rain', 'haze']) if (!CTL.touched['sky:' + k]) CTL.man[k] = ctlAuto(k); }
+  }
+  if (mode === 'manual' && prev !== 'manual') {
+    // a group taken by hand starts from the piece's current values unless you already set them
+    for (const p of CTL_SCHEMA) if (p.g === gr && !CTL.touched[gr + ':' + p.id] && gr !== 'audio' && gr !== 'influence' && gr !== 'sky') CTL.man[p.id] = ctlAuto(p.id);
+  }
+  if (gr === 'audio' && mode !== 'dub') { const t = AU.ctx ? AU.ctx.currentTime : 0; VOICE_BUSES.forEach(v => { CTL.gate[v] = 1; if (AU.g) AU.g.B[v].gates.forEach(gt => gt.gain.setTargetAtTime(1, t, 0.05)); }); }
+  CTL.mode[gr] = mode; CTL.touched[gr] = performance.now(); ctlSave();
+}
+function ctlSet(id, v) {
+  const p = CTL_BY[id]; if (!p) return;
+  v = p.options ? clamp(Math.round(v), 0, p.options.length - 1) : clamp(+v, p.min, p.max);
+  if (!Number.isFinite(v)) return;
+  if (CTL.mode[p.g] !== 'manual') ctlSetMode(p.g, 'manual');
+  CTL.man[id] = v; CTL.touched[p.g] = performance.now(); CTL.touched[p.g + ':' + id] = 1;
+  if (id === 'sunTime') CTL.skyPh = v * TAU;
+  ctlSave();
+}
+function ctlStep(dt) {
+  const now = performance.now();
+  for (const gr of CTL_GROUPS) {
+    const target = CTL.mode[gr] === 'manual' ? 1 : 0;
+    CTL.w[gr] += (target - CTL.w[gr]) * (1 - Math.exp(-dt / (target ? 0.25 : 1.5)));
+    if (Math.abs(CTL.w[gr] - target) < 0.001) CTL.w[gr] = target;
+    if (CTL.release > 0 && CTL.mode[gr] === 'manual' && now - CTL.touched[gr] > CTL.release * 60000) ctlSetMode(gr, 'auto');
+  }
+  if (CTL.mode.sky === 'manual') CTL.skyPh = ((CTL.skyPh ?? S.sunPh) + dt * TAU / DAY * CTL.man.sunSpeed) % TAU;
+  if (CTL.skyPh !== null && CTL.mode.sky === 'manual') CTL.man.sunTime = CTL.skyPh / TAU;
+}
+// the piece as its own dub engineer: decided per bar, scheduled on the bar line
+function dubBar(t, spb) {
+  if (CTL.mode.audio !== 'dub' || !AU.g) return;
+  const g = AU.g, beat = spb * 4;
+  const setGate = (v, on) => { CTL.gate[v] = on ? 1 : 0; g.B[v].gates.forEach(gt => gt.gain.setTargetAtTime(on ? 1 : 0, t, 0.012)); };
+  if (t < CTL.dropUntil) return;
+  if (VOICE_BUSES.some(v => CTL.gate[v] === 0) && CTL.dropUntil && t >= CTL.dropUntil) { CTL.dropUntil = 0; ['kick', 'chords', 'perc', 'pings', 'wind', 'drone'].forEach(v => setGate(v, 1)); }
+  const r = Math.random(); CTL.log.push(r.toFixed(2)); if (CTL.log.length > 40) CTL.log.shift();
+  if (r < 0.07) { ['kick', 'chords', 'perc', 'drone'].forEach(v => setGate(v, 0)); setGate('bass', 1); CTL.dropUntil = t + beat * 4; CTL.throwUntil = t + beat * 2; return; }   // the drop: bass and echoes alone for a bar
+  if (r < 0.42) {
+    const pool = ['kick', 'bass', 'chords', 'perc', 'drone'];
+    const v = pool[Math.floor(Math.random() * pool.length)];
+    let on = CTL.gate[v] === 0 ? Math.random() < 0.8 : Math.random() < 0.35;
+    if (!on && (v === 'kick' || v === 'bass') && CTL.gate[v === 'kick' ? 'bass' : 'kick'] === 0) on = true;   // keep a floor under it
+    setGate(v, on);
+  }
+  if (Math.random() < 0.22) CTL.throwUntil = t + beat * (Math.random() < 0.5 ? 2 : 3);   // echo throw
+}
+// transport: BroadcastChannel (same browser / same OBS), with a localStorage fallback
+const CTL_CH = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('mztv-sounding') : null;
+function ctlPost(msg) { try { if (CTL_CH) CTL_CH.postMessage(msg); else localStorage.setItem('mztv-sounding-bus', JSON.stringify({ ...msg, _n: Math.random() })); } catch (err) { } }
+function ctlMsg(m) {
+  if (!m || m.to === 'mixer') return;
+  switch (m.t) {
+    case 'hello': ctlPost({ to: 'mixer', t: 'schema', groups: CTL_GROUPS, schema: CTL_SCHEMA, ops: OPS }); break;
+    case 'set': ctlSet(m.id, m.v); break;
+    case 'mode': ctlSetMode(m.g, m.mode); break;
+    case 'mute': CTL.mute[m.id] = !!m.v; ctlSave(); break;
+    case 'solo': CTL.solo[m.id] = !!m.v; ctlSave(); break;
+    case 'autopilot': CTL_GROUPS.forEach(gr => ctlSetMode(gr, 'auto')); CTL.mute = {}; CTL.solo = {}; ctlSave(); break;
+    case 'release': CTL.release = Math.max(0, +m.v || 0); ctlSave(); break;
+    case 'transition': if (S.phase === 'era') { if (m.op && OPS.includes(m.op)) S.forceDom = m.op; S.P = 1; } break;
+    case 'impact': spawnEvent(0.6 + Math.random() * 0.4); break;
+    case 'info': SHOW_INFO = m.v === undefined ? !SHOW_INFO : !!m.v; updateInfo(); break;
+  }
+}
+if (CTL_CH) CTL_CH.onmessage = e => ctlMsg(e.data);
+addEventListener('storage', e => { if (e.key === 'mztv-sounding-bus' && e.newValue) { try { ctlMsg(JSON.parse(e.newValue)); } catch (err) { } } });
+const meterBuf = new Float32Array(512);
+function meter(an) { if (!an) return -90; an.getFloatTimeDomainData(meterBuf); let s2 = 0; for (let i = 0; i < meterBuf.length; i++) s2 += meterBuf[i] * meterBuf[i]; const r = Math.sqrt(s2 / meterBuf.length); return r > 1e-5 ? 20 * Math.log10(r) : -90; }
+function ctlBroadcast() {
+  const auto = {}, eff = {}, meters = {};
+  for (const p of CTL_SCHEMA) { auto[p.id] = ctlAuto(p.id); eff[p.id] = ctlV(p.id); }
+  if (AU.g) { VOICE_BUSES.forEach(v => meters[v] = meter(AU.g.B[v].a)); meters.master = meter(AU.g.an); }
+  const G = S.G, dom = G.dom === 'uplift' ? (G.uplift >= 0 ? 'upliftUp' : 'upliftDown') : G.dom;
+  ctlPost({
+    to: 'mixer', t: 'state', auto, eff, man: CTL.man, mode: CTL.mode, w: CTL.w, mute: CTL.mute, solo: CTL.solo, gate: CTL.gate, release: CTL.release, meters,
+    audio: AU.ctx ? AU.ctx.state : 'none',
+    status: {
+      era: S.era, dom: G.dom, desc: S.phase === 'trans' ? 'rules deforming → ' + (S.to ? S.to.dom : '') : DESC[dom], phase: S.phase, P: S.P, trS: S.trS,
+      sunDeg: Math.round(S.sunEl * 180 / Math.PI), rising: Math.cos(S.sunPhE ?? S.sunPh) > 0, cloud: S.cloud, rain: S.rain, haze: S.haze,
+      caps: OPS.filter(o => S.caps[o]), worn: S.stats.mMean, scars: S.events, bpm: Math.round(G.bpm), mode: MODE_NAMES[G.mode], running: S.real,
+      pal: palRGB.map(c => '#' + c.map(v => Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, '0')).join('')), info: SHOW_INFO
+    }
+  });
+}
+function ctlAudioApply() {
+  const g = AU.g; if (!g) return;
+  const anySolo = VOICE_BUSES.some(v => CTL.solo[v]);
+  for (const v of VOICE_BUSES) {
+    const f = ctlV(v) * (CTL.mute[v] ? 0 : 1) * (anySolo && !CTL.solo[v] ? 0 : 1);
+    g.B[v].faders.forEach(fd => setP(fd.gain, f, 0.05));
+  }
+  const now = AU.ctx.currentTime, thr = now < CTL.throwUntil ? 1 : 0;
+  setP(g.wet.gain, 0.65 * ctlV('echo') * (CTL.mute.echo ? 0 : 1) * (1 + 0.5 * thr), 0.08);
+  setP(g.verbOut.gain, 0.42 * ctlV('space') * (CTL.mute.space ? 0 : 1), 0.1);
+  setP(g.mix.gain, 0.85 * ctlV('master') * (CTL.mute.master ? 0 : 1), 0.05);
+  return thr;
+}
+// in-piece mixer overlay (M), for OBS "Interact" or a plain browser window
+let mixerFrame = null;
+addEventListener('keydown', ev => {
+  if (ev.key !== 'm' && ev.key !== 'M') return;
+  if (mixerFrame) { mixerFrame.remove(); mixerFrame = null; document.body.style.cursor = 'none'; return; }
+  mixerFrame = document.createElement('iframe'); mixerFrame.src = 'mixer.html?embed=1';
+  mixerFrame.style.cssText = 'position:fixed;top:0;right:0;width:min(760px,100vw);height:100vh;border:0;z-index:10;background:transparent';
+  document.body.appendChild(mixerFrame); document.body.style.cursor = 'default';
+});
 
 /* ---------------- persistence ---------------- */
 function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
@@ -1165,10 +1367,12 @@ function updateInfo() {
   L.push(S.phase === 'trans'
     ? `<span class="k">pressure </span><span style="color:rgb(${i2})">${bar(S.trS)}</span> transition ${Math.round(S.trS * 100)}%`
     : `<span class="k">pressure </span>${bar(S.P)} rises with revisiting worn ground`);
-  const deg = Math.round(S.sunEl * 180 / Math.PI), rising = Math.cos(S.sunPh) > 0;
+  const deg = Math.round(S.sunEl * 180 / Math.PI), rising = Math.cos(S.sunPhE ?? S.sunPh) > 0;
   const sunTxt = S.sunEl < -0.05 ? `night · sun ${deg}°` : `sun ${deg}° ${rising ? 'rising' : 'setting'}`;
+  const hands = CTL_GROUPS.filter(gr => CTL.mode[gr] !== 'auto').map(gr => gr + (CTL.mode[gr] === 'dub' ? ' (dub)' : '')).join(', ');
   const wx = [S.cloud > 0.15 ? `clouds ${Math.round(S.cloud * 100)}%` : 'clear', S.rain > 0.15 ? 'rain' : '', S.haze > 0.6 ? 'haze' : ''].filter(Boolean).join(' · ');
   L.push(`<span class="k">sky      </span>${sunTxt} · ${wx} · wind moves clouds and dunes alike`);
+  if (hands) L.push(`<span class="k">hands    </span><span style="color:rgb(${i2})">mixer is steering: ${hands}</span>`);
   L.push(`<span class="k">sound    </span>bass reads the ground ahead · height above ground opens the filter`);
   L.push(`<span class="k">         </span>pressure detunes + misregisters · echo = delay feedback + image smear`);
   L.push(`<span class="k">         </span>impacts are seen first, heard later (distance) · ${MODE_NAMES[G.mode]} · ${Math.round(G.bpm)} bpm · ${DITHER_NAMES[G.dither]} dither`);
@@ -1196,7 +1400,7 @@ setInterval(audioWatch, 1000);
 setInterval(save, 60000);
 addEventListener('pagehide', save);
 
-let last = performance.now(), slowAcc = 0, ctlAcc = 0, infoAcc = 1;
+let last = performance.now(), slowAcc = 0, ctlAcc = 0, infoAcc = 1, bcAcc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - last) / 1000; last = now;
@@ -1212,12 +1416,13 @@ function frame(now) {
     render();
     ctlAcc += dt; if (ctlAcc > 0.1) { ctlAcc = 0; audioControl(); }
     infoAcc += dt; if (infoAcc > 1) { infoAcc = 0; updateInfo(); }
+    bcAcc += dt; if (bcAcc > 0.12) { bcAcc = 0; ctlBroadcast(); }
   } catch (err) { console.error(err); }
   PERF.ms = PERF.ms * 0.95 + (performance.now() - p0) * 0.05;
 }
 const PERF = { ms: 0 };
 requestAnimationFrame(frame);
-window.MZ = { rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
+window.MZ = { CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
 })();
 </script>
 </body>
