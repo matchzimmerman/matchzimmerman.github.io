@@ -125,6 +125,24 @@ async function getProductTemplate(templateId) {
   return request("/product-templates/" + encodeURIComponent(templateId));
 }
 
+async function getCatalogProduct(productId) {
+  return request("/products/" + encodeURIComponent(productId));
+}
+
+async function createMockupTask(storeId, productId, body) {
+  return request("/mockup-generator/create-task/" + encodeURIComponent(productId), {
+    storeId: storeId,
+    method: "POST",
+    body: body
+  });
+}
+
+async function getMockupTask(storeId, taskKey) {
+  return request("/mockup-generator/task?task_key=" + encodeURIComponent(taskKey), {
+    storeId: storeId
+  });
+}
+
 module.exports = {
   PrintfulError: PrintfulError,
   request: request,
@@ -132,5 +150,8 @@ module.exports = {
   listStoreProducts: listStoreProducts,
   listProductTemplates: listProductTemplates,
   getStoreProduct: getStoreProduct,
-  getProductTemplate: getProductTemplate
+  getProductTemplate: getProductTemplate,
+  getCatalogProduct: getCatalogProduct,
+  createMockupTask: createMockupTask,
+  getMockupTask: getMockupTask
 };
