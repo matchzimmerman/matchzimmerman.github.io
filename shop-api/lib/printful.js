@@ -143,6 +143,67 @@ async function getMockupTask(storeId, taskKey) {
   });
 }
 
+
+async function v2Paged(path, options) {
+  options = options || {};
+  var limit = 100;
+  var offset = 0;
+  var all = [];
+
+  while (true) {
+    var separator = path.indexOf("?") >= 0 ? "&" : "?";
+    var payload = await request(
+      path + separator + "limit=" + limit + "&offset=" + offset,
+      { storeId: options.storeId }
+    );
+
+    var items = payload.data || [];
+    if (!Array.isArray(items)) break;
+    all = all.concat(items);
+
+    var total = Number(
+      payload.paging && payload.paging.total !== undefined
+        ? payload.paging.total
+        : all.length
+    );
+
+    if (!items.length || all.length >= total || items.length < limit) break;
+    offset += limit;
+  }
+
+  return all;
+}
+
+async function listCatalogProductsV2() {
+  return v2Paged("/v2/catalog-products");
+}
+
+async function getCatalogProductV2(productId) {
+  return request("/v2/catalog-products/" + encodeURIComponent(productId));
+}
+
+async function listCatalogVariantsV2(productId) {
+  return v2Paged("/v2/catalog-products/" + encodeURIComponent(productId) + "/catalog-variants");
+}
+
+async function listMockupStylesV2(productId) {
+  return v2Paged("/v2/catalog-products/" + encodeURIComponent(productId) + "/mockup-styles");
+}
+
+async function createMockupTasksV2(storeId, body) {
+  return request("/v2/mockup-tasks", {
+    storeId: storeId,
+    method: "POST",
+    body: body
+  });
+}
+
+async function getMockupTasksV2(storeId, ids) {
+  return request("/v2/mockup-tasks?id=" + encodeURIComponent(ids.join(",")), {
+    storeId: storeId
+  });
+}
+
 module.exports = {
   PrintfulError: PrintfulError,
   request: request,
@@ -153,5 +214,11 @@ module.exports = {
   getProductTemplate: getProductTemplate,
   getCatalogProduct: getCatalogProduct,
   createMockupTask: createMockupTask,
-  getMockupTask: getMockupTask
+  getMockupTask: getMockupTask,
+  listCatalogProductsV2: listCatalogProductsV2,
+  getCatalogProductV2: getCatalogProductV2,
+  listCatalogVariantsV2: listCatalogVariantsV2,
+  listMockupStylesV2: listMockupStylesV2,
+  createMockupTasksV2: createMockupTasksV2,
+  getMockupTasksV2: getMockupTasksV2
 };
