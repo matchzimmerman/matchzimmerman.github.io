@@ -15,28 +15,75 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for Vercel deployment
-        run: sleep 45
+        run: sleep 60
 
-      - name: Run OBAS foundry
+      - name: Start Printful mockup tasks
         shell: bash
         run: |
           success=0
           for attempt in {1..12}; do
-            echo "Attempt $attempt"
-            if curl --silent --show-error --fail --max-time 28               "https://mzcmg-shop-api.vercel.app/api/foundry-run?seed=47"               -o /tmp/foundry-run.json; then
-              if jq -e '.ok == true' /tmp/foundry-run.json >/dev/null; then
+            echo "Start attempt $attempt"
+            if curl --silent --show-error --fail --max-time 20               "https://mzcmg-shop-api.vercel.app/api/foundry-start?seed=47"               -o /tmp/foundry-start.json; then
+              if jq -e '.ok == true' /tmp/foundry-start.json >/dev/null; then
                 success=1
                 break
               fi
-              cat /tmp/foundry-run.json
+              cat /tmp/foundry-start.json
             fi
             sleep 15
           done
           if [ "$success" -ne 1 ]; then
-            echo "Foundry demo did not complete successfully."
-            cat /tmp/foundry-run.json || true
+            echo "Could not start foundry demo."
+            cat /tmp/foundry-start.json || true
             exit 1
           fi
+          jq '.' /tmp/foundry-start.json
+
+      - name: Resolve Printful mockups
+        shell: bash
+        run: |
+          store_id=$(jq -r '.store.id' /tmp/foundry-start.json)
+
+          resolve_candidate () {
+            index="$1"
+            out="$2"
+            initial_status=$(jq -r ".candidates[$index].task.status // empty" /tmp/foundry-start.json)
+            task_key=$(jq -r ".candidates[$index].task.task_key // empty" /tmp/foundry-start.json)
+
+            if [ "$initial_status" = "completed" ]; then
+              jq ".candidates[$index].task" /tmp/foundry-start.json > "$out"
+              return 0
+            fi
+
+            if [ -z "$task_key" ]; then
+              echo "No task key for candidate $index"
+              jq ".candidates[$index].task" /tmp/foundry-start.json
+              return 1
+            fi
+
+            for attempt in {1..24}; do
+              sleep 3
+              curl --silent --show-error --fail --max-time 15                 "https://mzcmg-shop-api.vercel.app/api/foundry-task?storeId=$store_id&taskKey=$task_key"                 -o /tmp/poll.json
+              status=$(jq -r '.result.status // empty' /tmp/poll.json)
+              echo "Candidate $index poll $attempt: $status"
+              if [ "$status" = "completed" ]; then
+                jq '.result' /tmp/poll.json > "$out"
+                return 0
+              fi
+              if [ "$status" = "failed" ]; then
+                cat /tmp/poll.json
+                return 1
+              fi
+            done
+            echo "Candidate $index timed out."
+            return 1
+          }
+
+          resolve_candidate 0 /tmp/shirt.json
+          resolve_candidate 1 /tmp/mug.json
+
+          jq             --slurpfile shirt /tmp/shirt.json             --slurpfile mug /tmp/mug.json             '.candidates[0].task = $shirt[0] | .candidates[1].task = $mug[0]'             /tmp/foundry-start.json > /tmp/foundry-run.json
+
           jq '.' /tmp/foundry-run.json
 
       - name: Save result to repository
