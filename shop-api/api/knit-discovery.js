@@ -20,14 +20,17 @@ module.exports=async function handler(req,res){
   try{
     var products=await printful.listCatalogProductsV2();
     var knit=products.filter(function(p){
-      var raw=JSON.stringify(p).toLowerCase();
-      var name=String(p.name||p.title||"").toLowerCase();
-      return raw.indexOf('"knitting"')>=0 ||
-        name.indexOf("knit")>=0 ||
-        name.indexOf("sweater")>=0 ||
-        name.indexOf("cardigan")>=0 ||
-        name.indexOf("scarf")>=0 ||
-        name.indexOf("beanie")>=0;
+      var placements=Array.isArray(p.placements)?p.placements:[];
+      var hasKnittingPlacement=placements.some(function(pl){
+        return String(pl.technique||"").toLowerCase()==="knitting";
+      });
+      var options=Array.isArray(p.product_options)?p.product_options:[];
+      var hasPixelatedMode=options.some(function(o){
+        return o.name==="color_reduction_mode" &&
+          Array.isArray(o.values) &&
+          o.values.map(function(v){return String(v).toLowerCase();}).indexOf("pixelated")>=0;
+      });
+      return hasKnittingPlacement && hasPixelatedMode;
     }).map(compactProduct);
 
     res.statusCode=200;
