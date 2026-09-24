@@ -1,0 +1,43 @@
+name: Discover Printful Knit Products
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/discover-knit-products.yml
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel
+        run: sleep 90
+
+      - name: Fetch knit catalog
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+            code=$(curl --silent --show-error --max-time 45 -w "%{http_code}"               "https://mzcmg-shop-api.vercel.app/api/knit-discovery"               -o /tmp/knit.json || true)
+            echo "attempt=$attempt http=$code"
+            if [ "$code" = "200" ] && jq -e '.ok == true' /tmp/knit.json >/dev/null; then
+              jq '.' /tmp/knit.json
+              exit 0
+            fi
+            cat /tmp/knit.json || true
+            sleep 15
+          done
+          exit 1
+
+      - name: Save discovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          encoded=$(base64 -w 0 /tmp/knit.json)
+          sha=$(curl --silent -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/$REPO/contents/shop-api/demo/knit-discovery.json?ref=main"             | jq -r '.sha // empty')
+          body=$(jq -n --arg message "Capture Printful knit catalog [skip ci]"             --arg content "$encoded" --arg branch "main" --arg sha "$sha"             'if $sha == "" then {message:$message,content:$content,branch:$branch} else {message:$message,content:$content,branch:$branch,sha:$sha} end')
+          curl --silent --show-error --fail -X PUT             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/$REPO/contents/shop-api/demo/knit-discovery.json"             -d "$body"
