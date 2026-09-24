@@ -45,3 +45,7 @@ Separate Vercel project using shop-api as its Root Directory
 
 Printful
 Catalog, production, fulfillment, and shipping
+
+## OBAS Foundry demo
+
+The private prototype can generate procedural OBAS print sources and request Printful mockup tasks for candidate physical products without publishing products to the store.
