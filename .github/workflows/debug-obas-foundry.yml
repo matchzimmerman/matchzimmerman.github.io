@@ -1,0 +1,33 @@
+name: Debug OBAS Foundry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/debug-obas-foundry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch foundry start response
+        shell: bash
+        run: |
+          sleep 10
+          code=$(curl --silent --show-error --max-time 30             -w "%{http_code}"             "https://mzcmg-shop-api.vercel.app/api/foundry-start?seed=47"             -o /tmp/debug.json || true)
+          jq -n             --arg http_code "$code"             --rawfile body /tmp/debug.json             '{http_code:$http_code, body:$body}' > /tmp/debug-wrapper.json
+          cat /tmp/debug-wrapper.json
+
+      - name: Save debug response
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          encoded=$(base64 -w 0 /tmp/debug-wrapper.json)
+          body=$(jq -n             --arg message "Capture OBAS foundry debug response [skip ci]"             --arg content "$encoded"             --arg branch "main"             '{message:$message, content:$content, branch:$branch}')
+          curl --silent --show-error --fail             -X PUT             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/$REPO/contents/shop-api/demo/foundry-debug.json"             -d "$body"
