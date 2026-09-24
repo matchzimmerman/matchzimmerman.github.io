@@ -44,6 +44,14 @@ function optionValues(option){
   }).filter(Boolean);
 }
 
+function colorIntersection(a,b){
+  var aa=(a||[]).map(normHex).filter(Boolean);
+  var bb=(b||[]).map(normHex).filter(Boolean);
+  if(!aa.length) return bb;
+  if(!bb.length) return aa;
+  return aa.filter(function(v){return bb.indexOf(v)>=0;});
+}
+
 function knittingPlacements(product){
   return (product.placements||[]).filter(function(p){
     if(String(p.technique||"").toLowerCase()==="knitting") return true;
@@ -137,22 +145,31 @@ module.exports=async function handler(req,res){
         }) || variants[0];
 
         var yarnAllowed=yarnValuesFromPlacements(placements);
-        var yarnColors=OBAS_PALETTE.map(function(color){
-          return nearest(color,yarnAllowed);
-        });
-        yarnColors=Array.from(new Set(yarnColors)).slice(0,4);
 
         var baseOpt=productOption(product,"base_color");
         var trimOpt=productOption(product,"trim_color");
         var reductionOpt=productOption(product,"color_reduction_mode");
 
-        var baseColor=nearest(OBAS_PALETTE[0],optionValues(baseOpt));
-        var trimColor=nearest(OBAS_PALETTE[1],optionValues(trimOpt));
+        var baseCandidates=colorIntersection(yarnAllowed,optionValues(baseOpt));
+        var trimCandidates=colorIntersection(yarnAllowed,optionValues(trimOpt));
+        var baseColor=nearest(OBAS_PALETTE[0],baseCandidates.length?baseCandidates:yarnAllowed);
+        var trimColor=nearest(OBAS_PALETTE[1],trimCandidates.length?trimCandidates:yarnAllowed);
+
+        var yarnColors=[baseColor,trimColor];
+        OBAS_PALETTE.slice(2).forEach(function(color){
+          yarnColors.push(nearest(color,yarnAllowed));
+        });
+        yarnColors=Array.from(new Set(yarnColors.map(normHex).filter(Boolean))).slice(0,4);
 
         var productOptions=[];
         if(baseOpt) productOptions.push({name:"base_color",value:baseColor});
         if(trimOpt) productOptions.push({name:"trim_color",value:trimColor});
-        if(reductionOpt) productOptions.push({name:"color_reduction_mode",value:"pixelated"});
+        if(reductionOpt){
+          var reductionValues=optionValues(reductionOpt).map(function(v){return String(v).toLowerCase();});
+          if(!reductionValues.length || reductionValues.indexOf("pixelated")>=0){
+            productOptions.push({name:"color_reduction_mode",value:"pixelated"});
+          }
+        }
 
         var designedPlacements=placements.map(function(p){
           return {
