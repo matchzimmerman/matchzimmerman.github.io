@@ -47,6 +47,7 @@ const FRESH = Q.get('fresh') === '1';
 const MUTE = Q.get('audio') === '0';
 const LINES = Math.max(120, parseInt(Q.get('lines') || '270', 10));
 const KEY = 'mztv-sounding-v1';
+const CAPTURE = Q.get('capture') === '1';   // offline rendering: frames advance only when MZ.tick(dt) is called
 
 /* ---------------- utilities ---------------- */
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
@@ -733,7 +734,7 @@ function makeRT(wd, ht) {
 }
 function freeRT(r) { if (r) { gl.deleteTexture(r.t); gl.deleteFramebuffer(r.f); } }
 function initGL() {
-  gl = cv.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  gl = cv.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, preserveDrawingBuffer: CAPTURE, powerPreference: 'high-performance' });
   if (!gl) { glOK = false; return; }
   const lin = gl.getExtension('OES_texture_float_linear');
   fieldFmt = lin ? 'f32' : 'f16';
@@ -1398,12 +1399,13 @@ if (!MUTE) { createContext().catch(() => { }); }
 setInterval(audioSchedule, 40);
 setInterval(audioWatch, 1000);
 setInterval(save, 60000);
+setInterval(() => { try { ctlBroadcast(); } catch (err) { } }, 150);   // keeps the mixer live even when this tab is in the background
 addEventListener('pagehide', save);
 
 let last = performance.now(), slowAcc = 0, ctlAcc = 0, infoAcc = 1, bcAcc = 0;
-function frame(now) {
-  requestAnimationFrame(frame);
-  let dt = (now - last) / 1000; last = now;
+function frame(now, fixedDt) {
+  if (!CAPTURE) requestAnimationFrame(frame);
+  let dt = fixedDt || (now - last) / 1000; last = now;
   if (!(dt > 0)) dt = 1 / 60; dt = Math.min(dt, 0.1);
   const p0 = performance.now();
   try {
@@ -1416,13 +1418,12 @@ function frame(now) {
     render();
     ctlAcc += dt; if (ctlAcc > 0.1) { ctlAcc = 0; audioControl(); }
     infoAcc += dt; if (infoAcc > 1) { infoAcc = 0; updateInfo(); }
-    bcAcc += dt; if (bcAcc > 0.12) { bcAcc = 0; ctlBroadcast(); }
   } catch (err) { console.error(err); }
   PERF.ms = PERF.ms * 0.95 + (performance.now() - p0) * 0.05;
 }
 const PERF = { ms: 0 };
-requestAnimationFrame(frame);
-window.MZ = { CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
+if (!CAPTURE) requestAnimationFrame(frame);
+window.MZ = { tick: dt => frame(performance.now(), dt), CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
 })();
 </script>
 </body>
