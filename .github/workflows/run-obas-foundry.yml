@@ -1,0 +1,51 @@
+name: Run OBAS Foundry Demo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/run-obas-foundry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  run-foundry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Vercel deployment
+        run: sleep 90
+
+      - name: Run OBAS foundry
+        shell: bash
+        run: |
+          mkdir -p shop-api/demo
+          success=0
+          for attempt in {1..12}; do
+            echo "Attempt $attempt"
+            if curl --silent --show-error --fail --max-time 28               "https://mzcmg-shop-api.vercel.app/api/foundry-run?seed=47"               -o shop-api/demo/foundry-run.json; then
+              if jq -e '.ok == true' shop-api/demo/foundry-run.json >/dev/null; then
+                success=1
+                break
+              fi
+              cat shop-api/demo/foundry-run.json
+            fi
+            sleep 15
+          done
+          if [ "$success" -ne 1 ]; then
+            echo "Foundry demo did not complete successfully."
+            cat shop-api/demo/foundry-run.json || true
+            exit 1
+          fi
+          jq '.' shop-api/demo/foundry-run.json
+
+      - name: Commit demo result
+        run: |
+          git config user.name "MZCMG Foundry Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add shop-api/demo/foundry-run.json
+          git commit -m "Capture OBAS foundry demo result [skip ci]"
+          git push
