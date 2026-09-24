@@ -1,3 +1,4 @@
+var requireAdmin=require("../lib/auth").requireAdmin;
 var printful = require("../lib/printful");
 
 function pickVariant(payload, preference) {
