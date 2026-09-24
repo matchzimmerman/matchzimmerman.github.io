@@ -12,11 +12,15 @@ function pickVariant(payload, preference) {
   return found || variants[0];
 }
 
-async function startOne(storeId, productId, variantId, placement, imageUrl) {
+async function startOne(storeId, productId, variantId, placement, imageUrl, position) {
   var created = await printful.createMockupTask(storeId, productId, {
     variant_ids: [variantId],
     format: "jpg",
-    files: [{ placement: placement, image_url: imageUrl }]
+    files: [{
+      placement: placement,
+      image_url: imageUrl,
+      position: position
+    }]
   });
   return created.result || {};
 }
@@ -47,8 +51,22 @@ module.exports = async function handler(req,res) {
     var mugSource="https://"+host+"/api/obas-source.png?mode=mug&seed="+seed;
 
     var tasks=await Promise.all([
-      startOne(store.id,shirtProductId,shirtVariant.id,"front",shirtSource),
-      startOne(store.id,mugProductId,mugVariant.id,"default",mugSource)
+      startOne(
+        store.id,
+        shirtProductId,
+        shirtVariant.id,
+        "front",
+        shirtSource,
+        { area_width:1800, area_height:2400, width:1500, height:2000, top:200, left:150 }
+      ),
+      startOne(
+        store.id,
+        mugProductId,
+        mugVariant.id,
+        "default",
+        mugSource,
+        { area_width:520, area_height:202, width:520, height:202, top:0, left:0 }
+      )
     ]);
 
     res.statusCode=200;
