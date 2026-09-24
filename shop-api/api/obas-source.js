@@ -46,9 +46,9 @@ function rgba(hex, alpha) {
 
 function makePng(mode, seed) {
   var isMug = mode === "mug";
-  var width = isMug ? 2400 : 1800;
-  var height = isMug ? 1000 : 2400;
-  var scale = 6;
+  var width = isMug ? 1600 : 1200;
+  var height = isMug ? 700 : 1600;
+  var scale = 4;
   var lw = Math.floor(width / scale);
   var lh = Math.floor(height / scale);
 
