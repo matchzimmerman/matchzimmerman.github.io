@@ -46,9 +46,10 @@ function rgba(hex, alpha) {
 
 function makePng(mode, seed) {
   var isMug = mode === "mug";
-  var width = isMug ? 1600 : 1200;
-  var height = isMug ? 700 : 1600;
-  var scale = 4;
+  var isKnit = mode === "knit";
+  var width = isKnit ? 1400 : (isMug ? 1600 : 1200);
+  var height = isKnit ? 1400 : (isMug ? 700 : 1600);
+  var scale = isKnit ? 7 : 4;
   var lw = Math.floor(width / scale);
   var lh = Math.floor(height / scale);
 
@@ -71,7 +72,7 @@ function makePng(mode, seed) {
       var band = Math.abs(waveA + waveB) * 0.5;
       var block = hash(Math.floor(x / 9), Math.floor(y / 9), seed);
       var dither = hash(x, y, seed + 31);
-      var inside = isMug ? true : (radial < 0.46 && Math.abs(cx) < 0.38);
+      var inside = (isMug || isKnit) ? true : (radial < 0.46 && Math.abs(cx) < 0.38);
       var color;
 
       if (!inside) {
@@ -82,7 +83,7 @@ function makePng(mode, seed) {
         color = coral;
       } else if ((block < 0.22 && dither > 0.2) || (waveB < -0.75 && nx > 0.22)) {
         color = mint;
-      } else if (isMug || dither > 0.73) {
+      } else if (isMug || isKnit || dither > 0.73) {
         color = cream;
       } else {
         color = [0, 0, 0, 0];
@@ -132,7 +133,8 @@ function makePng(mode, seed) {
 }
 
 module.exports = async function handler(req, res) {
-  var mode = req.query && req.query.mode === "mug" ? "mug" : "shirt";
+  var requestedMode = req.query && req.query.mode;
+  var mode = requestedMode === "mug" ? "mug" : (requestedMode === "knit" ? "knit" : "shirt");
   var seed = parseInt(req.query && req.query.seed, 10);
   if (!Number.isFinite(seed)) seed = 47;
 
