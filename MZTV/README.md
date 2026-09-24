@@ -73,6 +73,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-013-substrate/`
 
+### BIT FIELD 014 — SOUNDING
+A low camera drifts across a ground that remembers where it has been. A live field simulation on a torus (ridges, erosion, drift, waves, terraces, uplift, faults, flood, canopy) whose governing rules mutate over hours under accumulated pressure; new rules unlock from memory. The camera's path hardens the ground and becomes ridges or canyons; impacts leave scars that attract later impacts. A sun orbits every 38 minutes (golden-hour palette, long shadows, moonlit night) and weather drifts through (cloud shadows on the same wind as the dunes, rain, haze). Dub audio shares the environment: the bass reads the terrain ahead, height above ground opens the filter, impacts are seen first and heard later by distance. State persists across reloads. Params: ?info=0 ?fresh=1 ?audio=0 ?rate=N ?lines=N
+
+Path:
+sources/bit-field-014-sounding/index.html
+
+Live:
+https://matchzimmerman.github.io/MZTV/sources/bit-field-014-sounding/
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
