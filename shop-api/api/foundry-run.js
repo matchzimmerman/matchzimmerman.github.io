@@ -1,3 +1,4 @@
+var requireAdmin=require("../lib/auth").requireAdmin;
 var printful = require("../lib/printful");
 
 function sleep(ms) {
@@ -50,6 +51,7 @@ async function generateOne(storeId, productId, variantId, placement, imageUrl) {
 }
 
 module.exports = async function handler(req, res) {
+  if (!requireAdmin(req, res)) return;
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
 
