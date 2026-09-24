@@ -116,12 +116,7 @@ module.exports=async function handler(req,res){
     });
 
     var sourceUrl="https://"+req.headers.host+"/api/obas-source.png?mode=knit&seed="+seed;
-    var candidates=[];
-    var mockupProducts=[];
-
-    for(var i=0;i<knit.length;i+=1){
-      var summary=knit[i];
-
+    var resolved=await Promise.all(knit.map(async function(summary){
       try{
         var details=await Promise.all([
           printful.getCatalogProductV2(summary.id),
@@ -133,7 +128,7 @@ module.exports=async function handler(req,res){
         var variants=details[1]||[];
         var styles=details[2]||[];
         var placements=knittingPlacements(product);
-        if(!placements.length || !variants.length) continue;
+        if(!placements.length || !variants.length) return null;
 
         var variant=variants.find(function(v){
           return String(v.size||"").toUpperCase()==="M";
@@ -169,39 +164,46 @@ module.exports=async function handler(req,res){
 
         var placementNames=placements.map(function(p){return p.placement;});
         var mockupStyleIds=flattenMockupStyles(styles,placementNames).slice(0,2);
-        if(!mockupStyleIds.length) continue;
+        if(!mockupStyleIds.length) return null;
 
-        mockupProducts.push({
-          source:"catalog",
-          mockup_style_ids:mockupStyleIds,
-          catalog_product_id:product.id,
-          catalog_variant_ids:[variant.id],
-          placements:designedPlacements,
-          product_options:productOptions
-        });
-
-        candidates.push({
-          catalog_product_id:product.id,
-          name:product.name,
-          image:product.image,
-          variant:{id:variant.id,name:variant.name,size:variant.size,color:variant.color},
-          placements:placementNames,
-          mockup_style_ids:mockupStyleIds,
-          yarn_colors:yarnColors,
-          base_color:baseColor,
-          trim_color:trimColor,
-          color_reduction_mode:"pixelated",
-          source_url:sourceUrl
-        });
+        return {
+          mockupProduct:{
+            source:"catalog",
+            mockup_style_ids:mockupStyleIds,
+            catalog_product_id:product.id,
+            catalog_variant_ids:[variant.id],
+            placements:designedPlacements,
+            product_options:productOptions
+          },
+          candidate:{
+            catalog_product_id:product.id,
+            name:product.name,
+            image:product.image,
+            variant:{id:variant.id,name:variant.name,size:variant.size,color:variant.color},
+            placements:placementNames,
+            mockup_style_ids:mockupStyleIds,
+            yarn_colors:yarnColors,
+            base_color:baseColor,
+            trim_color:trimColor,
+            color_reduction_mode:"pixelated",
+            source_url:sourceUrl
+          }
+        };
       }catch(innerError){
-        candidates.push({
-          catalog_product_id:summary.id,
-          name:summary.name,
-          skipped:true,
-          error:innerError.message
-        });
+        return {
+          mockupProduct:null,
+          candidate:{
+            catalog_product_id:summary.id,
+            name:summary.name,
+            skipped:true,
+            error:innerError.message
+          }
+        };
       }
-    }
+    }));
+
+    var candidates=resolved.filter(Boolean).map(function(x){return x.candidate;});
+    var mockupProducts=resolved.filter(function(x){return x&&x.mockupProduct;}).map(function(x){return x.mockupProduct;});
 
     if(!mockupProducts.length){
       throw new Error("No API-compatible knitting products with usable variants and mockup styles were found.");
