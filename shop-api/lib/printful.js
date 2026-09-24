@@ -121,11 +121,16 @@ async function getStoreProduct(store, productId) {
   return request(base + encodeURIComponent(productId), { storeId: store.id });
 }
 
+async function getProductTemplate(templateId) {
+  return request("/product-templates/" + encodeURIComponent(templateId));
+}
+
 module.exports = {
   PrintfulError: PrintfulError,
   request: request,
   listStores: listStores,
   listStoreProducts: listStoreProducts,
   listProductTemplates: listProductTemplates,
-  getStoreProduct: getStoreProduct
+  getStoreProduct: getStoreProduct,
+  getProductTemplate: getProductTemplate
 };
