@@ -79,6 +79,7 @@ section{border:1px solid var(--line);background:var(--panel)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 10px 10px}
 .wait{padding:40px 14px;color:var(--dim);line-height:1.7}
 .wait b{color:var(--i2);font-weight:400}
+#swatch{display:inline-flex;border:1px solid var(--line)}#swatch i{width:14px;height:14px;display:block}
 footer{padding:0 14px 20px;color:var(--dim);font-size:11px;line-height:1.6}
 @media (max-width:560px){.row{grid-template-columns:1fr 54px}.row .lab{grid-column:1/-1}}
 </style>
@@ -87,6 +88,7 @@ footer{padding:0 14px 20px;color:var(--dim);font-size:11px;line-height:1.6}
 <header>
   <div class="top">
     <span class="title">MZTV / SOUNDING · MIXER</span>
+    <span id="swatch" title="the piece's palette right now"><i></i><i></i><i></i><i></i></span>
     <span class="conn"><span class="dot" id="dot"></span><span id="connTxt">looking for the piece…</span></span>
     <span class="spacer"></span>
     <label class="conn">release
@@ -267,7 +269,7 @@ function hms(s) { s = Math.floor(s); return [Math.floor(s / 3600), Math.floor(s 
 function render() {
   if (!state || !built) return;
   const st = state.status, pal = st.pal || [];
-  if (pal.length === 4) { const r = document.documentElement.style; r.setProperty('--bg', pal[0]); r.setProperty('--i1', pal[1]); r.setProperty('--i2', pal[2]); r.setProperty('--i3', pal[3]); }
+  if (pal.length === 4) document.querySelectorAll('#swatch i').forEach((el, i) => el.style.background = pal[i]);
   const tr = st.phase === 'trans';
   const wx = [st.cloud > 0.15 ? `clouds ${Math.round(st.cloud * 100)}%` : 'clear', st.rain > 0.15 ? `rain ${Math.round(st.rain * 100)}%` : '', st.haze > 0.6 ? 'haze' : ''].filter(Boolean).join(' · ');
   document.getElementById('status').innerHTML =
