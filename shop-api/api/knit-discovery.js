@@ -8,6 +8,7 @@ module.exports=async function handler(req,res){
   res.end(JSON.stringify({
     ok:true,
     source:"qualified-manifest",
+    build:"001.1",
     knit_count:knitProducts.length,
     products:knitProducts
   },null,2));
