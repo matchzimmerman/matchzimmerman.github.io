@@ -32,9 +32,9 @@ const projects = {
     video: true
   },
   haril: {
-    kicker: 'RESEARCH / 2026–ONGOING / HUMAN–AI SYSTEMS',
+    kicker: 'RESEARCH / 2026–ONGOING / HUMAN–MACHINE SYSTEMS',
     title: 'HARIL',
-    lede: 'Human–AI Recursive Interaction Lattice: a working model for cognition that is distributed across people, models, memory, tools, and repeated interaction.',
+    lede: 'Human–Machine Recursive Interaction Lattice: a working model for cognition that is distributed across people, models, memory, tools, and repeated interaction.',
     question: 'What happens to human thought when more cognition exists outside the human—and what remains uniquely ours when it does?',
     system: 'Conversation, external memory, re-entry, model behavior, compression, reflection, and iterative self-modeling are treated as interacting layers rather than isolated events.',
     artifacts: 'Working diagrams, memory protocols, PIECE-R, daily contribution reports, rehydration experiments, and longitudinal reflection systems.',
@@ -74,7 +74,7 @@ const projects = {
     title: 'ARCHIVE ENGINE 360',
     lede: 'A museum-standard living archive of an adult creative life, designed so preservation, provenance, interpretation, and future re-entry are themselves part of the artwork.',
     question: 'What changes when the archive is treated as an active medium rather than a storage layer?',
-    system: 'Persistent IDs, originals plus derivatives, provenance, rights, preservation metadata, AI-assisted description, relationships, oral history, and version histories.',
+    system: 'Persistent IDs, originals plus derivatives, provenance, rights, preservation metadata, machine-assisted description, relationships, oral history, and version histories.',
     artifacts: 'Archive records, project pages, scans, transcripts, derivative media, metadata models, oral histories, and public-facing archive interfaces.',
     reflection: 'The archive should be exhaustive without making the public site exhaustive. Its power comes from deep expansion behind a highly compressed front door.'
   }
