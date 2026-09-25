@@ -177,7 +177,7 @@ footer{border-top:1px solid var(--ink);margin-top:52px;padding-top:14px;display:
     results.innerHTML='<div class="placeholder">Building pixelated jacquard candidates…</div>';
 
     fetch("/api/knit-foundry-run?seed=47",{method:"POST"}).then(function(r){return r.json();}).then(function(data){
-      if(!data.ok) throw new Error(data.error+(data.detail?"\n"+JSON.stringify(data.detail,null,2):""));
+      if(!data.ok) throw new Error(data.error+(data.detail?"\\n"+JSON.stringify(data.detail,null,2):""));
       candidates=data.candidates||[];
       taskIds=data.task_ids||[];
       candidateCount.textContent=candidates.filter(function(c){return !c.skipped;}).length;
