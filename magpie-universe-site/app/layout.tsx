@@ -13,7 +13,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Project: Magpie — Field Station",
-  description: "A fictional world and research lab — built with AI, unfolding in real time.",
+  description: "A fictional world and research lab — built with machine, unfolding in real time.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
