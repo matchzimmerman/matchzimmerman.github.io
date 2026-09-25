@@ -1,5 +1,6 @@
 var requireAdmin=require("../lib/auth").requireAdmin;
 var printful=require("../lib/printful");
+var knitProducts=require("../lib/knit-products");
 
 var OBAS_PALETTE=["#09254f","#ff6f61","#5ee0bd","#f1efe8"];
 
@@ -54,6 +55,7 @@ function colorIntersection(a,b){
 
 function knittingPlacements(product){
   return (product.placements||[]).filter(function(p){
+    if(String(p.placement||"").toLowerCase()==="mockup") return false;
     if(String(p.technique||"").toLowerCase()==="knitting") return true;
     if(Array.isArray(p.techniques)){
       return p.techniques.map(function(t){return String(t).toLowerCase();}).indexOf("knitting")>=0;
@@ -118,9 +120,8 @@ module.exports=async function handler(req,res){
     })||stores[0];
     if(!store) throw new Error("No Printful store available.");
 
-    var all=await printful.listCatalogProductsV2();
-    var knit=all.filter(function(p){
-      return knittingPlacements(p).length>0;
+    var knit=knitProducts.map(function(p){
+      return {id:p.id,name:p.name};
     });
 
     var sourceUrl="https://"+req.headers.host+"/api/obas-source.png?mode=knit&seed="+seed;
@@ -249,7 +250,7 @@ module.exports=async function handler(req,res){
       obas_palette:OBAS_PALETTE,
       source_url:sourceUrl,
       store:{id:store.id,name:store.name,type:store.type},
-      discovered_knit_products:knit.length,
+      discovered_knit_products:knitProducts.length,
       submitted_products:mockupProducts.length,
       candidates:candidates,
       task_ids:tasks.map(function(t){return t.id;}).filter(Boolean),
