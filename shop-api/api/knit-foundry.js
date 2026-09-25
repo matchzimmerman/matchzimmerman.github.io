@@ -54,14 +54,14 @@ footer{border-top:1px solid var(--ink);margin-top:52px;padding-top:14px;display:
     <div class="palette" aria-label="OBAS source palette"><span class="swatch"></span><span class="swatch"></span><span class="swatch"></span><span class="swatch"></span></div>
     <div class="runbar">
       <button class="button" id="run">RUN ALL KNIT PRODUCTS</button>
-      <span class="statusline" id="status">DISCOVERING CATALOG…</span>
+      <span class="statusline" id="status">8 KNIT PRODUCTS READY</span>
     </div>
   </div>
 </section>
 
 <section class="section">
-  <div class="sectionhead"><div><p class="eyebrow">QUALIFIED CATALOG</p><h2>Printful Knit Products</h2></div><div class="count" id="count">—</div></div>
-  <div class="catalog" id="catalog"><span class="pill">Loading…</span></div>
+  <div class="sectionhead"><div><p class="eyebrow">QUALIFIED CATALOG</p><h2>Printful Knit Products</h2></div><div class="count" id="count">8</div></div>
+  <div class="catalog" id="catalog"><span class="pill">Unisex Knitted Cardigan</span><span class="pill">Unisex Classic Fit Knitted Crew neck Sweater</span><span class="pill">Knitted Pet Sweater</span><span class="pill">Unisex Relaxed Fit Knitted Crew Neck Sweater</span><span class="pill">Women&#39;s Straight Bottom Knitted Sweater</span><span class="pill">Unisex Knitted V-Neck Vest</span><span class="pill">Unisex Knitted T-shirt</span><span class="pill">Knitted Beanie</span></div>
 </section>
 
 <section class="section">
@@ -93,20 +93,6 @@ footer{border-top:1px solid var(--ink);margin-top:52px;padding-top:14px;display:
 
   function chip(hex){
     return '<span class="chip" title="'+esc(hex)+'" style="background:'+esc(hex)+'"></span>';
-  }
-
-  function loadCatalog(){
-    fetch("/api/knit-discovery").then(function(r){return r.json();}).then(function(data){
-      if(!data.ok) throw new Error(data.error||"Catalog discovery failed");
-      count.textContent=data.knit_count;
-      catalog.innerHTML=data.products.map(function(p){
-        return '<span class="pill">'+esc(p.name||("PRODUCT "+p.id))+'</span>';
-      }).join("");
-      status.textContent=data.knit_count+" KNIT CANDIDATES DISCOVERED · READY";
-    }).catch(function(err){
-      status.textContent="CATALOG DISCOVERY ERROR";
-      errorBox.innerHTML='<div class="error">'+esc(err.message)+'</div>';
-    });
   }
 
   function render(tasks){
@@ -192,7 +178,6 @@ footer{border-top:1px solid var(--ink);margin-top:52px;padding-top:14px;display:
     });
   });
 
-  loadCatalog();
 })();
 </script>
 </main></body></html>`;
