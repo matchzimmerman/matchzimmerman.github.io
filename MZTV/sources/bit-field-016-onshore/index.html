@@ -85,8 +85,9 @@ const sgn = v => fin(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) : '—
 /* ================= projection ================= */
 // the view adapts to the frame it is in (no letterbox): wide frames see more east–west, tall frames more north–south
 const ASP = clamp((innerWidth / innerHeight) || 16 / 9, 0.4, 3.6);
-const W0T = Math.min(Math.round(LINES * 16 / 9), Math.max(160, Math.floor(innerWidth / 1.5) || 480));   // tall frames: never finer than the screen
-const H = ASP >= 16 / 9 ? LINES : Math.round(W0T / ASP), W = ASP >= 16 / 9 ? Math.round(LINES * ASP) : W0T, N = W * H;
+const IWQ = parseInt(Q.get('iw'), 10);   // capture: explicit internal width
+const W0T = IWQ > 0 ? IWQ : Math.min(Math.round(LINES * 16 / 9), Math.max(160, Math.floor(innerWidth / 1.5) || 480));   // tall frames: never finer than the screen
+const H = IWQ > 0 ? Math.round(IWQ / ASP) : ASP >= 16 / 9 ? LINES : Math.round(W0T / ASP), W = IWQ > 0 ? IWQ : ASP >= 16 / 9 ? Math.round(LINES * ASP) : W0T, N = W * H;
 // framing: ?span=deg of longitude across, ?clat ?clon centre (for promo capture); memory frame never moves
 const LAT_C = parseFloat(Q.get('clat')) || 39.5, LON_C = parseFloat(Q.get('clon')) || -69.8, COSL = Math.cos(LAT_C * D2R);
 const LONSPAN = parseFloat(Q.get('span')) || Math.max(20, 13 * ASP / COSL), LATSPAN = LONSPAN * COSL / ASP;
@@ -188,14 +189,14 @@ const TH = [];
 {
   const b4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
   const b8 = new Array(64); for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { let v = 0, xx = x, yy = y ^ x; for (let b = 0; b < 3; b++) { v = (v << 2) | (((yy >> (2 - b)) & 1) << 1) | ((xx >> (2 - b)) & 1); } b8[y * 8 + x] = v; }
-  const cell = 5 * Math.max(1, SC * 0.9);
+  const cell = 5 * Math.max(1, Math.min(SC, 1.6) * 0.9);
   for (let g = 0; g < 5; g++) TH.push(new Float32Array(N));
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x, r = hash2(x, y, SEED);
     TH[0][i] = (b4[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
     const u = (x + y) * 0.7071 / cell, v = (x - y) * 0.7071 / cell;
     TH[1][i] = clamp(1 - (Math.cos(u * 2 * Math.PI) + Math.cos(v * 2 * Math.PI) + 2) / 4 + (r - 0.5) * 0.06, 0.005, 0.995);
-    const lq = ((x + 2 * y) / (6 * Math.max(1, SC * 0.8))) % 1; TH[2][i] = clamp(Math.abs(lq * 2 - 1) + (r - 0.5) * 0.05, 0.005, 0.995);
+    const lq = ((x + 2 * y) / (6 * Math.max(1, Math.min(SC, 1.6) * 0.8))) % 1; TH[2][i] = clamp(Math.abs(lq * 2 - 1) + (r - 0.5) * 0.05, 0.005, 0.995);
     TH[3][i] = r;
     TH[4][i] = (b8[(y & 7) * 8 + (x & 7)] + 0.5) / 64;
   }
@@ -520,7 +521,7 @@ function classify(first) {
 function rupture(ph, why) {
   const old = S.phase; S.phase = ph; S.phaseSince = now(); S.pend = null;
   const g = PHASE_GRAMMAR[ph] === S.gram.b ? (S.gram.b + 1 + Math.floor(hash2(S.hist.length, 3, SEED) * 3)) % 5 : PHASE_GRAMMAR[ph];
-  S.gram = { a: S.gram.b, b: g, t0: pnow() / 1000, dur: 150 };
+  S.gram = { a: S.gram.b, b: g, t0: pnow() / 1000, dur: CAPTURE ? 4 : 150 };
   AU.throwUntil = (AU.ctx ? AU.ctx.currentTime : 0) + 6; AU.dropBars = 2; AU.boom = true;
   log(`RUPTURE · ${old} → ${ph}${why ? ' (' + why + ')' : ''} · grammar ${GRAMMAR_NAMES[S.gram.a]} → ${GRAMMAR_NAMES[g]}`);
 }
@@ -662,7 +663,7 @@ function line(x0, y0, x1, y1, col, pat, fade) {
 }
 const FONT = { A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010', U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010', Z: '111001010100111', '0': '111101101101111', '1': '010110010010111', '2': '110001010100111', '3': '110001010001110', '4': '101101111001001', '5': '111100110001110', '6': '011100111101111', '7': '111001010010010', '8': '111101111101111', '9': '111101111001110', '.': '000000000000010', '-': '000000111000000', '+': '000010111010000', ' ': '000000000000000' };
 function text(str, x, y, col, bg) {
-  const s = Math.max(1, Math.floor(SC + 0.25)); str = String(str).toUpperCase();
+  const s = parseInt(Q.get('ts'), 10) || Math.max(1, Math.floor(SC + 0.25)); str = String(str).toUpperCase();
   if (bg !== undefined) for (let j = -1; j <= 5 * s; j++) for (let i = -1; i <= str.length * 4 * s - s; i++) plot(x + i, y + j, bg);
   for (let k = 0; k < str.length; k++) { const gl = FONT[str[k]] || FONT[' ']; for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (gl[j * 3 + i] === '1') for (let a = 0; a < s; a++) for (let b = 0; b < s; b++) plot(x + (k * 4 + i) * s + a, y + j * s + b, col); }
 }
@@ -909,7 +910,7 @@ const OFFICES = [['BOX', 'NWS Boston'], ['OKX', 'NWS New York'], ['PHI', 'NWS Ph
 const NOTES = {}; let noteIdx = 0;
 function afdSection(txt, name) { const m = txt.match(new RegExp('\\n\\.' + name + '\\.\\.\\.([\\s\\S]*?)(?:\\n&&|\\n\\.[A-Z][A-Z /]+\\.\\.\\.)')); return m ? m[1].trim() : ''; }
 function afdItems(sec) {
-  return sec.split(/\n\s*(?:-|\d\)|\.?KEY MESSAGE \d\.\.\.)\s+/).map(q => q.replace(/\s*\n\s*/g, ' ').replace(/^[-\d).\s]+/, '').replace(/\.\.\./g, '… ').replace(/\s+/g, ' ').trim()).filter(q => q.length > 20);
+  return sec.split(/\n\s*(?:-|\d\)|\.?KEY MESSAGE \d\.\.\.)\s+/).map(q => q.replace(/\s*\n\s*/g, ' ').replace(/^[-\d).\s]+/, '').replace(/\.\.\./g, '… ').replace(/\s+/g, ' ').trim()).flatMap(q => q.split(/\s+\d\.\s+(?=[A-Z])/)).map(q => q.trim()).filter(q => q.length > 20);
 }
 async function fetchNotes() {
   await Promise.all(OFFICES.map(async ([id, name]) => {
@@ -997,7 +998,7 @@ function renderInfo() {
 /* ================= main loop ================= */
 let lastFrame = performance.now(), lastSec = 0, lastMin = 0, frameAcc = 0;
 function secondTick() {
-  analyze(false); memoryStep(); events(); inkTargets(); inkHeal(); paletteStep(1); renderInfo();
+  analyze(false); memoryStep(); events(); inkTargets(); inkHeal(); paletteStep(CAPTURE ? 4 : 1); renderInfo();
   if (pnow() - lastMin > 60e3) { lastMin = pnow(); classify(false); persist(); }
 }
 let lastRAF = performance.now();
