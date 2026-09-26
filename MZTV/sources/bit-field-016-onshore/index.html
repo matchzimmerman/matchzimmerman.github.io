@@ -592,7 +592,7 @@ const cv = document.getElementById('cv'); cv.width = W; cv.height = H;
 const cx2 = cv.getContext('2d', { alpha: false }); const IMG = cx2.createImageData(W, H), BUF = new Uint32Array(IMG.data.buffer);
 function fit() { const k = Math.max(innerWidth / W, innerHeight / H); cv.style.width = Math.ceil(W * k) + 'px'; cv.style.height = Math.ceil(H * k) + 'px'; }
 let reshapeT = 0;
-addEventListener('resize', () => { fit(); const a = innerWidth / innerHeight; if (fin(a) && a > 0 && Math.abs(Math.log(clamp(a, 0.4, 3.6) / ASP)) > 0.03) { clearTimeout(reshapeT); reshapeT = setTimeout(() => { persist(); location.reload(); }, 700); } }); fit();
+addEventListener('resize', () => { fit(); const a = innerWidth / innerHeight; if (fin(a) && a > 0 && Math.abs(Math.log(clamp(a, 0.4, 3.6) / ASP)) > 0.03) { clearTimeout(reshapeT); reshapeT = setTimeout(() => { let last = 0; try { last = +sessionStorage.getItem('mztv-onshore-reshape') || 0; sessionStorage.setItem('mztv-onshore-reshape', Date.now()); } catch (e) { } if (Date.now() - last < 20000) return; persist(); location.reload(); }, 700); } }); fit();
 let swellPhase = 0;
 const RINGS = [];
 function ringAdd(tsec, amp) { RINGS.push({ t: tsec, a: amp }); if (RINGS.length > 24) RINGS.shift(); }
