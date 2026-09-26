@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIVE CODE 002 · MZTV</title>
+<style>
+:root{
+  --ink:#19132f; --violet:#3a2dff; --orange:#ff6d3c; --acid:#eff74f;
+  --cream:#f4eedc; --pink:#ff5aae; --cyan:#3be8ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--cream)}
+body{min-width:960px;color:var(--ink);font-family:"SFMono-Regular",Menlo,Consolas,ui-monospace,monospace}
+#app{height:100%;display:grid;grid-template-rows:42px 1fr;border:4px solid var(--ink)}
+header{display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--acid);border-bottom:4px solid var(--ink);font:800 10px/1 monospace;text-transform:uppercase;letter-spacing:.08em}
+header .title{font-size:14px;letter-spacing:.15em}
+.grow{flex:1}
+button{border:2px solid var(--ink);background:var(--cream);color:var(--ink);padding:6px 10px;border-radius:0;box-shadow:2px 2px 0 var(--ink);font:900 10px/1 monospace;text-transform:uppercase;cursor:pointer}
+button.on{background:var(--pink)}
+button:active{transform:translate(2px,2px);box-shadow:none}
+main{min-height:0;display:grid;grid-template-columns:1fr 1fr}
+section{min-width:0;min-height:0;position:relative}
+#left{background:var(--violet);color:var(--cream);border-right:4px solid var(--ink);display:grid;grid-template-rows:34px 1fr 32px}
+.bar{display:flex;align-items:center;gap:10px;padding:0 10px;background:var(--orange);color:var(--ink);border-bottom:2px solid var(--ink);font:900 10px/1 monospace;text-transform:uppercase}
+#code{overflow:auto;padding:12px 8px 18px;scrollbar-width:thin;scrollbar-color:var(--acid) transparent}
+.line{display:grid;grid-template-columns:30px minmax(260px,1fr) 86px 64px;align-items:center;gap:8px;min-height:27px;padding:1px 3px;border-left:6px solid transparent;transition:.12s}
+.line.hot{background:var(--pink);color:var(--ink);border-left-color:var(--acid)}
+.line.active{background:rgba(239,247,79,.12);border-left-color:var(--acid)}
+.ln{text-align:right;opacity:.55;font-size:10px}
+.src{white-space:pre;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:800;border-bottom:1px solid rgba(244,238,220,.15);padding:4px 2px}
+.comment .src{opacity:.58;font-weight:500}.comment .meter,.comment .read{opacity:0}
+.meter{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;height:9px}
+.meter i{display:block;background:rgba(244,238,220,.18)} .meter i.on{background:var(--acid)}
+.read{text-align:right;color:var(--acid);font-size:10px;font-weight:900}
+#status{display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--cream);color:var(--ink);border-top:2px solid var(--ink);font:900 10px/1 monospace;text-transform:uppercase}
+#status .dot{width:9px;height:9px;border:2px solid var(--ink);background:var(--acid)}
+#right{background:var(--orange)}
+#vbar{position:absolute;z-index:3;left:0;right:0;top:0;height:34px;padding:0 10px;display:flex;align-items:center;gap:10px;background:var(--cream);border-bottom:2px solid var(--ink);font:900 10px/1 monospace;text-transform:uppercase}
+canvas{position:absolute;left:0;right:0;top:34px;bottom:0;width:100%;height:calc(100% - 34px);image-rendering:pixelated}
+.badge{position:absolute;z-index:4;border:2px solid var(--ink);padding:7px 9px;box-shadow:3px 3px 0 var(--ink);font:900 10px/1.25 monospace;text-transform:uppercase}
+#badgeA{left:12px;bottom:12px;background:var(--acid)}
+#badgeB{right:12px;bottom:12px;background:var(--pink)}
+@media(max-height:650px){.line{min-height:23px}.src{font-size:11px}.meter{height:8px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <div class="title">MZTV / LIVE CODE 002</div>
+  <div>autonomous algorave · one score / two outputs</div>
+  <div class="grow"></div>
+  <div id="topread">74 BPM · BAR 01 · ERA 01</div>
+  <button id="mutBtn" class="on">AUTO MUTATE</button>
+  <button id="playBtn">PLAY</button>
+</header>
+<main>
+  <section id="left">
+    <div class="bar"><span>SELF-COMPOSING SCORE</span><span class="grow"></span><span>actual engine state</span></div>
+    <div id="code"></div>
+    <div id="status"><span class="dot"></span><span id="statusText">ready · play to begin · click anywhere if browser audio is blocked</span></div>
+  </section>
+  <section id="right">
+    <div id="vbar"><span>OBAS FIELD</span><span class="grow"></span><span id="fieldread">PRESSURE .32 · MEMORY .68 · DRIFT .12</span></div>
+    <canvas id="c"></canvas>
+    <div id="badgeA" class="badge">MZTV<br>LIVE SOURCE</div>
+    <div id="badgeB" class="badge">ERA 01<br>RIDGES</div>
+  </section>
+</main>
+</div>
+
+<script>
+'use strict';
+(() => {
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t, TAU=Math.PI*2;
+const rand=(a=1,b=0)=>b+Math.random()*(a-b), choose=a=>a[(Math.random()*a.length)|0];
+const q=new URLSearchParams(location.search), rate=Math.max(.25,Math.min(8,+(q.get('rate')||1)));
+const S={
+ playing:false,auto:true,bpm:74,bar:1,step:0,era:1,eraName:'RIDGES',
+ pressure:.32,memory:.68,drift:.12,density:.56,dustProb:.18,dubSend:.46,feedback:.58,swing:.07,
+ pulse:0,sub:0,grain:0,space:0,rupture:0,stab:0,
+ kick:{pulses:5,steps:16,rot:1}, rim:{pulses:3,steps:16,rot:7}, hat:{pulses:9,steps:16,rot:2},
+ bass:['c1','.','.','c1','.','eb1','.','.','g0','.','bb0','.','.','c1','.','.'],
+ mode:'phrygian', root:'c1', seed:Math.random()*9999, phase:0
+};
+
+const spec=[
+ ['c0','// autonomous algorave score',1],
+ ['tempo','tempo(~74.0)','tempo'],
+ ['kick','kick(euclid(5,16).rotate(1))','pulse'],
+ ['rim','rim(euclid(3,16).rotate(7))','stab'],
+ ['hat','hat(euclid(9,16).rotate(2))','grain'],
+ ['bass','sub("<c1 . . c1 . eb1 . . g0 . bb0 . . c1 . .>")','sub'],
+ ['dust','dust(prob(.18))','grain'],
+ ['dub','dub(send=.46, feedback=.58)','space'],
+ ['c1','// field state',1],
+ ['field','field("ridges")','rupture'],
+ ['pressure','pressure(~.32)','pressure'],
+ ['memory','memory(~.68)','memory'],
+ ['drift','drift(~.12)','drift'],
+ ['density','density(~.56)','density'],
+ ['c2','// shared influence',1],
+ ['i1','influence(kick -> rupture, .94)','pulse'],
+ ['i2','influence(sub -> mass, .86)','sub'],
+ ['i3','influence(hat -> grain, .48)','grain'],
+ ['i4','influence(dub -> space, .71)','space'],
+ ['mutate','mutate(every(4 bars), .34)','rupture']
+];
+
+const code=document.getElementById('code'), lines={};
+spec.forEach((s,i)=>{
+ const row=document.createElement('div');row.className='line'+(s[2]===1?' comment':'');row.dataset.id=s[0];
+ const ln=document.createElement('span');ln.className='ln';ln.textContent=String(i+1).padStart(2,'0');
+ const src=document.createElement('span');src.className='src';src.textContent=s[1];
+ const meter=document.createElement('span');meter.className='meter';for(let k=0;k<12;k++)meter.appendChild(document.createElement('i'));
+ const read=document.createElement('span');read.className='read';
+ row.append(ln,src,meter,read);code.appendChild(row);
+ lines[s[0]]={row,src,meter,read,signal:s[2]===1?null:s[2]};
+});
+function flash(id){const o=lines[id];if(!o)return;o.row.classList.add('hot');setTimeout(()=>o.row.classList.remove('hot'),170)}
+function setline(id,text){const o=lines[id];if(!o)return;if(o.src.textContent!==text){o.src.textContent=text;flash(id)}}
+function val(name){return clamp(S[name]||0,0,1)}
+function meters(){
+ Object.values(lines).forEach(o=>{
+  if(!o.signal)return;const v=val(o.signal);
+  [...o.meter.children].forEach((e,i)=>e.classList.toggle('on',i<Math.round(v*12)));
+  o.read.textContent=v.toFixed(2);
+ });
+}
+function euclid(pulses,steps,rot=0){
+ const a=[];for(let i=0;i<steps;i++)a.push((((i*pulses)%steps)<pulses)?1:0);
+ if(rot){const r=((rot%steps)+steps)%steps;return a.slice(-r).concat(a.slice(0,-r))}
+ return a;
+}
+function seqString(o){return `euclid(${o.pulses},${o.steps}).rotate(${o.rot})`}
+function refreshCode(structural=false){
+ setline('tempo','tempo(~'+S.bpm.toFixed(1)+')');
+ setline('kick','kick('+seqString(S.kick)+')');
+ setline('rim','rim('+seqString(S.rim)+')');
+ setline('hat','hat('+seqString(S.hat)+')');
+ setline('bass','sub("<'+S.bass.join(' ') + '>")');
+ setline('dust','dust(prob('+S.dustProb.toFixed(2)+'))');
+ setline('dub','dub(send='+S.dubSend.toFixed(2)+', feedback='+S.feedback.toFixed(2)+')');
+ setline('field','field("'+S.eraName.toLowerCase()+'")');
+ setline('pressure','pressure(~'+S.pressure.toFixed(2)+')');
+ setline('memory','memory(~'+S.memory.toFixed(2)+')');
+ setline('drift','drift(~'+S.drift.toFixed(2)+')');
+ setline('density','density(~'+S.density.toFixed(2)+')');
+ if(structural)flash('mutate');
+}
+
+let AC,master,delay,fb,lp,comp;
+function audioInit(){
+ if(AC)return;
+ AC=new (window.AudioContext||window.webkitAudioContext)();
+ master=AC.createGain(); master.gain.value=.38;
+ comp=AC.createDynamicsCompressor();comp.threshold.value=-14;comp.knee.value=20;comp.ratio.value=4;comp.attack.value=.006;comp.release.value=.18;
+ delay=AC.createDelay(2.2);fb=AC.createGain();lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1700;
+ delay.delayTime.value=.33;fb.gain.value=S.feedback;delay.connect(lp).connect(fb).connect(delay);delay.connect(comp);
+ master.connect(comp).connect(AC.destination);
+}
+function env(a,d){const g=AC.createGain(),n=AC.currentTime;g.gain.setValueAtTime(Math.max(.0001,a),n);g.gain.exponentialRampToValueAtTime(.0001,n+d);return g}
+function send(g,amt){const s=AC.createGain();s.gain.value=amt;g.connect(s).connect(delay)}
+function kick(){
+ const n=AC.currentTime,o=AC.createOscillator(),g=env(.92,.28);o.type='sine';o.frequency.setValueAtTime(130,n);o.frequency.exponentialRampToValueAtTime(42,n+.17);
+ o.connect(g).connect(master);send(g,S.dubSend*.18);o.start();o.stop(n+.3);
+}
+function noiseHit(kind){
+ const len=Math.floor(AC.sampleRate*(kind==='hat'?.045:.09)),buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);
+ for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+ const src=AC.createBufferSource(),f=AC.createBiquadFilter(),g=env(kind==='hat'?.09:.11,kind==='hat'?.05:.11);
+ src.buffer=buf;f.type=kind==='hat'?'highpass':'bandpass';f.frequency.value=kind==='hat'?6500:1100+rand(900);f.Q.value=kind==='hat'?.7:4.5;
+ src.connect(f).connect(g).connect(master);if(Math.random()<.5)send(g,S.dubSend*(kind==='hat'?.35:.6));src.start();
+}
+const sem={c:0,'c#':1,db:1,d:2,'d#':3,eb:3,e:4,f:5,'f#':6,gb:6,g:7,'g#':8,ab:8,a:9,'a#':10,bb:10,b:11};
+function hz(note){const m=String(note).toLowerCase().match(/^([a-g](?:#|b)?)(-?\d)$/);if(!m)return 32.7;const midi=(+m[2]+1)*12+sem[m[1]];return 440*Math.pow(2,(midi-69)/12)}
+function sub(note){
+ const n=AC.currentTime,g=AC.createGain(),o=AC.createOscillator(),o2=AC.createOscillator(),f=AC.createBiquadFilter();
+ o.type='sine';o2.type='triangle';o.frequency.value=hz(note);o2.frequency.value=hz(note)*2;
+ f.type='lowpass';f.frequency.value=170+S.pressure*300;f.Q.value=3;
+ g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.22,n+.015);g.gain.exponentialRampToValueAtTime(.0001,n+.34);
+ o.connect(f);o2.connect(f);f.connect(g).connect(master);if(Math.random()<.28)send(g,S.dubSend*.48);
+ o.start();o2.start();o.stop(n+.36);o2.stop(n+.36);
+}
+function stab(){
+ const n=AC.currentTime,g=AC.createGain(),f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=650+S.pressure*1000;f.Q.value=1.5;
+ g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.07,n+.02);g.gain.exponentialRampToValueAtTime(.0001,n+.7);
+ const root=choose([43,46,48,51]);
+ [0,3,7,10].forEach(iv=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=440*Math.pow(2,(root+iv-69)/12);o.detune.value=rand(8,-8);o.connect(f);o.start();o.stop(n+.72)});
+ f.connect(g).connect(master);send(g,.55+S.dubSend*.35);
+}
+
+function mutatePattern(o,amt){
+ const n={...o};
+ if(Math.random()<amt)n.pulses=clamp(n.pulses+choose([-1,1]),1,n.steps-1);
+ if(Math.random()<amt)n.rot=(n.rot+choose([-3,-2,-1,1,2,3])+n.steps)%n.steps;
+ return n;
+}
+const bassPools=[
+ ['c1','.','.','c1','.','eb1','.','.','g0','.','bb0','.','.','c1','.','.'],
+ ['c1','.','g0','.','.','bb0','.','c1','.','.','eb1','.','.','g0','.','.'],
+ ['c1','.','.','.','eb1','.','g0','.','.','bb0','.','g0','.','c1','.','.'],
+ ['c1','.','.','bb0','.','.','g0','.','eb1','.','.','c1','.','.','g0','.']
+];
+function mutateScore(){
+ const amt=.34;
+ S.kick=mutatePattern(S.kick,.42);S.rim=mutatePattern(S.rim,.36);S.hat=mutatePattern(S.hat,.52);
+ if(Math.random()<.7)S.bass=choose(bassPools).slice();
+ S.bpm=clamp(S.bpm+rand(5,-4),66,84);S.pressure=clamp(S.pressure+rand(.22,-.16),.12,.96);
+ S.memory=clamp(S.memory+rand(.16,-.12),.38,.92);S.drift=clamp(S.drift+rand(.15,-.10),.04,.46);
+ S.density=clamp(S.density+rand(.22,-.18),.26,.94);S.dustProb=clamp(S.dustProb+rand(.14,-.10),.06,.52);
+ S.dubSend=clamp(S.dubSend+rand(.15,-.12),.18,.82);S.feedback=clamp(S.feedback+rand(.11,-.09),.35,.78);
+ S.rupture=1;S.seed=Math.random()*9999;
+ if(AC){fb.gain.setTargetAtTime(S.feedback,AC.currentTime,.05);delay.delayTime.setTargetAtTime(.23+S.dubSend*.34,AC.currentTime,.05)}
+ refreshCode(true);
+}
+function mutateEra(){
+ const names=['RIDGES','PRESSURE','RUPTURE','DRIFT','MEMORY','FAULT','TIDE'];
+ S.era++;S.eraName=names[(S.era-1)%names.length];mutateScore();
+ document.getElementById('badgeB').innerHTML='ERA '+String(S.era).padStart(2,'0')+'<br>'+S.eraName;
+}
+document.getElementById('mutBtn').onclick=function(){S.auto=!S.auto;this.classList.toggle('on',S.auto);this.textContent=S.auto?'AUTO MUTATE':'MUTATION HELD'};
+
+let timer;
+function schedule(){clearTimeout(timer);if(!S.playing)return;const swing=(S.step%2?S.swing:0);timer=setTimeout(tick,(60000/S.bpm/4)*(1+swing)/rate)}
+function tick(){
+ if(!S.playing)return;
+ const i=S.step,k=euclid(S.kick.pulses,16,S.kick.rot),r=euclid(S.rim.pulses,16,S.rim.rot),h=euclid(S.hat.pulses,16,S.hat.rot);
+ if(k[i]){kick();S.pulse=1;S.rupture=Math.max(S.rupture,.72)}
+ if(r[i]&&Math.random()<.8){noiseHit('rim');S.stab=1}
+ if(h[i]&&Math.random()<.86){noiseHit('hat');S.grain=1}
+ if(Math.random()<S.dustProb*.42){noiseHit('rim');S.grain=1}
+ const note=S.bass[i%S.bass.length];if(note&&note!=='.'&&Math.random()<.9){sub(note);S.sub=1}
+ if(i===12&&Math.random()<.18+S.pressure*.28){stab();S.space=1}
+ S.step=(S.step+1)%16;
+ if(S.step===0){
+  S.bar++;
+  if(S.auto&&S.bar%4===1)mutateScore();
+  if(S.auto&&S.bar%16===1)mutateEra();
+ }
+ schedule();
+}
+document.getElementById('playBtn').onclick=async function(){
+ audioInit();await AC.resume();S.playing=!S.playing;this.textContent=S.playing?'STOP':'PLAY';this.classList.toggle('on',S.playing);
+ if(S.playing){tick();document.getElementById('statusText').textContent='running · code mutates because the composition mutates'}else{clearTimeout(timer);document.getElementById('statusText').textContent='stopped · visual field still evolves'}
+};
+document.addEventListener('pointerdown',()=>{if(AC&&AC.state==='suspended')AC.resume()},{passive:true});
+
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});
+const low=document.createElement('canvas'),g=low.getContext('2d',{alpha:false});low.width=320;low.height=180;
+const trail=document.createElement('canvas'),tg=trail.getContext('2d');trail.width=320;trail.height=180;
+const W=320,H=180,P=['#3a2dff','#ff6d3c','#eff74f','#f4eedc','#ff5aae','#3be8ff'];
+const pts=Array.from({length:320},()=>({a:rand(TAU),r:Math.random(),j:Math.random(),k:Math.random()}));
+function resize(){canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;ctx.imageSmoothingEnabled=false}
+addEventListener('resize',resize);resize();
+
+function draw(t){
+ S.phase+=.007+S.drift*.018;
+ S.pulse*=.87;S.sub*=.92;S.grain*=.78;S.space*=.95;S.rupture*=.94;S.stab*=.84;
+ S.pressure=clamp(S.pressure+Math.sin(t*.00029+S.era)*.00055,0,1);
+ S.memory=clamp(S.memory+Math.sin(t*.00017+3)*.00022,0,1);
+ S.drift=clamp(S.drift+Math.sin(t*.00021+6)*.00018,0,1);
+ S.density=clamp(S.density+Math.sin(t*.00019+8)*.00025,0,1);
+
+ g.fillStyle=P[3];g.fillRect(0,0,W,H);
+ g.fillStyle=P[(S.era+1)%3];g.fillRect(0,0,W,35);
+ g.fillStyle=P[(S.era+2)%3];g.fillRect(0,144,W,36);
+
+ const horizon=136;g.strokeStyle=P[0];g.globalAlpha=.34;g.lineWidth=1;
+ for(let x=-80;x<400;x+=24){g.beginPath();g.moveTo(W/2,horizon);g.lineTo(x,H);g.stroke()}
+ for(let y=0;y<8;y++){const yy=horizon+(H-horizon)*Math.pow(y/7,1.6);g.beginPath();g.moveTo(0,yy);g.lineTo(W,yy);g.stroke()}
+ g.globalAlpha=1;
+
+ const cy=88+Math.sin(S.phase*.55)*10;
+ for(let q=0;q<5;q++){
+  g.strokeStyle=P[(q+S.era)%4];g.lineWidth=4+q*2+S.sub*5;g.beginPath();
+  for(let x=-10;x<W+10;x+=4){
+   const y=cy+Math.sin(x*.036+S.phase*3+q*.48)*(10+22*S.pressure)+Math.sin(x*.012-S.phase*1.7)*18*S.drift+q*3;
+   if(x<0)g.moveTo(x,y);else g.lineTo(x,y);
+  }g.stroke()
+ }
+
+ const cx=94+Math.sin(S.phase*.35)*18,by=86+Math.cos(S.phase*.31)*8,rad=23+S.sub*14+S.pressure*12;
+ g.fillStyle=P[(S.era+3)%4];g.beginPath();
+ for(let i=0;i<36;i++){const a=i/36*TAU,rr=rad*(1+.17*Math.sin(a*5+S.phase*3)+.08*Math.sin(a*11-S.phase*2));const x=cx+Math.cos(a)*rr,y=by+Math.sin(a)*rr*.84;if(i===0)g.moveTo(x,y);else g.lineTo(x,y)}
+ g.closePath();g.fill();
+ if(S.pulse>.02){g.strokeStyle=P[4];g.lineWidth=2+S.pulse*5;g.beginPath();g.arc(cx,by,rad+8+S.pulse*30,0,TAU);g.stroke()}
+
+ tg.fillStyle='rgba(244,238,220,'+(1-S.memory*.78)+')';tg.fillRect(0,0,W,H);
+ tg.fillStyle=P[(S.era+2)%4];
+ const count=Math.floor(34+S.density*180+S.grain*75);
+ for(let i=0;i<count;i++){const p=pts[i%pts.length],a=p.a+S.phase*(.18+p.k*.5),rr=(14+p.r*112)*(1+S.sub*.2),x=184+Math.cos(a)*rr+Math.sin(a*3)*S.drift*22,y=91+Math.sin(a*1.13)*rr*.52,z=1+(i%3);tg.fillRect(Math.round(x/z)*z,Math.round(y/z)*z,z,z)}
+ g.globalAlpha=.62;g.drawImage(trail,0,0);g.globalAlpha=1;
+
+ const blocks=4+Math.floor(S.rupture*14);
+ for(let i=0;i<blocks;i++){const x=(i*43+Math.floor(S.seed))%W,y=(i*31+Math.floor(S.seed*.7))%H;g.fillStyle=P[(i+S.era)%5];g.fillRect(x,y,3+(i%4)*4,5+(i%3)*8)}
+ g.fillStyle=P[0];for(let i=0;i<Math.floor(9+S.grain*85);i++){const x=(rand(W))|0,y=(rand(H))|0;g.fillRect(x,y,1+(i%2),1)}
+
+ ctx.imageSmoothingEnabled=false;ctx.drawImage(low,0,0,canvas.width,canvas.height);
+
+ refreshCode(false);meters();
+ document.getElementById('topread').textContent=Math.round(S.bpm)+' BPM · BAR '+String(S.bar).padStart(2,'0')+' · ERA '+String(S.era).padStart(2,'0');
+ document.getElementById('fieldread').textContent='PRESSURE '+S.pressure.toFixed(2)+' · MEMORY '+S.memory.toFixed(2)+' · DRIFT '+S.drift.toFixed(2);
+ requestAnimationFrame(draw);
+}
+refreshCode(true);requestAnimationFrame(draw);
+if(q.get('autoplay')==='1')document.getElementById('playBtn').click().catch?.(()=>{});
+})();
+</script>
+</body>
+</html>
