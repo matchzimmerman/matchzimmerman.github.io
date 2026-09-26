@@ -25,7 +25,15 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);cursor:none}
   color:var(--tx);background:color-mix(in srgb,var(--bg) 84%,transparent);border:1px solid var(--sw);border-left:3px solid var(--co);
   padding:.7em .9em;white-space:pre;letter-spacing:.01em;pointer-events:none}
 #info{left:1.3vw;bottom:2vh}
-#log{right:1.3vw;top:2vh;max-width:44vw;overflow:hidden;border-left:1px solid var(--sw);border-right:3px solid var(--iso)}
+#log{right:1.3vw;top:2vh;max-width:40vw;overflow:hidden;border-left:1px solid var(--sw);border-right:3px solid var(--iso)}
+#note{left:1.3vw;top:2vh;max-width:36vw;white-space:normal;border-left:3px solid var(--hit)}
+#note .h{margin-right:.6em}
+#legend{right:1.3vw;bottom:2vh;border-left:1px solid var(--sw);border-right:3px solid var(--co)}
+.k{display:inline-block;width:1.6em;height:0;vertical-align:middle;margin-right:.2em}
+.k.ring{width:.75em;height:.75em;border:2px solid var(--tx);border-radius:50%;box-sizing:border-box;margin:0 .45em}
+.k.solid{border-top:2px solid var(--tx)} .k.dots{border-top:2px dotted var(--hit)} .k.iso{border-top:2px solid var(--iso)}
+.k.veil{height:.7em;background:#000;opacity:.7} .k.sw{height:.7em;background:repeating-linear-gradient(135deg,var(--sw) 0 2px,transparent 2px 5px)}
+.k.co{border-top:3px solid var(--co)} .k.hit{border-top:3px solid var(--hit)}
 .box b{color:var(--co);font-weight:600}
 .box i{font-style:normal;color:color-mix(in srgb,var(--tx) 60%,var(--sw))}
 .box .h{color:var(--iso);font-weight:600}
@@ -37,6 +45,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);cursor:none}
 <canvas id="cv"></canvas>
 <div id="info" class="box"></div>
 <div id="log" class="box"></div>
+<div id="note" class="box"></div>
+<div id="legend" class="box"></div>
 <script>
 'use strict';
 /* ================= utils + params ================= */
@@ -71,8 +81,15 @@ const f1 = v => fin(v) ? v.toFixed(1) : '—', f0 = v => fin(v) ? Math.round(v).
 const sgn = v => fin(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) : '—';
 
 /* ================= projection ================= */
-const H = LINES, W = Math.round(H * 16 / 9), N = W * H, SC = W / 480;
-const LAT_C = 39.5, LON_C = -69.8, LATSPAN = 13, COSL = Math.cos(LAT_C * D2R), LONSPAN = LATSPAN * (16 / 9) / COSL;
+// the view adapts to the frame it is in (no letterbox): wide frames see more east–west, tall frames more north–south
+const ASP = clamp((innerWidth / innerHeight) || 16 / 9, 0.4, 3.6);
+const W0T = Math.min(Math.round(LINES * 16 / 9), Math.max(160, Math.floor(innerWidth / 1.5) || 480));   // tall frames: never finer than the screen
+const H = ASP >= 16 / 9 ? LINES : Math.round(W0T / ASP), W = ASP >= 16 / 9 ? Math.round(LINES * ASP) : W0T, N = W * H;
+const LAT_C = 39.5, LON_C = -69.8, COSL = Math.cos(LAT_C * D2R), LONSPAN = Math.max(20, 13 * ASP / COSL), LATSPAN = LONSPAN * COSL / ASP;
+const SC = (H / LATSPAN) / (270 / 13);
+// memory lives in a fixed geographic frame (Carolinas → Cape Breton), whatever the view
+const M_LON0 = LON_C - 13 * (16 / 9) / COSL / 2, M_LONSPAN = 13 * (16 / 9) / COSL, M_LAT1 = LAT_C + 6.5, M_LATSPAN = 13;
+const mU = lon => (lon - M_LON0) / M_LONSPAN, mV = lat => (M_LAT1 - lat) / M_LATSPAN, mLon = u => M_LON0 + u * M_LONSPAN, mLat = v => M_LAT1 - v * M_LATSPAN;
 const uLon = lon => (lon - LON_C) / LONSPAN + 0.5, vLat = lat => 0.5 - (lat - LAT_C) / LATSPAN;
 const lonU = u => LON_C + (u - 0.5) * LONSPAN, latV = v => LAT_C + (0.5 - v) * LATSPAN;
 const PX = lon => uLon(lon) * W, PY = lat => vLat(lat) * H;
@@ -108,11 +125,12 @@ const COAST_ISLANDS = [
   [[-70.85, 41.35], [-70.5, 41.35], [-70.45, 41.45], [-70.75, 41.48]],
   [[-70.23, 41.29], [-69.97, 41.25], [-69.96, 41.33], [-70.1, 41.32]],
   [[-64.4, 46.62], [-63.8, 46.45], [-62.9, 46.42], [-62.0, 46.45], [-62.5, 46.0], [-63.4, 46.22], [-64.1, 46.4]]];
-function rasterLand(w, h) {
+function rasterLand(w, h, uf, vf) {
+  uf = uf || uLon; vf = vf || vLat;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff';
   for (const poly of [COAST_MAIN, ...COAST_ISLANDS]) {
-    x.beginPath(); poly.forEach(([lo, la], i) => { const X = uLon(lo) * w, Y = vLat(la) * h; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); x.fill();
+    x.beginPath(); poly.forEach(([lo, la], i) => { const X = uf(lo) * w, Y = vf(la) * h; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); x.fill();
   }
   const d = x.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) out[i] = d[i * 4 + 3] > 127 ? 1 : 0;
@@ -125,9 +143,9 @@ const CW = 120, CH = 68, CN = CW * CH;            // coarse memory grid, fixed a
 const IW = Math.round(W / 2), IH = Math.round(H / 2), IN = IW * IH;   // ink grid
 // coarse land fraction from a fixed 480×272 raster so memory means the same at every resolution
 const LANDF = new Float32Array(CN);
-{ const L = rasterLand(CW * 4, CH * 4); for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { let s = 0; for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) s += L[(cy * 4 + j) * CW * 4 + cx * 4 + i]; LANDF[cy * CW + cx] = s / 16; } }
+{ const L = rasterLand(CW * 4, CH * 4, mU, mV); for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { let s = 0; for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) s += L[(cy * 4 + j) * CW * 4 + cx * 4 + i]; LANDF[cy * CW + cx] = s / 16; } }
 const CLAT = new Float32Array(CN), CLON = new Float32Array(CN);
-for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { CLAT[cy * CW + cx] = latV((cy + 0.5) / CH); CLON[cy * CW + cx] = lonU((cx + 0.5) / CW); }
+for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { CLAT[cy * CW + cx] = mLat((cy + 0.5) / CH); CLON[cy * CW + cx] = mLon((cx + 0.5) / CW); }
 // coastal coarse cells + seaward normals
 const COASTAL = new Uint8Array(CN), CNX = new Float32Array(CN), CNY = new Float32Array(CN), CTIDE = new Int8Array(CN), CCITY = new Int8Array(CN).fill(-1);
 {
@@ -152,7 +170,7 @@ const COASTPX = new Uint8Array(N), COASTC = new Int32Array(N).fill(-1), ODIST = 
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
     const i = y * W + x; if (!LAND[i]) continue;
     if (LAND[i - 1] && LAND[i + 1] && LAND[i - W] && LAND[i + W]) continue;
-    const cx = Math.floor(x * CW / W), cy = Math.floor(y * CH / H);
+    const cx = Math.floor(mU(lonU((x + 0.5) / W)) * CW), cy = Math.floor(mV(latV((y + 0.5) / H)) * CH);
     let best = -1, bd = 9;
     for (let j = -2; j <= 2; j++) for (let k = -2; k <= 2; k++) { const X = cx + k, Y = cy + j; if (X < 0 || Y < 0 || X >= CW || Y >= CH) continue; const c = Y * CW + X; if (COASTAL[c]) { const d = k * k + j * j; if (d < bd) { bd = d; best = c; } } }
     COASTC[i] = best; COASTPX[i] = 1;
@@ -187,8 +205,8 @@ const HP = new Float32Array(N), RELIEF = new Float32Array(N);
 }
 // pixel -> coarse bilinear lookups
 const CX0 = new Int16Array(W), CFX = new Float32Array(W), CY0 = new Int16Array(H), CFY = new Float32Array(H), IXS = new Int16Array(W), IYS = new Int16Array(H);
-for (let x = 0; x < W; x++) { const f = clamp((x + 0.5) * CW / W - 0.5, 0, CW - 1.001); CX0[x] = Math.floor(f); CFX[x] = f - CX0[x]; IXS[x] = Math.min(IW - 1, Math.floor(x * IW / W)); }
-for (let y = 0; y < H; y++) { const f = clamp((y + 0.5) * CH / H - 0.5, 0, CH - 1.001); CY0[y] = Math.floor(f); CFY[y] = f - CY0[y]; IYS[y] = Math.min(IH - 1, Math.floor(y * IH / H)); }
+for (let x = 0; x < W; x++) { const f = clamp(mU(lonU((x + 0.5) / W)) * CW - 0.5, 0, CW - 1.001); CX0[x] = Math.floor(f); CFX[x] = f - CX0[x]; IXS[x] = Math.min(IW - 1, Math.floor(x * IW / W)); }
+for (let y = 0; y < H; y++) { const f = clamp(mV(latV((y + 0.5) / H)) * CH - 0.5, 0, CH - 1.001); CY0[y] = Math.floor(f); CFY[y] = f - CY0[y]; IYS[y] = Math.min(IH - 1, Math.floor(y * IH / H)); }
 
 /* ================= data layer ================= */
 const GLAT = [], GLON = []; for (let la = 32; la <= 47.01; la += 1.5) for (let lo = -85; lo <= -54.99; lo += 1.5) { GLAT.push(+la.toFixed(2)); GLON.push(+lo.toFixed(2)); }
@@ -381,9 +399,9 @@ function fieldsAt(t) {
     Pc[c] = gP[i0] * w0 + gP[i1] * w1 + gP[i2] * w2 + gP[i3] * w3; Uc[c] = gU[i0] * w0 + gU[i1] * w1 + gU[i2] * w2 + gU[i3] * w3; Vc[c] = gV[i0] * w0 + gV[i1] * w1 + gV[i2] * w2 + gV[i3] * w3;
     Gc[c] = gG[i0] * w0 + gG[i1] * w1 + gG[i2] * w2 + gG[i3] * w3; Rc[c] = gR[i0] * w0 + gR[i1] * w1 + gR[i2] * w2 + gR[i3] * w3; Cc[c] = gC[i0] * w0 + gC[i1] * w1 + gC[i2] * w2 + gC[i3] * w3;
   }
-  const pxPerCell = W / CW;
+  const cpx = (LONSPAN / W) / (M_LONSPAN / CW), cpy = (LATSPAN / H) / (M_LATSPAN / CH);   // coarse cells per display pixel
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { const c = y * CW + x, xl = x > 0 ? c - 1 : c, xr = x < CW - 1 ? c + 1 : c, yu = y > 0 ? c - CW : c, yd = y < CH - 1 ? c + CW : c;
-    GMc[c] = Math.hypot((Pc[xr] - Pc[xl]) / ((xr - xl) || 1), (Pc[yd] - Pc[yu]) / (((yd - yu) / CW) || 1)) / pxPerCell + 1e-4; }
+    GMc[c] = Math.hypot((Pc[xr] - Pc[xl]) / ((xr - xl) || 1) * cpx, (Pc[yd] - Pc[yu]) / (((yd - yu) / CW) || 1) * cpy) + 1e-4; }
   return true;
 }
 function marineAt(t) {
@@ -547,9 +565,9 @@ let R0 = new Float32Array(IN), R1 = new Float32Array(IN), C0 = new Float32Array(
 const VX = new Float32Array(IN), VY = new Float32Array(IN), TR = new Float32Array(IN), TC = new Float32Array(IN), RV = new Float32Array(IN), CVV = new Float32Array(IN);
 for (let i = 0; i < IN; i++) { G0[i] = hash2(i, 7, SEED); }
 function inkTargets() {
-  const vs = 0.075 * (IW / 240);
-  for (let y = 0; y < IH; y++) { const fy = clamp((y + 0.5) * CH / IH - 0.5, 0, CH - 1.001), y0 = fy | 0, wy = fy - y0;
-    for (let x = 0; x < IW; x++) { const fx = clamp((x + 0.5) * CW / IW - 0.5, 0, CW - 1.001), x0 = fx | 0, wx = fx - x0, c = y0 * CW + x0;
+  const vs = 0.075 * (IW / 240) * (M_LONSPAN / LONSPAN);
+  for (let y = 0; y < IH; y++) { const fy = clamp(mV(latV((y + 0.5) / IH)) * CH - 0.5, 0, CH - 1.001), y0 = fy | 0, wy = fy - y0;
+    for (let x = 0; x < IW; x++) { const fx = clamp(mU(lonU((x + 0.5) / IW)) * CW - 0.5, 0, CW - 1.001), x0 = fx | 0, wx = fx - x0, c = y0 * CW + x0;
       const b = (A0) => lerp(lerp(A0[c], A0[c + 1], wx), lerp(A0[c + CW], A0[c + CW + 1], wx), wy);
       const i = y * IW + x; VX[i] = b(Uc) * vs; VY[i] = -b(Vc) * vs; if (!fin(VX[i]) || !fin(VY[i])) { VX[i] = 0; VY[i] = 0; }
       const r = Math.pow(clamp(b(Rc) / 6, 0, 1), 0.7), cc = b(Cc) / 100; TR[i] = fin(r) ? r : 0; TC[i] = fin(cc) ? cc : 0; } }
@@ -572,8 +590,9 @@ function inkHeal() { let bad = false; for (let i = 0; i < IN; i += 97) if (!fin(
 /* ================= render ================= */
 const cv = document.getElementById('cv'); cv.width = W; cv.height = H;
 const cx2 = cv.getContext('2d', { alpha: false }); const IMG = cx2.createImageData(W, H), BUF = new Uint32Array(IMG.data.buffer);
-function fit() { const s = Math.min(innerWidth / W, innerHeight / H), si = Math.floor(s), k = si >= 1 && si / s > 0.9 ? si : s; cv.style.width = W * k + 'px'; cv.style.height = H * k + 'px'; }
-addEventListener('resize', fit); fit();
+function fit() { const k = Math.max(innerWidth / W, innerHeight / H); cv.style.width = Math.ceil(W * k) + 'px'; cv.style.height = Math.ceil(H * k) + 'px'; }
+let reshapeT = 0;
+addEventListener('resize', () => { fit(); const a = innerWidth / innerHeight; if (fin(a) && a > 0 && Math.abs(Math.log(clamp(a, 0.4, 3.6) / ASP)) > 0.03) { clearTimeout(reshapeT); reshapeT = setTimeout(() => { persist(); location.reload(); }, 700); } }); fit();
 let swellPhase = 0;
 const RINGS = [];
 function ringAdd(tsec, amp) { RINGS.push({ t: tsec, a: amp }); if (RINGS.length > 24) RINGS.shift(); }
@@ -639,7 +658,7 @@ function line(x0, y0, x1, y1, col, pat, fade) {
 }
 const FONT = { A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010', U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010', Z: '111001010100111', '0': '111101101101111', '1': '010110010010111', '2': '110001010100111', '3': '110001010001110', '4': '101101111001001', '5': '111100110001110', '6': '011100111101111', '7': '111001010010010', '8': '111101111101111', '9': '111101111001110', '.': '000000000000010', '-': '000000111000000', '+': '000010111010000', ' ': '000000000000000' };
 function text(str, x, y, col, bg) {
-  const s = Math.max(1, Math.round(SC)); str = String(str).toUpperCase();
+  const s = Math.max(1, Math.floor(SC + 0.25)); str = String(str).toUpperCase();
   if (bg !== undefined) for (let j = -1; j <= 5 * s; j++) for (let i = -1; i <= str.length * 4 * s - s; i++) plot(x + i, y + j, bg);
   for (let k = 0; k < str.length; k++) { const gl = FONT[str[k]] || FONT[' ']; for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (gl[j * 3 + i] === '1') for (let a = 0; a < s; a++) for (let b = 0; b < s; b++) plot(x + (k * 4 + i) * s + a, y + j * s + b, col); }
 }
@@ -879,8 +898,43 @@ function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.bus
 addEventListener('pointerdown', audioUnlock); addEventListener('keydown', audioUnlock);
 
 /* ================= info + log ================= */
-const infoEl = document.getElementById('info'), logEl = document.getElementById('log');
-function applyInfo() { infoEl.classList.toggle('hide', !SHOW_INFO); logEl.classList.toggle('hide', !SHOW_INFO); }
+const infoEl = document.getElementById('info'), logEl = document.getElementById('log'), legendEl = document.getElementById('legend'), noteEl = document.getElementById('note');
+function applyInfo() { for (const e of [infoEl, logEl, legendEl, noteEl]) e.classList.toggle('hide', !SHOW_INFO); }
+/* ---- NOAA note: the forecasters' own words, rotated from the local NWS offices' Area Forecast Discussions ---- */
+const OFFICES = [['BOX', 'NWS Boston'], ['OKX', 'NWS New York'], ['PHI', 'NWS Philadelphia/Mt Holly'], ['AKQ', 'NWS Wakefield VA']];
+const NOTES = {}; let noteIdx = 0;
+function afdSection(txt, name) { const m = txt.match(new RegExp('\\n\\.' + name + '\\.\\.\\.([\\s\\S]*?)(?:\\n&&|\\n\\.[A-Z][A-Z /]+\\.\\.\\.)')); return m ? m[1].trim() : ''; }
+function afdItems(sec) {
+  return sec.split(/\n\s*(?:-|\d\)|\.?KEY MESSAGE \d\.\.\.)\s+/).map(q => q.replace(/\s*\n\s*/g, ' ').replace(/^[-\d).\s]+/, '').replace(/\.\.\./g, '… ').replace(/\s+/g, ' ').trim()).filter(q => q.length > 20);
+}
+async function fetchNotes() {
+  await Promise.all(OFFICES.map(async ([id, name]) => {
+    try {
+      const l = await getJSON('https://api.weather.gov/products/types/AFD/locations/' + id); const it = l['@graph'] && l['@graph'][0]; if (!it) return;
+      if (NOTES[id] && NOTES[id].pid === it.id) return;
+      const p = await getJSON('https://api.weather.gov/products/' + it.id), txt = '\n' + (p.productText || '');
+      let items = afdItems(afdSection(txt, 'KEY MESSAGES')), kind = 'key messages';
+      if (!items.length) { items = afdItems(afdSection(txt, 'SYNOPSIS')); kind = 'synopsis'; }
+      if (!items.length) return;
+      const changed = afdSection(txt, 'WHAT HAS CHANGED').replace(/\s*\n\s*/g, ' ').replace(/\.\.\./g, '… ').trim();
+      const first = !NOTES[id];
+      NOTES[id] = { pid: it.id, name, t: Date.parse(p.issuanceTime), items, kind, changed: (/^no significant change/i.test(changed) && changed.length < 60) ? '' : changed };
+      if (!first) log(`${name.toUpperCase()} issued a new forecast discussion`);
+    } catch (e) { DATA.fetchErr.afd = id + ' ' + (e.message || e); }
+  }));
+  renderNote();
+}
+function clip(s, n) { return s.length <= n ? s : s.slice(0, s.lastIndexOf(' ', n)) + ' …'; }
+function renderNote() {
+  if (!SHOW_INFO) return;
+  const keys = OFFICES.map(o => o[0]).filter(k => NOTES[k]);
+  if (!keys.length) { noteEl.innerHTML = `<span class="h">WHAT THE FORECASTERS SAY</span>\n<i>fetching the NWS forecast discussions …</i>`; return; }
+  const n = NOTES[keys[noteIdx % keys.length]];
+  const body = n.items.slice(0, 2).map(q => '▸ ' + esc(clip(q, 260))).join('<br>');
+  noteEl.innerHTML = `<span class="h">WHAT THE FORECASTERS SAY</span> <i>${esc(n.name)} · ${esc(dt(n.t))} · ${n.kind}</i><br>${body}` +
+    (n.changed ? `<br><i>what changed: ${esc(clip(n.changed, 170))}</i>` : '') + `<br><i>${keys.map((k, i) => (i === noteIdx % keys.length ? '■' : '□')).join(' ')} rotating every 40 s</i>`;
+}
+setInterval(() => { noteIdx++; renderNote(); }, 40e3);
 addEventListener('keydown', e => { if (e.key === 'i' || e.key === 'I') { SHOW_INFO = !SHOW_INFO; applyInfo(); } if (e.key === 't' || e.key === 'T') { rupture(S.phase, 'manual'); } });
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]); }
 function renderLog() { if (!SHOW_INFO) return; logEl.innerHTML = '<span class="h">EVOLUTION LOG</span>\n' + S.log.slice(-9).map(e => `<i>${esc(dt(e.t))}</i> ${esc(e.m)}`).join('\n'); }
@@ -910,18 +964,29 @@ function renderInfo() {
   const hi = ['8518750', '8443970'].map(id => { const r = DATA.tides[id], nh = r && nextHigh(r.preds, t); return nh ? `${TIDES.find(q => q.id === id).k} ${hm(nh.t)} (${f1(nh.v)} ft)` : null; }).filter(Boolean).join(' · ');
   if (hi) L.push(`<b>TIDE</b> next high ${hi}`);
   if (DATA.alerts) L.push(`<b>NWS</b>  ${DATA.alerts.total} alerts NC→ME · ` + DATA.alerts.types.slice(0, 3).map(([n, c]) => `${esc(n)} ×${c}`).join(' · '));
-  const st = subTarget(), rn = (() => { let m = 0, k = ''; for (const c of CITIES) { const cc = Math.floor(vLat(c.lat) * CH) * CW + Math.floor(uLon(c.lon) * CW); if (cc >= 0 && cc < CN && S.rain[cc] > m) { m = S.rain[cc]; k = c.k; } } return m > 0.5 ? `${k} ${f0(m)} mm` : '—'; })();
-  L.push(`<span class="h">─ WHAT CONTROLS WHAT</span>`);
-  L.push(`central pressure ${f1(st.p)} hPa → sub ${noteName(st.deg)} · isobar density`);
-  L.push(`model gust ${f0(A.gust)} mph → tempo ${f0(AU.bpm)} bpm · ${DATA.alerts ? DATA.alerts.nTypes : '—'} alert types → kick ${PAT.kk}/16`);
-  L.push(`heading ${fin(A.hdg) ? comp(A.hdg) : '—'} → knock rotation ${PAT.rot} · intensity ${(A.I * 100).toFixed(0)}% → knock ${PAT.nk}/16`);
-  L.push(`wave period → swell LFO + sea motion · surge → tide chord (1 partial/gauge)`);
-  L.push(`onshore wind × waves × surge → coast wear · rain → drops + land stain (most: ${rn})`);
-  L.push(`phase → scope ${(SCOPES[S.phase] || SCOPES.DEEPENING).name} + dither ${GRAMMAR_NAMES[S.gram.b]}${S.unlock.coast ? ' · worn coast speaks' : ''}`);
-  L.push(`<span class="ramp">model rain ${RAMP.map(c => `<span style="background:${c}"></span>`).join('')}</span> 0 → 6+ mm/h`);
+  const st = subTarget(), rn = (() => { let m = 0, k = ''; for (const c of CITIES) { const cc = Math.floor(mV(c.lat) * CH) * CW + Math.floor(mU(c.lon) * CW); if (cc >= 0 && cc < CN && S.rain[cc] > m) { m = S.rain[cc]; k = c.k; } } return m > 0.5 ? `${k} ${f0(m)} mm` : '—'; })();
   const age = DATA.grid ? ago(Date.now() - DATA.gridAt) : '—';
   L.push(`<i>Open-Meteo model grid (${age} old) · NOAA NWS · NOAA CO-OPS · art, not a forecast: weather.gov</i>`);
   L.push(`<i>i hide${AU.ctx && AU.ctx.state === 'running' ? '' : MUTE ? ' · audio off' : ' · click for sound'}</i>`);
+  // legend: what the marks mean, then what the sound follows
+  const G = [];
+  G.push(`<span class="h">LEGEND</span>`);
+  G.push(`<span class="k ring"></span> <b>L${A.ok ? f0(A.p) : ''}</b> centre of the low + its pressure (hPa)`);
+  G.push(`<span class="k solid"></span> where the low has been  <span class="k dots"></span> model path, next 48 h`);
+  G.push(`<span class="k iso"></span> isobars, 2 hPa apart · tighter rings = stronger wind`);
+  G.push(`<span class="ramp">${RAMP.map(c => `<span style="background:${c}"></span>`).join('')}</span> rain 0 → 6+ mm/h, blown by the model wind`);
+  G.push(`<span class="k veil"></span> dark veil = cloud · <span class="k sw"></span> stripes = swell (real direction + period)`);
+  G.push(`<span class="k co"></span> coast: brighter = more battered this weekend`);
+  G.push(`<span class="k hit"></span> flashes = onshore wind + surf hitting now`);
+  G.push(`rings from the low = the kick · colours = storm phase (${(SCOPES[S.phase] || SCOPES.DEEPENING).name})`);
+  G.push(`<span class="h">SOUND FOLLOWS</span>`);
+  G.push(`pressure ${f1(st.p)} hPa → sub ${noteName(st.deg)}`);
+  G.push(`gust ${f0(A.gust)} mph → ${f0(AU.bpm)} bpm · ${DATA.alerts ? DATA.alerts.nTypes : '—'} alert types → kick ${PAT.kk}/16`);
+  G.push(`heading ${fin(A.hdg) ? comp(A.hdg) : '—'} → knock rotation ${PAT.rot} · intensity ${(A.I * 100).toFixed(0)}%`);
+  G.push(`wave period ${f1(A.perG)} s → swell pulse · surge → tide chord`);
+  G.push(`onshore wind → wind noise · rain → drops (most so far: ${rn})`);
+  G.push(`phase → dither ${GRAMMAR_NAMES[S.gram.b]}${S.unlock.coast ? ' · worn coast speaks' : ''}`);
+  legendEl.innerHTML = G.join('\n');
   infoEl.innerHTML = L.join('\n');
 }
 
@@ -964,6 +1029,7 @@ dataTick(); setInterval(dataTick, 60e3);
 fetchObs(); setInterval(fetchObs, 10 * 60e3);
 setTimeout(() => { fetchTides(); setInterval(fetchTides, 10 * 60e3); }, 1500);
 setTimeout(() => { fetchAlerts(); setInterval(fetchAlerts, 10 * 60e3); }, 3000);
+setTimeout(() => { fetchNotes(); setInterval(fetchNotes, 20 * 60e3); }, 2000);
 if (!MUTE) { audioUnlock(); }
 requestAnimationFrame(frame);
 addEventListener('beforeunload', persist);

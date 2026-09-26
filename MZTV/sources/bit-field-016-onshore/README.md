@@ -8,7 +8,15 @@ The map runs from the Carolinas to Cape Breton. Isobars come from the live press
 
 **Phases, from the storm itself.** The phase is read from the storm's own numbers: DEEPENING (pressure falling ≥0.8 hPa/3h), MATURE, STALLED (moving under 7 kt), FILLING, then AFTER. A phase change has to hold for 15 minutes before it counts. Each change is a rupture: the dither grammar dissolves into a new one over about 2.5 minutes, the colour scope changes, and the groove drops out while the echo throws. The scopes are NEXRAD NIGHT (navy, cobalt, hot-pink coast, cyan isobars), VELOCITY (violet sea, cyan coast, pink isobars), LOOP (teal and magenta, yellow isobars), DAYBREAK SCOPE (slate blue, white isobars, orange coast) and CLEAR AIR, a pale-sky scope for when the storm is gone.
 
-**What controls what** (also shown live on screen):
+**On screen:**
+- **top left:** what the forecasters say. The Key Messages (or Synopsis) and "what changed" from the latest NWS Area Forecast Discussions for Boston, New York, Philadelphia/Mt Holly and Wakefield VA, rotating every 40 s. Refreshed every 20 min. A new discussion is also logged.
+- **bottom left:** the storm in numbers: the low's position, pressure and trend, movement, distances, gusts, waves, station obs, surge, next high tide and NWS alerts.
+- **bottom right:** the legend (what every mark means) and what the sound is following.
+- **top right:** the evolution log.
+
+The view fills whatever frame it's in, with no letterbox. Wide frames show more east–west and tall frames more north–south. Memory is kept on a fixed geographic grid, so reshaping the frame never scrambles it.
+
+**What controls what:**
 - central pressure → the sub's pitch, D Phrygian (1000 hPa = D2; each hPa lower pulls it down 0.6 semitone) · also isobar density
 - model peak gust → tempo · number of NWS alert types → kick density (Euclidean) · storm heading → knock rotation
 - dominant wave period → one LFO that swells the sub and the tide chord, and the speed of the drawn sea
@@ -19,7 +27,7 @@ The map runs from the Carolinas to Cape Breton. Isobars come from the live press
 **Data** (no keys, all CORS-open, refreshed live):
 - Open-Meteo forecast grid 32–47°N / 85–55°W at 1.5° (pressure, wind, gusts, rain, cloud), hourly, past 24h + next 72h. Refreshed hourly and cached, so reloads don't refetch.
 - Open-Meteo marine: wave height, period and direction at 10 offshore points
-- NOAA NWS: latest observations at KORF KBWI KACY KJFK KBOS KACK; active alerts NC→ME
+- NOAA NWS: latest observations at KORF KBWI KACY KJFK KBOS KACK; active alerts NC→ME; Area Forecast Discussions (BOX, OKX, PHI, AKQ)
 - NOAA CO-OPS tide gauges: Sewells Point, Atlantic City, The Battery, Montauk, Boston, Nantucket
 
 The low's position and pressure are derived from the model pressure grid (minimum plus quadratic refinement), so they are approximate. This is an artwork, not a forecast: see weather.gov.
