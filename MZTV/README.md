@@ -82,6 +82,15 @@ sources/bit-field-014-sounding/index.html
 Live:
 https://matchzimmerman.github.io/MZTV/sources/bit-field-014-sounding/
 
+### BIT FIELD 015 — STIGMERGY
+Tens of thousands of agents on a torus lay trail and follow trail, and transport networks form out of that feedback alone. The camera looks down through three stacked planes: the live trail, the channels it has worn (minutes up, an hour down) and the deep sediment (hours), with parallax and low-light shadows between them. Memory steers the agents, thickens worn routes into trunks, and brings old sediment hubs back as food. A packet rides the strongest vein and the camera follows it. The sub-bass line is the vein under the packet, a vein entering earshot is a pluck ringed where it appears, and a junction it crosses is an accent. Coverage drives the kick, loops extend the chords, and channel depth feeds the echo (D Phrygian home). Rules mutate over hours under pressure from stasis, saturation and retracing: network, meander, knots, streams, cells, plus reinforcement, food, a second colony and cuts, all unlocked from memory. Standalone stream, no mixer. State persists across reloads. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?agents=N ?ff=H ?capture=1
+
+Path:
+sources/bit-field-015-stigmergy/index.html
+
+Live:
+https://matchzimmerman.github.io/MZTV/sources/bit-field-015-stigmergy/
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
