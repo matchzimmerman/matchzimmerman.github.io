@@ -91,6 +91,15 @@ sources/bit-field-015-stigmergy/index.html
 Live:
 https://matchzimmerman.github.io/MZTV/sources/bit-field-015-stigmergy/
 
+### BIT FIELD 016 — ONSHORE
+Live field tuned to the September 2026 nor'easter. Real data, fetched live in the browser: the Open-Meteo pressure/wind/rain/cloud grid and marine waves, NWS station observations and alerts, and NOAA tide-gauge surge. It is drawn as a dreaming radar scope from the Carolinas to Cape Breton. Isobars tighten as the low deepens. Rain is a stepped radar ramp carried by the model's real wind. The swell runs at the real wave period. Central pressure is the sub's pitch (D Phrygian), gust sets the tempo, and each tide gauge's surge is one partial of a low chord. Memory: the coast wears where onshore wind, waves and surge hit it, rain stains the land, and the low's track hardens; worn coast later speaks, and a retraced path throws an echo. The storm's own lifecycle (deepening / mature / stalled / filling / after) triggers ruptures into new dither grammars and colour scopes. State persists across reloads. Params: ?info=0 ?fresh=1 ?audio=0 ?rate=N ?ff=H ?lines=N
+
+Path:
+sources/bit-field-016-onshore/index.html
+
+Live:
+https://matchzimmerman.github.io/MZTV/sources/bit-field-016-onshore/
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 

@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · BIT FIELD 016 · ONSHORE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!--
+  MZTV · BIT FIELD 016 · ONSHORE
+  A live field tuned to the September 2026 nor'easter. Real data, abstract ecology.
+  Data (all fetched live in the browser, no keys):
+    Open-Meteo forecast grid 32–47N / 85–55W @1.5°: pressure, wind, gusts, rain, cloud (hourly, past 24h + next 72h)
+    Open-Meteo marine: wave height / period / direction at 10 offshore points
+    NOAA NWS: latest station observations (KORF KBWI KACY KJFK KBOS KACK) + active alerts NC→ME
+    NOAA CO-OPS: water level vs astronomical prediction (surge) at 6 tide gauges
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H (shift clock by H hours) ?capture=1
+  Keys: i info · t force a grammar rupture
+-->
+<style>
+:root{--bg:#050a2c;--sw:#1f44e0;--co:#ff2e93;--iso:#6ff6ff;--tx:#ffffff;--hit:#fff34a}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);cursor:none}
+#cv{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);image-rendering:pixelated;image-rendering:crisp-edges}
+.box{position:fixed;font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;font-size:clamp(8px,0.6vw,15px);line-height:1.38;
+  color:var(--tx);background:color-mix(in srgb,var(--bg) 84%,transparent);border:1px solid var(--sw);border-left:3px solid var(--co);
+  padding:.7em .9em;white-space:pre;letter-spacing:.01em;pointer-events:none}
+#info{left:1.3vw;bottom:2vh}
+#log{right:1.3vw;top:2vh;max-width:44vw;overflow:hidden;border-left:1px solid var(--sw);border-right:3px solid var(--iso)}
+.box b{color:var(--co);font-weight:600}
+.box i{font-style:normal;color:color-mix(in srgb,var(--tx) 60%,var(--sw))}
+.box .h{color:var(--iso);font-weight:600}
+.box .ramp span{display:inline-block;width:1.1em;height:.7em;margin-right:1px;vertical-align:middle}
+.hide{display:none}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="info" class="box"></div>
+<div id="log" class="box"></div>
+<script>
+'use strict';
+/* ================= utils + params ================= */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v, lerp = (a, b, t) => a + (b - a) * t;
+const fin = v => Number.isFinite(v);
+function hash2(x, y, s) { let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1103515245); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+const Q = new URLSearchParams(location.search);
+const CAPTURE = Q.get('capture') === '1';
+let SHOW_INFO = Q.get('info') !== '0' && !CAPTURE;
+const FRESH = Q.get('fresh') === '1', MUTE = Q.get('audio') === '0';
+const SEED = (parseInt(Q.get('seed') || '16', 10) | 0) || 16;
+const RATE = Math.max(0.01, parseFloat(Q.get('rate') || '1') || 1), FF = parseFloat(Q.get('ff') || '0') || 0;
+const LINES = clamp(Math.round(parseFloat(Q.get('lines') || '270') || 270), 120, 720);
+const SIMCLOCK = RATE !== 1 || FF !== 0;
+const KEY = 'mztv-onshore-v1' + (SIMCLOCK ? '-sim' : '');
+const T_REAL0 = Date.now(), PERF0 = performance.now();
+const now = () => T_REAL0 + FF * 3600e3 + (performance.now() - PERF0) * RATE;
+const HOUR = 3600e3;
+const TZ = 'America/New_York';
+const fmtDT = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+const fmtHM = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
+const fmtZ = new Intl.DateTimeFormat('en-US', { timeZone: TZ, timeZoneName: 'short' });
+const tzName = t => (fmtZ.formatToParts(new Date(t)).find(p => p.type === 'timeZoneName') || {}).value || 'ET';
+const dt = t => fmtDT.format(new Date(t)).replace(',', '');
+const hm = t => fmtHM.format(new Date(t));
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const comp = deg => COMPASS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+const R2D = 180 / Math.PI, D2R = Math.PI / 180;
+function miles(la1, lo1, la2, lo2) { const a = Math.sin((la2 - la1) * D2R / 2) ** 2 + Math.cos(la1 * D2R) * Math.cos(la2 * D2R) * Math.sin((lo2 - lo1) * D2R / 2) ** 2; return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(a))); }
+function bearing(la1, lo1, la2, lo2) { const y = Math.sin((lo2 - lo1) * D2R) * Math.cos(la2 * D2R), x = Math.cos(la1 * D2R) * Math.sin(la2 * D2R) - Math.sin(la1 * D2R) * Math.cos(la2 * D2R) * Math.cos((lo2 - lo1) * D2R); return (Math.atan2(y, x) * R2D + 360) % 360; }
+const f1 = v => fin(v) ? v.toFixed(1) : '—', f0 = v => fin(v) ? Math.round(v).toString() : '—';
+const sgn = v => fin(v) ? (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1) : '—';
+
+/* ================= projection ================= */
+const H = LINES, W = Math.round(H * 16 / 9), N = W * H, SC = W / 480;
+const LAT_C = 39.5, LON_C = -69.8, LATSPAN = 13, COSL = Math.cos(LAT_C * D2R), LONSPAN = LATSPAN * (16 / 9) / COSL;
+const uLon = lon => (lon - LON_C) / LONSPAN + 0.5, vLat = lat => 0.5 - (lat - LAT_C) / LATSPAN;
+const lonU = u => LON_C + (u - 0.5) * LONSPAN, latV = v => LAT_C + (0.5 - v) * LATSPAN;
+const PX = lon => uLon(lon) * W, PY = lat => vLat(lat) * H;
+
+/* ================= places ================= */
+const CITIES = [
+  { k: 'NORF', n: 'Norfolk', lat: 36.85, lon: -76.29 }, { k: 'BAL', n: 'Baltimore', lat: 39.29, lon: -76.61 },
+  { k: 'AC', n: 'Atlantic City', lat: 39.36, lon: -74.42 }, { k: 'NYC', n: 'NYC', lat: 40.71, lon: -74.0 },
+  { k: 'BOS', n: 'Boston', lat: 42.36, lon: -71.06 }, { k: 'ACK', n: 'Nantucket', lat: 41.28, lon: -70.1 },
+  { k: 'PWM', n: 'Portland', lat: 43.66, lon: -70.26 }, { k: 'HFX', n: 'Halifax', lat: 44.65, lon: -63.57 }];
+const OBS = [
+  { id: 'KORF', k: 'NORF', lat: 36.9, lon: -76.19 }, { id: 'KBWI', k: 'BAL', lat: 39.18, lon: -76.67 },
+  { id: 'KACY', k: 'AC', lat: 39.45, lon: -74.58 }, { id: 'KJFK', k: 'JFK', lat: 40.64, lon: -73.78 },
+  { id: 'KBOS', k: 'BOS', lat: 42.36, lon: -71.01 }, { id: 'KACK', k: 'ACK', lat: 41.25, lon: -70.06 }];
+const TIDES = [
+  { id: '8638610', k: 'NORF', lat: 36.95, lon: -76.33, f: 146.83 }, { id: '8534720', k: 'AC', lat: 39.36, lon: -74.42, f: 174.61 },
+  { id: '8518750', k: 'BATT', lat: 40.7, lon: -74.01, f: 220.0 }, { id: '8510560', k: 'MTK', lat: 41.05, lon: -71.96, f: 196.0 },
+  { id: '8443970', k: 'BOS', lat: 42.35, lon: -71.05, f: 261.63 }, { id: '8449130', k: 'ACK', lat: 41.29, lon: -70.1, f: 293.66 }];
+const MARINE = [[35.0, -75.0], [36.8, -75.3], [38.3, -74.6], [39.5, -73.8], [40.4, -72.5], [40.9, -70.5], [42.4, -70.4], [43.3, -69.4], [43.2, -65.8], [38.5, -70.0]];
+
+/* ================= coastline (lon,lat) — hand-simplified, Georgia to Cape Breton ================= */
+const COAST_MAIN = [
+  [-81.45, 30.7], [-81.3, 31.3], [-81.1, 31.85], [-80.85, 32.1], [-80.45, 32.45], [-79.95, 32.75], [-79.4, 33.1], [-79.15, 33.4], [-78.8, 33.75], [-78.3, 33.9], [-77.95, 33.85], [-77.85, 34.2], [-77.55, 34.45], [-77.1, 34.65], [-76.7, 34.7], [-76.52, 34.6], [-76.2, 34.85], [-75.9, 35.1], [-75.53, 35.23], [-75.48, 35.6], [-75.6, 36.0], [-75.8, 36.5], [-75.97, 36.9],
+  [-76.3, 36.97], [-76.4, 37.25], [-76.3, 37.6], [-76.35, 38.0], [-76.4, 38.35], [-76.5, 38.7], [-76.4, 39.05], [-76.55, 39.27], [-76.35, 39.4], [-76.05, 39.55], [-75.95, 39.4], [-76.2, 39.1], [-76.1, 38.8], [-76.25, 38.5], [-75.95, 38.2], [-75.85, 37.9], [-75.95, 37.5], [-76.0, 37.15],
+  [-75.85, 37.2], [-75.6, 37.55], [-75.3, 37.95], [-75.1, 38.35], [-75.05, 38.6], [-75.08, 38.8],
+  [-75.3, 38.95], [-75.45, 39.3], [-75.55, 39.6], [-75.4, 39.65], [-75.25, 39.4], [-75.0, 39.2], [-74.9, 38.95],
+  [-74.75, 39.1], [-74.55, 39.3], [-74.35, 39.4], [-74.15, 39.7], [-74.05, 40.05], [-73.98, 40.4], [-74.02, 40.47], [-74.05, 40.6],
+  [-73.95, 40.58], [-73.6, 40.59], [-73.2, 40.65], [-72.8, 40.75], [-72.4, 40.87], [-72.05, 41.0], [-71.86, 41.07], [-72.1, 41.05], [-72.35, 41.12],
+  [-72.7, 40.97], [-73.1, 40.93], [-73.5, 40.9], [-73.75, 40.82], [-73.78, 40.88], [-73.65, 40.98], [-73.35, 41.1], [-73.0, 41.2], [-72.6, 41.27], [-72.2, 41.3], [-71.9, 41.33], [-71.6, 41.37], [-71.4, 41.46], [-71.2, 41.47], [-71.05, 41.5], [-70.9, 41.52], [-70.65, 41.53], [-70.45, 41.6], [-70.1, 41.67], [-69.95, 41.7], [-69.95, 41.95], [-70.05, 42.07], [-70.2, 42.05], [-70.1, 41.9], [-70.3, 41.75], [-70.55, 41.8], [-70.65, 42.0], [-70.8, 42.2], [-71.0, 42.3], [-71.0, 42.4], [-70.85, 42.5], [-70.6, 42.65], [-70.75, 42.8], [-70.8, 42.95], [-70.6, 43.15], [-70.4, 43.4], [-70.2, 43.62], [-69.9, 43.8], [-69.5, 43.9], [-69.0, 44.1], [-68.6, 44.25], [-68.2, 44.35], [-67.8, 44.45], [-67.3, 44.6], [-67.0, 44.85], [-66.95, 45.1],
+  [-66.4, 45.15], [-66.0, 45.25], [-65.4, 45.4], [-64.9, 45.6], [-64.6, 45.75], [-64.3, 45.4], [-64.0, 45.3], [-64.4, 45.15], [-64.9, 45.2], [-65.4, 44.95], [-65.8, 44.7], [-66.2, 44.4], [-66.15, 43.9],
+  [-65.8, 43.6], [-65.4, 43.5], [-65.0, 43.75], [-64.6, 44.05], [-64.2, 44.35], [-63.8, 44.5], [-63.5, 44.6], [-63.0, 44.7], [-62.4, 44.9], [-61.8, 45.1], [-61.1, 45.25], [-60.9, 45.5], [-60.3, 45.65], [-59.9, 45.9], [-59.8, 46.15], [-60.1, 46.5], [-60.4, 46.85], [-60.6, 47.05], [-61.0, 46.8], [-61.4, 46.3], [-61.5, 45.95], [-62.3, 45.75], [-63.2, 45.75], [-63.9, 45.85], [-64.4, 46.1], [-64.7, 46.4], [-64.9, 46.9], [-64.8, 47.4], [-64.6, 47.9], [-65.0, 48.1], [-64.3, 48.5], [-64.3, 50], [-100, 50], [-100, 30.7]];
+const COAST_ISLANDS = [
+  [[-70.85, 41.35], [-70.5, 41.35], [-70.45, 41.45], [-70.75, 41.48]],
+  [[-70.23, 41.29], [-69.97, 41.25], [-69.96, 41.33], [-70.1, 41.32]],
+  [[-64.4, 46.62], [-63.8, 46.45], [-62.9, 46.42], [-62.0, 46.45], [-62.5, 46.0], [-63.4, 46.22], [-64.1, 46.4]]];
+function rasterLand(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff';
+  for (const poly of [COAST_MAIN, ...COAST_ISLANDS]) {
+    x.beginPath(); poly.forEach(([lo, la], i) => { const X = uLon(lo) * w, Y = vLat(la) * h; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); x.fill();
+  }
+  const d = x.getImageData(0, 0, w, h).data, out = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) out[i] = d[i * 4 + 3] > 127 ? 1 : 0;
+  return out;
+}
+
+/* ================= static rasters ================= */
+const LAND = rasterLand(W, H);
+const CW = 120, CH = 68, CN = CW * CH;            // coarse memory grid, fixed across resolutions
+const IW = Math.round(W / 2), IH = Math.round(H / 2), IN = IW * IH;   // ink grid
+// coarse land fraction from a fixed 480×272 raster so memory means the same at every resolution
+const LANDF = new Float32Array(CN);
+{ const L = rasterLand(CW * 4, CH * 4); for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { let s = 0; for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) s += L[(cy * 4 + j) * CW * 4 + cx * 4 + i]; LANDF[cy * CW + cx] = s / 16; } }
+const CLAT = new Float32Array(CN), CLON = new Float32Array(CN);
+for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { CLAT[cy * CW + cx] = latV((cy + 0.5) / CH); CLON[cy * CW + cx] = lonU((cx + 0.5) / CW); }
+// coastal coarse cells + seaward normals
+const COASTAL = new Uint8Array(CN), CNX = new Float32Array(CN), CNY = new Float32Array(CN), CTIDE = new Int8Array(CN), CCITY = new Int8Array(CN).fill(-1);
+{
+  const B = new Float32Array(CN);
+  for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) { let s = 0, n = 0; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const x = cx + i, y = cy + j; if (x >= 0 && y >= 0 && x < CW && y < CH) { s += LANDF[y * CW + x]; n++; } } B[cy * CW + cx] = s / n; }
+  for (let cy = 1; cy < CH - 1; cy++) for (let cx = 1; cx < CW - 1; cx++) {
+    const c = cy * CW + cx, f = LANDF[c];
+    let nearSea = false, nearLand = false; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const g = LANDF[c + j * CW + i]; if (g < 0.5) nearSea = true; if (g >= 0.5) nearLand = true; }
+    if (!(f > 0.04 && f < 0.96) && !(f >= 0.5 && nearSea)) continue;
+    if (!nearSea || !nearLand) continue;
+    let gx = B[c + 1] - B[c - 1], gy = B[c + CW] - B[c - CW]; const m = Math.hypot(gx, gy); if (m < 1e-4) continue;
+    COASTAL[c] = 1; CNX[c] = -gx / m; CNY[c] = -gy / m;   // points toward the sea
+    let bd = 1e9; TIDES.forEach((t, k) => { const d = miles(CLAT[c], CLON[c], t.lat, t.lon); if (d < bd) { bd = d; CTIDE[c] = k; } }); if (bd > 160) CTIDE[c] = -1;
+    let cd = 1e9; CITIES.forEach((t, k) => { const d = miles(CLAT[c], CLON[c], t.lat, t.lon); if (d < cd) { cd = d; CCITY[c] = k; } });
+  }
+}
+const COASTLIST = []; for (let c = 0; c < CN; c++) if (COASTAL[c]) COASTLIST.push(c);
+// display-res coast pixels -> coastal coarse cell
+const COASTPX = new Uint8Array(N), COASTC = new Int32Array(N).fill(-1), ODIST = new Uint8Array(N).fill(255), NEARC = new Int32Array(N).fill(-1);
+{
+  const q = [];
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x; if (!LAND[i]) continue;
+    if (LAND[i - 1] && LAND[i + 1] && LAND[i - W] && LAND[i + W]) continue;
+    const cx = Math.floor(x * CW / W), cy = Math.floor(y * CH / H);
+    let best = -1, bd = 9;
+    for (let j = -2; j <= 2; j++) for (let k = -2; k <= 2; k++) { const X = cx + k, Y = cy + j; if (X < 0 || Y < 0 || X >= CW || Y >= CH) continue; const c = Y * CW + X; if (COASTAL[c]) { const d = k * k + j * j; if (d < bd) { bd = d; best = c; } } }
+    COASTC[i] = best; COASTPX[i] = 1;
+    for (const n of [i - 1, i + 1, i - W, i + W]) if (!LAND[n] && ODIST[n] > 1) { ODIST[n] = 1; NEARC[n] = best; q.push(n); }
+  }
+  for (let h = 0; h < q.length; h++) { const i = q[h], d = ODIST[i]; if (d >= 4) continue; const x = i % W; for (const n of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i - W, i + W]) { if (n < 0 || n >= N || LAND[n] || ODIST[n] <= d + 1) continue; ODIST[n] = d + 1; NEARC[n] = NEARC[i]; q.push(n); } }
+}
+// dither grammars: 0 bayer4 · 1 halftone · 2 line screen · 3 stochastic · 4 bayer8
+const GRAMMAR_NAMES = ['BAYER', 'HALFTONE', 'LINE SCREEN', 'STOCHASTIC', 'FINE BAYER'];
+const TH = [];
+{
+  const b4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const b8 = new Array(64); for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { let v = 0, xx = x, yy = y ^ x; for (let b = 0; b < 3; b++) { v = (v << 2) | (((yy >> (2 - b)) & 1) << 1) | ((xx >> (2 - b)) & 1); } b8[y * 8 + x] = v; }
+  const cell = 5 * Math.max(1, SC * 0.9);
+  for (let g = 0; g < 5; g++) TH.push(new Float32Array(N));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, r = hash2(x, y, SEED);
+    TH[0][i] = (b4[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+    const u = (x + y) * 0.7071 / cell, v = (x - y) * 0.7071 / cell;
+    TH[1][i] = clamp(1 - (Math.cos(u * 2 * Math.PI) + Math.cos(v * 2 * Math.PI) + 2) / 4 + (r - 0.5) * 0.06, 0.005, 0.995);
+    const lq = ((x + 2 * y) / (6 * Math.max(1, SC * 0.8))) % 1; TH[2][i] = clamp(Math.abs(lq * 2 - 1) + (r - 0.5) * 0.05, 0.005, 0.995);
+    TH[3][i] = r;
+    TH[4][i] = (b8[(y & 7) * 8 + (x & 7)] + 0.5) / 64;
+  }
+}
+const HP = new Float32Array(N), RELIEF = new Float32Array(N);
+{
+  // static land relief: smooth value noise, so the ground has grain but no motion
+  const vn = (x, y, s, sd) => { const X = Math.floor(x / s), Y = Math.floor(y / s), fx = x / s - X, fy = y / s - Y, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    return lerp(lerp(hash2(X, Y, sd), hash2(X + 1, Y, sd), sx), lerp(hash2(X, Y + 1, sd), hash2(X + 1, Y + 1, sd), sx), sy); };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; HP[i] = hash2(x * 7 + 3, y * 13 + 1, SEED + 99) * 0.7 + vn(x, y, 18 * SC, SEED + 5) * 0.3; RELIEF[i] = 0.02 + 0.12 * vn(x, y, 9 * SC, SEED + 1) + 0.06 * vn(x, y, 3 * SC, SEED + 2); }
+}
+// pixel -> coarse bilinear lookups
+const CX0 = new Int16Array(W), CFX = new Float32Array(W), CY0 = new Int16Array(H), CFY = new Float32Array(H), IXS = new Int16Array(W), IYS = new Int16Array(H);
+for (let x = 0; x < W; x++) { const f = clamp((x + 0.5) * CW / W - 0.5, 0, CW - 1.001); CX0[x] = Math.floor(f); CFX[x] = f - CX0[x]; IXS[x] = Math.min(IW - 1, Math.floor(x * IW / W)); }
+for (let y = 0; y < H; y++) { const f = clamp((y + 0.5) * CH / H - 0.5, 0, CH - 1.001); CY0[y] = Math.floor(f); CFY[y] = f - CY0[y]; IYS[y] = Math.min(IH - 1, Math.floor(y * IH / H)); }
+
+/* ================= data layer ================= */
+const GLAT = [], GLON = []; for (let la = 32; la <= 47.01; la += 1.5) for (let lo = -85; lo <= -54.99; lo += 1.5) { GLAT.push(+la.toFixed(2)); GLON.push(+lo.toFixed(2)); }
+const NG = GLAT.length, NLAT = 11, NLON = 21;
+const DATA = { grid: null, marine: null, gridAt: 0, marineAt: 0, gridErr: '', obs: {}, tides: {}, alerts: null, fetchErr: {} };
+// coarse -> grid bilinear weights
+const CGI = new Int16Array(CN * 4), CGW = new Float32Array(CN * 4);
+for (let c = 0; c < CN; c++) {
+  const gi = clamp((CLON[c] + 85) / 1.5, 0, NLON - 1.001), gj = clamp((CLAT[c] - 32) / 1.5, 0, NLAT - 1.001);
+  const i0 = Math.floor(gi), j0 = Math.floor(gj), fx = gi - i0, fy = gj - j0;
+  CGI[c * 4] = j0 * NLON + i0; CGI[c * 4 + 1] = j0 * NLON + i0 + 1; CGI[c * 4 + 2] = (j0 + 1) * NLON + i0; CGI[c * 4 + 3] = (j0 + 1) * NLON + i0 + 1;
+  CGW[c * 4] = (1 - fx) * (1 - fy); CGW[c * 4 + 1] = fx * (1 - fy); CGW[c * 4 + 2] = (1 - fx) * fy; CGW[c * 4 + 3] = fx * fy;
+}
+function b64f(a) { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function fb64(s, n) { try { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); const f = new Float32Array(u.buffer); return n && f.length !== n ? null : f; } catch (e) { return null; } }
+async function getJSON(url, ms) {
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), ms || 25000);
+  try { const r = await fetch(url, { signal: ac.signal, cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(to); }
+}
+const GVARS = ['pressure_msl', 'wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'precipitation', 'cloud_cover'];
+function packGrid(arr) {
+  const times = arr[0].hourly.time.map(t => t * 1000), NT = times.length;
+  const P = new Float32Array(NT * NG), U = new Float32Array(NT * NG), V = new Float32Array(NT * NG), G = new Float32Array(NT * NG), R = new Float32Array(NT * NG), C = new Float32Array(NT * NG);
+  for (let i = 0; i < NG; i++) {
+    const h = (arr[i] || arr[0]).hourly;
+    for (let t = 0; t < NT; t++) {
+      const k = t * NG + i, prev = t > 0 ? k - NG : -1;
+      const p = h.pressure_msl[t], ws = h.wind_speed_10m[t], wd = h.wind_direction_10m[t], g = h.wind_gusts_10m[t], pr = h.precipitation[t], cc = h.cloud_cover[t];
+      P[k] = fin(p) ? p : (prev >= 0 ? P[prev] : 1013);
+      if (fin(ws) && fin(wd)) { U[k] = -ws * Math.sin(wd * D2R); V[k] = -ws * Math.cos(wd * D2R); } else if (prev >= 0) { U[k] = U[prev]; V[k] = V[prev]; }
+      G[k] = fin(g) ? g : (prev >= 0 ? G[prev] : 0); R[k] = fin(pr) ? pr : 0; C[k] = fin(cc) ? cc : 0;
+    }
+  }
+  return { times, NT, P, U, V, G, R, C };
+}
+function packMarine(arr) {
+  if (!Array.isArray(arr)) arr = [arr];
+  const times = arr[0].hourly.time.map(t => t * 1000), NT = times.length, NM = MARINE.length;
+  const Hh = new Float32Array(NT * NM).fill(NaN), Pp = new Float32Array(NT * NM).fill(NaN), Dd = new Float32Array(NT * NM).fill(NaN);
+  for (let i = 0; i < NM; i++) { const h = arr[i] && arr[i].hourly; if (!h) continue; for (let t = 0; t < NT; t++) { const k = t * NM + i; if (fin(h.wave_height[t])) Hh[k] = h.wave_height[t]; if (fin(h.wave_period[t])) Pp[k] = h.wave_period[t]; if (fin(h.wave_direction[t])) Dd[k] = h.wave_direction[t]; } }
+  return { times, NT, H: Hh, P: Pp, D: Dd };
+}
+function saveCache(name, obj, at) {
+  if (CAPTURE) return;
+  try { const o = { at, times: obj.times }; for (const k of ['P', 'U', 'V', 'G', 'R', 'C', 'H', 'D']) if (obj[k]) o[k] = b64f(obj[k]); localStorage.setItem('mztv-onshore-' + name, JSON.stringify(o)); } catch (e) { }
+}
+function loadCache(name, fields, per) {
+  try {
+    const o = JSON.parse(localStorage.getItem('mztv-onshore-' + name) || 'null'); if (!o || !o.times) return null;
+    const NT = o.times.length, r = { times: o.times, NT };
+    for (const k of fields) { r[k] = fb64(o[k], NT * per); if (!r[k]) return null; }
+    return { d: r, at: o.at };
+  } catch (e) { return null; }
+}
+async function fetchGrid() {
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + GLAT.join(',') + '&longitude=' + GLON.join(',') +
+    '&hourly=' + GVARS.join(',') + '&wind_speed_unit=mph&past_hours=24&forecast_hours=72&timezone=GMT&timeformat=unixtime';
+  try {
+    const arr = await getJSON(url, 45000); const g = packGrid(Array.isArray(arr) ? arr : [arr]);
+    const first = !DATA.grid; DATA.grid = g; DATA.gridAt = Date.now(); DATA.gridErr = ''; saveCache('grid', g, DATA.gridAt);
+    onGridUpdate(first ? 'MODEL GRID LOADED' : 'MODEL GRID UPDATED');
+  } catch (e) { DATA.gridErr = String(e.message || e); DATA.gridRetry = Date.now() + (/429/.test(DATA.gridErr) ? 30 : 8) * 60e3; }
+}
+async function fetchMarine() {
+  const url = 'https://marine-api.open-meteo.com/v1/marine?latitude=' + MARINE.map(m => m[0]).join(',') + '&longitude=' + MARINE.map(m => m[1]).join(',') +
+    '&hourly=wave_height,wave_period,wave_direction&past_hours=6&forecast_hours=72&timezone=GMT&timeformat=unixtime';
+  try { const m = packMarine(await getJSON(url)); m.D = m.D; DATA.marine = m; DATA.marineAt = Date.now(); saveCache('marine', { times: m.times, H: m.H, P: m.P, D: m.D }, DATA.marineAt); }
+  catch (e) { DATA.fetchErr.marine = String(e.message || e); DATA.marineRetry = Date.now() + 10 * 60e3; }
+}
+async function fetchObs() {
+  await Promise.all(OBS.map(async o => {
+    try {
+      const p = (await getJSON('https://api.weather.gov/stations/' + o.id + '/observations/latest')).properties;
+      const kmh = v => v && fin(v.value) ? v.value * 0.621371 : NaN;
+      const prev = DATA.obs[o.id];
+      const rec = { ws: kmh(p.windSpeed), wg: kmh(p.windGust), wd: p.windDirection && fin(p.windDirection.value) ? p.windDirection.value : NaN,
+        p: p.seaLevelPressure && fin(p.seaLevelPressure.value) ? p.seaLevelPressure.value / 100 : (p.barometricPressure && fin(p.barometricPressure.value) ? p.barometricPressure.value / 100 : NaN),
+        t: Date.parse(p.timestamp) || Date.now(), txt: p.textDescription || '' };
+      DATA.obs[o.id] = rec;
+      const g = fin(rec.wg) ? rec.wg : rec.ws; const mk = 'g' + o.id;
+      if (fin(g) && g >= 35 && g > (S.maxObs[mk] || 0) + 5) { if (S.maxObs[mk]) log(`GUST ${o.k} ${f0(g)} mph observed — new high for this broadcast`); S.maxObs[mk] = g; }
+      else if (fin(g) && !S.maxObs[mk]) S.maxObs[mk] = Math.max(g, 1);
+    } catch (e) { DATA.fetchErr.obs = o.id + ' ' + (e.message || e); }
+  }));
+}
+function coopsTime(s) { return Date.parse(s.replace(' ', 'T') + ':00Z'); }
+async function fetchTides() {
+  const d = new Date(Date.now() - 864e5), ds = d.toISOString().slice(0, 10).replace(/-/g, '');
+  await Promise.all(TIDES.map(async (t, k) => {
+    const b = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=' + t.id + '&datum=MLLW&units=english&time_zone=gmt&format=json&application=MZTV';
+    try {
+      const rec = DATA.tides[t.id] || {};
+      if (!rec.preds || !rec.predAt || Date.now() - rec.predAt > 6 * HOUR) {
+        const p = await getJSON(b + '&product=predictions&interval=6&begin_date=' + ds + '&range=72');
+        if (p.predictions) { rec.preds = p.predictions.map(q => [coopsTime(q.t), parseFloat(q.v)]); rec.predAt = Date.now(); }
+      }
+      const w = await getJSON(b + '&product=water_level&range=3');
+      if (w.data && w.data.length) { const last = w.data[w.data.length - 1]; rec.obsT = coopsTime(last.t); rec.obsV = parseFloat(last.v);
+        const first = w.data[0]; rec.trend = (rec.obsV - parseFloat(first.v)) / Math.max(0.1, (rec.obsT - coopsTime(first.t)) / HOUR); }
+      if (rec.preds && fin(rec.obsV)) {
+        const pv = predAt(rec.preds, rec.obsT); rec.surge = fin(pv) ? rec.obsV - pv : NaN;
+        const mk = 's' + t.id;
+        if (fin(rec.surge) && rec.surge >= 0.5 && rec.surge > (S.maxObs[mk] || 0) + 0.25) { if (S.maxObs[mk] !== undefined) log(`SURGE ${t.k} ${sgn(rec.surge)} ft above tide — new high for this broadcast`); S.maxObs[mk] = rec.surge; }
+        else if (S.maxObs[mk] === undefined && fin(rec.surge)) S.maxObs[mk] = Math.max(0.5, rec.surge);
+      }
+      DATA.tides[t.id] = rec;
+    } catch (e) { DATA.fetchErr.tides = t.k + ' ' + (e.message || e); }
+  }));
+}
+function predAt(pr, t) { if (!pr || !pr.length) return NaN; if (t <= pr[0][0]) return pr[0][1]; for (let i = 1; i < pr.length; i++) if (pr[i][0] >= t) { const a = pr[i - 1], b = pr[i]; return lerp(a[1], b[1], (t - a[0]) / Math.max(1, b[0] - a[0])); } return NaN; }
+function nextHigh(pr, t) { if (!pr) return null; for (let i = 1; i < pr.length - 1; i++) { if (pr[i][0] < t) continue; if (pr[i][1] >= pr[i - 1][1] && pr[i][1] > pr[i + 1][1]) return { t: pr[i][0], v: pr[i][1] }; } return null; }
+async function fetchAlerts() {
+  try {
+    const j = await getJSON('https://api.weather.gov/alerts/active?area=NC,VA,MD,DE,NJ,NY,CT,RI,MA,NH,ME');
+    const ev = {}; let total = 0; const seen = new Set();
+    for (const f of j.features || []) { const p = f.properties || {}; if (!p.event || /test/i.test(p.event) || seen.has(p.id)) continue; seen.add(p.id); ev[p.event] = (ev[p.event] || 0) + 1; total++; }
+    const types = Object.entries(ev).sort((a, b) => b[1] - a[1]);
+    const prev = DATA.alerts; DATA.alerts = { total, types, nTypes: types.length, t: Date.now() };
+    if (prev && prev.total !== total) log(`NWS ALERTS ${prev.total} → ${total}` + (types[0] ? ` · ${types[0][0]} ×${types[0][1]}` : ''));
+    else if (!prev) log(`NWS ALERTS ${total} active NC→ME` + (types[0] ? ` · ${types[0][0]} ×${types[0][1]}` : ''));
+  } catch (e) { DATA.fetchErr.alerts = String(e.message || e); }
+}
+function dataTick() {
+  const t = Date.now();
+  if (!DATA.grid || (t - DATA.gridAt > 58 * 60e3 && (!DATA.gridRetry || t > DATA.gridRetry))) { if (!DATA.gridBusy) { DATA.gridBusy = true; fetchGrid().finally(() => DATA.gridBusy = false); } }
+  if (!DATA.marine || (t - DATA.marineAt > 58 * 60e3 && (!DATA.marineRetry || t > DATA.marineRetry))) { if (!DATA.marineBusy) { DATA.marineBusy = true; fetchMarine().finally(() => DATA.marineBusy = false); } }
+}
+
+/* ================= persistent state ================= */
+let S;
+function freshState() {
+  return { v: 1, born: now(), wear: new Float32Array(CN), rain: new Float32Array(CN), hist: [], log: [], phase: 'ACQUIRING', phaseSince: now(), pend: null,
+    recLow: 9999, latBand: null, cd: {}, maxObs: {}, gram: { a: 4, b: 4, t0: 0, dur: 1 }, unlock: {}, lastRetrace: 0, lastPersist: 0, subDeg: null };
+}
+function loadState() {
+  if (FRESH) { try { localStorage.removeItem(KEY); } catch (e) { } return freshState(); }
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!o || o.v !== 1) return freshState();
+    const s = Object.assign(freshState(), o);
+    s.wear = fb64(o.wear, CN) || new Float32Array(CN); s.rain = fb64(o.rain, CN) || new Float32Array(CN);
+    for (const a of [s.wear, s.rain]) for (let i = 0; i < CN; i++) if (!fin(a[i]) || a[i] < 0) a[i] = 0;
+    s.hist = (o.hist || []).filter(h => h && fin(h.t) && fin(h.lat) && fin(h.lon) && fin(h.p));
+    s.log = (o.log || []).slice(-80); s.gram = o.gram && fin(o.gram.b) ? { a: o.gram.b, b: o.gram.b, t0: 0, dur: 1 } : s.gram;
+    if (!fin(s.recLow)) s.recLow = 9999;
+    return s;
+  } catch (e) { return freshState(); }
+}
+function persist() {
+  if (CAPTURE) return;
+  try {
+    const o = Object.assign({}, S, { wear: b64f(S.wear), rain: b64f(S.rain), hist: S.hist.slice(-1600), log: S.log.slice(-80) });
+    localStorage.setItem(KEY, JSON.stringify(o));
+  } catch (e) { }
+}
+S = loadState();
+function log(m) { S.log.push({ t: now(), m }); if (S.log.length > 120) S.log.splice(0, S.log.length - 120); renderLog(); }
+
+/* ================= fields at time t ================= */
+const Pc = new Float32Array(CN), Uc = new Float32Array(CN), Vc = new Float32Array(CN), Gc = new Float32Array(CN), Rc = new Float32Array(CN), Cc = new Float32Array(CN);
+const GMc = new Float32Array(CN), WHc = new Float32Array(CN), WPc = new Float32Array(CN).fill(9), WXc = new Float32Array(CN), WYc = new Float32Array(CN), Ec = new Float32Array(CN), STAINc = new Float32Array(CN);
+const gP = new Float32Array(NG), gU = new Float32Array(NG), gV = new Float32Array(NG), gG = new Float32Array(NG), gR = new Float32Array(NG), gC = new Float32Array(NG);
+function timeIdx(times, t) { const n = times.length; if (t <= times[0]) return [0, 0, t < times[0] - 2 * HOUR]; if (t >= times[n - 1]) return [n - 2, 1, t > times[n - 1] + 2 * HOUR]; let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (times[m] <= t) lo = m; else hi = m; } return [lo, (t - times[lo]) / (times[hi] - times[lo]), false]; }
+function gridAt(t, onlyP) {
+  const g = DATA.grid; if (!g) return false;
+  const [h, f] = timeIdx(g.times, t), a = h * NG, b = (h + 1) * NG;
+  for (let i = 0; i < NG; i++) {
+    gP[i] = lerp(g.P[a + i], g.P[b + i], f); if (onlyP) continue;
+    gU[i] = lerp(g.U[a + i], g.U[b + i], f); gV[i] = lerp(g.V[a + i], g.V[b + i], f); gG[i] = lerp(g.G[a + i], g.G[b + i], f); gR[i] = lerp(g.R[a + i], g.R[b + i], f); gC[i] = lerp(g.C[a + i], g.C[b + i], f);
+  }
+  return true;
+}
+function findLow(P) {
+  let mi = 1e9, k = -1, sum = 0;
+  for (let i = 0; i < NG; i++) { sum += P[i]; const x = i % NLON, y = (i / NLON) | 0; if (x < 1 || y < 1 || x > NLON - 2 || y > NLAT - 2) continue; if (P[i] < mi) { mi = P[i]; k = i; } }
+  const mean = sum / NG;
+  if (k < 0) return { ok: false };
+  const pl = P[k - 1], pr = P[k + 1], pd = P[k - NLON], pu = P[k + NLON];
+  const dx = pl - 2 * mi + pr, dy = pd - 2 * mi + pu;
+  const ox = dx > 1e-3 ? clamp((pl - pr) / (2 * dx), -0.5, 0.5) : 0, oy = dy > 1e-3 ? clamp((pd - pu) / (2 * dy), -0.5, 0.5) : 0;
+  const p = mi - (pl - pr) * ox / 4 - (pd - pu) * oy / 4;
+  const lat = GLAT[k] + oy * 1.5, lon = GLON[k] + ox * 1.5, depth = mean - p;
+  return { ok: depth >= 6 && p <= 1011, lat, lon, p, depth, mean };
+}
+function lowAt(t) { if (!gridAt(t, true)) return { ok: false }; return findLow(gP); }
+function fieldsAt(t) {
+  if (!gridAt(t, false)) return false;
+  for (let c = 0; c < CN; c++) {
+    const o = c * 4, i0 = CGI[o], i1 = CGI[o + 1], i2 = CGI[o + 2], i3 = CGI[o + 3], w0 = CGW[o], w1 = CGW[o + 1], w2 = CGW[o + 2], w3 = CGW[o + 3];
+    Pc[c] = gP[i0] * w0 + gP[i1] * w1 + gP[i2] * w2 + gP[i3] * w3; Uc[c] = gU[i0] * w0 + gU[i1] * w1 + gU[i2] * w2 + gU[i3] * w3; Vc[c] = gV[i0] * w0 + gV[i1] * w1 + gV[i2] * w2 + gV[i3] * w3;
+    Gc[c] = gG[i0] * w0 + gG[i1] * w1 + gG[i2] * w2 + gG[i3] * w3; Rc[c] = gR[i0] * w0 + gR[i1] * w1 + gR[i2] * w2 + gR[i3] * w3; Cc[c] = gC[i0] * w0 + gC[i1] * w1 + gC[i2] * w2 + gC[i3] * w3;
+  }
+  const pxPerCell = W / CW;
+  for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { const c = y * CW + x, xl = x > 0 ? c - 1 : c, xr = x < CW - 1 ? c + 1 : c, yu = y > 0 ? c - CW : c, yd = y < CH - 1 ? c + CW : c;
+    GMc[c] = Math.hypot((Pc[xr] - Pc[xl]) / ((xr - xl) || 1), (Pc[yd] - Pc[yu]) / (((yd - yu) / CW) || 1)) / pxPerCell + 1e-4; }
+  return true;
+}
+function marineAt(t) {
+  const m = DATA.marine, NM = MARINE.length, out = [];
+  if (!m) return null;
+  const [h, f] = timeIdx(m.times, t);
+  for (let i = 0; i < NM; i++) { const a = h * NM + i, b = (h + 1) * NM + i; const hh = lerp(m.H[a], m.H[b], f), pp = lerp(m.P[a], m.P[b], f);
+    let d0 = m.D[a], d1 = m.D[b]; if (fin(d0) && fin(d1) && Math.abs(d1 - d0) > 180) d1 += d1 < d0 ? 360 : -360; const dd = lerp(d0, d1, f);
+    if (fin(hh) && fin(pp) && fin(dd)) out.push({ lat: MARINE[i][0], lon: MARINE[i][1], h: hh, p: pp, d: dd }); }
+  return out.length ? out : null;
+}
+function wavesToCoarse(pts) {
+  for (let c = 0; c < CN; c++) {
+    if (!pts) { WHc[c] = 1.2; WPc[c] = 8; WXc[c] = -0.6; WYc[c] = 0.8; continue; }
+    let sw = 0, sh = 0, sp = 0, sx = 0, sy = 0;
+    for (const q of pts) { const d2 = (q.lat - CLAT[c]) ** 2 + ((q.lon - CLON[c]) * COSL) ** 2, w = 1 / (d2 + 0.4); sw += w; sh += q.h * w; sp += q.p * w; const pr = (q.d + 180) * D2R; sx += Math.sin(pr) * w; sy += -Math.cos(pr) * w; }
+    WHc[c] = sh / sw; WPc[c] = sp / sw; const m = Math.hypot(sx, sy) || 1; WXc[c] = sx / m; WYc[c] = sy / m;
+  }
+}
+
+/* ================= analysis: the storm as numbers ================= */
+const A = { ok: false, lat: NaN, lon: NaN, p: NaN, depth: 0, trend: NaN, spd: NaN, hdg: NaN, gust: 0, gLat: NaN, gLon: NaN, rainNorm: 0, windNorm: 0, windPan: 0, onW: 0, onCity: -1,
+  waveH: 0, waveP: 9, waveAt: '', perG: 9, I: 0, dispX: NaN, dispY: NaN, stale: false, trackF: [], peak: null };
+function onGridUpdate(msg) {
+  const g = DATA.grid; A.track = [];
+  for (let h = 0; h < g.NT; h++) { const P = g.P.subarray(h * NG, (h + 1) * NG), L = findLow(P); A.track.push(Object.assign({ t: g.times[h] }, L)); }
+  const t = now(); let peak = null;
+  for (const q of A.track) if (q.ok && q.t >= t - HOUR && (!peak || q.p < peak.p)) peak = q;
+  A.peak = peak;
+  // seed the memory track from the model's own past analysis on first sight
+  if (!S.hist.length) for (const q of A.track) if (q.ok && q.t <= t) S.hist.push({ t: q.t, lat: q.lat, lon: q.lon, p: q.p, m: 1 });
+  if (msg) log(msg + (peak ? ` · lowest ahead ${f1(peak.p)} hPa ${dt(peak.t)} near ${f1(peak.lat)}N ${f1(-peak.lon)}W` : ' · no organised low ahead'));
+  analyze(true);
+}
+const PHASE_GRAMMAR = { DEEPENING: 0, MATURE: 1, STALLED: 2, FILLING: 3, AFTER: 4, QUIET: 4, ACQUIRING: 4 };
+function analyze(force) {
+  const t = now();
+  A.stale = !DATA.grid || timeIdx(DATA.grid.times, t)[2];
+  if (!fieldsAt(t)) return;
+  wavesToCoarse(marineAt(t));
+  const L = findLow(gP); Object.assign(A, { ok: L.ok, lat: L.lat, lon: L.lon, p: L.p, depth: L.depth || 0 });
+  const g = DATA.grid, t0 = g.times[0];
+  const back = t - 3 * HOUR >= t0, L2 = lowAt(back ? t - 3 * HOUR : t + 3 * HOUR);
+  gridAt(t, false);  // restore gP etc for the current time
+  if (L2.ok && L.ok) {
+    A.trend = back ? L.p - L2.p : L2.p - L.p;
+    const d = miles(L2.lat, L2.lon, L.lat, L.lon); A.spd = d / 3 / 1.15078;
+    A.hdg = back ? bearing(L2.lat, L2.lon, L.lat, L.lon) : bearing(L.lat, L.lon, L2.lat, L2.lon);
+  } else { A.trend = NaN; A.spd = NaN; A.hdg = NaN; }
+  // gusts in view
+  let gm = 0, gi = -1; for (let i = 0; i < NG; i++) { const u = uLon(GLON[i]), v = vLat(GLAT[i]); if (u < 0 || u > 1 || v < 0 || v > 1) continue; if (gG[i] > gm) { gm = gG[i]; gi = i; } }
+  A.gust = gm; A.gLat = gi >= 0 ? GLAT[gi] : NaN; A.gLon = gi >= 0 ? GLON[gi] : NaN;
+  // rain
+  let rn = 0, rs = 0; for (let c = 0; c < CN; c++) if (Rc[c] > 0.25) { rn++; rs += Rc[c]; }
+  A.rainNorm = rn ? clamp(rs / rn / 3, 0, 1) * clamp(rn / CN * 8, 0, 1) : 0;
+  // onshore wind along the coast
+  let s1 = 0, s2 = 0, sx = 0, best = 0, bc = -1;
+  for (const c of COASTLIST) {
+    const sxw = Uc[c], syw = -Vc[c], on = Math.max(0, -(sxw * CNX[c] + syw * CNY[c]));
+    const tk = CTIDE[c], tr = tk >= 0 ? DATA.tides[TIDES[tk].id] : null, surge = tr && fin(tr.surge) ? Math.max(0, tr.surge) : 0;
+    const e = (on / 35) ** 2 * (0.6 + 0.4 * clamp(WHc[c] / 4, 0, 2)) * (1 + surge / 2);
+    Ec[c] = fin(e) ? e : 0; s1 += on * on; s2 += on; sx += on * on * ((c % CW) / CW * 2 - 1);
+    if (on > best) { best = on; bc = c; }
+  }
+  A.onW = s2 > 0 ? s1 / s2 : 0; A.windNorm = clamp((A.onW - 6) / 38, 0, 1); A.windPan = s1 > 0 ? clamp(sx / s1, -1, 1) : 0; A.onMax = best; A.onCity = bc >= 0 ? CCITY[bc] : -1;
+  // waves
+  const mp = marineAt(t);
+  if (mp) { let hm = 0, pm = 9, at = null, sw = 0, sp = 0; for (const q of mp) { if (q.h > hm) { hm = q.h; pm = q.p; at = q; } sw += q.h; sp += q.h * q.p; }
+    A.waveH = hm; A.waveP = pm; A.perG = clamp(sw > 0 ? sp / sw : 9, 5, 16); A.waveLat = at ? at.lat : NaN; A.waveLon = at ? at.lon : NaN; }
+  A.I = A.ok ? clamp((1013 - A.p) / 22, 0, 1) * 0.7 + clamp(A.gust / 70, 0, 1) * 0.3 : clamp(A.gust / 70, 0, 1) * 0.3;
+  if (force) classify(true);
+}
+
+/* ================= memory integration + events ================= */
+let lastMem = 0;
+function memoryStep() {
+  const t = now(); if (!lastMem) { lastMem = t; return; }
+  const dh = clamp((t - lastMem) / HOUR, 0, 0.25); lastMem = t; if (!DATA.grid || A.stale || dh <= 0) return;
+  let tot = 0;
+  for (const c of COASTLIST) { S.wear[c] += Ec[c] * dh; if (!fin(S.wear[c])) S.wear[c] = 0; tot += S.wear[c]; }
+  for (let c = 0; c < CN; c++) { if (LANDF[c] > 0.3 && Rc[c] > 0) S.rain[c] += Rc[c] * dh; if (!fin(S.rain[c])) S.rain[c] = 0; STAINc[c] = 1 - Math.exp(-S.rain[c] / 30); }
+  if (!S.unlock.coast && tot > COASTLIST.length * 0.12) { S.unlock.coast = t; log('UNLOCK · WORN COAST SPEAKS — segments the storm has worn now answer when struck again'); }
+  // track memory every 10 sim-minutes
+  const lh = S.hist[S.hist.length - 1];
+  if (A.ok && (!lh || t - lh.t >= 10 * 60e3)) {
+    // recognition: the low comes back over ground it already crossed
+    if (S.hist.length > 12 && t - S.lastRetrace > HOUR) {
+      for (let hi = 0; hi < S.hist.length; hi++) { const h = S.hist[hi]; if (t - h.t < 6 * HOUR) break; if (miles(h.lat, h.lon, A.lat, A.lon) >= 35) continue;
+        let away = false; for (let k = hi + 1; k < S.hist.length; k++) if (miles(h.lat, h.lon, S.hist[k].lat, S.hist[k].lon) > 110) { away = true; break; }
+        if (away) { S.lastRetrace = t; AU.throwUntil = (AU.ctx ? AU.ctx.currentTime : 0) + 7; ringAdd(performance.now() / 1000, 1.2); log(`RETRACE · the low is back over its own path from ${dt(h.t)} — echo`); break; } }
+    }
+    S.hist.push({ t, lat: A.lat, lon: A.lon, p: A.p });
+    if (S.hist.length > 2000) S.hist.splice(0, S.hist.length - 2000);
+  }
+}
+function classify(first) {
+  const t = now();
+  let ph;
+  if (!DATA.grid) ph = 'ACQUIRING';
+  else if (!A.ok) ph = S.hist.some(h => !h.m) || S.hist.length > 3 ? 'AFTER' : 'QUIET';
+  else if (fin(A.trend) && A.trend <= -0.8) ph = 'DEEPENING';
+  else if (fin(A.trend) && A.trend >= 0.8) ph = 'FILLING';
+  else if (fin(A.spd) && A.spd < 7) ph = 'STALLED';
+  else ph = 'MATURE';
+  if (S.phase === 'ACQUIRING' || first && S.phase === ph) { if (S.phase !== ph) { S.phase = ph; S.phaseSince = t; const g = PHASE_GRAMMAR[ph]; S.gram = { a: g, b: g, t0: 0, dur: 1 }; log(`PHASE ${ph} · grammar ${GRAMMAR_NAMES[g]}`); } return; }
+  if (ph === S.phase) { S.pend = null; return; }
+  if (!S.pend || S.pend.phase !== ph) { S.pend = { phase: ph, since: t }; return; }
+  if (t - S.pend.since < 15 * 60e3) return;
+  rupture(ph, fin(A.trend) ? `${A.trend > 0 ? '+' : '−'}${Math.abs(A.trend).toFixed(1)} hPa/3h` : '');
+}
+function rupture(ph, why) {
+  const old = S.phase; S.phase = ph; S.phaseSince = now(); S.pend = null;
+  const g = PHASE_GRAMMAR[ph] === S.gram.b ? (S.gram.b + 1 + Math.floor(hash2(S.hist.length, 3, SEED) * 3)) % 5 : PHASE_GRAMMAR[ph];
+  S.gram = { a: S.gram.b, b: g, t0: performance.now() / 1000, dur: 150 };
+  AU.throwUntil = (AU.ctx ? AU.ctx.currentTime : 0) + 6; AU.dropBars = 2; AU.boom = true;
+  log(`RUPTURE · ${old} → ${ph}${why ? ' (' + why + ')' : ''} · grammar ${GRAMMAR_NAMES[S.gram.a]} → ${GRAMMAR_NAMES[g]}`);
+}
+function events() {
+  if (!A.ok || A.stale) return;
+  if (A.p < S.recLow - 1) { const first = S.recLow > 5000; S.recLow = A.p; if (!first) log(`NEW LOW ${f1(A.p)} hPa at ${f1(A.lat)}N ${f1(-A.lon)}W · sub falls to ${noteName(subTarget().deg)}`); }
+  const band = Math.floor(A.lat); if (S.latBand !== null && band !== S.latBand) log(`LOW CROSSES ${Math.max(band, S.latBand)}°N heading ${fin(A.hdg) ? comp(A.hdg) : '?'}`); S.latBand = band;
+  for (const c of CITIES) {
+    const d = miles(A.lat, A.lon, c.lat, c.lon), r = S.cd[c.k] || (S.cd[c.k] = { min: d, logged: false, lt: now() });
+    if (d < r.min - 1) { r.min = d; r.lt = now(); if (r.logged && d < r.loggedAt - 25) r.logged = false; }
+    else if (!r.logged && d > r.min + 18 && r.min < 450 && now() - r.lt > 20 * 60e3) { r.logged = true; r.loggedAt = r.min; log(`CLOSEST APPROACH ${c.n} ${f0(r.min)} mi · ${dt(r.lt)}`); }
+  }
+}
+
+/* ================= palette: radar scopes ================= 
+   Each storm phase has its own scope: a dBZ-style rain ramp that stays legible (green → yellow → orange → red → magenta),
+   laid over a different, deliberately playful pairing of sea / land / isobar / coast. Colours glide between scopes. */
+const IK = { BG: 0, SW: 1, LD: 2, LT: 3, ISO: 4, CO: 5, HIT: 6, R0: 7, TX: 13, SH: 14 };
+const RAMP = ['#00c853', '#76ff03', '#ffea00', '#ff9100', '#ff1744', '#f500d8'];
+const SCOPES = {
+  DEEPENING: { name: 'NEXRAD NIGHT', c: ['#050a2c', '#1f44e0', '#170a33', '#4a22a0', '#6ff6ff', '#ff2e93', '#fff34a', ...RAMP, '#ffffff', '#01020f'] },
+  MATURE: { name: 'VELOCITY', c: ['#14041f', '#8a1ff0', '#031e2c', '#0e6b82', '#ff86d8', '#00f0ff', '#ffffff', ...RAMP, '#fff6d8', '#050008'] },
+  STALLED: { name: 'LOOP', c: ['#001d24', '#00b2a6', '#2e0633', '#a1178f', '#fff35c', '#ff5a36', '#63ffb4', ...RAMP, '#ffffff', '#000a0d'] },
+  FILLING: { name: 'DAYBREAK SCOPE', c: ['#1b2550', '#4f86ff', '#2d1d45', '#7a62c4', '#ffffff', '#ffb000', '#ff4fd8', ...RAMP, '#ffffff', '#0b1030'] },
+  AFTER: { name: 'CLEAR AIR', c: ['#e6efff', '#8fb0ff', '#ffd6ea', '#ff8cc6', '#3a2cff', '#ff3b3b', '#00a860', ...RAMP, '#160b52', '#b9c8ee'] }
+};
+SCOPES.QUIET = SCOPES.AFTER; SCOPES.ACQUIRING = SCOPES.DEEPENING;
+const hexRGB = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
+const PALC = SCOPES.DEEPENING.c.map(hexRGB), INK = new Uint32Array(PALC.length);
+function paletteStep(dts) {
+  const sc = SCOPES[S.phase] || SCOPES.DEEPENING, k = clamp(dts / 45, 0, 1), tt = performance.now() / 1000;
+  for (let i = 0; i < PALC.length; i++) {
+    const tg = hexRGB(sc.c[i]);
+    // a little life in the non-semantic inks: sea and ground breathe with intensity
+    const wob = (i === IK.SW || i === IK.LT) ? Math.sin(tt / 23 + i) * 14 * (0.3 + A.I) : 0;
+    for (let j = 0; j < 3; j++) PALC[i][j] += (clamp(tg[j] + (j === 2 ? wob : -wob * 0.4), 0, 255) - PALC[i][j]) * k;
+    const [r, g, b] = PALC[i].map(v => Math.round(clamp(v, 0, 255))); INK[i] = (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const css = i => `rgb(${PALC[i].map(v => Math.round(v)).join(',')})`, st = document.documentElement.style;
+  st.setProperty('--bg', css(IK.BG)); st.setProperty('--sw', css(IK.SW)); st.setProperty('--co', css(IK.CO)); st.setProperty('--iso', css(IK.ISO)); st.setProperty('--tx', css(IK.TX)); st.setProperty('--hit', css(IK.HIT));
+  document.body.style.background = css(IK.BG);
+}
+
+/* ================= ink: rain + cloud carried by the real wind ================= */
+let R0 = new Float32Array(IN), R1 = new Float32Array(IN), C0 = new Float32Array(IN), C1 = new Float32Array(IN), G0 = new Float32Array(IN), G1 = new Float32Array(IN);
+const VX = new Float32Array(IN), VY = new Float32Array(IN), TR = new Float32Array(IN), TC = new Float32Array(IN), RV = new Float32Array(IN), CVV = new Float32Array(IN);
+for (let i = 0; i < IN; i++) { G0[i] = hash2(i, 7, SEED); }
+function inkTargets() {
+  const vs = 0.075 * (IW / 240);
+  for (let y = 0; y < IH; y++) { const fy = clamp((y + 0.5) * CH / IH - 0.5, 0, CH - 1.001), y0 = fy | 0, wy = fy - y0;
+    for (let x = 0; x < IW; x++) { const fx = clamp((x + 0.5) * CW / IW - 0.5, 0, CW - 1.001), x0 = fx | 0, wx = fx - x0, c = y0 * CW + x0;
+      const b = (A0) => lerp(lerp(A0[c], A0[c + 1], wx), lerp(A0[c + CW], A0[c + CW + 1], wx), wy);
+      const i = y * IW + x; VX[i] = b(Uc) * vs; VY[i] = -b(Vc) * vs; if (!fin(VX[i]) || !fin(VY[i])) { VX[i] = 0; VY[i] = 0; }
+      const r = Math.pow(clamp(b(Rc) / 6, 0, 1), 0.7), cc = b(Cc) / 100; TR[i] = fin(r) ? r : 0; TC[i] = fin(cc) ? cc : 0; } }
+}
+function inkStep(dts) {
+  const kR = 1 - Math.exp(-0.085 * dts), kN = 1 - Math.exp(-0.9 * dts), tk = (performance.now() * 7) | 0;
+  for (let y = 0; y < IH; y++) for (let x = 0; x < IW; x++) {
+    const i = y * IW + x, sx = clamp(x - VX[i] * dts, 0, IW - 1.001), sy = clamp(y - VY[i] * dts, 0, IH - 1.001);
+    const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0, j = y0 * IW + x0;
+    const bl = a => lerp(lerp(a[j], a[j + 1], fx), lerp(a[j + IW], a[j + IW + 1], fx), fy);
+    const r = bl(R0), c = bl(C0), g = bl(G0);
+    R1[i] = r + (TR[i] - r) * kR; C1[i] = c + (TC[i] - c) * kR * 0.7;
+    G1[i] = g + (hash2(i, tk, SEED) - g) * kN * 0.12;
+  }
+  let t = R0; R0 = R1; R1 = t; t = C0; C0 = C1; C1 = t; t = G0; G0 = G1; G1 = t;
+  for (let i = 0; i < IN; i++) { const gg = G0[i]; RV[i] = R0[i] * (0.45 + 1.1 * gg); CVV[i] = C0[i] * (0.2 + 1.6 * gg); }
+}
+function inkHeal() { let bad = false; for (let i = 0; i < IN; i += 97) if (!fin(R0[i]) || !fin(C0[i]) || !fin(G0[i])) { bad = true; break; } if (bad) { for (let i = 0; i < IN; i++) { R0[i] = TR[i] || 0; C0[i] = TC[i] || 0; G0[i] = hash2(i, 3, SEED); } log('SELF-HEAL · rain field regrown from the model'); } }
+
+/* ================= render ================= */
+const cv = document.getElementById('cv'); cv.width = W; cv.height = H;
+const cx2 = cv.getContext('2d', { alpha: false }); const IMG = cx2.createImageData(W, H), BUF = new Uint32Array(IMG.data.buffer);
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H), si = Math.floor(s), k = si >= 1 && si / s > 0.9 ? si : s; cv.style.width = W * k + 'px'; cv.style.height = H * k + 'px'; }
+addEventListener('resize', fit); fit();
+let swellPhase = 0;
+const RINGS = [];
+function ringAdd(tsec, amp) { RINGS.push({ t: tsec, a: amp }); if (RINGS.length > 24) RINGS.shift(); }
+let flash = { c: -1, t: 0 };
+function render() {
+  const g = S.gram, tt = performance.now() / 1000, prog = g.a === g.b ? 1 : clamp((tt - g.t0) / g.dur, 0, 1);
+  if (prog >= 1 && g.a !== g.b) g.a = g.b;
+  const TA = TH[g.a], TB = TH[g.b], dissolve = g.a !== g.b;
+  const BG = INK[IK.BG], SW = INK[IK.SW], LD = INK[IK.LD], LT = INK[IK.LT], ISO = INK[IK.ISO], CO = INK[IK.CO], HIT = INK[IK.HIT], SH = INK[IK.SH];
+  const have = !!DATA.grid, pAmb = A.ok ? A.p + A.depth : 1016, depth = Math.max(4, A.depth || 4);
+  const lam = 1 / ((6 + A.perG * 0.9) * SC), iShX = Math.max(1, Math.round(2 * SC * IW / W)), iShY = Math.max(1, Math.round(2 * SC * IH / H));
+  const flashOn = flash.c >= 0 && tt - flash.t < 0.7;
+  for (let y = 0; y < H; y++) {
+    const cy0 = CY0[y], fy = CFY[y], iy = IYS[y], iys = Math.max(0, iy - iShY);
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, cx0 = CX0[x], fx = CFX[x], c = cy0 * CW + cx0;
+      const th = dissolve && HP[i] < prog ? TB[i] : TA[i];
+      const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+      const land = LAND[i]; let col;
+      if (land) {
+        const st = STAINc[c] * w00 + STAINc[c + 1] * w10 + STAINc[c + CW] * w01 + STAINc[c + CW + 1] * w11;
+        col = RELIEF[i] + 0.45 * st > th ? LT : LD;
+      } else {
+        col = BG;
+        const wh = WHc[c] * w00 + WHc[c + 1] * w10 + WHc[c + CW] * w01 + WHc[c + CW + 1] * w11;
+        const dx = WXc[c] * w00 + WXc[c + 1] * w10 + WXc[c + CW] * w01 + WXc[c + CW + 1] * w11, dy = WYc[c] * w00 + WYc[c + 1] * w10 + WYc[c + CW] * w01 + WYc[c + CW + 1] * w11;
+        const s = Math.sin((x * dx + y * dy) * lam * 6.2832 - swellPhase + RELIEF[i] * 9);
+        const cr = s > 0 ? s * s * s : 0;
+        if (cr * (0.08 + 0.72 * clamp(wh / 7, 0, 1)) > th) col = SW;
+        const od = ODIST[i];
+        if (od < 5) { const nc = NEARC[i]; if (nc >= 0) { const e = Ec[nc]; if (clamp(e, 0, 1.4) * (1 - od / 5) * (0.35 + 0.65 * (s * 0.5 + 0.5)) > th + 0.08) col = HIT; } }
+      }
+      // cloud: a veil that hides the ground; rain: the radar ramp, dithered between steps, with a cast shadow
+      const ii = iy * IW + IXS[x], rr = RV[ii];
+      if (CVV[ii] > 0.5 + 0.55 * th) col = land ? LD : BG;
+      if (rr > 0.07 + 0.14 * th) { const lv = clamp(Math.floor(rr * 6.2 + (th - 0.5) * 0.9), 0, 5); col = INK[IK.R0 + lv]; }
+      else { const xs = IXS[x] - iShX; if (xs >= 0 && RV[iys * IW + xs] > 0.07 + 0.14 * th) col = SH; }
+      // isobars
+      if (have) {
+        const P = Pc[c] * w00 + Pc[c + 1] * w10 + Pc[c + CW] * w01 + Pc[c + CW + 1] * w11;
+        const gm = GMc[c] * w00 + GMc[c + 1] * w10 + GMc[c + CW] * w01 + GMc[c + CW + 1] * w11;
+        const q = P / 2, fr = q - Math.round(q), dP = Math.abs(fr) * 2;
+        if (gm > 0.004 && dP < gm * 0.62) { const major = Math.round(q) % 2 === 0, near = clamp((pAmb - P) / depth, 0, 1); const s = major ? 0.3 + 0.65 * near : 0.04 + 0.6 * near * near; if (s > th) col = ISO; }
+      }
+      // coast: worn segments glow, live exposure flashes
+      if (COASTPX[i]) {
+        const cc = COASTC[i];
+        if (cc < 0) col = 0.6 > th ? CO : LT; else {
+          const wv = 1 - Math.exp(-S.wear[cc] / 1.5), e = Ec[cc];
+          col = (flashOn && cc === flash.c) ? HIT : (e * 0.9 > th + 0.25) ? HIT : (0.6 + 0.4 * wv > th) ? CO : LT; }
+      }
+      BUF[i] = col;
+    }
+  }
+  overlays(tt);
+  cx2.putImageData(IMG, 0, 0);
+}
+function plot(x, y, col) { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < W && y < H) BUF[y * W + x] = col; }
+function thAt(x, y) { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= W || y >= H) return 1; return TH[S.gram.b][y * W + x]; }
+function line(x0, y0, x1, y1, col, pat, fade) {
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+  for (let k = 0; k <= n; k++) { if (pat && (k % pat)) continue; const x = lerp(x0, x1, k / n), y = lerp(y0, y1, k / n); if (fade !== undefined && thAt(x, y) > fade) continue; plot(x, y, col); }
+}
+const FONT = { A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010', P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010', U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010', Z: '111001010100111', '0': '111101101101111', '1': '010110010010111', '2': '110001010100111', '3': '110001010001110', '4': '101101111001001', '5': '111100110001110', '6': '011100111101111', '7': '111001010010010', '8': '111101111101111', '9': '111101111001110', '.': '000000000000010', '-': '000000111000000', '+': '000010111010000', ' ': '000000000000000' };
+function text(str, x, y, col, bg) {
+  const s = Math.max(1, Math.round(SC)); str = String(str).toUpperCase();
+  if (bg !== undefined) for (let j = -1; j <= 5 * s; j++) for (let i = -1; i <= str.length * 4 * s - s; i++) plot(x + i, y + j, bg);
+  for (let k = 0; k < str.length; k++) { const gl = FONT[str[k]] || FONT[' ']; for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (gl[j * 3 + i] === '1') for (let a = 0; a < s; a++) for (let b = 0; b < s; b++) plot(x + (k * 4 + i) * s + a, y + j * s + b, col); }
+}
+function overlays(tt) {
+  const BG = INK[IK.BG], ISO = INK[IK.ISO], CO = INK[IK.CO], HIT = INK[IK.HIT], TX = INK[IK.TX], SH = INK[IK.SH], t = now();
+  // hardened track: where the low has been since the broadcast (and the model's own recent past)
+  let prev = null;
+  for (const h of S.hist) { const x = PX(h.lon), y = PY(h.lat); if (prev && t - h.t < 14 * 24 * HOUR) { line(prev[0] + 1, prev[1] + 1, x + 1, y + 1, SH); line(prev[0], prev[1], x, y, TX); } prev = [x, y]; }
+  for (const h of S.hist) if (!h.m && ((h.t / (6 * HOUR)) % 1) < (10 * 60e3) / (6 * HOUR)) { const x = PX(h.lon), y = PY(h.lat); plot(x, y - 1, HIT); plot(x, y + 1, HIT); plot(x - 1, y, HIT); plot(x + 1, y, HIT); }
+  // forecast path: next 48 h, dotted, fading
+  if (A.track) { let pv = A.ok ? [PX(A.lon), PY(A.lat)] : null; for (const q of A.track) { if (q.t <= t || q.t > t + 48 * HOUR) continue; if (!q.ok) { pv = null; continue; } const x = PX(q.lon), y = PY(q.lat); if (pv) line(pv[0], pv[1], x, y, HIT, 3, 0.95 - (q.t - t) / (48 * HOUR) * 0.8); pv = [x, y]; } }
+  // cities
+  for (const c of CITIES) { const x = PX(c.lon), y = PY(c.lat); plot(x, y, HIT); plot(x + 1, y, HIT); plot(x, y + 1, HIT); plot(x + 1, y + 1, HIT); text(c.k, x + 4 * SC, y - 2 * SC, TX, BG); }
+  // the low
+  if (A.ok) {
+    const tx = PX(A.lon), ty = PY(A.lat);
+    if (!fin(A.dispX)) { A.dispX = tx; A.dispY = ty; }
+    A.dispX += (tx - A.dispX) * 0.04; A.dispY += (ty - A.dispY) * 0.04;
+    const x = A.dispX, y = A.dispY, r = 3.2 * SC;
+    // kick rings: seen with the beat
+    for (let k = RINGS.length - 1; k >= 0; k--) {
+      const R = RINGS[k], age = tt - R.t; if (age < 0) continue; if (age > 3) { RINGS.splice(k, 1); continue; }
+      const rr = (4 + age * 26) * SC, fade = R.a * (1 - age / 3), n = Math.ceil(rr * 6.3);
+      for (let a = 0; a < n; a++) { const px = x + Math.cos(a / n * 6.283) * rr, py = y + Math.sin(a / n * 6.283) * rr; if (thAt(px, py) < fade * 0.8) plot(px, py, ISO); }
+    }
+    for (let a = 0; a < 40; a++) plot(x + Math.cos(a / 40 * 6.283) * r, y + Math.sin(a / 40 * 6.283) * r, TX);
+    plot(x, y, CO);
+    text('L' + f0(A.p), x + 6 * SC, y + 3 * SC, TX, BG);
+  } else { A.dispX = NaN; for (let k = RINGS.length - 1; k >= 0; k--) if (tt - RINGS[k].t > 3) RINGS.splice(k, 1); }
+  if (!DATA.grid) text('ACQUIRING MODEL GRID', 8 * SC, 8 * SC, TX, BG);
+}
+
+/* ================= audio ================= */
+const SCALE = [0, 1, 3, 5, 7, 8, 10], NOTE_D1 = 36.708, NOTE = ['D', 'EB', 'F', 'G', 'A', 'BB', 'C'];
+const AU = { ctx: null, g: null, worklet: false, step: 0, nextT: 0, bar: 0, lastCT: -1, stall: 0, silent: 0, builtAt: 0, abuf: new Float32Array(2048), busy: false, noiseBuf: null, ir: null, bpm: 70, throwUntil: 0, dropBars: 0, boom: false, flutter: 1 };
+function degToFreq(deg) { const o = Math.floor(deg / 7), s = SCALE[((deg % 7) + 7) % 7] + 12 * o; return NOTE_D1 * Math.pow(2, s / 12); }
+const NN = ['C', 'C#', 'D', 'EB', 'E', 'F', 'F#', 'G', 'AB', 'A', 'BB', 'B'];
+function noteName(deg) { const midi = 26 + SCALE[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7); return NN[midi % 12] + (Math.floor(midi / 12) - 1) + ' ' + degToFreq(deg).toFixed(1) + ' Hz'; }
+function subTarget() {
+  const p = A.ok ? A.p : (DATA.grid ? Math.min(...gP) : 1010);
+  const semis = 12 + (p - 1000) * 0.6;   // 1000 hPa = D2; every hPa lower pulls 0.6 semitone down
+  let best = 0, bd = 1e9; for (let d = 0; d < 21; d++) { const s = SCALE[d % 7] + 12 * Math.floor(d / 7); const e = Math.abs(s - semis); if (e < bd) { bd = e; best = d; } }
+  if (S.subDeg !== null && S.subDeg !== best) { const cur = SCALE[S.subDeg % 7] + 12 * Math.floor(S.subDeg / 7); if (Math.abs(cur - semis) < bd + 0.35) best = S.subDeg; }
+  return { deg: best, p };
+}
+const NOISE_SRC = `class MZNoise extends AudioWorkletProcessor{constructor(){super();this.s=(Math.random()*4294967295)>>>0;this.b=[0,0];}
+process(i,out){const o=out[0];for(let c=0;c<o.length;c++){const a=o[c];let b=this.b[c]||0;for(let k=0;k<a.length;k++){this.s=(Math.imul(this.s,1664525)+1013904223)>>>0;const w=this.s/2147483648-1;b=b*0.992+w*0.1;a[k]=b*0.5;}this.b[c]=b;}return true;}}
+registerProcessor('mz-noise',MZNoise);`;
+function tanhCurve(n, k) { const c = new Float32Array(n), d = Math.tanh(k); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; } return c; }
+function makeNoiseBuffer(ctx, secs) { const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * secs), ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+function makeIR(ctx, secs) {
+  const len = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0; for (let i = 0; i < len; i++) { const t = i / ctx.sampleRate, w = Math.random() * 2 - 1, k = 0.2 + 0.5 * Math.exp(-t * 1.4); lp += (w - lp) * k; d[i] = t < 0.025 ? 0 : lp * Math.exp(-t * 5.2 / secs) * 0.6; } }
+  return b;
+}
+function buildGraph(ctx) {
+  const nodes = [], mk = n => (nodes.push(n), n);
+  const out = mk(ctx.createGain()); out.gain.value = 0; out.connect(ctx.destination);
+  const an = mk(ctx.createAnalyser()); an.fftSize = 2048; out.connect(an);
+  const comp = mk(ctx.createDynamicsCompressor()); comp.threshold.value = -15; comp.knee.value = 14; comp.ratio.value = 4; comp.attack.value = 0.012; comp.release.value = 0.35;
+  const clip = mk(ctx.createWaveShaper()); clip.curve = tanhCurve(4096, 1.35); clip.oversample = '2x';
+  const tone = mk(ctx.createBiquadFilter()); tone.type = 'lowpass'; tone.frequency.value = 1800; tone.Q.value = 0.4;
+  const hp = mk(ctx.createBiquadFilter()); hp.type = 'highpass'; hp.frequency.value = 26; hp.Q.value = 0.7;
+  const mix = mk(ctx.createGain()); mix.gain.value = 0.9;
+  mix.connect(hp); hp.connect(tone); tone.connect(clip); clip.connect(comp); comp.connect(out);
+  // dub delay, saturated + filtered inside the loop
+  const send = mk(ctx.createGain());
+  const dL = mk(ctx.createDelay(5)), dR = mk(ctx.createDelay(5)); dL.delayTime.value = 0.64; dR.delayTime.value = 0.43;
+  const fbL = mk(ctx.createGain()), fbR = mk(ctx.createGain()); fbL.gain.value = 0.42; fbR.gain.value = 0.42;
+  const sat = mk(ctx.createWaveShaper()); sat.curve = tanhCurve(2048, 1.2);
+  const lpD = mk(ctx.createBiquadFilter()); lpD.type = 'lowpass'; lpD.frequency.value = 1300; lpD.Q.value = 0.6;
+  const hpD = mk(ctx.createBiquadFilter()); hpD.type = 'highpass'; hpD.frequency.value = 150; hpD.Q.value = 0.6;
+  send.connect(dL); dL.connect(sat); sat.connect(lpD); lpD.connect(hpD); hpD.connect(fbL); fbL.connect(dR); dR.connect(fbR); fbR.connect(dL);
+  const pL = mk(ctx.createStereoPanner()), pR = mk(ctx.createStereoPanner()); pL.pan.value = -0.7; pR.pan.value = 0.7;
+  const wet = mk(ctx.createGain()); wet.gain.value = 0.6; hpD.connect(pL); dR.connect(pR); pL.connect(wet); pR.connect(wet); wet.connect(mix);
+  const verb = mk(ctx.createGain()), conv = mk(ctx.createConvolver()); conv.buffer = AU.ir; const verbOut = mk(ctx.createGain()); verbOut.gain.value = 0.4;
+  verb.connect(conv); conv.connect(verbOut); verbOut.connect(mix); const wv = mk(ctx.createGain()); wv.gain.value = 0.25; wet.connect(wv); wv.connect(verb);
+  // swell LFO: the real dominant wave period, shared by the sub, the tide chord and the image
+  const lfo = mk(ctx.createOscillator()); lfo.type = 'sine'; lfo.frequency.value = 1 / 9;
+  // sub: central pressure is the pitch
+  const sub = mk(ctx.createOscillator()), sub2 = mk(ctx.createOscillator()); sub.type = 'sine'; sub2.type = 'triangle'; sub.frequency.value = 55; sub2.frequency.value = 110;
+  const s2g = mk(ctx.createGain()); s2g.gain.value = 0.1; const subLP = mk(ctx.createBiquadFilter()); subLP.type = 'lowpass'; subLP.frequency.value = 170; subLP.Q.value = 0.5;
+  const subAM = mk(ctx.createGain()); subAM.gain.value = 0.85; const subAMd = mk(ctx.createGain()); subAMd.gain.value = 0.12; lfo.connect(subAMd); subAMd.connect(subAM.gain);
+  const subG = mk(ctx.createGain()); subG.gain.value = 0; const duck = mk(ctx.createGain()); duck.gain.value = 1;
+  sub.connect(subLP); sub2.connect(s2g); s2g.connect(subLP); subLP.connect(subAM); subAM.connect(subG); subG.connect(duck); duck.connect(mix);
+  // wind: onshore wind along the coast, continuously synthesised
+  let noise; if (AU.worklet) noise = mk(new AudioWorkletNode(ctx, 'mz-noise', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] })); else { noise = mk(ctx.createGain()); }
+  const nLP = mk(ctx.createBiquadFilter()); nLP.type = 'lowpass'; nLP.frequency.value = 200; nLP.Q.value = 0.9;
+  const nLP2 = mk(ctx.createBiquadFilter()); nLP2.type = 'lowpass'; nLP2.frequency.value = 480; nLP2.Q.value = 0.5;
+  const nG = mk(ctx.createGain()); nG.gain.value = 0.02; const nPan = mk(ctx.createStereoPanner()); const nV = mk(ctx.createGain()); nV.gain.value = 0.3;
+  noise.connect(nLP); nLP.connect(nLP2); nLP2.connect(nG); nG.connect(nPan); nPan.connect(mix); nG.connect(nV); nV.connect(verb);
+  // tide chord: one partial per gauge, loudness = surge above the astronomical tide
+  const tLP = mk(ctx.createBiquadFilter()); tLP.type = 'lowpass'; tLP.frequency.value = 650; tLP.Q.value = 0.7;
+  const tAM = mk(ctx.createGain()); tAM.gain.value = 0.8; const tAMd = mk(ctx.createGain()); tAMd.gain.value = 0.2; lfo.connect(tAMd); tAMd.connect(tAM.gain);
+  const tV = mk(ctx.createGain()); tV.gain.value = 0.55; tLP.connect(tAM); tAM.connect(mix); tAM.connect(tV); tV.connect(verb);
+  const tO = [], tGn = [];
+  TIDES.forEach((t, k) => { const o = mk(ctx.createOscillator()); o.type = k % 2 ? 'sine' : 'triangle'; o.frequency.value = t.f; o.detune.value = (k - 2.5) * 3; const gg = mk(ctx.createGain()); gg.gain.value = 0; const pn = mk(ctx.createStereoPanner()); pn.pan.value = clamp(uLon(t.lon) * 2 - 1, -0.8, 0.8); o.connect(gg); gg.connect(pn); pn.connect(tLP); tO.push(o); tGn.push(gg); });
+  const t0 = ctx.currentTime; for (const o of [lfo, sub, sub2, ...tO]) o.start(t0);
+  const g = { out, an, tone, mix, send, verb, dL, dR, fbL, fbR, lpD, lfo, sub, sub2, s2g, subG, subAMd, duck, noise, nLP, nG, nPan, tGn, tAMd, nodes, nNext: 0 };
+  g.stop = () => { const t = ctx.currentTime; for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (e) { } } setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, 400); };
+  return g;
+}
+async function createContext() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ctx = new AC({ latencyHint: 'playback' }); AU.worklet = false;
+  try { await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true; }
+  catch (e) { try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_SRC], { type: 'application/javascript' }))); AU.worklet = true; } catch (e2) { AU.worklet = false; } }
+  AU.ir = makeIR(ctx, 4.5); AU.noiseBuf = makeNoiseBuffer(ctx, 2); AU.ctx = ctx; AU.g = buildGraph(ctx); AU.builtAt = ctx.currentTime;
+  const t = ctx.currentTime; AU.g.out.gain.setValueAtTime(0, t); AU.g.out.gain.linearRampToValueAtTime(1, t + 1.5);
+  AU.nextT = t + 0.1; AU.step = 0; AU.lastCT = -1; AU.stall = 0; AU.silent = 0;
+  try { await ctx.resume(); } catch (e) { }
+}
+function rebuildGraph() {
+  const ctx = AU.ctx; if (!ctx) return; const old = AU.g, t = ctx.currentTime, ng = buildGraph(ctx);
+  ng.out.gain.setValueAtTime(0, t); ng.out.gain.linearRampToValueAtTime(1, t + 4);
+  if (old) { try { old.out.gain.cancelScheduledValues(t); old.out.gain.setValueAtTime(old.out.gain.value, t); old.out.gain.linearRampToValueAtTime(0, t + 4); } catch (e) { } setTimeout(() => old.stop(), 4500); }
+  AU.g = ng; AU.builtAt = t; AU.silent = 0;
+}
+async function recreateContext() { if (AU.busy) return; AU.busy = true; try { const old = AU.ctx; AU.ctx = null; AU.g = null; if (old) { try { await old.close(); } catch (e) { } } await createContext(); } finally { AU.busy = false; } }
+function audioWatch() {
+  const ctx = AU.ctx; if (!ctx || AU.busy) return;
+  if (ctx.state === 'closed') { recreateContext(); return; }
+  if (ctx.state !== 'running') { ctx.resume().catch(() => { }); return; }
+  const ct = ctx.currentTime; if (ct === AU.lastCT) { if (++AU.stall > 6) { recreateContext(); return; } } else AU.stall = 0; AU.lastCT = ct;
+  if (!AU.g) return; const b = AU.abuf; AU.g.an.getFloatTimeDomainData(b);
+  let mx = 0, bad = false; for (let i = 0; i < b.length; i++) { const v = b[i]; if (!fin(v)) { bad = true; break; } const a = v < 0 ? -v : v; if (a > mx) mx = a; }
+  if (bad) { rebuildGraph(); return; }
+  AU.silent = mx < 1e-5 ? AU.silent + 1 : 0;
+  if (AU.silent > 20) rebuildGraph(); else if (ct - AU.builtAt > 3 * 3600) rebuildGraph();
+}
+function setP(p, v, tc) { if (!fin(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, AU.ctx.currentTime, tc); }
+function done(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }; }
+function vKick(t, amp, long) {
+  const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), v = ctx.createGain(), L = long ? 2.6 : 0.8;
+  o.type = 'sine'; o.frequency.setValueAtTime(long ? 90 : 108, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.13); o.frequency.exponentialRampToValueAtTime(long ? 31 : 37, t + L * 0.9);
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.006); v.gain.exponentialRampToValueAtTime(amp * 0.3, t + 0.2); v.gain.exponentialRampToValueAtTime(0.0006, t + L - 0.04); v.gain.linearRampToValueAtTime(0, t + L);
+  o.connect(v); v.connect(g.mix); if (long) { const s = ctx.createGain(); s.gain.value = 0.5; v.connect(s); s.connect(g.send); }
+  o.start(t); o.stop(t + L + 0.03); done(o, [o, v]);
+  const d = g.duck.gain; d.cancelScheduledValues(t); d.setValueAtTime(d.value > 0 ? Math.min(1, d.value) : 1, t); d.linearRampToValueAtTime(0.35, t + 0.01); d.linearRampToValueAtTime(1, t + 0.32);
+}
+function vKnock(t, amp, f) {
+  const ctx = AU.ctx, g = AU.g, src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), v = ctx.createGain(), s = ctx.createGain(), pn = ctx.createStereoPanner();
+  src.buffer = AU.noiseBuf; bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 2.2;
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.004); v.gain.exponentialRampToValueAtTime(0.0004, t + 0.09); v.gain.linearRampToValueAtTime(0, t + 0.095);
+  pn.pan.value = clamp(A.windPan * 0.6 + (Math.random() - 0.5) * 0.4, -0.8, 0.8); s.gain.value = 0.9;
+  src.connect(bp); bp.connect(v); v.connect(pn); pn.connect(g.mix); v.connect(s); s.connect(g.send); src.start(t, Math.random() * 1.5, 0.1); done(src, [src, bp, v, s, pn]);
+}
+function vDrop(t, f, amp, pan) {
+  const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), v = ctx.createGain(), pn = ctx.createStereoPanner(), s = ctx.createGain(), r = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f * 1.02, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.05); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 1.5;
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.006); v.gain.exponentialRampToValueAtTime(0.0004, t + 0.34); v.gain.linearRampToValueAtTime(0, t + 0.36);
+  pn.pan.value = pan; s.gain.value = 1.1; r.gain.value = 0.6;
+  o.connect(lp); lp.connect(v); v.connect(pn); pn.connect(g.mix); pn.connect(s); s.connect(g.send); pn.connect(r); r.connect(g.verb); o.start(t); o.stop(t + 0.38); done(o, [o, lp, v, pn, s, r]);
+}
+function vCoast(t, f, amp, pan) {   // a worn segment struck again: low struck tone, ringing
+  const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), o2 = ctx.createOscillator(), v = ctx.createGain(), pn = ctx.createStereoPanner(), s = ctx.createGain(), g2 = ctx.createGain();
+  o.type = 'sine'; o2.type = 'sine'; o.frequency.setValueAtTime(f * 1.25, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.08); o2.frequency.value = f * 2.01; g2.gain.value = 0.18;
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.01); v.gain.exponentialRampToValueAtTime(0.0005, t + 2.2); v.gain.linearRampToValueAtTime(0, t + 2.25);
+  pn.pan.value = pan; s.gain.value = 0.8; o.connect(v); o2.connect(g2); g2.connect(v); v.connect(pn); pn.connect(g.mix); pn.connect(s); s.connect(g.send);
+  o.start(t); o2.start(t); o.stop(t + 2.3); o2.stop(t + 2.3); done(o, [o, o2, v, pn, s, g2]);
+}
+// shared groove, used by the audio scheduler and by the silent visual clock alike
+const PAT = { kick: new Array(16).fill(false), knock: new Array(16).fill(false), kk: 3, nk: 3, rot: 0 };
+function euclid(k, n, rot) { const a = []; for (let i = 0; i < n; i++) a.push(((i * k) % n) < k); return a.map((_, i) => a[((i - rot) % n + n) % n]); }
+function barPattern() {
+  const types = DATA.alerts ? DATA.alerts.nTypes : 4;
+  PAT.kk = clamp(2 + Math.floor(types / 2), 2, 6); PAT.nk = clamp(3 + Math.round(4 * A.I), 3, 7); PAT.rot = fin(A.hdg) ? Math.round(A.hdg / 22.5) % 16 : 0;
+  PAT.kick = euclid(PAT.kk, 16, 0); PAT.knock = euclid(PAT.nk, 16, PAT.rot).map((on, i) => on && !PAT.kick[i]);
+  if (S.phase === 'AFTER' || S.phase === 'QUIET' || S.phase === 'ACQUIRING') PAT.kick = PAT.kick.map((_, i) => i === 0 || i === 10);
+  const target = 58 + 34 * clamp((A.gust - 25) / 45, 0, 1);
+  AU.bpm += clamp(target - AU.bpm, -1.5, 1.5);
+}
+function kickOn(k) { if (AU.dropBars > 0) return false; if (S.phase === 'STALLED' && (AU.bar % 2) === 1 && k >= 8) return false; return PAT.kick[k]; }
+function playStep(k, t, spb) {
+  const I = A.I, ctx = AU.ctx, lead = t - ctx.currentTime;
+  if (kickOn(k)) { const a = (0.5 + 0.2 * I) * (k === 0 ? 1 : 0.82); vKick(t, a); ringAdd(performance.now() / 1000 + lead, 0.6 + 0.4 * I); }
+  if (k === 0 && AU.boom) { AU.boom = false; vKick(t, 0.7, true); ringAdd(performance.now() / 1000 + lead, 1.3); }
+  if (PAT.knock[k] && AU.dropBars <= 0) vKnock(t, 0.09 + 0.1 * I, 180 + 140 * (k % 3));
+  if (Math.random() < A.rainNorm * (k % 2 ? 0.34 : 0.14)) vDrop(t, degToFreq(14 + Math.floor(Math.random() * 14)), 0.05 + 0.06 * A.rainNorm, (Math.random() - 0.5) * 1.4);
+  if (k === 0 && S.unlock.coast) coastVoice(t, lead);
+}
+function coastVoice(t, lead) {
+  let best = 0, bc = -1; for (const c of COASTLIST) { const v = Ec[c] * (1 - Math.exp(-S.wear[c] / 1.5)); if (v > best) { best = v; bc = c; } }
+  if (bc < 0 || best < 0.12 || Math.random() > 0.55) return;
+  const deg = 7 + Math.round(clamp((CLAT[bc] - 34) / 11, 0, 1) * 9);   // south low, north high
+  vCoast(t, degToFreq(deg), clamp(0.08 + best * 0.12, 0, 0.22), clamp((bc % CW) / CW * 2 - 1, -0.8, 0.8));
+  setTimeout(() => { flash = { c: bc, t: performance.now() / 1000 }; }, Math.max(0, lead * 1000));
+}
+function audioSchedule() {
+  const ctx = AU.ctx; if (!ctx || !AU.g || ctx.state !== 'running') return;
+  noiseSegments();
+  const spb = 60 / AU.bpm / 4, ahead = 0.4;
+  if (AU.nextT < ctx.currentTime - 0.2) AU.nextT = ctx.currentTime + 0.05;
+  let guard = 0;
+  while (AU.nextT < ctx.currentTime + ahead && guard++ < 24) {
+    const k = AU.step % 16;
+    if (k === 0) { AU.bar++; if (AU.dropBars > 0) AU.dropBars--; barPattern(); }
+    try { playStep(k, AU.nextT, spb); } catch (e) { }
+    const sw = S.phase === 'MATURE' ? 0.08 : S.phase === 'STALLED' ? 0.12 : 0.04;
+    AU.nextT += spb * (k % 2 === 0 ? 1 + sw : 1 - sw); AU.step = (AU.step + 1) % 16;
+  }
+}
+// visual beat when there is no running audio (OBS muted, or before a click)
+const VB = { t: 0, step: 0, bar: 0 };
+function visualBeat(dts) {
+  if (AU.ctx && AU.ctx.state === 'running') return;
+  VB.t += dts; const spb = 60 / AU.bpm / 4;
+  while (VB.t >= spb) { VB.t -= spb; const k = VB.step % 16; if (k === 0) { AU.bar++; if (AU.dropBars > 0) AU.dropBars--; barPattern(); if (AU.boom) { AU.boom = false; ringAdd(performance.now() / 1000, 1.3); } } if (kickOn(k)) ringAdd(performance.now() / 1000, 0.6 + 0.4 * A.I); VB.step++; }
+}
+const FADE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2)), FADE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
+function noiseSegments() {
+  const ctx = AU.ctx, g = AU.g; if (AU.worklet || !g) return; if (!AU.longNoise) AU.longNoise = makeNoiseBuffer(ctx, 20);
+  if (g.nNext < ctx.currentTime) g.nNext = ctx.currentTime + 0.05;
+  while (g.nNext < ctx.currentTime + 1.0) { const t = g.nNext, len = 7, xf = 1.5, src = ctx.createBufferSource(), v = ctx.createGain(); src.buffer = AU.longNoise; src.playbackRate.value = 0.5 + Math.random() * 0.05;
+    v.gain.value = 0; v.gain.setValueCurveAtTime(FADE_IN, t, xf); v.gain.setValueCurveAtTime(FADE_OUT, t + len - xf, xf); src.connect(v); v.connect(g.noise); src.start(t, Math.random() * 12); src.stop(t + len + 0.05); done(src, [src, v]); g.nNext = t + len - xf; }
+}
+let flutT = 0;
+function audioControl() {
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const I = A.I, st = subTarget();
+  if (S.subDeg !== st.deg) { const was = S.subDeg; S.subDeg = st.deg; if (was !== null && A.ok && DATA.grid) log(`SUB ${noteName(was)} → ${noteName(st.deg)} · pressure ${f1(st.p)} hPa`); }
+  const f = degToFreq(st.deg);
+  setP(g.sub.frequency, f, 5); setP(g.sub2.frequency, f * 2, 5); setP(g.s2g.gain, 0.12 + 0.14 * I, 3);
+  setP(g.subG.gain, 0.09 + 0.07 * I, 3); setP(g.subAMd.gain, 0.06 + 0.2 * clamp(A.waveH / 7, 0, 1), 4); setP(g.tAMd.gain, 0.12 + 0.3 * clamp(A.waveH / 7, 0, 1), 4);
+  setP(g.lfo.frequency, 1 / A.perG, 6);
+  flutT += 0.1; AU.flutter += ((0.55 + Math.random() * 0.9) - AU.flutter) * 0.08;
+  const fl = 1 + (AU.flutter - 1) * (0.3 + 0.7 * A.windNorm);
+  setP(g.nLP.frequency, clamp((110 + 330 * A.windNorm) * fl, 70, 520), 0.5); setP(g.nG.gain, (0.03 + 0.14 * A.windNorm) * fl, 0.5); setP(g.nPan.pan, A.windPan * 0.7, 1.5);
+  TIDES.forEach((t, k) => { const r = DATA.tides[t.id], s = r && fin(r.surge) ? Math.abs(r.surge) : 0; setP(g.tGn[k].gain, r ? 0.008 + 0.055 * Math.pow(clamp(s / 2.5, 0, 1), 0.8) : 0.004, 3); });
+  const base = { DEEPENING: 0.4, MATURE: 0.46, STALLED: 0.58, FILLING: 0.36, AFTER: 0.5, QUIET: 0.44, ACQUIRING: 0.44 }[S.phase] || 0.44;
+  const thr = ctx.currentTime < AU.throwUntil ? 0.84 : 0;
+  const fb = clamp(Math.max(base + 0.1 * I, thr), 0, 0.88); setP(g.fbL.gain, fb, 0.5); setP(g.fbR.gain, fb, 0.5);
+  const beat = 60 / AU.bpm; setP(g.dL.delayTime, beat * 0.75, 2.5); setP(g.dR.delayTime, beat * 0.5, 2.5);
+  setP(g.tone.frequency, clamp(1100 + 1300 * I + 400 * A.rainNorm, 600, 2800), 2);
+}
+function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
+addEventListener('pointerdown', audioUnlock); addEventListener('keydown', audioUnlock);
+
+/* ================= info + log ================= */
+const infoEl = document.getElementById('info'), logEl = document.getElementById('log');
+function applyInfo() { infoEl.classList.toggle('hide', !SHOW_INFO); logEl.classList.toggle('hide', !SHOW_INFO); }
+addEventListener('keydown', e => { if (e.key === 'i' || e.key === 'I') { SHOW_INFO = !SHOW_INFO; applyInfo(); } if (e.key === 't' || e.key === 'T') { rupture(S.phase, 'manual'); } });
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]); }
+function renderLog() { if (!SHOW_INFO) return; logEl.innerHTML = '<span class="h">EVOLUTION LOG</span>\n' + S.log.slice(-9).map(e => `<i>${esc(dt(e.t))}</i> ${esc(e.m)}`).join('\n'); }
+function ago(ms) { const m = Math.round(ms / 60e3); return m < 60 ? m + ' min' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm'; }
+function renderInfo() {
+  if (!SHOW_INFO) return;
+  const t = now(), L = [];
+  const clock = SIMCLOCK ? `<b>SIM CLOCK</b> ${dt(t)} ${tzName(t)} (×${RATE}${FF ? ', ' + (FF > 0 ? '+' : '') + FF + 'h' : ''})` : `LIVE · ${dt(t)} ${tzName(t)}`;
+  L.push(`<span class="h">MZTV · BIT FIELD 016 · ONSHORE</span>   ${clock}`);
+  L.push(`<i>the September 2026 nor'easter, as data · on air ${ago(t - S.born)}</i>`);
+  if (!DATA.grid) L.push(DATA.gridErr ? `model grid unavailable (${esc(DATA.gridErr)}) · retrying` : 'acquiring model grid …');
+  else {
+    if (A.ok) {
+      const tr = fin(A.trend) ? `${A.trend < 0 ? '▼' : A.trend > 0 ? '▲' : '='}${Math.abs(A.trend).toFixed(1)} hPa/3h` : '';
+      L.push(`<b>LOW</b>  ${f1(A.lat)}N ${f1(-A.lon)}W · <b>${f1(A.p)} hPa</b> ${tr} · <b>${S.phase}</b>`);
+      const near = ['NYC', 'BOS', 'BAL', 'NORF'].map(k => { const c = CITIES.find(q => q.k === k), d = miles(c.lat, c.lon, A.lat, A.lon); return `${k} ${f0(d)} mi ${comp(bearing(c.lat, c.lon, A.lat, A.lon))}`; }).join(' · ');
+      L.push(`<b>MOVE</b> ${fin(A.hdg) ? comp(A.hdg) + ' ' + f0(A.spd) + ' kt' : '—'} · ${near}`);
+    } else L.push(`<b>LOW</b>  no organised low in the field (lowest ${f1(Math.min(...gP))} hPa) · <b>${S.phase}</b>`);
+    if (A.peak && A.peak.t > t) L.push(`<b>AHEAD</b> model lowest ${f1(A.peak.p)} hPa ${dt(A.peak.t)} near ${f1(A.peak.lat)}N ${f1(-A.peak.lon)}W`);
+    L.push(`<b>WIND</b> model gust max ${f0(A.gust)} mph near ${f1(A.gLat)}N ${f1(-A.gLon)}W · onshore ${f0(A.onMax)} mph at ${A.onCity >= 0 ? CITIES[A.onCity].k : '—'}`);
+    L.push(`<b>SEA</b>  waves ${f1(A.waveH)} m / ${f0(A.waveP)} s (${f1(A.waveLat)}N ${f1(-A.waveLon)}W) · swell clock ${f1(A.perG)} s`);
+  }
+  const ob = OBS.map(o => { const r = DATA.obs[o.id]; if (!r) return `${o.k} —`; return `${o.k} ${fin(r.wd) ? comp(r.wd) : ''}${f0(r.ws)}${fin(r.wg) ? 'g' + f0(r.wg) : ''}`; }).join(' · ');
+  L.push(`<b>OBS</b>  ${ob} mph`);
+  const su = TIDES.map(tt => { const r = DATA.tides[tt.id]; return `${tt.k} ${r && fin(r.surge) ? sgn(r.surge) : '—'}`; }).join(' · ');
+  L.push(`<b>SURGE</b> ${su} ft vs tide`);
+  const hi = ['8518750', '8443970'].map(id => { const r = DATA.tides[id], nh = r && nextHigh(r.preds, t); return nh ? `${TIDES.find(q => q.id === id).k} ${hm(nh.t)} (${f1(nh.v)} ft)` : null; }).filter(Boolean).join(' · ');
+  if (hi) L.push(`<b>TIDE</b> next high ${hi}`);
+  if (DATA.alerts) L.push(`<b>NWS</b>  ${DATA.alerts.total} alerts NC→ME · ` + DATA.alerts.types.slice(0, 3).map(([n, c]) => `${esc(n)} ×${c}`).join(' · '));
+  const st = subTarget(), rn = (() => { let m = 0, k = ''; for (const c of CITIES) { const cc = Math.floor(vLat(c.lat) * CH) * CW + Math.floor(uLon(c.lon) * CW); if (cc >= 0 && cc < CN && S.rain[cc] > m) { m = S.rain[cc]; k = c.k; } } return m > 0.5 ? `${k} ${f0(m)} mm` : '—'; })();
+  L.push(`<span class="h">─ WHAT CONTROLS WHAT</span>`);
+  L.push(`central pressure ${f1(st.p)} hPa → sub ${noteName(st.deg)} · isobar density`);
+  L.push(`model gust ${f0(A.gust)} mph → tempo ${f0(AU.bpm)} bpm · ${DATA.alerts ? DATA.alerts.nTypes : '—'} alert types → kick ${PAT.kk}/16`);
+  L.push(`heading ${fin(A.hdg) ? comp(A.hdg) : '—'} → knock rotation ${PAT.rot} · intensity ${(A.I * 100).toFixed(0)}% → knock ${PAT.nk}/16`);
+  L.push(`wave period → swell LFO + sea motion · surge → tide chord (1 partial/gauge)`);
+  L.push(`onshore wind × waves × surge → coast wear · rain → drops + land stain (most: ${rn})`);
+  L.push(`phase → scope ${(SCOPES[S.phase] || SCOPES.DEEPENING).name} + dither ${GRAMMAR_NAMES[S.gram.b]}${S.unlock.coast ? ' · worn coast speaks' : ''}`);
+  L.push(`<span class="ramp">model rain ${RAMP.map(c => `<span style="background:${c}"></span>`).join('')}</span> 0 → 6+ mm/h`);
+  const age = DATA.grid ? ago(Date.now() - DATA.gridAt) : '—';
+  L.push(`<i>Open-Meteo model grid (${age} old) · NOAA NWS · NOAA CO-OPS · art, not a forecast: weather.gov</i>`);
+  L.push(`<i>i hide${AU.ctx && AU.ctx.state === 'running' ? '' : MUTE ? ' · audio off' : ' · click for sound'}</i>`);
+  infoEl.innerHTML = L.join('\n');
+}
+
+/* ================= main loop ================= */
+let lastFrame = performance.now(), lastSec = 0, lastMin = 0, frameAcc = 0;
+function secondTick() {
+  analyze(false); memoryStep(); events(); inkTargets(); inkHeal(); paletteStep(1); renderInfo();
+  if (performance.now() - lastMin > 60e3) { lastMin = performance.now(); classify(false); persist(); }
+}
+function frame() {
+  requestAnimationFrame(frame);
+  const tp = performance.now(), dts = clamp((tp - lastFrame) / 1000, 0, 0.25); frameAcc += dts; lastFrame = tp;
+  if (frameAcc < 1 / 31) return; const d = Math.min(frameAcc, 0.25); frameAcc = 0;
+  try {
+    if (tp - lastSec > 1000) { lastSec = tp; secondTick(); }
+    swellPhase = (swellPhase + d * 6.2832 / A.perG) % (6.2832 * 1000);
+    inkStep(d); visualBeat(d); render();
+  } catch (e) { console.error(e); }
+}
+setInterval(() => { try { audioSchedule(); } catch (e) { } }, 40);
+setInterval(() => { try { audioControl(); } catch (e) { } }, 100);
+setInterval(() => { try { audioWatch(); } catch (e) { } }, 1000);
+setInterval(() => { if (document.hidden) { try { secondTick(); } catch (e) { } } }, 1000);   // keep memory + events alive in hidden tabs
+
+/* ================= boot ================= */
+applyInfo(); paletteStep(999); wavesToCoarse(null);
+{
+  const cg = loadCache('grid', ['P', 'U', 'V', 'G', 'R', 'C'], NG); if (cg && cg.d.times.length > 2) { DATA.grid = cg.d; DATA.gridAt = cg.at; }
+  const cm = loadCache('marine', ['H', 'P', 'D'], MARINE.length); if (cm && cm.d.times.length > 2) { DATA.marine = cm.d; DATA.marineAt = cm.at; }
+}
+if (!S.log.length) log('BROADCAST OPEN · tuned to the East Coast nor\'easter');
+if (DATA.grid) { onGridUpdate(null); }
+for (let c = 0; c < CN; c++) STAINc[c] = 1 - Math.exp(-S.rain[c] / 30);
+analyze(true); inkTargets();
+for (let k = 0; k < 160; k++) inkStep(0.12);   // pre-warm: the weather was already moving before you arrived
+renderLog(); renderInfo(); render();
+dataTick(); setInterval(dataTick, 60e3);
+fetchObs(); setInterval(fetchObs, 10 * 60e3);
+setTimeout(() => { fetchTides(); setInterval(fetchTides, 10 * 60e3); }, 1500);
+setTimeout(() => { fetchAlerts(); setInterval(fetchAlerts, 10 * 60e3); }, 3000);
+if (!MUTE) { audioUnlock(); }
+requestAnimationFrame(frame);
+addEventListener('beforeunload', persist);
+window.MZ = { S, A, DATA, AU, PAT, rupture, force: ph => rupture(ph, 'forced'), analyze, persist, onGridUpdate, fieldsAt,
+  poison: () => { R0.fill(NaN); G0.fill(NaN); }, get ink() { return R0; }, snapPalette: () => paletteStep(999) };
+</script>
+</body>
+</html>
