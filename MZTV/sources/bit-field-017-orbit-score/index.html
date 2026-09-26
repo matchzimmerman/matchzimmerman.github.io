@@ -111,13 +111,14 @@ function setTLE(l1, l2, src, quiet) {
   const ep = tleEpochMs(l1); if (ORB.rec && ep <= ORB.epoch) return false;
   let rec = null; try { rec = window.satellite ? satellite.twoline2satrec(l1, l2) : null; } catch (e) { rec = null; }
   const n = parseFloat(l2.slice(52, 63)), a = Math.cbrt(MU / Math.pow(n * 2 * Math.PI / 86400, 2));
-  const prevA = ORB.rec || ORB.l1 ? ORB.a : NaN, prevEp = ORB.epoch;
+  const prevA = ORB.rec || ORB.l1 ? ORB.a : NaN, prevEp = ORB.epoch, prevSrc = ORB.src;
   Object.assign(ORB, { l1, l2, rec, epoch: ep, n, a, rev0: +l2.slice(63, 68), src,
     inc: parseFloat(l2.slice(8, 16)) * D2R, raan: parseFloat(l2.slice(17, 25)) * D2R, argp: parseFloat(l2.slice(34, 42)) * D2R, M: parseFloat(l2.slice(43, 51)) * D2R });
   if (!CAPTURE) try { localStorage.setItem('mztv-orbit-tle', JSON.stringify({ l1, l2, src })); } catch (e) { }
   if (!quiet && typeof log === 'function') {
     log(`NEW ORBIT DATA · epoch ${dt(ep)} · ${src}`);
-    if (fin(prevA) && prevEp && a - prevA > 0.35) { log(`REBOOST · the station's engines raised the orbit ${(a - prevA).toFixed(1)} km`); rupture('REBOOST'); }
+    // only compare consecutive live sets a few days apart, so an ageing embedded set never fakes a reboost
+    if (fin(prevA) && prevEp && prevSrc !== 'embedded' && ep - prevEp < 3 * 864e5 && a - prevA > 0.35) { log(`REBOOST · the station's engines raised the orbit ${(a - prevA).toFixed(1)} km`); rupture('REBOOST'); }
   }
   return true;
 }
