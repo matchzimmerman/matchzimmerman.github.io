@@ -660,8 +660,9 @@ const GROUND = { PLUCK: 'lowlands', ARP: 'mountains', BOW: 'ocean', PULSE: 'coas
 function renderInfo() {
   if (INFO < 1 || !L.iss) return;
   const t = now(), iss = L.iss, fp = L.fp, I = [], ahead = t - Date.now(), ns = nextSunEvent(t), last = S.log[S.log.length - 1];
+  const snd = AU.ctx && AU.ctx.state === 'running' ? '' : MUTE ? ' <i>· audio off</i>' : ' <span class="p">· CLICK FOR SOUND</span>';
   const clock = SIMCLOCK && ahead > 1000 ? `<span class="p">FUTURE POSITION PROJECTION +${ago(ahead)}</span> <i>×${RATE}</i>` : `<span class="p">LIVE</span> <i>${esc(dt(t))} ${tzName(t)}</i>`;
-  I.push(`<span class="h">MZTV · BIT FIELD 017 · ORBIT SCORE</span>  ${clock}`);
+  I.push(`<span class="h">MZTV · BIT FIELD 017 · ORBIT SCORE</span>  ${clock}${snd}`);
   I.push(`<b>ISS</b> ${latS(iss.lat)} ${lonS(iss.lon)} · ${iss.alt.toFixed(0)} km · ${iss.vel.toFixed(2)} km/s · over ${esc(surfaceName(fp.center))}`);
   I.push(`<b>SUN</b> ${L.lit ? 'station in sunlight' : 'station in Earth\'s shadow'}${ns ? ` · ${ns.lit ? 'sunrise' : 'sunset'} in ${ago(ns.t - t)}` : ''} · orbit ${revAt(t).toLocaleString('en-US')}`);
   I.push(`<b>SOUND</b> latitude → drone ${noteName(L.rootIdx)} · ocean ${Math.round(fp.sea * 100)}% → surf · land → plucks · coast → bell`);
