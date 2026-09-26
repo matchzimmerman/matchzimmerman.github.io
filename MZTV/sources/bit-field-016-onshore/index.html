@@ -417,6 +417,7 @@ function onGridUpdate(msg) {
   if (!S.hist.length) for (const q of A.track) if (q.ok && q.t <= t) S.hist.push({ t: q.t, lat: q.lat, lon: q.lon, p: q.p, m: 1 });
   if (msg) log(msg + (peak ? ` · lowest ahead ${f1(peak.p)} hPa ${dt(peak.t)} near ${f1(peak.lat)}N ${f1(-peak.lon)}W` : ' · no organised low ahead'));
   analyze(true);
+  if (!DATA.warmed) { DATA.warmed = true; inkTargets(); for (let k = 0; k < 160; k++) inkStep(0.12); }
 }
 const PHASE_GRAMMAR = { DEEPENING: 0, MATURE: 1, STALLED: 2, FILLING: 3, AFTER: 4, QUIET: 4, ACQUIRING: 4 };
 function analyze(force) {
@@ -930,8 +931,9 @@ function secondTick() {
   analyze(false); memoryStep(); events(); inkTargets(); inkHeal(); paletteStep(1); renderInfo();
   if (performance.now() - lastMin > 60e3) { lastMin = performance.now(); classify(false); persist(); }
 }
-function frame() {
-  requestAnimationFrame(frame);
+let lastRAF = performance.now();
+function frame(fromTimer) {
+  if (fromTimer !== true) { lastRAF = performance.now(); requestAnimationFrame(frame); }
   const tp = performance.now(), dts = clamp((tp - lastFrame) / 1000, 0, 0.25); frameAcc += dts; lastFrame = tp;
   if (frameAcc < 1 / 31) return; const d = Math.min(frameAcc, 0.25); frameAcc = 0;
   try {
@@ -943,7 +945,8 @@ function frame() {
 setInterval(() => { try { audioSchedule(); } catch (e) { } }, 40);
 setInterval(() => { try { audioControl(); } catch (e) { } }, 100);
 setInterval(() => { try { audioWatch(); } catch (e) { } }, 1000);
-setInterval(() => { if (document.hidden) { try { secondTick(); } catch (e) { } } }, 1000);   // keep memory + events alive in hidden tabs
+// if rAF is throttled or stalled (hidden tab, embedded pane), keep the field moving from a timer instead
+setInterval(() => { if (performance.now() - lastRAF > 600) frame(true); }, 100);
 
 /* ================= boot ================= */
 applyInfo(); paletteStep(999); wavesToCoarse(null);
