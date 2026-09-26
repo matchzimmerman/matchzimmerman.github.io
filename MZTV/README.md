@@ -100,6 +100,15 @@ sources/bit-field-016-onshore/index.html
 Live:
 https://matchzimmerman.github.io/MZTV/sources/bit-field-016-onshore/
 
+### BIT FIELD 017 — ORBIT SCORE
+The International Space Station flies its real orbit (live two-line elements from CelesTrak, propagated with SGP4) over a NASA public-domain relief map of Earth, and the ground passing beneath it is the score. The camera follows the station. A heading-up downlook window shows the ground under it, and a slit-scan strip holds the last orbit of terrain. Latitude is the drone's root (D Phrygian), daylight opens the filters, ocean is surf with depth darkening it, land elevation is pluck pitch and roughness is pluck density, coastlines ring, and the station's own sunrises and sunsets bring chord swells. Memory: every pass exposes the ground like film and keeps the note heard there, weaving a net that fades over two days. Crossing an earlier pass replays its note. Pressure from revisiting exposed ground breaks eras at orbital sunrise/sunset into a new mode and dither grammar, chosen by what was unusual about the ground just flown: PLUCK lowlands, ARP mountains, BOW open ocean, PULSE coastlines. The real beta angle sets the colour scope over days, and a detected reboost is a rupture. Standalone stream, no mixer. State persists across reloads. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?ff=H ?lines=N ?capture=1
+
+Path:
+sources/bit-field-017-orbit-score/index.html
+
+Live:
+https://matchzimmerman.github.io/MZTV/sources/bit-field-017-orbit-score/
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
