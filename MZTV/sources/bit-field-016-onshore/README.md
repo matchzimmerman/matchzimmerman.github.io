@@ -64,6 +64,7 @@ Open the piece in **Chrome** with these parameters. Without them, nothing change
     - 6 intensity
     - 7 wave period
     - 20–25 surge at Norfolk, Atlantic City, the Battery, Montauk, Boston and Nantucket
+- **MIDI Map helper:** press `L` to send one CC at a time on ch16, 0↔127 for 8 s (CC 1 → 7, then 20 → 25), so Ableton's MIDI Map can learn it. Press `L` again for the next one.
 - A small **RECORDING OUTPUTS** panel (top centre, `i` hides it) shows the device, channel map, per-stem meters and MIDI status.
 
 In Ableton: set Preferences → Audio → Input Device to BlackHole 16ch and enable inputs 1/2 to 15/16 as stereo pairs. Make one audio track per pair with monitoring Off, and arm them all. For the MIDI, set Preferences → Link/Tempo/MIDI → IAC Driver: turn on Sync (to follow the storm's tempo) and Track (to record notes and CCs on MIDI tracks).
