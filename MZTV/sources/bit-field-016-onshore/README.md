@@ -40,3 +40,32 @@ Standalone piece: no mixer.
 
 Params: `?info=0` `?fresh=1` `?audio=0` `?seed=N` `?rate=N` (clock speed; memory goes to a separate `-sim` store) `?ff=H` (shift the clock ±H hours inside the data window) `?lines=N` `?capture=1`
 Keys: `i` info · `t` force a rupture
+
+## Recording into Ableton: stems + MIDI (branch `stems`)
+
+Open the piece in **Chrome** with these parameters. Without them, nothing changes.
+
+- `?stems=16&sink=blackhole`: multichannel output to BlackHole 16ch. Each voice gets its own stereo pair, taken before the master bus:
+  `1/2 master · 3/4 sub · 5/6 kick · 7/8 perc (knock + coast) · 9/10 wind · 11/12 tide chord · 13/14 drops · 15/16 fx returns (delay + reverb)`.
+  Chrome asks once for audio permission. That is only so it can show device names; the mic is never used. If the device offers fewer channels, the piece uses what it has, in that priority order.
+- `&midi=iac`: sends to the IAC Driver bus (enable it in Audio MIDI Setup):
+  - MIDI clock at 24 ppqn, following the storm's tempo, with Start on the first downbeat
+  - ch1 kick (36, and 35 for the rupture boom)
+  - ch2 knock
+  - ch3 drops
+  - ch4 coast voice
+  - ch5 the sub note (held; changes when the pressure moves it)
+  - ch16 CCs, updated once a second:
+    - 1 pressure depth
+    - 2 gust
+    - 3 rain
+    - 4 onshore wind
+    - 5 wave height
+    - 6 intensity
+    - 7 wave period
+    - 20–25 surge at Norfolk, Atlantic City, the Battery, Montauk, Boston and Nantucket
+- A small **RECORDING OUTPUTS** panel (top centre, `i` hides it) shows the device, channel map, per-stem meters and MIDI status.
+
+In Ableton: set Preferences → Audio → Input Device to BlackHole 16ch and enable inputs 1/2 to 15/16 as stereo pairs. Make one audio track per pair with monitoring Off, and arm them all. For the MIDI, set Preferences → Link/Tempo/MIDI → IAC Driver: turn on Sync (to follow the storm's tempo) and Track (to record notes and CCs on MIDI tracks).
+
+This runs as its own instance with its own memory (its own browser storage). The data-driven parts (pressure, gusts, surge, rain, phases) match the broadcast. The small random details (knock placement, drops) do not.
