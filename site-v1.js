@@ -29,6 +29,8 @@ const projects = {
     system: 'A linked world across physical exhibition, interfaces, music, graphic narrative, and playable systems. The Grid and The Field provide competing logics rather than a single linear story.',
     artifacts: 'Field devices, GULL audio tools, transmissions, prints, interfaces, diagrams, sound works, cards, narrative fragments, and installation studies.',
     reflection: 'MAGPIE is strongest when each object can stand alone while also behaving like evidence from a larger world.',
+    link: '/field-station-magpie/',
+    linkLabel: 'ENTER FIELD STATION: MAGPIE →',
     video: true
   },
   obas: {
