@@ -262,8 +262,9 @@ function memMinute() {
 const cv = document.getElementById('cv'), cx = cv.getContext('2d', { alpha: false });
 let W = 480, H = 270, SC = 1, IMG, BUF, LF, GW, GH, BG, THR = [], THRM, CX0, CXF, RY0, RYF;
 function resize() {
-  const iw = CAPTURE ? 1920 : innerWidth, ih = CAPTURE ? 1080 : innerHeight;
-  SC = Math.max(1, Math.round(ih / LINES)); W = Math.ceil(iw / SC); H = Math.ceil(ih / SC);
+  // a hidden tab / unsized OBS source can report 0×0 at load: fall back, then the resize listener corrects it
+  const iw = CAPTURE ? 1920 : (innerWidth || document.documentElement.clientWidth || 1920), ih = CAPTURE ? 1080 : (innerHeight || document.documentElement.clientHeight || 1080);
+  SC = Math.max(1, Math.round(ih / LINES)); W = Math.max(8, Math.ceil(iw / SC)); H = Math.max(8, Math.ceil(ih / SC));
   cv.width = W; cv.height = H; cv.style.width = W * SC + 'px'; cv.style.height = H * SC + 'px';
   IMG = cx.createImageData(W, H); BUF = new Uint32Array(IMG.data.buffer); LF = new Float32Array(W * H);
   GW = Math.ceil(W / 4) + 2; GH = Math.ceil(H / 4) + 2; BG = new Float32Array(GW * GH);
@@ -554,6 +555,7 @@ function renderInfo() {
 
 /* ================= boot ================= */
 resize(); addEventListener('resize', () => { if (!CAPTURE) resize(); });
+document.addEventListener('visibilitychange', () => { if (!CAPTURE && !document.hidden && (cv.width * SC < innerWidth - SC || cv.height * SC < innerHeight - SC)) resize(); });
 derive(); FAM = familiarity(); palette();
 if (FF > 0) fastForward(FF);
 prewarm();
