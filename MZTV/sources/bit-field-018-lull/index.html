@@ -25,6 +25,8 @@
 <style>
 :root{--bg:#14070f;--mid:#4a1030;--hi:#e0506a;--gl:#ffb070;--tx:#ffc9a6}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);cursor:none}
+body.wait{cursor:pointer}
+#snd{right:1.2vw;bottom:1.6vh;font-size:clamp(11px,0.9vw,18px);font-weight:600;color:var(--gl);border-left:3px solid var(--gl);opacity:.95!important}
 #cv{position:fixed;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges}
 .box{position:fixed;font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;font-size:clamp(8px,0.56vw,14px);line-height:1.4;
   color:var(--tx);background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--mid);border-left:3px solid var(--hi);
@@ -42,6 +44,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);cursor:none}
 <canvas id="cv"></canvas>
 <div id="info" class="box"></div>
 <div id="log" class="box hide"></div>
+<div id="snd" class="box hide">▶ CLICK / TAP ANYWHERE FOR SOUND</div>
 <script>
 'use strict';
 /* ================= utils + params ================= */
@@ -367,7 +370,7 @@ function padBank(ctx, g, freqs, fadeIn) {
   const nodes = [], bank = ctx.createGain(), t = ctx.currentTime; bank.gain.setValueAtTime(0, t); bank.gain.linearRampToValueAtTime(1, t + fadeIn); bank.connect(g.padF); nodes.push(bank);
   freqs.forEach((f, k) => { [-0.35, 0.35].forEach(det => {   // slow beating pairs (~0.7 Hz): gentle motion, no LFO needed
     const o = ctx.createOscillator(), v = ctx.createGain(), p = ctx.createStereoPanner(); o.type = 'sine'; o.frequency.value = f + det;
-    v.gain.value = [0.34, 0.2, 0.16, 0.1][k] || 0.08; p.pan.value = det < 0 ? -0.35 : 0.35; o.connect(v); v.connect(p); p.connect(bank); o.start(t); nodes.push(o, v, p); }); });
+    v.gain.value = [0.3, 0.22, 0.2, 0.16][k] || 0.1; p.pan.value = det < 0 ? -0.35 : 0.35; o.connect(v); v.connect(p); p.connect(bank); o.start(t); nodes.push(o, v, p); }); });
   return { bank, nodes, stop(fade) { const t = ctx.currentTime; try { bank.gain.cancelScheduledValues(t); bank.gain.setValueAtTime(bank.gain.value, t); bank.gain.linearRampToValueAtTime(0, t + fade); } catch (e) { }
     for (const n of nodes) if (n.stop) { try { n.stop(t + fade + 0.1); } catch (e) { } }
     setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, (fade + 0.5) * 1000); } };
@@ -383,10 +386,10 @@ function buildGraph(ctx) {
   const verb = mk(ctx.createConvolver()); verb.buffer = AU.ir; const wetF = mk(ctx.createBiquadFilter()); wetF.type = 'lowpass'; wetF.frequency.value = 2200;
   const wet = mk(ctx.createGain()); wet.gain.value = 0.4; verb.connect(wetF); wetF.connect(wet); wet.connect(mix);
   // drone: A pedal
-  const droneF = mk(ctx.createBiquadFilter()); droneF.type = 'lowpass'; droneF.frequency.value = 260; droneF.Q.value = 0.7;
+  const droneF = mk(ctx.createBiquadFilter()); droneF.type = 'lowpass'; droneF.frequency.value = 420; droneF.Q.value = 0.7;
   const droneG = mk(ctx.createGain()); droneG.gain.value = 0.16; droneF.connect(droneG); droneG.connect(mix); droneG.connect(verb);
-  const dro = [[54, 'sine', 0.26], [81, 'sine', 0.14], [108, 'triangle', 0.16], [162, 'sine', 0.04]].map(([f, type, gv]) => { const o = mk(ctx.createOscillator()); o.type = type; o.frequency.value = f; const gg = mk(ctx.createGain()); gg.gain.value = gv; o.connect(gg); gg.connect(droneF); return o; });
-  const dlfo = mk(ctx.createOscillator()); dlfo.frequency.value = 0.013; const dlg = mk(ctx.createGain()); dlg.gain.value = 60; dlfo.connect(dlg); dlg.connect(droneF.frequency);
+  const dro = [[54, 'sine', 0.24], [81, 'sine', 0.12], [108, 'triangle', 0.18], [162, 'sine', 0.07], [216, 'sine', 0.05]].map(([f, type, gv]) => { const o = mk(ctx.createOscillator()); o.type = type; o.frequency.value = f; const gg = mk(ctx.createGain()); gg.gain.value = gv; o.connect(gg); gg.connect(droneF); return o; });
+  const dlfo = mk(ctx.createOscillator()); dlfo.frequency.value = 0.013; const dlg = mk(ctx.createGain()); dlg.gain.value = 90; dlfo.connect(dlg); dlg.connect(droneF.frequency);
   // optional binaural pair (headphones): carrier 108 Hz left, 108 + Δ right; Δ falls from 6 Hz (theta) to 2 Hz (delta)
   let binR = null;
   if (BIN) { const mg = mk(ctx.createChannelMerger(2)), bg = mk(ctx.createGain()); bg.gain.value = 0.07; const l = mk(ctx.createOscillator()), r = mk(ctx.createOscillator()); l.frequency.value = 108; r.frequency.value = 114;
@@ -417,6 +420,7 @@ function padChord(c) {   // crossfade pad banks over 40 s; no glides
 }
 async function createContext() {
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }   // iOS: play through the silent switch
   const ctx = new AC({ latencyHint: 'playback' }); AU.worklet = false;
   try { await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true; }
   catch (e) { try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_SRC], { type: 'application/javascript' }))); AU.worklet = true; } catch (e2) { AU.worklet = false; } }
@@ -459,7 +463,7 @@ function vTone(t, f, amp, pan, att, rel) {
 }
 function playTone(e, t) {
   const f = POOL[e.idx] * (e.echo ? 0.5 : 1);
-  const amp = (e.echo ? 0.1 : e.quiet ? 0.09 : 0.16) * (1 - 0.3 * P.s) * (e.idx > 6 ? 0.8 : 1);
+  const amp = (e.echo ? 0.15 : e.quiet ? 0.14 : 0.27) * (1 - 0.25 * P.s) * (e.idx > 6 ? 0.8 : 1);
   vTone(t, f, amp, e.pan, lerp(1.8, 3.2, P.s) + RND() * 0.6, lerp(7, 11, P.s));
   if (S.unlock.low && P.deep > 0.5 && !e.echo && t - AU.lastLow > 90 && RND() < 0.12) { AU.lastLow = t; vTone(t + 2, 108, 0.06, 0, 4, 14); }
 }
@@ -474,9 +478,9 @@ let CTL_ACC = 0;
 function audioControl() {   // ≤10 Hz, setTargetAtTime only
   const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
   setP(g.out.gain, outLevel(), 1.5);
-  setP(g.padG.gain, 0.16 * (0.3 + 0.7 * BMOD) * (1 - 0.25 * P.s), 0.12);
-  setP(g.padF.frequency, 240 + 760 * BMOD * (1 - 0.45 * P.s), 0.12);
-  setP(g.nG.gain, P.noise * 0.75 * (0.92 + 0.08 * BMOD), 0.5);
+  setP(g.padG.gain, 0.2 * (0.3 + 0.7 * BMOD) * (1 - 0.25 * P.s), 0.12);
+  setP(g.padF.frequency, 380 + 820 * BMOD * (1 - 0.4 * P.s), 0.12);
+  setP(g.nG.gain, P.noise * 0.6 * (0.92 + 0.08 * BMOD), 0.5);
   setP(g.nF1.frequency, P.noiseLP, 2); setP(g.nF2.frequency, P.noiseLP * 1.2, 2);
   setP(g.nP.pan, S.unlock.tide ? 0.35 * Math.sin(T * 2 * Math.PI / 47) : 0, 0.8);
   setP(g.droneG.gain, 0.16 + 0.04 * P.deep, 3);
@@ -484,8 +488,11 @@ function audioControl() {   // ≤10 Hz, setTargetAtTime only
   setP(g.toneF.frequency, lerp(1800, 1100, P.s), 3);
   if (g.binR) setP(g.binR.frequency, 108 + lerp(6, 2, P.s), 4);
 }
-function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
-addEventListener('pointerdown', audioUnlock); addEventListener('keydown', audioUnlock);
+function audioUnlock() { if (MUTE) return; AU.wanted = true; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
+for (const ev of ['pointerdown', 'pointerup', 'click', 'touchend', 'keydown']) addEventListener(ev, audioUnlock, { capture: true });
+const sndEl = document.getElementById('snd');
+function soundPlate() { const need = !MUTE && !CAPTURE && !(AU.ctx && AU.ctx.state === 'running'); sndEl.classList.toggle('hide', !need); document.body.classList.toggle('wait', need); }
+setInterval(soundPlate, 300);
 
 /* ================= the clock: one advance() for both rAF and the audio interval ================= */
 let lastAdv = performance.now(), SAVE_ACC = 0, NAN_CHECK = 0;
