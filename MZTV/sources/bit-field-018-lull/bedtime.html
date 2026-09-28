@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · BIT FIELD 018 · LULL · BEDSIDE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!--
+  MZTV · BIT FIELD 018 · LULL
+  A night field for falling asleep. A=432 Hz just-intoned pentatonic tones drift in and out over a low A drone,
+  a breathing pad and a brown-noise bed. A breath pacer (inhale 40% / exhale 60%, slowing from 8 to 5 breaths/min)
+  drives both the pad swell and the size of the lanterns. Tones fall only on the exhale. Every tone drops a lantern into
+  a slow membrane of contours (pitch = height, pan = x). The arc: SETTLING → DESCENDING → DEEP. Tones thin out, the
+  register falls, the breath flattens toward steady sound, the light dims and loses blue.
+  Memory: lanterns leave sediment that holds the note heard there; worn ground later echoes it. A transition table
+  learns the lullaby, so the melody grows more familiar the longer the piece has been heard. Voices unlock over hours.
+  Two files, one source: index.html = MZTV stream (arc follows the local clock: day field, dusk descent, deep night,
+  dawn); bedtime.html = bedside (arc starts when you press play, deep after ~45 min, then stays deep).
+  Params: ?info=0|1|2 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?capture=1
+          ?arc=MIN (bedside arc length, default 45) ?end=MIN (bedside: fade to silence at MIN)
+          ?binaural=1 (optional delta-range binaural pair on the drone; needs headphones) ?vol=0..1.5 ?dim=0.1..1.5 ?t0=MIN
+  Keys: i cycles info (compact / full / off)
+-->
+<style>
+:root{--bg:#14070f;--mid:#4a1030;--hi:#e0506a;--gl:#ffb070;--tx:#ffc9a6}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);cursor:none}
+#cv{position:fixed;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges}
+.box{position:fixed;font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;font-size:clamp(8px,0.56vw,14px);line-height:1.4;
+  color:var(--tx);background:color-mix(in srgb,var(--bg) 82%,transparent);border:1px solid var(--mid);border-left:3px solid var(--hi);
+  padding:.7em .9em;white-space:pre-wrap;letter-spacing:.01em;pointer-events:none;transition:opacity 4s ease}
+#info{left:1.2vw;top:1.6vh;max-width:52vw}
+#log{left:1.2vw;bottom:1.6vh;max-width:40vw;border-left:3px solid var(--gl)}
+.box b{color:var(--gl);font-weight:600}
+.box i{font-style:normal;opacity:.62}
+.box .h{color:var(--hi);font-weight:600}
+.box .p{color:var(--gl);font-weight:600}
+.hide{display:none}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="info" class="box"></div>
+<div id="log" class="box hide"></div>
+<script>window.MZTV_BEDTIME = true;</script>
+<script>
+'use strict';
+/* ================= utils + params ================= */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v, lerp = (a, b, t) => a + (b - a) * t, fin = v => Number.isFinite(v);
+const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const Q = new URLSearchParams(location.search);
+const num = (k, d) => { const v = parseFloat(Q.get(k)); return fin(v) ? v : d; };
+const BED = window.MZTV_BEDTIME === true;
+const CAPTURE = Q.get('capture') === '1';
+let INFO = CAPTURE ? 0 : clamp(parseInt(Q.get('info') ?? '1', 10) || 0, 0, 2);
+const FRESH = Q.get('fresh') === '1', MUTE = Q.get('audio') === '0', BIN = Q.get('binaural') === '1';
+const RATE = Math.max(0.01, num('rate', 1)), FF = Math.max(0, num('ff', 0));
+const LINES = clamp(Math.round(num('lines', 270)), 90, 720);
+const ARC = Math.max(1, num('arc', 45)), END = Math.max(0, num('end', 0)), VOL = clamp(num('vol', 1), 0, 1.5), DIM = clamp(num('dim', 1), 0.1, 1.5);
+const KEY = BED ? 'mztv-lull-bed-v1' : 'mztv-lull-v1';
+function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function b64u8(u) { let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function u8b64(s, n) { try { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return n && u.length !== n ? null : u; } catch (e) { return null; } }
+const b64f = a => b64u8(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
+function fb64(s, n) { const u = u8b64(s, n * 4); return u ? new Float32Array(u.buffer) : null; }
+
+/* ================= tuning =================
+   A4 = 432 Hz. Just-intoned pentatonic on A that also holds a D chord: A 1 · B 9/8 · D 4/3 · E 3/2 · F# 5/3.
+   Tone pool spans A3 216 → F#5 720; 432 sits in the middle of it. */
+const RAT = [1, 9 / 8, 4 / 3, 3 / 2, 5 / 3], NN = ['A', 'B', 'D', 'E', 'F#'];
+const POOL = []; for (let o = 0; o < 2; o++) for (let k = 0; k < 5; k++) POOL.push(216 * Math.pow(2, o) * RAT[k]);   // 10 notes
+const NP = POOL.length;
+const noteName = i => NN[i % 5] + (3 + Math.floor(i / 5));
+const CHORDS = [   // pad chords over the A pedal: [name, freqs, hue shift for hi/glow]
+  { n: 'HOME · A', f: [108, 162, 216, 324], hue: 0 },
+  { n: 'OPEN · Asus4', f: [108, 144, 216, 288], hue: -7 },
+  { n: 'WARM · D/A', f: [108, 180, 216, 288], hue: 9 },
+  { n: 'SIX · A6/9', f: [108, 162, 243, 360], hue: 4 },   // unlocked by memory
+];
+const CHORD_NEXT = [[1, 2, 3], [0, 2], [0, 1], [0, 2]];
+
+/* ================= state + memory ================= */
+const SW = 128, SH = 72, SN = SW * SH;
+function priorMk() { const m = new Float32Array(NP * NP); for (let i = 0; i < NP; i++) for (let j = 0; j < NP; j++) { const d = Math.abs(i - j); m[i * NP + j] = [0.35, 1, 0.6, 0.25, 0.08][Math.min(d, 4)] * (d > 4 ? 0.5 : 1); } return m; }
+const PRIOR = priorMk();
+function freshState(seed) {
+  return { v: 1, seed: seed || ((Math.random() * 1e9) | 0), hours: 0, tones: 0, sessions: 0, sed: new Float32Array(SN), note: new Uint8Array(SN).fill(255),
+    mk: PRIOR.slice(), unlock: { echo: false, six: false, tide: false, low: false }, pal: [0, 0, 0, 0], gram: { a: 0, b: 0, k: 1 }, era: { n: 1, since: 0, p: 0 },
+    chord: 0, lastIdx: 5, drift: { x: 0, y: 0, ang: 0.4 }, log: [] };
+}
+function loadState() {
+  const seedQ = Q.has('seed') ? (parseInt(Q.get('seed'), 10) | 0) : 0;
+  if (FRESH || CAPTURE) { if (FRESH) try { localStorage.removeItem(KEY); } catch (e) { } return freshState(seedQ); }
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!o || o.v !== 1) return freshState(seedQ);
+    const s = Object.assign(freshState(o.seed), o);
+    s.sed = fb64(o.sed, SN) || new Float32Array(SN); s.note = u8b64(o.note, SN) || new Uint8Array(SN).fill(255);
+    const mk = fb64(o.mk, NP * NP); s.mk = mk || PRIOR.slice();
+    sanitize(s); return s;
+  } catch (e) { return freshState(seedQ); }
+}
+function sanitize(s) {
+  for (let i = 0; i < SN; i++) if (!fin(s.sed[i]) || s.sed[i] < 0) s.sed[i] = 0; else if (s.sed[i] > 1) s.sed[i] = 1;
+  for (let i = 0; i < NP * NP; i++) if (!fin(s.mk[i]) || s.mk[i] <= 0) s.mk[i] = PRIOR[i];
+  if (!fin(s.hours)) s.hours = 0; if (!fin(s.era.p)) s.era.p = 0; if (!fin(s.gram.k)) s.gram.k = 1;
+  for (let i = 0; i < 4; i++) if (!fin(s.pal[i])) s.pal[i] = 0;
+  if (!(s.chord >= 0 && s.chord < CHORDS.length)) s.chord = 0; if (!(s.lastIdx >= 0 && s.lastIdx < NP)) s.lastIdx = 5;
+  for (const k of ['x', 'y', 'ang']) if (!fin(s.drift[k])) s.drift[k] = 0;
+}
+function saveState() {
+  if (CAPTURE) return;
+  try { localStorage.setItem(KEY, JSON.stringify(Object.assign({}, S, { sed: b64f(S.sed), note: b64u8(S.note), mk: b64f(S.mk), log: S.log.slice(-60) }))); } catch (e) { }
+}
+let S = loadState(); S.sessions++;
+const RND = mulberry(S.seed ^ (Date.now() & 0xffff));
+const SEEDH = S.seed | 0;
+const START_MS = Date.now(), PERF0 = performance.now();
+let T = BED ? num('t0', 0) * 60 : 0;   // sim seconds since start (bedside: minutes into the arc)
+function stamp() { const s = Math.floor((performance.now() - PERF0) / 1000 * RATE); const p = n => String(n).padStart(2, '0'); return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`; }
+function logEv(m) { S.log.push({ t: stamp(), m }); if (S.log.length > 60) S.log.shift(); renderLog(); }
+
+/* ================= the arc =================
+   a: 0 = settling · 1 = deep. Bedside: minutes since play / ARC. Stream: the local clock
+   (07–19 day field · 19–22:30 dusk descent · 22:30–05:30 deep · 05:30–07 dawn). */
+let DAWN = false, CLOCKPH = '';
+function arcNow() {
+  if (BED) return T / 60 / ARC;
+  const d = new Date(START_MS + T * 1000), h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  DAWN = false;
+  if (h >= 7 && h < 19) { CLOCKPH = 'DAY FIELD'; return 0; }
+  if (h >= 19 && h < 22.5) { CLOCKPH = 'DUSK DESCENT'; return (h - 19) / 3.5; }
+  if (h >= 5.5 && h < 7) { CLOCKPH = 'DAWN'; DAWN = true; return 1 - (h - 5.5) / 1.5; }
+  CLOCKPH = 'NIGHT · DEEP'; return 1.3;
+}
+const P = { a: 0, s: 0, deep: 0, period: 7.5, depth: 1, rate: 8, lo: 2, hi: 9, lum: 1, noise: 0.3, noiseLP: 520, speed: 1, master: 1, endG: 1, phase: '' };
+function derive() {
+  const a = arcNow(), s = smooth(a), deep = smooth((a - 0.75) / 0.5);
+  P.a = a; P.s = s; P.deep = deep;
+  P.period = lerp(7.5, 12, s);                       // 8 → 5 breaths per minute
+  P.depth = 1 - 0.72 * deep;                         // breath modulation flattens once asleep: steady sound arouses least
+  P.rate = lerp(8, 2.6, s) * (1 - 0.65 * deep);      // tones per minute
+  P.hi = lerp(9, 5, s); P.lo = lerp(2, 0, s);        // register falls; 432 stays the ceiling in deep
+  P.lum = lerp(1, 0.5, s) * (1 - 0.4 * deep) * DIM;
+  P.noise = lerp(0.3, 0.78, s); P.noiseLP = lerp(520, 250, s);
+  P.speed = lerp(1, 0.42, s); P.master = lerp(1, 0.8, s);
+  P.endG = BED && END > 0 ? 1 - smooth((T / 60 - END) / 2) : 1;
+  P.phase = BED ? (a < 0.35 ? 'SETTLING' : a < 1 ? 'DESCENDING' : 'DEEP') : CLOCKPH;
+}
+
+/* ================= breath + tones =================
+   Breath phase is a continuous accumulator (period changes never jump). Inhale 40% rises, exhale 60% falls (C1 smooth).
+   At each breath, tones are planned only inside the exhale. The melody walks a learned transition table. */
+let BP = RND(), BE = 0.5, BMOD = 0.5;
+const breathEnv = f => f < 0.4 ? 0.5 - 0.5 * Math.cos(Math.PI * f / 0.4) : 0.5 + 0.5 * Math.cos(Math.PI * (f - 0.4) / 0.6);
+const PEND = [];         // planned tones {t, idx, amp, echo, x, y, pan, au, vis}
+const LANT = [];         // visual lanterns
+function familiarity() {  // how far the learned table has narrowed from the prior (0..1)
+  let h = 0, hp = 0;
+  for (let i = 0; i < NP; i++) { let s = 0, sp = 0; for (let j = 0; j < NP; j++) { s += S.mk[i * NP + j]; sp += PRIOR[i * NP + j]; }
+    for (let j = 0; j < NP; j++) { const p = S.mk[i * NP + j] / s, q = PRIOR[i * NP + j] / sp; if (p > 0) h -= p * Math.log(p); if (q > 0) hp -= q * Math.log(q); } }
+  return clamp(1 - h / hp, 0, 1) * 4;   // entropy drops slowly; scaled so a few nights reads as meaningful
+}
+let FAM = 0;
+function nextIdx(i) {
+  const lo = Math.floor(P.lo), hi = Math.ceil(P.hi), ex = 1 + 0.9 * clamp(FAM, 0, 1) + Math.min(0.6, S.hours / 40);
+  let tot = 0; const w = new Float32Array(NP);
+  for (let j = lo; j <= hi; j++) { w[j] = Math.pow(S.mk[i * NP + j], ex); tot += w[j]; }
+  if (!(tot > 0)) return clamp(i, lo, hi);
+  let r = RND() * tot; for (let j = lo; j <= hi; j++) { r -= w[j]; if (r <= 0) return j; } return hi;
+}
+function learn(i, j) { const k = i * NP + j; S.mk[k] = Math.min(6, S.mk[k] + 0.22); }
+function placeFor(idx) {   // pitch = height; memory pulls lanterns toward familiar (moderately worn) ground
+  const yN = 0.86 - 0.72 * (idx / (NP - 1));
+  let best = null, bs = -1;
+  for (let c = 0; c < 6; c++) {
+    const x = 0.08 + RND() * 0.84, y = clamp(yN + (RND() - 0.5) * 0.12, 0.06, 0.94);
+    const s = S.sed[Math.floor(y * (SH - 1)) * SW + Math.floor(x * (SW - 1))], sc = s * (1 - s) * 4 * 0.8 + RND() * 0.35;
+    if (sc > bs) { bs = sc; best = { x, y }; }
+  }
+  return best;
+}
+function planBreath() {
+  const per = P.period, lam = P.rate * per / 60;
+  let n = 0, L = Math.exp(-lam), p = RND(); while (p > L && n < 3) { n++; p *= RND(); }
+  let i = S.lastIdx;
+  for (let k = 0; k < n; k++) {
+    const j = nextIdx(i); learn(i, j); i = j;
+    const t = T + per * (0.42 + 0.5 * (k + 0.2 + RND() * 0.6) / n);
+    const pos = placeFor(j);
+    PEND.push({ t, idx: j, amp: 0.8 - 0.25 * P.s, x: pos.x, y: pos.y, pan: (pos.x * 2 - 1) * 0.7, au: false, vis: false });
+    // a fifth beneath, sometimes, while still settling
+    if (P.a < 0.5 && j >= 3 && RND() < 0.18) PEND.push({ t: t + 0.9, idx: j - 3, amp: 0.45, x: pos.x, y: clamp(pos.y + 0.1, 0, 0.94), pan: (pos.x * 2 - 1) * 0.5, au: false, vis: false, quiet: true });
+  }
+  S.lastIdx = i;
+  // harmonic centre moves at breath boundaries, rarely, and less often in deep
+  if (RND() < 1 / lerp(26, 60, P.s)) changeChord();
+}
+function changeChord(force) {
+  const opts = CHORD_NEXT[S.chord].filter(c => c !== 3 || S.unlock.six);
+  const c = opts[Math.floor(RND() * opts.length)];
+  if (c === undefined || (c === S.chord && !force)) return;
+  S.chord = c; padChord(c); logEv(`harmonic centre → ${CHORDS[c].n}`);
+}
+function breathTick(dt) {
+  const prev = BP; BP += dt / P.period;
+  let crossings = Math.floor(BP) - Math.floor(prev); if (crossings > 3) crossings = 3;
+  for (let k = 0; k < crossings; k++) planBreath();
+  BE = breathEnv(BP - Math.floor(BP)); BMOD = 1 - P.depth + P.depth * BE;
+}
+function spawnLantern(e) {
+  const hiN = e.idx / (NP - 1);
+  LANT.push({ x: e.x, y: e.y, t0: e.t, idx: e.idx, amp: e.amp * 1.15 * (e.echo ? 0.5 : e.quiet ? 0.6 : 1) * (0.75 + 0.45 * hiN), R: 11 + (1 - hiN) * 13, rs: 4.5 + RND() * 2, echo: !!e.echo });
+  if (LANT.length > 24) LANT.shift();
+  // sediment: memory of where tones landed and which note was heard there
+  const cx = e.x * (SW - 1), cy = e.y * (SH - 1);
+  for (let y = Math.max(0, Math.floor(cy - 5)); y <= Math.min(SH - 1, Math.ceil(cy + 5)); y++)
+    for (let x = Math.max(0, Math.floor(cx - 5)); x <= Math.min(SW - 1, Math.ceil(cx + 5)); x++) {
+      const d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy), w = 0.1 * Math.exp(-d2 / 6), k = y * SW + x;
+      if (!e.echo) { S.sed[k] = Math.min(1, S.sed[k] + w * (1 - S.sed[k] * 0.5)); if (w > 0.05) S.note[k] = e.idx; }
+    }
+  if (!e.echo) {
+    S.tones++;
+    const k = Math.round(cy) * SW + Math.round(cx);
+    if (S.unlock.echo && S.sed[k] > 0.45 && S.note[k] !== 255 && RND() < 0.3) {
+      const ni = S.note[k];
+      PEND.push({ t: T + 3.5 + RND() * 2, idx: ni, amp: 0.4, x: clamp(e.x + (RND() - 0.5) * 0.06, 0.02, 0.98), y: e.y, pan: -(e.x * 2 - 1) * 0.6, au: false, vis: false, echo: true });
+    }
+  }
+}
+
+/* ================= slow memory + evolution (once per sim minute) ================= */
+const SED_DECAY = Math.pow(0.5, 1 / (72 * 60)), MK_K = 1 - Math.pow(0.5, 1 / (4 * 24 * 60));
+const GRAM = ['LATTICE', 'PEARL', 'GRAIN'];
+let MINACC = 0, COVER = 0;
+function memMinute() {
+  S.hours += 1 / 60;
+  let cov = 0;
+  for (let i = 0; i < SN; i++) { const v = S.sed[i] * SED_DECAY; S.sed[i] = v; if (v > 0.3) cov++; if (v < 0.02 && S.note[i] !== 255 && v < 0.005) S.note[i] = 255; }
+  COVER = cov / SN;
+  for (let i = 0; i < NP * NP; i++) S.mk[i] += (PRIOR[i] - S.mk[i]) * MK_K;
+  FAM = familiarity();
+  // palette drift: random walk, pulled home, clamped to its family
+  for (let i = 0; i < 4; i++) { S.pal[i] += (RND() - 0.5) * 0.8 - S.pal[i] * 0.02; S.pal[i] = clamp(S.pal[i], -16, 16); }
+  // membrane currents turn over hours
+  S.drift.ang += (RND() - 0.5) * 0.01;
+  // unlocks, spread over hours of accumulated listening
+  const U = S.unlock;
+  if (!U.echo && S.hours > 1.5 && COVER > 0.04) { U.echo = true; logEv('unlocked · worn ground now echoes its note'); }
+  if (!U.low && S.hours > 3) { U.low = true; logEv('unlocked · low A bell in the deep'); }
+  if (!U.six && S.hours > 7 && FAM > 0.25) { U.six = true; logEv('unlocked · A6/9 chord (F# 360 Hz joins the pad)'); }
+  if (!U.tide && S.hours > 16) { U.tide = true; logEv('unlocked · tide: the noise bed begins to move across the room'); }
+  // visual grammar: pressure from how worn and how familiar the field has become
+  S.era.p += (0.012 + COVER * 0.08 + FAM * 0.02) * (P.a < 0.2 ? 0.6 : 1);
+  if (S.era.p > 1 && S.hours - S.era.since > 0.66) {
+    const next = FAM > 0.5 ? 1 : COVER > 0.12 ? 2 : (S.gram.b + 1) % 3;
+    if (next !== S.gram.b) { S.gram.a = S.gram.b; S.gram.b = next; S.gram.k = 0; S.era.n++; S.era.since = S.hours; S.era.p = 0; logEv(`dither grammar → ${GRAM[next]} (era ${S.era.n})`); }
+    else S.era.p = 0.5;
+  }
+}
+
+/* ================= visuals ================= */
+const cv = document.getElementById('cv'), cx = cv.getContext('2d', { alpha: false });
+let W = 480, H = 270, SC = 1, IMG, BUF, LF, GW, GH, BG, THR = [], THRM, CX0, CXF, RY0, RYF;
+function resize() {
+  const iw = CAPTURE ? 1920 : innerWidth, ih = CAPTURE ? 1080 : innerHeight;
+  SC = Math.max(1, Math.round(ih / LINES)); W = Math.ceil(iw / SC); H = Math.ceil(ih / SC);
+  cv.width = W; cv.height = H; cv.style.width = W * SC + 'px'; cv.style.height = H * SC + 'px';
+  IMG = cx.createImageData(W, H); BUF = new Uint32Array(IMG.data.buffer); LF = new Float32Array(W * H);
+  GW = Math.ceil(W / 4) + 2; GH = Math.ceil(H / 4) + 2; BG = new Float32Array(GW * GH);
+  CX0 = new Int32Array(W); CXF = new Float32Array(W); RY0 = new Int32Array(H); RYF = new Float32Array(H);
+  for (let x = 0; x < W; x++) { const g = x / 4; CX0[x] = g | 0; CXF[x] = g - (g | 0); }
+  for (let y = 0; y < H; y++) { const g = y / 4; RY0[y] = g | 0; RYF[y] = g - (g | 0); }
+  // dither grammars: LATTICE (bayer 8) · PEARL (round clustered dots) · GRAIN (interleaved gradient)
+  const b8 = new Float32Array(64); { const m = [[0]]; let M = m; for (let n = 1; n < 8; n *= 2) { const N = []; for (let y = 0; y < 2 * n; y++) { N.push([]); for (let x = 0; x < 2 * n; x++) N[y].push(4 * M[y % n][x % n] + [0, 2, 3, 1][(y >= n) * 2 + (x >= n)]); } M = N; } for (let i = 0; i < 64; i++) b8[i] = (M[i >> 3][i & 7] + 0.5) / 64; }
+  const cl = new Float32Array(64); { const ord = []; for (let i = 0; i < 64; i++) { const x = (i & 7) - 3.5, y = (i >> 3) - 3.5; ord.push([Math.hypot(x, y) + (i * 0.0001), i]); } ord.sort((a, b) => a[0] - b[0]); ord.forEach((o, r) => cl[o[1]] = (r + 0.5) / 64); }
+  THR = [0, 1, 2].map(g => { const t = new Float32Array(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    t[y * W + x] = g === 0 ? b8[(y & 7) * 8 + (x & 7)] : g === 1 ? cl[(y & 7) * 8 + ((x + ((y >> 3) & 1) * 4) & 7)] : ((52.9829189 * ((0.06711056 * x + 0.00583715 * y) % 1)) % 1); } return t; });
+  THRM = new Float32Array(W * H); blendThr();
+}
+let THR_K = -1, THR_A = -1, THR_B = -1;
+function blendThr() {
+  const k = smooth(S.gram.k), a = S.gram.a, b = S.gram.b;
+  if (Math.abs(k - THR_K) < 0.004 && a === THR_A && b === THR_B) return;
+  THR_K = k; THR_A = a; THR_B = b; const A = THR[a], B = THR[b];
+  for (let i = 0; i < THRM.length; i++) THRM[i] = A[i] + (B[i] - A[i]) * k;
+}
+function h3(x, y, z) { let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(z, 1274126177) + SEEDH) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); n ^= n >>> 16; return (n >>> 0) / 4294967296; }
+function vn3(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const a = lerp(h3(xi, yi, zi), h3(xi + 1, yi, zi), u), b = lerp(h3(xi, yi + 1, zi), h3(xi + 1, yi + 1, zi), u);
+  const c = lerp(h3(xi, yi, zi + 1), h3(xi + 1, yi, zi + 1), u), d = lerp(h3(xi, yi + 1, zi + 1), h3(xi + 1, yi + 1, zi + 1), u);
+  return lerp(lerp(a, b, v), lerp(c, d, v), w);
+}
+let TV = 0;   // visual time, slows through the arc
+const PAL = new Uint32Array(4), PALRGB = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+function hsl(h, s, l) { h = ((h % 360) + 360) % 360 / 360; const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  return [f(h + 1 / 3), f(h), f(h - 1 / 3)].map(v => Math.round(clamp(v, 0, 1) * 255)); }
+let CH_HUE = 0;
+function palette() {
+  // low-blue night palette: plum dark, mulberry, coral-rose, apricot. Deep warms it further and dims it.
+  CH_HUE += (CHORDS[S.chord].hue - CH_HUE) * 0.02;
+  const dim = (0.3 + 0.7 * clamp(P.lum, 0, 1)) * (0.35 + 0.65 * P.endG), warm = P.s * 10 + P.deep * 6;
+  const base = [[330, 0.45, 0.045], [338 + warm * 0.4, 0.55, 0.16 * (0.6 + 0.4 * dim)], [356 + warm * 0.8 + CH_HUE, 0.62, 0.46 * dim], [26 - warm * 0.3 + CH_HUE * 0.6, 0.88, 0.66 * dim]];
+  const fam = [[300, 350], [320, 360], [340, 380], [12, 42]];
+  for (let i = 0; i < 4; i++) { const h = clamp(base[i][0] + S.pal[i], fam[i][0], fam[i][1]); const c = hsl(h, base[i][1], base[i][2]);
+    if (i > 0) c[2] = Math.round(c[2] * (1 - 0.45 * P.s));   // shed blue toward sleep
+    PALRGB[i] = c; PAL[i] = (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]; }
+  const r = document.documentElement.style, hex = c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+  r.setProperty('--bg', hex(PALRGB[0])); r.setProperty('--mid', hex(PALRGB[1])); r.setProperty('--hi', hex(PALRGB[2])); r.setProperty('--gl', hex(PALRGB[3]));
+  r.setProperty('--tx', hex(PALRGB[3].map((v, k) => Math.round(lerp(v, 255, 0.25)))));
+}
+function render() {
+  if (!BG) return;
+  // low-res background: membrane contours (fbm value noise, slow currents) + sediment memory
+  const ang = S.drift.ang, ca = Math.cos(ang), sa = Math.sin(ang), z = TV * 0.018, sx = TV * 0.004, sc = 0.03;
+  const tideOn = S.unlock.tide ? 1 : 0;
+  for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+    const X = (gx * ca - gy * sa) * sc + sx, Y = (gx * sa + gy * ca) * sc * 1.7;
+    let m = vn3(X, Y, z) * 0.55 + vn3(X * 2.1 + 5.2, Y * 2.1, z * 1.3) * 0.3 + vn3(X * 4.3, Y * 4.3 + 9.1, z * 1.7) * 0.15;
+    if (tideOn) m += 0.06 * Math.sin(gx * 0.05 + TV * 0.03);
+    const cont = Math.abs((m * 5) % 1 - 0.5) * 2, ridge = Math.pow(1 - cont, 8) * 0.24;   // contour lines of the membrane
+    const u = gx / (GW - 1), v = gy / (GH - 1), sxi = Math.min(SW - 1, (u * (SW - 1)) | 0), syi = Math.min(SH - 1, (v * (SH - 1)) | 0);
+    BG[gy * GW + gx] = smooth((m - 0.28) / 0.55) * 0.4 + ridge + S.sed[syi * SW + sxi] * 0.26 + 0.12 * v * v;
+  }
+  // lanterns: glow + a slow ripple ring, sized by the breath
+  LF.fill(0);
+  for (const L of LANT) {
+    const age = T - L.t0; if (age < 0) continue;
+    const env = smooth(age / 2.4) * Math.exp(-Math.max(0, age - 2.4) / 5.5), amp = L.amp * env;
+    const R = L.R * (0.8 + 0.4 * BMOD), invR2 = 1 / (R * R), rr = 2 + age * L.rs, ramp = L.amp * 0.45 * Math.exp(-age / 7) * smooth(age / 0.8);
+    const px = L.x * W, py = L.y * H, ext = Math.max(R * 2.4, rr + 6);
+    const x0 = Math.max(0, Math.floor(px - ext)), x1 = Math.min(W - 1, Math.ceil(px + ext)), y0 = Math.max(0, Math.floor(py - ext)), y1 = Math.min(H - 1, Math.ceil(py + ext));
+    const rin = Math.max(0, rr - 6), rout = rr + 6, rin2 = rin * rin, rout2 = rout * rout;
+    for (let y = y0; y <= y1; y++) { const dy = y - py; for (let x = x0; x <= x1; x++) { const dx = x - px, d2 = dx * dx + dy * dy;
+      let g = amp * Math.exp(-d2 * invR2);
+      if (d2 > rin2 && d2 < rout2) { const dd = Math.sqrt(d2) - rr; g += ramp * Math.exp(-dd * dd * 0.2); }
+      LF[y * W + x] += g; } }
+  }
+  // structure stays legible; darkness comes from the palette, so deep night is dim, not blank
+  const gain = (0.84 + 0.3 * BMOD) * lerp(1, 0.78, P.s) * (1 - 0.12 * P.deep) * (0.4 + 0.6 * P.endG), T4 = THRM;
+  for (let y = 0; y < H; y++) {
+    const r0 = RY0[y] * GW, r1 = r0 + GW, fy = RYF[y], row = y * W;
+    for (let x = 0; x < W; x++) {
+      const c0 = CX0[x], fx = CXF[x];
+      const a = BG[r0 + c0] + (BG[r0 + c0 + 1] - BG[r0 + c0]) * fx, b = BG[r1 + c0] + (BG[r1 + c0 + 1] - BG[r1 + c0]) * fx;
+      const i = row + x, v = ((a + (b - a) * fy) + LF[i]) * gain;
+      let l = (v * 3.3 + T4[i] - 0.5) | 0; l = l < 0 ? 0 : l > 3 ? 3 : l;
+      BUF[i] = PAL[l];
+    }
+  }
+  cx.putImageData(IMG, 0, 0);
+}
+
+/* ================= audio =================
+   Everything continuous: an A pedal drone (54/81/108 Hz), a pad chord breathing with the pacer, a brown-noise bed
+   (AudioWorklet, lowpassed well under 500 Hz), and slow-attack sine tones (≥2 s attack: no startle onsets) in a long room. */
+const AU = { ctx: null, g: null, worklet: false, lastCT: -1, stall: 0, silent: 0, builtAt: 0, abuf: new Float32Array(2048), busy: false, ir: null, lastLow: 0 };
+const NOISE_SRC = `class MZNoise extends AudioWorkletProcessor{constructor(){super();this.s=(Math.random()*4294967295)>>>0;this.b=[0,0];}
+process(i,out){const o=out[0];for(let c=0;c<o.length;c++){const a=o[c];let b=this.b[c]||0;for(let k=0;k<a.length;k++){this.s=(Math.imul(this.s,1664525)+1013904223)>>>0;const w=this.s/2147483648-1;b=b*0.996+w*0.06;a[k]=b*0.6;}this.b[c]=b;}return true;}}
+registerProcessor('mz-noise',MZNoise);`;
+function makeNoiseBuffer(ctx, secs) { const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * secs), ctx.sampleRate); const d = b.getChannelData(0); let l = 0; for (let i = 0; i < d.length; i++) { l = l * 0.996 + 0.06 * (Math.random() * 2 - 1); d[i] = l * 0.6; } return b; }
+function makeIR(ctx, secs) { const len = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, len, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < len; i++) { lp = lp * 0.7 + (Math.random() * 2 - 1) * 0.3; const t = i / len; d[i] = lp * Math.pow(1 - t, 3) * Math.min(1, i / (ctx.sampleRate * 0.03)); } } return b; }
+const MASTER = 0.9;
+function padBank(ctx, g, freqs, fadeIn) {
+  const nodes = [], bank = ctx.createGain(), t = ctx.currentTime; bank.gain.setValueAtTime(0, t); bank.gain.linearRampToValueAtTime(1, t + fadeIn); bank.connect(g.padF); nodes.push(bank);
+  freqs.forEach((f, k) => { [-0.35, 0.35].forEach(det => {   // slow beating pairs (~0.7 Hz): gentle motion, no LFO needed
+    const o = ctx.createOscillator(), v = ctx.createGain(), p = ctx.createStereoPanner(); o.type = 'sine'; o.frequency.value = f + det;
+    v.gain.value = [0.34, 0.2, 0.16, 0.1][k] || 0.08; p.pan.value = det < 0 ? -0.35 : 0.35; o.connect(v); v.connect(p); p.connect(bank); o.start(t); nodes.push(o, v, p); }); });
+  return { bank, nodes, stop(fade) { const t = ctx.currentTime; try { bank.gain.cancelScheduledValues(t); bank.gain.setValueAtTime(bank.gain.value, t); bank.gain.linearRampToValueAtTime(0, t + fade); } catch (e) { }
+    for (const n of nodes) if (n.stop) { try { n.stop(t + fade + 0.1); } catch (e) { } }
+    setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, (fade + 0.5) * 1000); } };
+}
+function buildGraph(ctx) {
+  const nodes = [], mk = n => (nodes.push(n), n);
+  const out = mk(ctx.createGain()); out.gain.value = 0; out.connect(ctx.destination);
+  const an = mk(ctx.createAnalyser()); an.fftSize = 2048; out.connect(an);
+  const clip = mk(ctx.createWaveShaper()); { const n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(1.1 * x) / Math.tanh(1.1); } clip.curve = c; } clip.connect(out);
+  const comp = mk(ctx.createDynamicsCompressor()); comp.threshold.value = -22; comp.ratio.value = 2.5; comp.attack.value = 0.08; comp.release.value = 0.8; comp.connect(clip);
+  const top = mk(ctx.createBiquadFilter()); top.type = 'lowpass'; top.frequency.value = 3200; top.Q.value = 0.5; top.connect(comp);   // nothing bright gets through
+  const mix = mk(ctx.createGain()); mix.gain.value = 1.6; mix.connect(top);
+  const verb = mk(ctx.createConvolver()); verb.buffer = AU.ir; const wetF = mk(ctx.createBiquadFilter()); wetF.type = 'lowpass'; wetF.frequency.value = 2200;
+  const wet = mk(ctx.createGain()); wet.gain.value = 0.4; verb.connect(wetF); wetF.connect(wet); wet.connect(mix);
+  // drone: A pedal
+  const droneF = mk(ctx.createBiquadFilter()); droneF.type = 'lowpass'; droneF.frequency.value = 260; droneF.Q.value = 0.7;
+  const droneG = mk(ctx.createGain()); droneG.gain.value = 0.16; droneF.connect(droneG); droneG.connect(mix); droneG.connect(verb);
+  const dro = [[54, 'sine', 0.26], [81, 'sine', 0.14], [108, 'triangle', 0.16], [162, 'sine', 0.04]].map(([f, type, gv]) => { const o = mk(ctx.createOscillator()); o.type = type; o.frequency.value = f; const gg = mk(ctx.createGain()); gg.gain.value = gv; o.connect(gg); gg.connect(droneF); return o; });
+  const dlfo = mk(ctx.createOscillator()); dlfo.frequency.value = 0.013; const dlg = mk(ctx.createGain()); dlg.gain.value = 60; dlfo.connect(dlg); dlg.connect(droneF.frequency);
+  // optional binaural pair (headphones): carrier 108 Hz left, 108 + Δ right; Δ falls from 6 Hz (theta) to 2 Hz (delta)
+  let binR = null;
+  if (BIN) { const mg = mk(ctx.createChannelMerger(2)), bg = mk(ctx.createGain()); bg.gain.value = 0.07; const l = mk(ctx.createOscillator()), r = mk(ctx.createOscillator()); l.frequency.value = 108; r.frequency.value = 114;
+    l.connect(mg, 0, 0); r.connect(mg, 0, 1); mg.connect(bg); bg.connect(top); binR = r; dro.push(l, r); }
+  // pad: breathing chord
+  const padF = mk(ctx.createBiquadFilter()); padF.type = 'lowpass'; padF.frequency.value = 500; padF.Q.value = 0.9;
+  const padG = mk(ctx.createGain()); padG.gain.value = 0.1; padF.connect(padG); padG.connect(mix); padG.connect(verb);
+  // noise bed: brown, double lowpassed
+  let noise; if (AU.worklet) noise = mk(new AudioWorkletNode(ctx, 'mz-noise', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] })); else noise = mk(ctx.createGain());
+  const nF1 = mk(ctx.createBiquadFilter()); nF1.type = 'lowpass'; nF1.frequency.value = 450; const nF2 = mk(ctx.createBiquadFilter()); nF2.type = 'lowpass'; nF2.frequency.value = 450;
+  const nHP = mk(ctx.createBiquadFilter()); nHP.type = 'highpass'; nHP.frequency.value = 70; nHP.Q.value = 0.5;   // keep the bed audible as air, not rumble
+  const nP = mk(ctx.createStereoPanner()); const nG = mk(ctx.createGain()); nG.gain.value = 0.3;
+  noise.connect(nHP); nHP.connect(nF1); nF1.connect(nF2); nF2.connect(nP); nP.connect(nG); nG.connect(mix);
+  // tone bus
+  const toneF = mk(ctx.createBiquadFilter()); toneF.type = 'lowpass'; toneF.frequency.value = 1800; toneF.Q.value = 0.5;
+  const toneG = mk(ctx.createGain()); toneG.gain.value = 1; toneF.connect(toneG); toneG.connect(mix);
+  const toneV = mk(ctx.createGain()); toneV.gain.value = 0.75; toneF.connect(toneV); toneV.connect(verb);
+  const t0 = ctx.currentTime; for (const o of [...dro, dlfo]) o.start(t0);
+  const g = { out, an, mix, verb, wet, droneF, droneG, padF, padG, noise, nF1, nF2, nP, nG, toneF, binR, nodes, nNext: 0, pad: null };
+  g.pad = padBank(ctx, g, padFreqs(S.chord), 4);
+  g.stop = () => { const t = ctx.currentTime; if (g.pad) g.pad.stop(0.3); for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (e) { } } setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, 500); };
+  return g;
+}
+function padFreqs(c) { const f = CHORDS[c].f.slice(); return f; }
+function padChord(c) {   // crossfade pad banks over 40 s; no glides
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const old = g.pad; g.pad = padBank(ctx, g, padFreqs(c), 40); if (old) old.stop(40);
+}
+async function createContext() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ctx = new AC({ latencyHint: 'playback' }); AU.worklet = false;
+  try { await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true; }
+  catch (e) { try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_SRC], { type: 'application/javascript' }))); AU.worklet = true; } catch (e2) { AU.worklet = false; } }
+  AU.ir = makeIR(ctx, 7); AU.ctx = ctx; AU.g = buildGraph(ctx); AU.builtAt = ctx.currentTime;
+  const t = ctx.currentTime; AU.g.out.gain.setValueAtTime(0, t); AU.g.out.gain.linearRampToValueAtTime(outLevel(), t + 6);
+  AU.g.out.gain._v = outLevel();
+  AU.lastCT = -1; AU.stall = 0; AU.silent = 0;
+  try { await ctx.resume(); } catch (e) { }
+}
+function rebuildGraph() {
+  const ctx = AU.ctx; if (!ctx) return; const old = AU.g, t = ctx.currentTime, ng = buildGraph(ctx);
+  ng.out.gain.setValueAtTime(0, t); ng.out.gain.linearRampToValueAtTime(outLevel(), t + 4); ng.out.gain._v = outLevel();
+  if (old) { try { old.out.gain.cancelScheduledValues(t); old.out.gain.setValueAtTime(old.out.gain.value, t); old.out.gain.linearRampToValueAtTime(0, t + 4); } catch (e) { } setTimeout(() => old.stop(), 4500); }
+  AU.g = ng; AU.builtAt = t; AU.silent = 0;
+}
+async function recreateContext() { if (AU.busy) return; AU.busy = true; try { const old = AU.ctx; AU.ctx = null; AU.g = null; if (old) { try { await old.close(); } catch (e) { } } await createContext(); } finally { AU.busy = false; } }
+function audioWatch() {
+  const ctx = AU.ctx; if (!ctx || AU.busy) return;
+  if (ctx.state === 'closed') { recreateContext(); return; }
+  if (ctx.state !== 'running') { ctx.resume().catch(() => { }); return; }
+  const ct = ctx.currentTime; if (ct === AU.lastCT) { if (++AU.stall > 6) { recreateContext(); return; } } else AU.stall = 0; AU.lastCT = ct;
+  if (!AU.g) return; const b = AU.abuf; AU.g.an.getFloatTimeDomainData(b);
+  let mx = 0, bad = false; for (let i = 0; i < b.length; i++) { const v = b[i]; if (!fin(v)) { bad = true; break; } const a = v < 0 ? -v : v; if (a > mx) mx = a; }
+  if (bad) { rebuildGraph(); return; }
+  const intendedSilent = outLevel() < 0.01;
+  AU.silent = mx < 1e-5 && !intendedSilent ? AU.silent + 1 : 0;
+  if (AU.silent > 20) rebuildGraph(); else if (ct - AU.builtAt > 3 * 3600) rebuildGraph();
+}
+function setP(p, v, tc) { if (!fin(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, AU.ctx.currentTime, tc); }
+function done(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }; }
+function outLevel() { return MASTER * VOL * P.master * P.endG; }
+function vTone(t, f, amp, pan, att, rel) {
+  const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), o2 = ctx.createOscillator(), h2 = ctx.createGain(), v = ctx.createGain(), p = ctx.createStereoPanner();
+  o.type = 'sine'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2.002; h2.gain.value = 0.09;
+  const hold = 0.9, end = t + att + hold + rel;
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + att); v.gain.linearRampToValueAtTime(amp * 0.75, t + att + hold);
+  v.gain.exponentialRampToValueAtTime(amp * 0.0008, end); v.gain.linearRampToValueAtTime(0, end + 0.05);
+  p.pan.value = pan; o.connect(v); o2.connect(h2); h2.connect(v); v.connect(p); p.connect(g.toneF);
+  o.start(t); o2.start(t); o.stop(end + 0.1); o2.stop(end + 0.1); done(o, [o, o2, h2, v, p]);
+}
+function playTone(e, t) {
+  const f = POOL[e.idx] * (e.echo ? 0.5 : 1);
+  const amp = (e.echo ? 0.1 : e.quiet ? 0.09 : 0.16) * (1 - 0.3 * P.s) * (e.idx > 6 ? 0.8 : 1);
+  vTone(t, f, amp, e.pan, lerp(1.8, 3.2, P.s) + RND() * 0.6, lerp(7, 11, P.s));
+  if (S.unlock.low && P.deep > 0.5 && !e.echo && t - AU.lastLow > 90 && RND() < 0.12) { AU.lastLow = t; vTone(t + 2, 108, 0.06, 0, 4, 14); }
+}
+const FADE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2)), FADE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
+function noiseSegments() {   // fallback when AudioWorklet is unavailable: long crossfaded noise segments, never a short loop
+  const ctx = AU.ctx, g = AU.g; if (AU.worklet || !g) return; if (!AU.longNoise) AU.longNoise = makeNoiseBuffer(ctx, 20);
+  if (g.nNext < ctx.currentTime) g.nNext = ctx.currentTime + 0.05;
+  while (g.nNext < ctx.currentTime + 1.6) { const t = g.nNext, len = 7, xf = 1.5, src = ctx.createBufferSource(), v = ctx.createGain(); src.buffer = AU.longNoise; src.playbackRate.value = 0.9 + Math.random() * 0.1;
+    v.gain.value = 0; v.gain.setValueCurveAtTime(FADE_IN, t, xf); v.gain.setValueCurveAtTime(FADE_OUT, t + len - xf, xf); src.connect(v); v.connect(g.noise); src.start(t, Math.random() * 12); src.stop(t + len + 0.05); done(src, [src, v]); g.nNext = t + len - xf; }
+}
+let CTL_ACC = 0;
+function audioControl() {   // ≤10 Hz, setTargetAtTime only
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  setP(g.out.gain, outLevel(), 1.5);
+  setP(g.padG.gain, 0.16 * (0.3 + 0.7 * BMOD) * (1 - 0.25 * P.s), 0.12);
+  setP(g.padF.frequency, 240 + 760 * BMOD * (1 - 0.45 * P.s), 0.12);
+  setP(g.nG.gain, P.noise * 0.75 * (0.92 + 0.08 * BMOD), 0.5);
+  setP(g.nF1.frequency, P.noiseLP, 2); setP(g.nF2.frequency, P.noiseLP * 1.2, 2);
+  setP(g.nP.pan, S.unlock.tide ? 0.35 * Math.sin(T * 2 * Math.PI / 47) : 0, 0.8);
+  setP(g.droneG.gain, 0.16 + 0.04 * P.deep, 3);
+  setP(g.wet.gain, 0.38 + 0.2 * P.s, 3);
+  setP(g.toneF.frequency, lerp(1800, 1100, P.s), 3);
+  if (g.binR) setP(g.binR.frequency, 108 + lerp(6, 2, P.s), 4);
+}
+function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
+addEventListener('pointerdown', audioUnlock); addEventListener('keydown', audioUnlock);
+
+/* ================= the clock: one advance() for both rAF and the audio interval ================= */
+let lastAdv = performance.now(), SAVE_ACC = 0, NAN_CHECK = 0;
+function advance(realDt, audible) {
+  const dt = clamp(realDt, 0, 2) * RATE;
+  T += dt; TV += dt * P.speed;
+  derive(); breathTick(dt);
+  if (S.gram.k < 1) { S.gram.k = Math.min(1, S.gram.k + dt / 180); }
+  MINACC += dt; let n = 0; while (MINACC >= 60 && n++ < 30) { MINACC -= 60; memMinute(); } if (MINACC >= 60) MINACC = 0;
+  // tones: to audio when inside the lookahead, to the field when their time arrives
+  const running = audible && AU.ctx && AU.g && AU.ctx.state === 'running';
+  const look = (document.hidden ? 1.8 : 0.5) * RATE;
+  for (let k = PEND.length - 1; k >= 0; k--) {
+    const e = PEND[k];
+    if (!e.au && e.t <= T + look) { e.au = true; if (running && RATE <= 4) { const at = AU.ctx.currentTime + Math.max(0.03, (e.t - T) / RATE); if (at > AU.ctx.currentTime) playTone(e, at); } }
+    if (!e.vis && e.t <= T) { e.vis = true; spawnLantern(e); }
+    if (e.au && e.vis) PEND.splice(k, 1);
+  }
+  for (let k = LANT.length - 1; k >= 0; k--) if (T - LANT[k].t0 > 22) LANT.splice(k, 1);
+  if (running) { CTL_ACC += realDt; if (CTL_ACC >= 0.1) { CTL_ACC = 0; audioControl(); } if (!AU.worklet) noiseSegments(); }
+  SAVE_ACC += realDt; if (SAVE_ACC >= 60) { SAVE_ACC = 0; saveState(); }
+  NAN_CHECK += realDt; if (NAN_CHECK > 5) { NAN_CHECK = 0; selfHeal(); }
+}
+function selfHeal() {   // never freeze: sanitise memory and scalar state
+  let bad = false; for (let i = 0; i < SN; i += 7) if (!fin(S.sed[i])) { bad = true; break; }
+  if (bad || !fin(T) || !fin(TV) || !fin(BP)) { if (!fin(T)) T = 0; if (!fin(TV)) TV = 0; if (!fin(BP)) BP = 0; sanitize(S); logEv('self-heal · field regrown from memory'); }
+}
+function tickFromInterval() { const n = performance.now(), d = (n - lastAdv) / 1000; lastAdv = n; advance(d, true); }
+function prewarm() {   // "it was running before you arrived": 40 s of breaths, silently, so lanterns are already in the field
+  const t0 = T; T -= 40; for (let i = 0; i < 400; i++) { T += 0.1; TV += 0.1; derive(); breathTick(0.1); for (let k = PEND.length - 1; k >= 0; k--) { const e = PEND[k]; if (e.t <= T) { e.au = true; spawnLantern(e); PEND.splice(k, 1); } } }
+  T = t0; for (const L of LANT) if (L.t0 > T) L.t0 = T;
+}
+function fastForward(hours) {   // pre-run memory: breaths, tones, sediment, learning, unlocks. Arc/time restored after.
+  const t0 = T, tv0 = TV, steps = Math.floor(hours * 3600 / 2);
+  for (let i = 0; i < steps; i++) { T += 2; derive(); breathTick(2); MINACC += 2; if (MINACC >= 60) { MINACC -= 60; memMinute(); }
+    for (let k = PEND.length - 1; k >= 0; k--) { const e = PEND[k]; if (e.t <= T) { spawnLantern(e); PEND.splice(k, 1); } } if (LANT.length > 20) LANT.length = 0; }
+  T = t0; TV = tv0; LANT.length = 0; PEND.length = 0; S.gram.k = 1; logEv(`fast-forwarded ${hours} h of memory`);
+}
+
+/* ================= info ================= */
+const infoEl = document.getElementById('info'), logEl = document.getElementById('log');
+let INFO_WAKE = performance.now();
+function applyInfo() { infoEl.classList.toggle('hide', INFO < 1); logEl.classList.toggle('hide', INFO < 2); }
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]); }
+function renderLog() { if (INFO < 2) return; logEl.innerHTML = '<span class="h">EVOLUTION LOG</span>\n' + (S.log.slice(-7).map(e => `<i>${esc(e.t)}</i> ${esc(e.m)}`).join('\n') || '<i>listening…</i>'); }
+addEventListener('keydown', e => { INFO_WAKE = performance.now(); if (e.key === 'i' || e.key === 'I') { INFO = (INFO + 2) % 3; applyInfo(); renderLog(); renderInfo(); } });
+addEventListener('pointerdown', () => { INFO_WAKE = performance.now(); });
+function mmss(sec) { sec = Math.max(0, Math.floor(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+function renderInfo() {
+  if (INFO < 1) return;
+  const I = [], bpm = 60 / P.period, inS = P.period * 0.4, outS = P.period * 0.6;
+  const snd = MUTE ? ' <i>· audio off</i>' : AU.ctx && AU.ctx.state === 'running' ? '' : ' <span class="p">· TAP / CLICK FOR SOUND</span>';
+  const where = BED ? `BEDSIDE · ${mmss(T)} in · ${P.phase}${END > 0 ? ` · fades out at ${END} min` : ''}` : `${P.phase} · ${new Date(START_MS + T * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+  I.push(`<span class="h">MZTV · BIT FIELD 018 · LULL</span>  ${where}${snd}`);
+  I.push(`<b>BREATH</b> ${bpm.toFixed(1)}/min · in ${inS.toFixed(1)} s · out ${outS.toFixed(1)} s → pad swell + lantern size${P.depth < 0.6 ? ' <i>(flattening: steady sound once asleep)</i>' : ''}`);
+  I.push(`<b>TONES</b> A = 432 Hz just pentatonic · ${noteName(Math.floor(P.lo))}–${noteName(Math.ceil(P.hi))} · ~${P.rate.toFixed(1)}/min, only on the exhale → each drops a lantern (pitch = height)`);
+  I.push(`<b>BED</b> A drone 54 Hz · pad ${CHORDS[S.chord].n} · brown noise ${Math.round(P.noise * 100)}% under ${Math.round(P.noiseLP)} Hz${BIN ? ` · binaural Δ ${lerp(6, 2, P.s).toFixed(1)} Hz` : ''}`);
+  I.push(`<b>LIGHT</b> ${Math.round(clamp(P.lum, 0, 1.5) * 100)}% · blue ${Math.round((1 - 0.45 * P.s) * 100)}% · motion ${Math.round(P.speed * 100)}% → dims toward sleep`);
+  I.push(`<b>MEMORY</b> ${S.hours.toFixed(1)} h heard · lullaby familiarity ${Math.round(clamp(FAM, 0, 1) * 100)}% · worn ground ${Math.round(COVER * 100)}% · ${GRAM[S.gram.b]}`);
+  infoEl.innerHTML = I.join('\n');
+  // bedside: the box recedes after a minute and a half so it doesn't light the room
+  const idle = (performance.now() - INFO_WAKE) / 1000;
+  const op = BED ? (idle > 90 ? 0.18 : 0.8) : lerp(0.88, 0.5, P.s);
+  infoEl.style.opacity = op; logEl.style.opacity = op;
+}
+
+/* ================= boot ================= */
+resize(); addEventListener('resize', () => { if (!CAPTURE) resize(); });
+derive(); FAM = familiarity(); palette();
+if (FF > 0) fastForward(FF);
+prewarm();
+if (S.sessions === 1 && S.log.length === 0) logEv(BED ? 'bedside session begins · settling' : 'field opens');
+applyInfo(); renderInfo(); renderLog();
+if (!MUTE && !CAPTURE) audioUnlock();   // OBS allows autoplay; a browser waits for a tap
+cv.addEventListener('webglcontextlost', e => e.preventDefault());
+let PAL_ACC = 0, INFO_ACC = 0;
+function frame(dt) { PAL_ACC += dt; if (PAL_ACC > 0.5) { PAL_ACC = 0; palette(); blendThr(); } INFO_ACC += dt; if (INFO_ACC > 0.5) { INFO_ACC = 0; renderInfo(); } render(); }
+if (!CAPTURE) {
+  setInterval(tickFromInterval, 40);
+  setInterval(audioWatch, 1000);
+  let lastR = performance.now();
+  const loop = () => { const n = performance.now(), d = (n - lastR) / 1000; lastR = n; frame(d); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  addEventListener('beforeunload', saveState);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
+}
+window.MZ = {
+  get S() { return S; }, get P() { return P; }, get T() { return T; }, get LANT() { return LANT; }, get AU() { return AU; },
+  tick(dt) { advance(dt, false); frame(dt); },
+  force(op) { if (op === 'chord') changeChord(true); else if (op === 'grammar') { S.era.p = 2; S.era.since = -9; memMinute(); } else if (op === 'unlock') { S.hours = Math.max(S.hours, 20); S.unlock.echo = true; memMinute(); } else if (op === 'deep') { T = BED ? ARC * 60 * 1.5 : T; } else if (op === 'nan') { S.sed[5] = NaN; T = NaN; } },
+  setT(min) { T = min * 60; }, rebuild: () => rebuildGraph(), save: saveState,
+};
+</script>
+</body>
+</html>

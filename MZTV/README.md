@@ -109,6 +109,16 @@ sources/bit-field-017-orbit-score/index.html
 Live:
 https://matchzimmerman.github.io/MZTV/sources/bit-field-017-orbit-score/
 
+### BIT FIELD 018 — LULL
+A night field for falling asleep. Tones from an A = 432 Hz just-intoned pentatonic (A B D E F#) drift in and out over a low A drone, a pad that breathes with a pacer (inhale 40% / exhale 60%, slowing from 8 to 5 breaths per minute), and a brown-noise bed lowpassed well under 500 Hz. Tones fall only on the exhale, with slow attacks and no percussion, and each one drops a lantern into a slow dithered membrane: pitch is height, pan is position, and the breath sets its size. The arc runs SETTLING → DESCENDING → DEEP. Tones thin out, the register falls, the breath flattens toward steady sound, and the light dims and sheds its blue. Memory: lanterns leave sediment that holds the note heard there, and worn ground later echoes it. A transition table learns the lullaby, so the melody grows more familiar the longer it has been heard. Chord (A / Asus4 / D over A / A6/9) shifts palette hue. Voices unlock over hours, and the dither grammar changes under pressure from wear and familiarity. The stream follows the local clock (day field, dusk descent, deep night, dawn). The bedside version starts its arc on play and keeps a separate memory. The README lists the evidence behind each choice. Params: ?info=0|1|2 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?ff=H ?lines=N ?capture=1 ?arc=MIN ?end=MIN ?binaural=1 ?vol=N ?dim=N
+
+Path:
+sources/bit-field-018-lull/index.html (stream) · sources/bit-field-018-lull/bedtime.html (bedside)
+
+Live:
+https://matchzimmerman.github.io/MZTV/sources/bit-field-018-lull/
+https://matchzimmerman.github.io/MZTV/sources/bit-field-018-lull/bedtime.html
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
