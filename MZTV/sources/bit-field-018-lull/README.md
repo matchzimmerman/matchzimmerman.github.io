@@ -10,7 +10,7 @@ A night field for falling asleep. Tones from an A = 432 Hz just-intoned pentaton
 | Choice | Why | Evidence |
 |---|---|---|
 | Breath pacer, inhale 40% / exhale 60%, slowing 8 → 5 breaths/min | Slow breathing with a longer exhale raises vagal (parasympathetic) tone. The pad swell and lantern size are a pacer you can breathe with. | Good (slow-breathing / HRV literature, e.g. Zaccaro et al. 2018 review) |
-| Nothing sudden: ≥2 s tone attacks, no percussion, everything lowpassed (tones ≤ ~1.8 kHz, master 3.2 kHz) | Abrupt onsets and bright transients trigger orienting/startle responses and micro-arousals in sleep | Good (sleep noise-arousal research, e.g. Basner) |
+| Nothing sudden: ≥2 s tone attacks, no percussion, everything lowpassed (tones 900 → 650 Hz, reverb 1 kHz, master 1.4 kHz) | Abrupt onsets and bright transients trigger orienting/startle responses and micro-arousals in sleep | Good (sleep noise-arousal research, e.g. Basner) |
 | Slow tempo, low register, predictable structure | Slow, low, predictable music is what the sleep-music trials used | Moderate (Cochrane review: music improves self-reported sleep quality in insomnia, Jespersen et al. 2022) |
 | Melody learns its own transitions, so it becomes more familiar with each night | Predictability lowers arousal; recurrence without exact repetition | Plausible (predictive processing), not directly tested |
 | Brown noise bed, lowpassed under 250–520 Hz, rising through the arc | Masks household sounds; steady broadband noise shortened sleep onset in some studies | Mixed but positive (e.g. Spencer et al. 1990, newborns; Zhou et al. 2012, pink noise) |
@@ -24,7 +24,7 @@ For children: keep the volume low. Pediatric researchers recommend infant sound 
 ## System
 
 - **Breath**: a continuous phase accumulator, so rate changes never jump. It drives the pad gain and filter, the lantern radius, and the whole field's swell. Tones are planned only inside the exhale.
-- **Tones**: pool A3 216 → F#5 720 Hz (A B D E F#), with 432 in the middle. The window falls to A3–A4 in deep. Density goes from 8 to under 1 per minute. Pitch sets a lantern's height and pan sets its x position.
+- **Tones**: A B D E F# from A3 216 Hz. Tones stay at or under B4 486 Hz, with 432 as the ceiling in deep. Higher notes are played quieter (level ∝ √(216/f)), tones are lowpassed at 900 → 650 Hz, and the master rolls off above 1.4 kHz, so nothing pierces. Density goes from 8 to under 1 per minute. Pitch sets a lantern's height and pan sets its x position.
 - **Harmony**: pad banks crossfade over 40 s at breath boundaries: HOME A · OPEN Asus4 · WARM D/A · SIX A6/9 (unlocked). The harmonic centre also shifts the palette's hue.
 - **Memory** (persists across reloads): lanterns leave sediment (half-life 3 days) that holds the note heard there, and new lanterns prefer moderately worn ground. A 10×10 transition table learns the lullaby and relaxes back toward its prior (half-life 4 days). As familiarity grows, choices sharpen.
 - **Unlocks**: echo from worn ground (~1.5 h) · low A bell in deep (3 h) · A6/9 chord (7 h, needs familiarity) · tide: the noise bed moves across the stereo field (16 h).

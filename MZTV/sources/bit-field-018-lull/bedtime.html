@@ -142,7 +142,7 @@ function derive() {
   P.period = lerp(7.5, 12, s);                       // 8 → 5 breaths per minute
   P.depth = 1 - 0.72 * deep;                         // breath modulation flattens once asleep: steady sound arouses least
   P.rate = lerp(8, 2.6, s) * (1 - 0.65 * deep);      // tones per minute
-  P.hi = lerp(9, 5, s); P.lo = lerp(2, 0, s);        // register falls; 432 stays the ceiling in deep
+  P.hi = lerp(6, 5, s); P.lo = lerp(1.5, 0, s);      // tones stay at or under B4 486 Hz; 432 is the ceiling in deep
   P.lum = lerp(1, 0.5, s) * (1 - 0.4 * deep) * DIM;
   P.noise = lerp(0.3, 0.78, s); P.noiseLP = lerp(520, 250, s);
   P.speed = lerp(1, 0.42, s); P.master = lerp(1, 0.8, s);
@@ -382,9 +382,9 @@ function buildGraph(ctx) {
   const an = mk(ctx.createAnalyser()); an.fftSize = 2048; out.connect(an);
   const clip = mk(ctx.createWaveShaper()); { const n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(1.1 * x) / Math.tanh(1.1); } clip.curve = c; } clip.connect(out);
   const comp = mk(ctx.createDynamicsCompressor()); comp.threshold.value = -22; comp.ratio.value = 2.5; comp.attack.value = 0.08; comp.release.value = 0.8; comp.connect(clip);
-  const top = mk(ctx.createBiquadFilter()); top.type = 'lowpass'; top.frequency.value = 3200; top.Q.value = 0.5; top.connect(comp);   // nothing bright gets through
+  const top = mk(ctx.createBiquadFilter()); top.type = 'lowpass'; top.frequency.value = 1400; top.Q.value = 0.5; top.connect(comp);   // nothing bright gets through
   const mix = mk(ctx.createGain()); mix.gain.value = 1.6; mix.connect(top);
-  const verb = mk(ctx.createConvolver()); verb.buffer = AU.ir; const wetF = mk(ctx.createBiquadFilter()); wetF.type = 'lowpass'; wetF.frequency.value = 2200;
+  const verb = mk(ctx.createConvolver()); verb.buffer = AU.ir; const wetF = mk(ctx.createBiquadFilter()); wetF.type = 'lowpass'; wetF.frequency.value = 1000;
   const wet = mk(ctx.createGain()); wet.gain.value = 0.4; verb.connect(wetF); wetF.connect(wet); wet.connect(mix);
   // drone: A pedal
   const droneF = mk(ctx.createBiquadFilter()); droneF.type = 'lowpass'; droneF.frequency.value = 420; droneF.Q.value = 0.7;
@@ -405,7 +405,7 @@ function buildGraph(ctx) {
   const nP = mk(ctx.createStereoPanner()); const nG = mk(ctx.createGain()); nG.gain.value = 0.3;
   noise.connect(nHP); nHP.connect(nF1); nF1.connect(nF2); nF2.connect(nP); nP.connect(nG); nG.connect(mix);
   // tone bus
-  const toneF = mk(ctx.createBiquadFilter()); toneF.type = 'lowpass'; toneF.frequency.value = 1800; toneF.Q.value = 0.5;
+  const toneF = mk(ctx.createBiquadFilter()); toneF.type = 'lowpass'; toneF.frequency.value = 900; toneF.Q.value = 0.5;
   const toneG = mk(ctx.createGain()); toneG.gain.value = 1; toneF.connect(toneG); toneG.connect(mix);
   const toneV = mk(ctx.createGain()); toneV.gain.value = 0.75; toneF.connect(toneV); toneV.connect(verb);
   const t0 = ctx.currentTime; for (const o of [...dro, dlfo]) o.start(t0);
@@ -455,7 +455,7 @@ function done(src, nodes) { src.onended = () => { for (const n of nodes) { try {
 function outLevel() { return MASTER * VOL * P.master * P.endG; }
 function vTone(t, f, amp, pan, att, rel) {
   const ctx = AU.ctx, g = AU.g, o = ctx.createOscillator(), o2 = ctx.createOscillator(), h2 = ctx.createGain(), v = ctx.createGain(), p = ctx.createStereoPanner();
-  o.type = 'sine'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2.002; h2.gain.value = 0.09;
+  o.type = 'sine'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2.002; h2.gain.value = 0.03;
   const hold = 0.9, end = t + att + hold + rel;
   v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + att); v.gain.linearRampToValueAtTime(amp * 0.75, t + att + hold);
   v.gain.exponentialRampToValueAtTime(amp * 0.0008, end); v.gain.linearRampToValueAtTime(0, end + 0.05);
@@ -464,8 +464,8 @@ function vTone(t, f, amp, pan, att, rel) {
 }
 function playTone(e, t) {
   const f = POOL[e.idx] * (e.echo ? 0.5 : 1);
-  const amp = (e.echo ? 0.15 : e.quiet ? 0.14 : 0.27) * (1 - 0.25 * P.s) * (e.idx > 6 ? 0.8 : 1);
-  vTone(t, f, amp, e.pan, lerp(1.8, 3.2, P.s) + RND() * 0.6, lerp(7, 11, P.s));
+  const amp = (e.echo ? 0.07 : e.quiet ? 0.065 : 0.12) * (1 - 0.25 * P.s) * Math.sqrt(216 / f);   // higher notes quieter (the ear is more sensitive up there)
+  vTone(t, f, amp, e.pan, lerp(2.6, 3.6, P.s) + RND() * 0.6, lerp(7, 11, P.s));
   if (S.unlock.low && P.deep > 0.5 && !e.echo && t - AU.lastLow > 90 && RND() < 0.12) { AU.lastLow = t; vTone(t + 2, 108, 0.06, 0, 4, 14); }
 }
 const FADE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2)), FADE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
@@ -480,13 +480,13 @@ function audioControl() {   // ≤10 Hz, setTargetAtTime only
   const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
   setP(g.out.gain, outLevel(), 1.5);
   setP(g.padG.gain, 0.2 * (0.3 + 0.7 * BMOD) * (1 - 0.25 * P.s), 0.12);
-  setP(g.padF.frequency, 380 + 820 * BMOD * (1 - 0.4 * P.s), 0.12);
+  setP(g.padF.frequency, 300 + 450 * BMOD * (1 - 0.4 * P.s), 0.12);
   setP(g.nG.gain, P.noise * 0.6 * (0.92 + 0.08 * BMOD), 0.5);
   setP(g.nF1.frequency, P.noiseLP, 2); setP(g.nF2.frequency, P.noiseLP * 1.2, 2);
   setP(g.nP.pan, S.unlock.tide ? 0.35 * Math.sin(T * 2 * Math.PI / 47) : 0, 0.8);
   setP(g.droneG.gain, 0.16 + 0.04 * P.deep, 3);
   setP(g.wet.gain, 0.38 + 0.2 * P.s, 3);
-  setP(g.toneF.frequency, lerp(1800, 1100, P.s), 3);
+  setP(g.toneF.frequency, lerp(900, 650, P.s), 3);
   if (g.binR) setP(g.binR.frequency, 108 + lerp(6, 2, P.s), 4);
 }
 function audioUnlock() { if (MUTE) return; AU.wanted = true; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
