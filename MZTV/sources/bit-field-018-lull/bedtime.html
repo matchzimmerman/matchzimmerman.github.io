@@ -115,7 +115,7 @@ function saveState() {
   try { localStorage.setItem(KEY, JSON.stringify(Object.assign({}, S, { sed: b64f(S.sed), note: b64u8(S.note), mk: b64f(S.mk), log: S.log.slice(-60) }))); } catch (e) { }
 }
 let S = loadState(); S.sessions++;
-const RND = mulberry(S.seed ^ (Date.now() & 0xffff));
+const RND = mulberry(CAPTURE ? S.seed : S.seed ^ (Date.now() & 0xffff));   // capture renders are deterministic per ?seed
 const SEEDH = S.seed | 0;
 const START_MS = Date.now(), PERF0 = performance.now();
 let T = BED ? num('t0', 0) * 60 : 0;   // sim seconds since start (bedside: minutes into the arc)
@@ -266,7 +266,7 @@ const cv = document.getElementById('cv'), cx = cv.getContext('2d', { alpha: fals
 let W = 480, H = 270, SC = 1, IMG, BUF, LF, GW, GH, BG, THR = [], THRM, CX0, CXF, RY0, RYF;
 function resize() {
   // a hidden tab / unsized OBS source can report 0×0 at load: fall back, then the resize listener corrects it
-  const iw = CAPTURE ? 1920 : (innerWidth || document.documentElement.clientWidth || 1920), ih = CAPTURE ? 1080 : (innerHeight || document.documentElement.clientHeight || 1080);
+  const iw = CAPTURE ? num('cw', 1920) : (innerWidth || document.documentElement.clientWidth || 1920), ih = CAPTURE ? num('ch', 1080) : (innerHeight || document.documentElement.clientHeight || 1080);
   SC = Math.max(1, Math.round(ih / LINES)); W = Math.max(8, Math.ceil(iw / SC)); H = Math.max(8, Math.ceil(ih / SC));
   cv.width = W; cv.height = H; cv.style.width = W * SC + 'px'; cv.style.height = H * SC + 'px';
   IMG = cx.createImageData(W, H); BUF = new Uint32Array(IMG.data.buffer); LF = new Float32Array(W * H);
@@ -360,6 +360,8 @@ function render() {
 /* ================= audio =================
    Everything continuous: an A pedal drone (54/81/108 Hz), a pad chord breathing with the pacer, a brown-noise bed
    (AudioWorklet, lowpassed well under 500 Hz), and slow-attack sine tones (≥2 s attack: no startle onsets) in a long room. */
+let OFF = null;   // offline capture clock (promo renders)
+const aT = () => OFF ? OFF.t : AU.ctx.currentTime;
 const AU = { ctx: null, g: null, worklet: false, lastCT: -1, stall: 0, silent: 0, builtAt: 0, abuf: new Float32Array(2048), busy: false, ir: null, lastLow: 0 };
 const NOISE_SRC = `class MZNoise extends AudioWorkletProcessor{constructor(){super();this.s=(Math.random()*4294967295)>>>0;this.b=[0,0];}
 process(i,out){const o=out[0];for(let c=0;c<o.length;c++){const a=o[c];let b=this.b[c]||0;for(let k=0;k<a.length;k++){this.s=(Math.imul(this.s,1664525)+1013904223)>>>0;const w=this.s/2147483648-1;b=b*0.996+w*0.06;a[k]=b*0.6;}this.b[c]=b;}return true;}}
@@ -368,11 +370,11 @@ function makeNoiseBuffer(ctx, secs) { const b = ctx.createBuffer(1, Math.floor(c
 function makeIR(ctx, secs) { const len = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, len, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < len; i++) { lp = lp * 0.7 + (Math.random() * 2 - 1) * 0.3; const t = i / len; d[i] = lp * Math.pow(1 - t, 3) * Math.min(1, i / (ctx.sampleRate * 0.03)); } } return b; }
 const MASTER = 0.9;
 function padBank(ctx, g, freqs, fadeIn) {
-  const nodes = [], bank = ctx.createGain(), t = ctx.currentTime; bank.gain.setValueAtTime(0, t); bank.gain.linearRampToValueAtTime(1, t + fadeIn); bank.connect(g.padF); nodes.push(bank);
+  const nodes = [], bank = ctx.createGain(), t = aT(); bank.gain.setValueAtTime(0, t); bank.gain.linearRampToValueAtTime(1, t + fadeIn); bank.connect(g.padF); nodes.push(bank);
   freqs.forEach((f, k) => { [-0.35, 0.35].forEach(det => {   // slow beating pairs (~0.7 Hz): gentle motion, no LFO needed
     const o = ctx.createOscillator(), v = ctx.createGain(), p = ctx.createStereoPanner(); o.type = 'sine'; o.frequency.value = f + det;
     v.gain.value = [0.3, 0.22, 0.2, 0.16][k] || 0.1; p.pan.value = det < 0 ? -0.35 : 0.35; o.connect(v); v.connect(p); p.connect(bank); o.start(t); nodes.push(o, v, p); }); });
-  return { bank, nodes, stop(fade) { const t = ctx.currentTime; try { bank.gain.cancelScheduledValues(t); bank.gain.setValueAtTime(bank.gain.value, t); bank.gain.linearRampToValueAtTime(0, t + fade); } catch (e) { }
+  return { bank, nodes, stop(fade) { const t = aT(); try { bank.gain.cancelScheduledValues(t); bank.gain.setValueAtTime(bank.gain.value, t); bank.gain.linearRampToValueAtTime(0, t + fade); } catch (e) { }
     for (const n of nodes) if (n.stop) { try { n.stop(t + fade + 0.1); } catch (e) { } }
     setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, (fade + 0.5) * 1000); } };
 }
@@ -408,7 +410,7 @@ function buildGraph(ctx) {
   const toneF = mk(ctx.createBiquadFilter()); toneF.type = 'lowpass'; toneF.frequency.value = 900; toneF.Q.value = 0.5;
   const toneG = mk(ctx.createGain()); toneG.gain.value = 1; toneF.connect(toneG); toneG.connect(mix);
   const toneV = mk(ctx.createGain()); toneV.gain.value = 0.75; toneF.connect(toneV); toneV.connect(verb);
-  const t0 = ctx.currentTime; for (const o of [...dro, dlfo]) o.start(t0);
+  const t0 = aT(); for (const o of [...dro, dlfo]) o.start(t0);
   const g = { out, an, mix, verb, wet, droneF, droneG, padF, padG, noise, nF1, nF2, nP, nG, toneF, binR, nodes, nNext: 0, pad: null };
   g.pad = padBank(ctx, g, padFreqs(S.chord), 4);
   g.stop = () => { const t = ctx.currentTime; if (g.pad) g.pad.stop(0.3); for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (e) { } } setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, 500); };
@@ -416,7 +418,7 @@ function buildGraph(ctx) {
 }
 function padFreqs(c) { const f = CHORDS[c].f.slice(); return f; }
 function padChord(c) {   // crossfade pad banks over 40 s; no glides
-  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || (!OFF && ctx.state !== 'running')) return;
   const old = g.pad; g.pad = padBank(ctx, g, padFreqs(c), 40); if (old) old.stop(40);
 }
 async function createContext() {
@@ -450,7 +452,7 @@ function audioWatch() {
   AU.silent = mx < 1e-5 && !intendedSilent ? AU.silent + 1 : 0;
   if (AU.silent > 20) rebuildGraph(); else if (ct - AU.builtAt > 3 * 3600) rebuildGraph();
 }
-function setP(p, v, tc) { if (!fin(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, AU.ctx.currentTime, tc); }
+function setP(p, v, tc) { if (!fin(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, aT(), tc); }
 function done(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }; }
 function outLevel() { return MASTER * VOL * P.master * P.endG; }
 function vTone(t, f, amp, pan, att, rel) {
@@ -477,7 +479,7 @@ function noiseSegments() {   // fallback when AudioWorklet is unavailable: long 
 }
 let CTL_ACC = 0;
 function audioControl() {   // ≤10 Hz, setTargetAtTime only
-  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || (!OFF && ctx.state !== 'running')) return;
   setP(g.out.gain, outLevel(), 1.5);
   setP(g.padG.gain, 0.2 * (0.3 + 0.7 * BMOD) * (1 - 0.25 * P.s), 0.12);
   setP(g.padF.frequency, 300 + 450 * BMOD * (1 - 0.4 * P.s), 0.12);
@@ -504,11 +506,11 @@ function advance(realDt, audible) {
   if (S.gram.k < 1) { S.gram.k = Math.min(1, S.gram.k + dt / 180); }
   MINACC += dt; let n = 0; while (MINACC >= 60 && n++ < 30) { MINACC -= 60; memMinute(); } if (MINACC >= 60) MINACC = 0;
   // tones: to audio when inside the lookahead, to the field when their time arrives
-  const running = audible && AU.ctx && AU.g && AU.ctx.state === 'running';
+  const running = audible && AU.ctx && AU.g && (OFF || AU.ctx.state === 'running');
   const look = (document.hidden ? 1.8 : 0.5) * RATE;
   for (let k = PEND.length - 1; k >= 0; k--) {
     const e = PEND[k];
-    if (!e.au && e.t <= T + look) { e.au = true; if (running && RATE <= 4) { const at = AU.ctx.currentTime + Math.max(0.03, (e.t - T) / RATE); if (at > AU.ctx.currentTime) playTone(e, at); } }
+    if (!e.au && e.t <= T + look) { e.au = true; if (running && RATE <= 4) { const at = aT() + Math.max(0.03, (e.t - T) / RATE); if (at > aT()) playTone(e, at); } }
     if (!e.vis && e.t <= T) { e.vis = true; spawnLantern(e); }
     if (e.au && e.vis) PEND.splice(k, 1);
   }
@@ -583,7 +585,20 @@ if (!CAPTURE) {
 }
 window.MZ = {
   get S() { return S; }, get P() { return P; }, get T() { return T; }, get LANT() { return LANT; }, get AU() { return AU; },
-  tick(dt) { advance(dt, false); frame(dt); },
+  tick(dt) { if (OFF) OFF.t += dt; advance(dt, !!OFF); frame(dt); },
+  // capture audio: the piece's own graph rendered offline, sample-locked to the ticks (for promos)
+  async audioStart(secs) {
+    const ctx = new OfflineAudioContext(2, Math.ceil(secs * 48000), 48000);
+    try { await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true; } catch (e) { AU.worklet = false; }
+    OFF = { t: 0 }; AU.ir = makeIR(ctx, 7); AU.ctx = ctx; AU.g = buildGraph(ctx); AU.g.out.gain.setValueAtTime(outLevel(), 0); AU.g.out.gain._v = outLevel(); return true;
+  },
+  async audioRender() {
+    const buf = await AU.ctx.startRendering(), n = buf.length, L = buf.getChannelData(0), R = buf.getChannelData(1);
+    const ab = new ArrayBuffer(44 + n * 4), d = new DataView(ab), w = (o, s) => { for (let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); d.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 2, true); d.setUint32(24, 48000, true); d.setUint32(28, 192000, true); d.setUint16(32, 4, true); d.setUint16(34, 16, true); w(36, 'data'); d.setUint32(40, n * 4, true);
+    for (let i = 0; i < n; i++) { d.setInt16(44 + i * 4, clamp(L[i], -1, 1) * 32767, true); d.setInt16(46 + i * 4, clamp(R[i], -1, 1) * 32767, true); }
+    const u = new Uint8Array(ab); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s);
+  },
   force(op) { if (op === 'chord') changeChord(true); else if (op === 'grammar') { S.era.p = 2; S.era.since = -9; memMinute(); } else if (op === 'unlock') { S.hours = Math.max(S.hours, 20); S.unlock.echo = true; memMinute(); } else if (op === 'deep') { T = BED ? ARC * 60 * 1.5 : T; } else if (op === 'nan') { S.sed[5] = NaN; T = NaN; } },
   setT(min) { T = min * 60; }, rebuild: () => rebuildGraph(), save: saveState,
 };
