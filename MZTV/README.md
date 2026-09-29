@@ -128,6 +128,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-019-if-the-birds-are-out/`
 
+### BIT FIELD 022 — WATER STUDIES
+Open sea at water level, a study of light on moving water. The sun and moon follow the Baltimore clock. At night, parachute flares rise, ignite and drift down, each throwing its own glitter path across real displaced swell, lighting the cloud base and pulling the camera round to frame it. Dust on the lens catches bright sources. A sea bed and a sky-coloured drone carry the sound, and each flare gets a thump, a hiss and a burn.
+
+Path:
+`sources/bit-field-022-water-studies/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-022-water-studies/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
