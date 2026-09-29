@@ -101,11 +101,18 @@ function makeTemplate(bounds){
 function specimenFor(cfg,index,bounds){
   const t=makeTemplate(bounds);
   return {cfg,index,bounds,nodes:t.nodes,edges:t.edges,left:t.left,right:t.right,
-    wind:0,targetWind:0,dir:null,gust:null,apiTime:null,fetchTime:null,apiOk,false,
+    wind:0,targetWind:0,dir:null,gust:null,apiTime:null,fetchTime:null,apiOk:false,
     failureTime:null,catastrophic:false,ruptures:0,maxWind:0,windHistory:[],breaks:[],historyAcc:0,
     initialEdges:t.edges.length,integrity:1,alive:true};
 }
-const bounds={x:i*colW,y:headerH,w:colW,h:H-headerH-footerH};
+
+function buildAll(preserveWeather=false){
+  if(!W||!H)return;
+  const old=cities;
+  const headerH=Math.max(145,H*.145),footerH=Math.max(100,H*.11);
+  const colW=W/3;
+  cities=CITY_CONFIG.map((cfg,i)=>{
+    const bounds={x:i*colW,y:headerH,w:colW,h:H-headerH-footerH};
     const s=specimenFor(cfg,i,bounds);
     if(preserveWeather&&old[i]){
       for(const k of ['wind','targetWind','dir','gust','apiTime','fetchTime','apiOk','maxWind'])s[k]=old[i][k];
@@ -204,7 +211,7 @@ function simulateSpecimen(s,dt){
 function finishRun(){
   phase='RESULT';resultElapsed=0;
   const rec={iso:new Date().toISOString(),run:runNo};
-  for(const s of cities){rec[`${s.cfg.name.toLowerCase()}_failure_sc]=s.failureTime==null?'':s.failureTime.toFixed(2);rec[`${s.cfg.name.toLowerCase()}_integrity_pct`]=(s.integrity*100).toFixed(1);rec[`${s.cfg.name.toLowerCase()}_max_wind_mph`]=s.maxWind.toFixed(2)}
+  for(const s of cities){rec[`${s.cfg.name.toLowerCase()}_failure_s`]=s.failureTime==null?'':s.failureTime.toFixed(2);rec[`${s.cfg.name.toLowerCase()}_integrity_pct`]=(s.integrity*100).toFixed(1);rec[`${s.cfg.name.toLowerCase()}_max_wind_mph`]=s.maxWind.toFixed(2)}
   let logs=[];try{logs=JSON.parse(safeGet('mz_wind_triad_logs','[]')||'[]')}catch{}logs.push(rec);while(logs.length>300)logs.shift();safeSet('mz_wind_triad_logs',JSON.stringify(logs));
 }
 function nextRun(){runNo++;safeSet('mz_wind_triad_run',runNo);resetRun()}
@@ -261,8 +268,10 @@ function drawColumn(s){
     line(x-len,y+Math.sin(simTime*1.9+i)*5,x,y,s.cfg.accent,1.1+clamp(s.wind/45,0,1)*1.6,.35+.45*clamp(s.wind/40,0,1));ctx.fillStyle=s.cfg.accent;ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-7,y-4);ctx.lineTo(x-7,y+4);ctx.closePath();ctx.fill();ctx.globalAlpha=1;
   }
   // mesh
-  for(const e of s.edges){if(e.broken)continue;const A=s.nodes[e.a],B=s.nodes[e.b],dmg=clamp(e.damage,0,1);ctx.globalAlpha=.42+dmg*.55;ctx.strokeStyle=dmg>.72?C.orange:(dmg>.2?s.cfg.accent:'rgba(23,26,51,.52)');ctx.lineWidth=.8+dmg*2.2;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.LineTo(B.x,B.y);ctx.stroke()}
-Width=1.5;ctx.beginPath();ctx.arc(br.x,br.y,6+p*28,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}
+  for(const e of s.edges){if(e.broken)continue;const A=s.nodes[e.a],B=s.nodes[e.b],dmg=clamp(e.damage,0,1);ctx.strokeStyle=dmg>.72?C.orange:(dmg>.2?s.cfg.accent:'rgba(23,26,51,.52)');ctx.lineWidth=.8+dmg*2.2;ctx.globalAlpha=.42+dmg*.55;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke()}
+  ctx.globalAlpha=1;for(const n of s.nodes){ctx.fillStyle=n.fixed?C.ink:s.cfg.accent;ctx.globalAlpha=n.fixed?.95:.65;ctx.beginPath();ctx.arc(n.x,n.y,n.fixed?3:1.7,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+  const lx=s.nodes[s.left[0]]?.x,rx=s.nodes[s.right[0]]?.x;if(Number.isFinite(lx)){line(lx,b.y+b.h*.13,lx,b.y+b.h*.88,C.ink,2.4,.8);line(rx,b.y+b.h*.13,rx,b.y+b.h*.88,C.ink,2.4,.8)}
+  for(let i=s.breaks.length-1;i>=0;i--){const br=s.breaks[i];br.t+=1/60;if(br.t>1.4){s.breaks.splice(i,1);continue}const p=br.t/1.4;ctx.globalAlpha=1-p;ctx.strokeStyle=C.orange;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(br.x,br.y,6+p*28,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}
   // local footer inside column
   const my=b.y+b.h*.865;const integ=s.integrity;ctx.fillStyle=C.mid;ctx.font=`600 ${Math.max(9,b.w*.017)}px ui-monospace,monospace`;ctx.fillText('NETWORK INTEGRITY',x0+pad,my);ctx.fillStyle=C.ink;ctx.font=`700 ${Math.max(18,b.w*.038)}px ui-monospace,monospace`;ctx.fillText(`${Math.round(integ*100)}%`,x0+pad,my+22);
   const barX=x0+pad,barY=my+52,barW=b.w*.44,barH=7;ctx.fillStyle='rgba(23,26,51,.11)';ctx.fillRect(barX,barY,barW,barH);ctx.fillStyle=s.cfg.accent;ctx.fillRect(barX,barY,barW*integ,barH);
