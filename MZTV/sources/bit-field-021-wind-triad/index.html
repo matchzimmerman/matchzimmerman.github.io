@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>MZTV — Wind Triad / Live Fatigue</title>
+<style>
+  :root{
+    --bg:#f3efdc;--ink:#171a33;--cyan:#00cfd0;--mag:#ef4c95;--orange:#ff7e30;--lime:#badf40;
+  }
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+  canvas{display:block;width:100%;height:100%;background:var(--bg)}
+  #audioGate{position:fixed;right:18px;bottom:18px;z-index:5;padding:9px 11px;border:1px solid rgba(23,26,51,.35);background:rgba(243,239,220,.9);font-size:11px;letter-spacing:.08em;cursor:pointer;display:none}
+  #audioGate.show{display:block}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="audioGate">AUDIO SUSPENDED — CLICK ONCE</div>
+<script>
+(() => {
+'use strict';
+
+// MZTV / BIT FIELD 021 — WIND TRIAD
+// Three identical specimens. Three live wind environments. One shared clock.
+// Live weather: Open-Meteo current 10 m wind speed / direction / gust reference.
+// Wind SPEED drives material loading; direction is displayed but does not alter the test orientation.
+// Default run: 30 minutes. Then 15-second result hold and automatic reset forever.
+// Query params: ?runMinutes=30&timeScale=1&audio=1&fatigueScale=1
+// Keys: H HUD / M audio / R reset / F fullscreen / L export CSV
+
+const canvas=document.getElementById('stage');
+const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+const gate=document.getElementById('audioGate');
+const Q=new URLSearchParams(location.search);
+const RUN_SECONDS=Math.max(60, +(Q.get('runMinutes')||30)*60);
+const RESULT_HOLD=15;
+const TIME_SCALE=Math.max(.1, +(Q.get('timeScale')||1));
+const FATIGUE_SCALE=Math.max(.05, +(Q.get('fatigueScale')||1));
+let audioEnabled=Q.get('audio')!=='0';
+
+const C={bg:'#f3efdc',ink:'#171a33',cyan:'#00cfd0',mag:'#ef4c95',orange:'#ff7e30',lime:'#badf40',faint:'rgba(23,26,51,.09)',mid:'rgba(23,26,51,.42)',paper:'rgba(243,239,220,.88)'};
+const CITY_CONFIG=[
+  {name:'BALTIMORE',lat:39.2904,lon:-76.6122,accent:C.cyan,pan:-.72},
+  {name:'GALWAY',lat:53.2707,lon:-9.0568,accent:C.mag,pan:0},
+  {name:'LONDON',lat:51.5074,lon:-0.1278,accent:C.lime,pan:.72}
+];
+const API_REFRESH_MS=5*60*1000;
+
+let W=1920,H=1080,DPR=1;
+function resize(){DPR=Math.min(devicePixelRatio||1,1.5);W=innerWidth;H=innerHeight;canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);buildAll(true)}
+addEventListener('resize',resize);
+
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function lerp(a,b,t){return a+(b-a)*t}
+function fmtTime(s){s=Math.max(0,s|0);const h=(s/3600)|0,m=((s%3600)/60)|0,ss=s%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
+function degCardinal(deg){if(!Number.isFinite(deg))return '—';const names=['N','NE','E','SE','S','SW','W','NW'];return `${names[Math.round(deg/45)%8]} ${Math.round(deg)}°`}
+function ageText(ms){if(!Number.isFinite(ms))return 'WAITING';const s=Math.max(0,ms/1000);if(s<90)return `${Math.round(s)} SEC AGO`;return `${Math.round(s/60)} MIN AGO`}
+
+function safeGet(k,d=null){try{const v=localStorage.getItem(k);return v==null?d:v}catch{return d}}
+function safeSet(k,v){try{localStorage.setItem(k,v)}catch{}}
+
+let runNo=+(safeGet('mz_wind_triad_run','1')||1);
+let runElapsed=0,resultElapsed=0,phase='RUN';
+let lastFrame=performance.now(),simTime=0,hud=true;
+let cities=[];
+let sharedSeed=0x4D5A5456; // stable geometry across all cities and all runs
+let weatherLastFetch=0;
+let APIStatus='CONNECTING';
+
+function makeTemplate(bounds){
+  const rand=mulberry32(sharedSeed);
+  const cols=12,rows=14,diag=.78,slack=1.018;
+  const nodes=[],edges=[],left=[],right=[];
+  const x0=bounds.x+bounds.w*.12,x1=bounds.x+bounds.w*.88,y0=bounds.y+bounds.h*.20,y1=bounds.y+bounds.h*.82;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const u=c/(cols-1),v=r/(rows-1);
+    const pinch=Math.sin(v*Math.PI)*Math.sin(u*Math.PI)*bounds.w*.018;
+    const x=lerp(x0,x1,u)+(rand()-.5)*bounds.w*.008;
+    const y=lerp(y0,y1,v)+Math.sin(u*Math.PI*2+r*.47)*bounds.h*.006+pinch*Math.sin((u-.5)*Math.PI)+(rand()-.5)*bounds.h*.008;
+    const fixed=c===0||c===cols-1;
+    nodes.push({x,y,px:x,py:y,fx:0,fy:0,fixed,mass:.9+rand()*.25,r,c});
+    if(c===0)left.push(nodes.length-1);if(c===cols-1)right.push(nodes.length-1);
+  }
+  const id=(r,c)=>r*cols+c;
+  function addEdge(a,b,type='orth'){
+    const A=nodes[a],B=nodes[b],d=Math.hypot(B.x-A.x,B.y-A.y);
+    edges.push({a,b,rest:d*slack,k:(type==='diag'?70:88)*(bounds.w/640),damage:0,broken:false,breakAge:0,
+      yield:.044*(.92+rand()*.16),ultimate:.245*(.92+rand()*.16),fatigue:.105*(.88+rand()*.24)});
+  }
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    if(c<cols-1)addEdge(id(r,c),id(r,c+1));
+    if(r<rows-1)addEdge(id(r,c),id(r+1,c));
+    if(c<cols-1&&r<rows-1&&rand()<diag)addEdge(id(r,c),id(r+1,c+1),'diag');
+    if(c>0&&r<rows-1&&rand()<diag*.5)addEdge(id(r,c),id(r+1,c-1),'diag');
+  }
+  return {nodes,edges,left,right};
+}
+
+function specimenFor(cfg,index,bounds){
+  const t=makeTemplate(bounds);
+  return {cfg,index,bounds,nodes:t.nodes,edges:t.edges,left:t.left,right:t.right,
+    wind:0,targetWind:0,dir:null,gust:null,apiTime:null,fetchTime:null,apiOk,false,
+    failureTime:null,catastrophic:false,ruptures:0,maxWind:0,windHistory:[],breaks:[],historyAcc:0,
+    initialEdges:t.edges.length,integrity:1,alive:true};
+}
+const bounds={x:i*colW,y:headerH,w:colW,h:H-headerH-footerH};
+    const s=specimenFor(cfg,i,bounds);
+    if(preserveWeather&&old[i]){
+      for(const k of ['wind','targetWind','dir','gust','apiTime','fetchTime','apiOk','maxWind'])s[k]=old[i][k];
+    }
+    return s;
+  });
+}
+
+function resetRun(){
+  runElapsed=0;resultElapsed=0;phase='RUN';simTime=0;buildAll(true);
+}
+
+async function fetchCityWeather(city){
+  const c=city.cfg;
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=mph&timezone=auto`;
+  const res=await fetch(url,{cache:'no-store'});if(!res.ok)throw new Error(`HTTP ${res.status}`);
+  const data=await res.json();
+  const cur=data.current||{};
+  if(!Number.isFinite(cur.wind_speed_10m))throw new Error('NO WIND DATA');
+  city.targetWind=cur.wind_speed_10m;
+  if(!city.apiOk)city.wind=city.targetWind;
+  city.dir=cur.wind_direction_10m;
+  city.gust=cur.wind_gusts_10m;
+  city.apiTime=cur.time||null;
+  city.fetchTime=Date.now();city.apiOk=true;
+}
+async function fetchAllWeather(){
+  APIStatus='UPDATING';
+  const results=await Promise.allSettled(cities.map(fetchCityWeather));
+  weatherLastFetch=Date.now();
+  APIStatus=results.every(r=>r.status==='fulfilled')?'LIVE':results.some(r=>r.status==='fulfilled')?'PARTIAL':'ERROR';
+}
+setInterval(fetchAllWeather,API_REFRESH_MS);
+
+function networkIntegrity(s){
+  let weighted=0;
+  for(const e of s.edges)if(!e.broken)weighted+=1-clamp(e.damage,0,1)*.62;
+  return s.initialEdges?weighted/s.initialEdges:0;
+}
+function hasSpanningPath(s){
+  const adj=Array.from({length:s.nodes.length},()=>[]);
+  for(const e of s.edges)if(!e.broken){adj[e.a].push(e.b);adj[e.b].push(e.a)}
+  const q=[...s.left],seen=new Uint8Array(s.nodes.length),right=new Set(s.right);for(const x of q)seen[x]=1;
+  for(let i=0;i<q.length;i++){const v=q[i];if(right.has(v))return true;for(const n of adj[v])if(!seen[n]){seen[n]=1;q.push(n)}}
+  return false;
+}
+function breakEdge(s,e,reason){
+  if(e.broken)return;e.broken=true;e.breakAge=0;s.ruptures++;
+  const A=s.nodes[e.a],B=s.nodes[e.b];s.breaks.push({x:(A.x+B.x)/2,y:(A.y+B.y)/2,t:0,reason});
+  ruptureSound(s,reason==='IMPACT'?.8:.35);
+}
+
+function simulateSpecimen(s,dt){
+  s.wind+=(s.targetWind-s.wind)*(1-Math.exp(-dt*.6));
+  s.maxWind=Math.max(s.maxWind,s.wind);
+  const sub=2,h=dt/sub;
+  for(let step=0;step<sub;step++){
+    // Force is driven directly by API wind speed. Material fatigue is deliberately
+    // accelerated so a half-hour broadcast behaves like long-term outdoor wear.
+    const w=Math.max(0,s.wind);
+    const wForce=(w*w)*0.00034*(s.bounds.w/640);
+    for(const n of s.nodes){
+      if(n.fixed)continue;
+      const turbulence=Math.sin(simTime*2.0+n.y*.021+n.r*.61)*.62+Math.sin(simTime*.53+n.c*.39)*.26;
+      n.fx+=wForce*(1+.22*turbulence);
+      n.fy+=wForce*.22*turbulence+.0065;
+    }
+    for(const e of s.edges){
+      if(e.broken){e.breakAge+=h;continue}
+      const A=s.nodes[e.a],B=s.nodes[e.b];let dx=B.x-A.x,dy=B.y-A.y,d=Math.hypot(dx,dy)||.0001;
+      const strain=(d-e.rest)/e.rest,force=e.k*strain,nx=dx/d,ny=dy/d;
+      if(!A.fixed){A.fx+=force*nx/A.mass;A.fy+=force*ny/A.mass}
+      if(!B.fixed){B.fx-=force*nx/B.mass;B.fy-=force*ny/B.mass}
+      const absStrain=Math.abs(strain);
+      const over=Math.max(0,absStrain-e.yield);
+      // Flag-like weathering: even sub-yield strain causes tiny cumulative damage.
+      // Above yield, damage rises nonlinearly. Higher live wind increases both terms.
+      const chronic=Math.pow(clamp(w/38,0,2),2.20)*(.0008+absStrain*.16);
+      const overload=over>0?Math.pow(over*10.5,1.55)*e.fatigue*(.5+w/28):0;
+      e.damage+=FATIGUE_SCALE*(chronic*.32+overload)*h;
+      if(absStrain>e.ultimate||e.damage>=1)breakEdge(s,e,absStrain>e.ultimate?'IMPACT':'FATIGUE');
+    }
+    for(const n of s.nodes){
+      if(n.fixed){n.fx=n.fy=0;continue}
+      const vx=(n.x-n.px)*.986,vy=(n.y-n.py)*.986,ox=n.x,oy=n.y;
+      n.x+=vx+n.fx*h*h*62;n.y+=vy+n.fy*h*h*62;n.px=ox;n.py=oy;n.fx=n.fy=0;
+      n.x=clamp(n.x,s.bounds.x-s.bounds.w*.12,s.bounds.x+s.bounds.w*1.12);
+      n.y=clamp(n.y,s.bounds.y-s.bounds.h*.12,s.bounds.y+s.bounds.h*1.12);
+    }
+  }
+  s.integrity=networkIntegrity(s);
+  if(!s.catastrophic&&(s.integrity<.18||!hasSpanningPath(s))){s.catastrophic=true;s.alive=false;s.failureTime=runElapsed;ruptureSound(s,1)}
+  s.historyAcc+=dt;if(s.historyAcc>.5){s.historyAcc=0;s.windHistory.push(s.wind);if(s.windHistory.length>240)s.windHistory.shift()}
+}
+
+function finishRun(){
+  phase='RESULT';resultElapsed=0;
+  const rec={iso:new Date().toISOString(),run:runNo};
+  for(const s of cities){rec[`${s.cfg.name.toLowerCase()}_failure_sc]=s.failureTime==null?'':s.failureTime.toFixed(2);rec[`${s.cfg.name.toLowerCase()}_integrity_pct`]=(s.integrity*100).toFixed(1);rec[`${s.cfg.name.toLowerCase()}_max_wind_mph`]=s.maxWind.toFixed(2)}
+  let logs=[];try{logs=JSON.parse(safeGet('mz_wind_triad_logs','[]')||'[]')}catch{}logs.push(rec);while(logs.length>300)logs.shift();safeSet('mz_wind_triad_logs',JSON.stringify(logs));
+}
+function nextRun(){runNo++;safeSet('mz_wind_triad_run',runNo);resetRun()}
+
+function ranking(){
+  return [...cities].sort((a,b)=>{
+    if(a.alive!==b.alive)return a.alive?-1:1;
+    if(!a.alive&&!b.alive)return (b.failureTime||0)-(a.failureTime||0);
+    return b.integrity-a.integrity;
+  });
+}
+
+// ---------- audio ----------
+let audioCtx=null,master=null,voices=[];
+function initAudio(){
+  if(audioCtx||!audioEnabled)return;
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();master=audioCtx.createGain();master.gain.value=.085;master.connect(audioCtx.destination);
+  voices=CITY_CONFIG.map((cfg,i)=>{
+    const pan=audioCtx.createStereoPanner(),gain=audioCtx.createGain(),filt=audioCtx.createBiquadFilter();pan.pan.value=cfg.pan;gain.gain.value=.01;filt.type='bandpass';filt.frequency.value=250+i*90;filt.Q.value=.7;
+    const len=audioCtx.sampleRate*2,b=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=b.getChannelData(0);let lp=0;for(let j=0;j<len;j++){lp=lp*.985+(Math.random()*2-1)*.015;d[j]=lp*2.2}
+    const src=audioCtx.createBufferSource();src.buffer=b;src.loop=true;src.connect(filt).connect(gain).connect(pan).connect(master);src.start();
+    const osc=audioCtx.createOscillator(),og=audioCtx.createGain();osc.type=i===1?'triangle':'sine';osc.frequency.value=[47,55,64][i];og.gain.value=.015;osc.connect(og).connect(pan);osc.start();
+    return {pan,gain,filt,osc,og,base:[47,55,64][i]};
+  });refreshAudioGate();
+}
+function refreshAudioGate(){if(!audioCtx||!audioEnabled){gate.classList.remove('show');return}gate.classList.toggle('show',audioCtx.state!=='running')}
+async function resumeAudio(){initAudio();if(audioCtx&&audioCtx.state!=='running')try{await audioCtx.resume()}catch{}refreshAudioGate()}
+function updateAudio(){if(!audioCtx||!audioEnabled)return;const now=audioCtx.currentTime;cities.forEach((s,i)=>{const v=voices[i];v.gain.gain.setTargetAtTime(.003+clamp(s.wind/45,0,1)*.035,now,.4);v.filt.frequency.setTargetAtTime(130+s.wind*17,now,.5);v.og.gain.setTargetAtTime(.006+s.integrity*.018,now,.6);v.osc.frequency.setTargetAtTime(v.base*(1+(1-s.integrity)*.026),now,.8)})}
+function ruptureSound(s,amount=.5){if(!audioCtx||!audioEnabled||audioCtx.state!=='running')return;const now=audioCtx.currentTime,dur=.08+amount*.18,len=(audioCtx.sampleRate*dur)|0,b=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++){const t=i/len;d[i]=(Math.random()*2-1)*Math.pow(1-t,3)*(0.35+amount*.65)}const src=audioCtx.createBufferSource(),f=audioCtx.createBiquadFilter(),g=audioCtx.createGain(),p=audioCtx.createStereoPanner();src.buffer=b;f.type='bandpass';f.frequency.value=300+Math.random()*1300;f.Q.value=.8+Math.random();g.gain.value=.14;p.pan.value=s.cfg.pan;src.connect(f).connect(g).connect(p).connect(master);src.start(now)}
+gate.onclick=resumeAudio;addEventListener('pointerdown',resumeAudio,{once:false});addEventListener('keydown',resumeAudio,{once:false});
+
+// ---------- drawing ----------
+function line(x1,y1,x2,y2,stroke=C.ink,w=1,a=1){ctx.globalAlpha=a;ctx.strokeStyle=stroke;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.globalAlpha=1}
+function draw(){ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);drawGrid();drawHeader();cities.forEach(drawColumn);drawFooter();if(phase==='RESULT')drawResultOverlay()}
+function drawGrid(){ctx.strokeStyle='rgba(23,26,51,.045)';ctx.lineWidth=1;const sx=Math.max(54,W/32),sy=Math.max(54,H/18);ctx.beginPath();for(let x=0;x<W;x+=sx){ctx.moveTo(x,0);ctx.lineTo(x,H)}for(let y=0;y<H;y+=sy){ctx.moveTo(0,y);ctx.lineTo(W,y)}ctx.stroke()}
+function drawHeader(){
+  const pad=Math.max(18,W*.018),top=Math.max(16,H*.018);ctx.textBaseline='top';ctx.fillStyle=C.ink;ctx.font=`700 ${Math.max(18,W*.017)}px ui-monospace,monospace`;ctx.fillText('MZTV / WIND TRIAD — LIVE FATIGUE TEST',pad,top);
+  ctx.font=`600 ${Math.max(10,W*.007)}px ui-monospace,monospace`;ctx.fillStyle=C.mid;ctx.fillText('THREE IDENTICAL STRUCTURES / LIVE 10M WIND / SHARED CLOCK / CUMULATIVE MATERIAL MEMORY',pad,top+38);
+  ctx.fillStyle=APIStatus==='LIVE'?C.cyan:(APIStatus==='ERROR'?C.orange:C.mag);ctx.fillText(`● WEATHER API ${APIStatus}`,pad,top+60);
+  ctx.fillStyle=C.ink;ctx.fillText(`RUN ${String(runNo).padStart(3,'0')}   ${phase==='RUN'?'ELAPSED':'RESULT'} ${fmtTime(phase==='RUN'?runElapsed:resultElapsed)}${phase==='RUN'?` / ${fmtTime(RUN_SECONDS)}`:''}`,pad+210,top+60);
+  const ranked=ranking();const leader=ranked[0];ctx.textAlign='right';ctx.fillStyle=leader?.cfg.accent||C.ink;ctx.font=`700 ${Math.max(12,W*.009)}px ui-monospace,monospace`;ctx.fillText(`CURRENT LEADER: ${leader?.cfg.name||'—'}`,W-pad,top+57);ctx.textAlign='start';
+  line(pad,top+88,W-pad,top+88,'rgba(23,26,51,.28)',1);
+}
+function drawColumn(s){
+  const b=s.bounds,x0=b.x,x1=b.x+b.w,pad=b.w*.055;const top=b.y-42;
+  if(s.index>0)line(x0,b.y-74,x0,H-96,'rgba(23,26,51,.18)',1);
+  ctx.fillStyle=s.cfg.accent;ctx.font=`700 ${Math.max(16,b.w*.032)}px ui-monospace,monospace`;ctx.fillText(s.cfg.name,x0+pad,top);
+  ctx.fillStyle=C.ink;ctx.font=`700 ${Math.max(19,b.w*.046)}px ui-monospace,monospace`;ctx.fillText(s.apiOk?`${s.wind.toFixed(1)} MPH`:'WAITING',x0+pad,top+29);
+  ctx.font=`600 ${Math.max(9,b.w*.017)}px ui-monospace,monospace`;ctx.fillStyle=C.mid;ctx.fillText(`DIR ${degCardinal(s.dir)}   GUST REF ${Number.isFinite(s.gust)?s.gust.toFixed(1)+' MPH':'—'}`,x0+pad,top+59);
+  ctx.fillText(`SOURCE AGE ${s.fetchTime?ageText(Date.now()-s.fetchTime):'WAITING'}`,x0+pad,top+77);
+  // wind arrows
+  const count=9,left=x0+b.w*.015,right=x0+b.w*.28;for(let i=0;i<count;i++){
+    const y=b.y+b.h*(.23+i*.065),len=lerp(b.w*.035,b.w*.15,clamp(s.wind/38,0,1))*(.65+((i*13)%8)/15),x=left+((simTime*(24+s.wind*.9)+i*67)%(Math.max(10,right-left)));
+    line(x-len,y+Math.sin(simTime*1.9+i)*5,x,y,s.cfg.accent,1.1+clamp(s.wind/45,0,1)*1.6,.35+.45*clamp(s.wind/40,0,1));ctx.fillStyle=s.cfg.accent;ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-7,y-4);ctx.lineTo(x-7,y+4);ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+  }
+  // mesh
+  for(const e of s.edges){if(e.broken)continue;const A=s.nodes[e.a],B=s.nodes[e.b],dmg=clamp(e.damage,0,1);ctx.globalAlpha=.42+dmg*.55;ctx.strokeStyle=dmg>.72?C.orange:(dmg>.2?s.cfg.accent:'rgba(23,26,51,.52)');ctx.lineWidth=.8+dmg*2.2;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.LineTo(B.x,B.y);ctx.stroke()}
+Width=1.5;ctx.beginPath();ctx.arc(br.x,br.y,6+p*28,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}
+  // local footer inside column
+  const my=b.y+b.h*.865;const integ=s.integrity;ctx.fillStyle=C.mid;ctx.font=`600 ${Math.max(9,b.w*.017)}px ui-monospace,monospace`;ctx.fillText('NETWORK INTEGRITY',x0+pad,my);ctx.fillStyle=C.ink;ctx.font=`700 ${Math.max(18,b.w*.038)}px ui-monospace,monospace`;ctx.fillText(`${Math.round(integ*100)}%`,x0+pad,my+22);
+  const barX=x0+pad,barY=my+52,barW=b.w*.44,barH=7;ctx.fillStyle='rgba(23,26,51,.11)';ctx.fillRect(barX,barY,barW,barH);ctx.fillStyle=s.cfg.accent;ctx.fillRect(barX,barY,barW*integ,barH);
+  ctx.fillStyle=C.mid;ctx.font=`600 ${Math.max(9,b.w*.017)}px ui-monospace,monospace`;ctx.fillText(`RUPTURES ${String(s.ruptures).padStart(3,'0')}`,x0+b.w*.56,my);ctx.fillText(`TTF ${s.failureTime==null?'—':fmtTime(s.failureTime)}`,x0+b.w*.56,my+22);ctx.fillText(s.catastrophic?'SPAN FAILURE':'SPAN HOLDING',x0+b.w*.56,my+44);
+  drawWindGraph(s,x0+pad,b.y+b.h*.965,b.w*.89,32);
+  if(s.catastrophic){ctx.save();ctx.translate(x0+b.w*.5,b.y+b.h*.51);ctx.textAlign='center';ctx.fillStyle=C.orange;ctx.font=`800 ${Math.max(19,b.w*.041)}px ui-monospace,monospace`;ctx.fillText('SPAN FAILURE',0,0);ctx.restore();ctx.textAlign='start'}
+}
+function drawWindGraph(s,x,y,w,h){ctx.fillStyle='rgba(243,239,220,.8)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='rgba(23,26,51,.17)';ctx.strokeRect(x,y,w,h);if(s.windHistory.length<2)return;ctx.beginPath();for(let i=0;i<s.windHistory.length;i++){const px=x+i/(s.windHistory.length-1)*w,py=y+h-clamp(s.windHistory[i]/50,0,1)*h;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.strokeStyle=s.cfg.accent;ctx.lineWidth=1.25;ctx.stroke()}
+function drawFooter(){
+  const pad=Math.max(18,W*.018),y=H-Math.max(74,H*.075);line(pad,y-12,W-pad,y-12,'rgba(23,26,51,.28)',1);
+  const ranked=ranking();ctx.fillStyle=C.ink;ctx.font=`700 ${Math.max(10,W*.0074)}px ui-monospace,monospace`;ctx.fillText('LIVE ORDER',pad,y);
+  let x=pad+95;ranked.forEach((s,i)=>{ctx.fillStyle=s.cfg.accent;ctx.fillText(`${i+1} ${s.cfg.name}`,x,y);ctx.fillStyle=C.mid;ctx.fillText(s.alive?`${Math.round(s.integrity*100)}%`:`FAIL ${fmtTime(s.failureTime)}`,x,y+22);x+=Math.max(145,W*.105)});
+  ctx.textAlign='right';ctx.fillStyle=C.mid;ctx.fillText(`WIND SPEED DRIVES LOAD  /  FATIGUE SCALE ${FATIGUE_SCALE.toFixed(2)}×  /  OPEN-METEO 10M CURRENT`,W-pad,y);ctx.fillText(`AUTO RESET AFTER ${fmtTime(RUN_SECONDS)}  /  SAME SPECIMEN GEOMETRY EVERY RUN`,W-pad,y+22);ctx.textAlign='start';
+}
+function drawResultOverlay(){
+  const ranked=ranking(),w=ranked[0];ctx.fillStyle='rgba(243,239,220,.88)';ctx.fillRect(W*.19,H*.38,W*.62,H*.24);ctx.strokeStyle='rgba(23,26,51,.35)';ctx.strokeRect(W*.19,H*.38,W*.62,H*.24);
+  ctx.textAlign='center';ctx.fillStyle=C.ink;ctx.font=`700 ${Math.max(18,W*.018)}px ui-monospace,monospace`;ctx.fillText(`RUN ${String(runNo).padStart(3,'0')} COMPLETE`,W*.5,H*.42);ctx.fillStyle=w.cfg.accent;ctx.font=`800 ${Math.max(24,W*.026)}px ui-monospace,monospace`;ctx.fillText(`LONGEST HOLD: ${w.cfg.name}`,W*.5,H*.47);
+  ctx.fillStyle=C.mid;ctx.font=`600 ${Math.max(11,W*.009)}px ui-monospace,monospace`;ctx.fillText(ranked.map((s,i)=>`${i+1} ${s.cfg.name} ${s.failureTime==null?'SURVIVED '+Math.round(s.integrity*100)+'%':'FAIL '+fmtTime(s.failureTime)}`).join('    '),W*.5,H*.535);ctx.fillText(`NEXT TEST IN ${Math.max(0,Math.ceil(RESULT_HOLD-resultElapsed))} SEC`,W*.5,H*.58);ctx.textAlign='start';
+}
+
+function exportCSV(){let rows=[];try{rows=JSON.parse(safeGet('mz_wind_triad_logs','[]')||'[]')}catch{}if(!rows.length)return;const keys=Object.keys(rows[0]),csv=[keys.join(','),...rows.map(r=>keys.map(k=>JSON.stringify(r[k]??'')).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='MZTV_WIND_TRIAD_LOG.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+addEventListener('keydown',e=>{if(e.repeat)return;if(e.key==='h'||e.key==='H')hud=!hud;else if(e.key==='m'||e.key==='M'){audioEnabled=!audioEnabled;if(audioEnabled){initAudio();resumeAudio();if(master)master.gain.value=.085}else if(master)master.gain.value=0}else if(e.key==='r'||e.key==='R')resetRun();else if(e.key==='l'||e.key==='L')exportCSV();else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.()}});
+
+function frame(now){
+  const dt=Math.min(.034,(now-lastFrame)/1000)*TIME_SCALE;lastFrame=now;
+  if(phase==='RUN'){
+    runElapsed+=dt;for(const s of cities)if(!s.catastrophic)simulateSpecimen(s,dt);simTime+=dt;updateAudio();if(runElapsed>=RUN_SECONDS)finishRun();
+  }else{resultElapsed+=dt;simTime+=dt;if(resultElapsed>=RESULT_HOLD)nextRun()}
+  draw();requestAnimationFrame(frame);
+}
+
+resize();fetchAllWeather();if(audioEnabled){initAudio();setTimeout(resumeAudio,100)}requestAnimationFrame(frame);setInterval(refreshAudioGate,1000);
+})();
+</script>
+</body>
+</html>
