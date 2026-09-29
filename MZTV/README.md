@@ -128,3 +128,12 @@ Path:
 ## Canonical rule
 
 This directory is the source of truth for MZTV broadcast-source code. Experimental local copies should be promoted here once they become part of the MZTV system.
+
+### BIT FIELD 019 — IF THE BIRDS ARE OUT
+A poem by Match Zimmerman, set as an OBAS field: one stanza per shot, one line per beat. It moves from a house across the street, through two aligned windows, to the ocean, and back to a bedside view. The dub score is built from the poem's events and rendered from the same script as the image.
+
+Path:
+`sources/bit-field-019-if-the-birds-are-out/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-019-if-the-birds-are-out/`
