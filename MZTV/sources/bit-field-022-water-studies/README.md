@@ -1,22 +1,21 @@
-# MZTV · BIT FIELD 022 · WATER STUDIES
+# MZTV · BIT FIELD 022 · WATER STUDIES · GALWAY BAY
 
-Open sea at water level. The only subject is light on moving water.
+Galway Bay off Inverin, at water level. The only subject is light on moving water, and the bay's live conditions drive it.
 
-- **Sun and moon** follow the real Baltimore clock (late-September rise and set): dawn glitter over the sea, hard noon speculars, dusk colour, and a moon glade at night.
-- **Flares.** At night, parachute flares go up in ones and volleys: red, white, magenta, green. Each one rises on a trail, ignites, drifts down on the wind, flickers and burns out. It throws its own glitter path across the swell, lights the cloud base above it, and trails a lit smoke column. When a flare burns, the camera eases round to frame the flare and its path together.
-- **Swell** is real displaced wave geometry: seven wave trains with whitecaps when the sea is up. Sea state drifts over hours.
-- **Camera** sits 1.6–4 m above the water. It drifts and bobs with the swell, turns once every 45 minutes, and slowly racks focus between near water and the horizon.
-- **Lens.** Bright sources catch dust and moisture on the lens glass, with no ghost streaks.
-- **Sound.** A brown-noise sea bed breathes with the swell, over a low drone whose colour follows the sky (its fifth drops a semitone at night). Each flare gets a thump when fired, a rising hiss, a low boom at ignition and a soft burn while it hangs, panned to where it is.
+- **Sun and moon** are computed for Inverin (53.23°N 9.48°W) from the real time: their true height and bearing, and the moon's real phase. The clock in the info box is Irish time. The camera starts facing south across the bay and turns once every 45 minutes.
+- **The bay's conditions** come from Open-Meteo: the marine model's nearest open-water cell in the bay (tried from 53.19N 9.48W outward) and the weather at Inverin. They refresh every 15 minutes and ease in over about a minute.
+  - swell height, period, direction → the three long wave trains: their height, their length (L = 1.56·T²) and the direction they travel
+  - wind-wave height and wind → the four short trains of chop, which run with the wind
+  - wind speed → whitecaps above about 5 m/s, how fast the surface texture moves, cloud drift, flare drift, and a wind hiss in the sound
+  - cloud cover, rain, visibility → cloud layer, dimmed sun, haze in the sky
+  - sea surface temperature → water colour (colder is greener and darker)
+- **Flares.** At night, parachute flares go up in ones and volleys: red, white, magenta, green. Each one rises, ignites, drifts downwind on the real wind and burns out. It throws its own glitter path across the swell and lights the cloud base above it, and the camera eases round to frame it.
+- **Lens.** Bright sources catch dust on the glass, with no ghost streaks.
+- **Sound.** The sea bed breathes at the swell's period and rises with wave height and wind. A drone's colour follows the sky. Each flare gets a thump, a hiss, a low boom and a soft burn.
 
-**What controls what**
-- clock → sun + moon → glitter path, sky, drone colour
-- sea state → swell height, whitecaps, sea-bed level
-- each flare → its light path on the water, cloud glow, its sounds
+The marine values are a model's nearest-cell estimate for the bay, not a buoy reading. The info box shows which cell was used and when it last updated. If a request fails, the piece keeps the last reading (cached up to 3 h) or falls back to typical bay values, and says so.
 
 - **Stream:** https://www.matchzimmerman.com/MZTV/sources/bit-field-022-water-studies/
 
-Params: `?info=0` `?audio=0` `?seed=N` `?rate=N` (clock speed) `?hour=H` (start hour) `?sea=0..1` (fix sea state) `?flares=N` (per hour at night, default 26) `?face=sun|moon` `?yaw=RAD` `?q=0..2` `?capture=1` (`MZ.seek(t)`, `MZ.audioWav(t0, secs)`)
+Params: `?info=0` `?audio=0` `?seed=N` `?rate=N` (clock speed) `?hour=H` (Inverin start hour, today) `?utc=ISO` `?data={json}` (override readings) `?sea=0..1` (ignore data, fix sea state) `?cover=0..1` `?flares=N` (per hour at night) `?face=sun|moon` `?yaw=RAD` `?q=0..2` `?capture=1`
 Keys: `i` info · `f` fire a flare now
-
-three.js r170 loads from jsDelivr. The piece needs a GPU; it renders in real time on the studio machine.

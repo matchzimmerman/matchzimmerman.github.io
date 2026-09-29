@@ -128,8 +128,8 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-019-if-the-birds-are-out/`
 
-### BIT FIELD 022 — WATER STUDIES
-Open sea at water level, a study of light on moving water. The sun and moon follow the Baltimore clock. At night, parachute flares rise, ignite and drift down, each throwing its own glitter path across real displaced swell, lighting the cloud base and pulling the camera round to frame it. Dust on the lens catches bright sources. A sea bed and a sky-coloured drone carry the sound, and each flare gets a thump, a hiss and a burn.
+### BIT FIELD 022 — WATER STUDIES · GALWAY BAY
+Galway Bay off Inverin at water level, a study of light on moving water. The real sun and moon over Inverin light it. The bay's live swell (height, period, direction), wind, cloud, visibility and sea temperature from Open-Meteo drive the waves, chop, whitecaps, sky and sound. At night, parachute flares drift downwind on the real wind, each throwing its own glitter path across the swell.
 
 Path:
 `sources/bit-field-022-water-studies/index.html`
