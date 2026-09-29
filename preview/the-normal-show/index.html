@@ -97,7 +97,30 @@
         <h2>The theme song is part of the branding, not an add-on.</h2>
         <p>The same project language extends into sound: the original theme music was developed as another piece of the show’s identity system, giving the series a recognizable entrance before the visual frame even settles.</p>
       </div>
-      <aside class="sound-note"><strong>ORIGINAL THEME / 00:28</strong><br><br><video controls playsinline preload="metadata" poster="./assets/cover.webp" style="width:100%;display:block;border:2px solid #111;background:#111"><source src="./assets/theme-song.mp4" type="video/mp4">Your browser does not support embedded video.</video></aside>
+      <aside class="sound-note"><strong>ORIGINAL THEME / 00:28</strong><br><br><video id="normal-show-theme" controls playsinline preload="metadata" poster="./assets/cover.webp" style="width:100%;display:block;border:2px solid #111;background:#111">Your browser does not support embedded video.</video>
+<script>
+(async()=>{
+  const video=document.getElementById('normal-show-theme');
+  const parts=["theme-song.00.b64","theme-song.01.b64","theme-song.02.b64","theme-song.03.b64","theme-song.04.b64","theme-song.05.b64","theme-song.06.b64","theme-song.07.b64","theme-song.08.b64","theme-song.09.b64","theme-song.10.b64","theme-song.11.b64","theme-song.12.b64","theme-song.13.b64","theme-song.14.b64","theme-song.15.b64","theme-song.16.b64","theme-song.17.b64","theme-song.18.b64"];
+  try{
+    const buffers=await Promise.all(parts.map(async(name)=>{
+      const response=await fetch('./assets/'+name);
+      if(!response.ok) throw new Error('Missing video asset '+name);
+      const b64=(await response.text()).trim();
+      const binary=atob(b64);
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+      return bytes;
+    }));
+    const url=URL.createObjectURL(new Blob(buffers,{type:'video/mp4'}));
+    video.src=url;
+    video.load();
+    window.addEventListener('beforeunload',()=>URL.revokeObjectURL(url),{once:true});
+  }catch(error){
+    console.error('Normal Show theme failed to load',error);
+  }
+})();
+</script></aside>
     </section>
   </main>
 
