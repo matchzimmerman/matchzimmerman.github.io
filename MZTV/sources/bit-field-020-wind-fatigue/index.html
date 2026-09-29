@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>MZTV — Wind Fatigue Test 001</title>
+<style>
+  :root{
+    --bg:#f2eedc;
+    --ink:#171a33;
+    --cyan:#00cfd0;
+    --mag:#ef4c95;
+    --orange:#ff7e30;
+    --lime:#badf40;
+    --faint:rgba(23,26,51,.12);
+  }
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;color:var(--ink)}
+  canvas{display:block;width:100%;height:100%;background:var(--bg)}
+  #audioGate{
+    position:fixed;inset:auto 24px 24px auto;z-index:5;padding:10px 12px;border:1px solid rgba(23,26,51,.35);
+    background:rgba(242,238,220,.88);backdrop-filter:blur(4px);font-size:12px;letter-spacing:.08em;display:none;cursor:pointer
+  }
+  #audioGate.show{display:block}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="audioGate">AUDIO SUSPENDED — CLICK ONCE</div>
+<script>
+(() => {
+'use strict';
+
+// -----------------------------------------------------------------------------
+// MZTV / WIND FATIGUE TEST 001
+// Infinite browser-source artwork for OBS/Twitch.
+// Six 5-minute material tests = one 30-minute run, then a new run begins.
+// Query params for testing: ?setupSeconds=30&timeScale=1&audio=0
+// Controls: H HUD / M audio / N next test / R reset / L CSV / F fullscreen
+// -----------------------------------------------------------------------------
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
+const gate = document.getElementById('audioGate');
+
+const Q = new URLSearchParams(location.search);
+const SETUP_SECONDS = Math.max(10, +(Q.get('setupSeconds') || 300));
+const TIME_SCALE = Math.max(.1, +(Q.get('timeScale') || 1));
+let audioEnabled = Q.get('audio') !== '0';
+
+const C = {
+  bg:'#f2eedc', ink:'#171a33', cyan:'#00cfd0', mag:'#ef4c95', orange:'#ff7e30', lime:'#badf40',
+  faint:'rgba(23,26,51,.12)', mid:'rgba(23,26,51,.38)', paper:'rgba(242,238,220,.86)'
+};
+const palette = [C.cyan,C.mag,C.orange,C.lime];
+
+let W=1920,H=1080,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  W = innerWidth; H = innerHeight;
+  canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize', resize); resize();
+
+// ---------- deterministic-ish seeded randomness per setup ----------
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+let rand = Math.random;
+function rr(a,b){return a+(b-a)*rand()}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function lerp(a,b,t){return a+(b-a)*t}
+function smooth(t){return t*t*(3-2*t)}
+function fmtTime(s){s=Math.max(0,s|0);const m=(s/60)|0;const sec=s%60;return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`}
+
+// ---------- test configurations ----------
+const setups = [
+  {name:'LOOSE WEAVE', cols:19, rows:11, diag:.62, slack:1.035, stiffness:78, yield:.075, fatigue:.080, ultimate:.38, drag:1.12},
+  {name:'TIGHT GRID', cols:20, rows:12, diag:.82, slack:1.000, stiffness:106,yield:.068, fatigue:.065, ultimate:.32, drag:.98},
+  {name:'LONG SPAN', cols:23, rows:9,  diag:.55, slack:1.020, stiffness:88, yield:.060, fatigue:.090, ultimate:.35, drag:1.18},
+  {name:'DENSE FIELD',cols:21, rows:13, diag:.94, slack:1.015, stiffness:98, yield:.085, fatigue:.050, ultimate:.34, drag:1.06},
+  {name:'BRITTLE NET',cols:19, rows:11, diag:.72, slack:1.008, stiffness:118,yield:.052, fatigue:.040, ultimate:.25, drag:1.00},
+  {name:'FATIGUE CLOTH',cols:22, rows:12, diag:.78, slack:1.028, stiffness:84, yield:.055, fatigue:.115, ultimate:.42, drag:1.14},
+];
+
+let runNo = +(localStorage.getItem('mz_wind_run_no')||1);
+let setupIndex = 0;
+let setupElapsed = 0;
+let runElapsed = 0;
+let runStartWall = Date.now();
+let failureTime = null;
+let maxWind = 0;
+let maxGustDuration = 0;
+let ruptureEvents = 0;
+let hud = true;
+let catastrophic = false;
+let edges=[], nodes=[], anchorLeft=[], anchorRight=[];
+let current = setups[0];
+let wind = 10, windTarget=10, gustAdd=0, gustType='BASELINE', gustStart=0, gustEnd=0, gustPeak=0;
+let nextWeatherDecision = 0;
+let windHistory=[];
+let breakQueue=[];
+let lastFrame = performance.now();
+let simTime = 0;
+
+function initSetup(index, preserveElapsed=false){
+  setupIndex = (index + setups.length) % setups.length;
+  current = setups[setupIndex];
+  const seed = (runNo*7919 + setupIndex*104729) >>> 0;
+  rand = mulberry32(seed);
+  nodes=[];edges=[];anchorLeft=[];anchorRight=[];breakQueue=[];
+  failureTime=null; maxWind=0; maxGustDuration=0; ruptureEvents=0; catastrophic=false;
+  if(!preserveElapsed) setupElapsed=0;
+  gustAdd=0; gustType='BASELINE'; gustEnd=0; nextWeatherDecision=0; windHistory=[];
+
+  const {cols,rows,slack,diag} = current;
+  const x0 = .105*W, x1=.895*W, y0=.205*H, y1=.795*H;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const u=c/(cols-1), v=r/(rows-1);
+      const curve = Math.sin(v*Math.PI)*Math.sin(u*Math.PI)*18;
+      const x=lerp(x0,x1,u) + rr(-5,5);
+      const y=lerp(y0,y1,v) + Math.sin(u*Math.PI*2+r*.45)*5 + curve*Math.sin((u-.5)*Math.PI) + rr(-4,4);
+      const fixed = c===0 || c===cols-1;
+      const n={x,y,px:x,py:y,fx:0,fy:0,fixed,mass:rr(.85,1.2),r,c};
+      nodes.push(n);
+      if(c===0) anchorLeft.push(nodes.length-1);
+      if(c===cols-1) anchorRight.push(nodes.length-1);
+    }
+  }
+  const id=(r,c)=>r*cols+c;
+  function addEdge(a,b,type='orth'){
+    const A=nodes[a],B=nodes[b];
+    const d=Math.hypot(B.x-A.x,B.y-A.y);
+    edges.push({a,b,rest:d*slack,k:current.stiffness*(type==='diag'?.82:1),damping:.92,damage:0,broken:false,breakAge:0,
+      yield:current.yield*rr(.88,1.12), ultimate:current.ultimate*rr(.9,1.12), fatigue:current.fatigue*rr(.82,1.18), color:palette[(a+b+setupIndex)%palette.length]});
+  }
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    if(c<cols-1) addEdge(id(r,c),id(r,c+1));
+    if(r<rows-1) addEdge(id(r,c),id(r+1,c));
+    if(c<cols-1 && r<rows-1 && rand()<diag) addEdge(id(r,c),id(r+1,c+1),'diag');
+    if(c>0 && r<rows-1 && rand()<diag*.55) addEdge(id(r,c),id(r+1,c-1),'diag');
+  }
+}
+
+function updateWind(dt){
+  // Base wind wanders slowly. Gust envelopes create either long moderate loading
+  // or short impact loading. The mesh remembers cumulative fatigue.
+  if(simTime >= nextWeatherDecision){
+    nextWeatherDecision = simTime + rr(4,11);
+    windTarget = rr(7,18);
+    if(simTime > gustEnd && rand()<.48){
+      if(rand()<.62){
+        gustType='PROLONGED GUST';
+        const dur=rr(18,52); gustStart=simTime; gustEnd=simTime+dur; gustPeak=rr(10,21); maxGustDuration=Math.max(maxGustDuration,dur);
+      } else {
+        gustType='IMPACT GUST';
+        const dur=rr(1.4,5.5); gustStart=simTime; gustEnd=simTime+dur; gustPeak=rr(28,48); maxGustDuration=Math.max(maxGustDuration,dur);
+      }
+    }
+  }
+  if(simTime < gustEnd){
+    const dur=gustEnd-gustStart;
+    const t=clamp((simTime-gustStart)/dur,0,1);
+    const env=Math.sin(Math.PI*smooth(t));
+    gustAdd=gustPeak*env;
+  }else{gustAdd*=Math.exp(-dt*2.5); if(gustAdd<.1){gustAdd=0;gustType='BASELINE';}}
+  const desired=windTarget+gustAdd;
+  wind += (desired-wind)*(1-Math.exp(-dt*(gustType==='IMPACT GUST'?5:.55)));
+  wind += Math.sin(simTime*.73)*.035 + Math.sin(simTime*2.17)*.018;
+  wind=clamp(wind,0,70); maxWind=Math.max(maxWind,wind);
+}
+
+function simulate(dt){
+  const sub=2, h=dt/sub;
+  for(let s=0;s<sub;s++){
+    updateWind(h);
+    const wForce = current.drag * (wind*wind) * 0.00026;
+
+    // external forces + Verlet-ish integration
+    for(let i=0;i<nodes.length;i++){
+      const n=nodes[i]; if(n.fixed) continue;
+      const turbulence = Math.sin(simTime*2.2 + n.y*.018 + n.r*.73)*.55 + Math.sin(simTime*.61+n.c*.44)*.25;
+      n.fx += wForce * (1 + .20*turbulence);
+      n.fy += wForce * .23 * turbulence + Math.sin(simTime*.8+n.r)*.012;
+      n.fy += .009; // tiny gravity
+    }
+
+    // spring forces and material fatigue
+    for(let i=0;i<edges.length;i++){
+      const e=edges[i]; if(e.broken){e.breakAge+=h;continue;}
+      const A=nodes[e.a],B=nodes[e.b];
+      let dx=B.x-A.x, dy=B.y-A.y, d=Math.hypot(dx,dy)||.0001;
+      const strain=(d-e.rest)/e.rest;
+      const force=e.k*strain;
+      const nx=dx/d, ny=dy/d;
+      if(!A.fixed){A.fx += force*nx/A.mass; A.fy += force*ny/A.mass;}
+      if(!B.fixed){B.fx -= force*nx/B.mass; B.fy -= force*ny/B.mass;}
+
+      // Fatigue: repeated/prolonged loading accumulates; only a tiny amount recovers.
+      const over=Math.max(0,Math.abs(strain)-e.yield);
+      if(over>0){
+        const windFactor=.55 + wind/30;
+        e.damage += Math.pow(over*8.5,1.52) * e.fatigue * windFactor * h;
+      } else {
+        e.damage = Math.max(0,e.damage - h*.0005);
+      }
+      // Impact rupture can cut local holes without necessarily destroying spanning connectivity.
+      const impact=Math.abs(strain)>e.ultimate;
+      if(e.damage>=1 || impact) breakEdge(e, impact?'IMPACT':'FATIGUE');
+    }
+
+    // integrate
+    for(let i=0;i<nodes.length;i++){
+      const n=nodes[i]; if(n.fixed){n.fx=n.fy=0;continue;}
+      const vx=(n.x-n.px)*.987, vy=(n.y-n.py)*.987;
+      const ox=n.x, oy=n.y;
+      n.x += vx + n.fx*h*h*62;
+      n.y += vy + n.fy*h*h*62;
+      n.px=ox; n.py=oy; n.fx=n.fy=0;
+      // loose bounds so tears can flap out of frame
+      n.x=clamp(n.x,-W*.1,W*1.1); n.y=clamp(n.y,-H*.1,H*1.1);
+    }
+    simTime+=h;
+  }
+
+  // evaluate structural connectivity about 10x/sec
+  if((simTime*10|0)!==((simTime-dt)*10|0)){
+    const spanning=hasSpanningPath();
+    const integrity=networkIntegrity();
+    if(!catastrophic && (!spanning || integrity<.19)){
+      catastrophic=true; failureTime=setupElapsed; ruptureEvents++;
+      ruptureSound(1.0);
+    }
+  }
+}
+
+function breakEdge(e,reason){
+  if(e.broken) return;
+  e.broken=true; e.breakAge=0; ruptureEvents++;
+  breakQueue.push({x:(nodes[e.a].x+nodes[e.b].x)/2,y:(nodes[e.a].y+nodes[e.b].y)/2,t:0,reason,color:e.color});
+  ruptureSound(reason==='IMPACT'?.75:.35);
+}
+
+function networkIntegrity(){
+  let alive=0, weighted=0;
+  for(const e of edges){
+    if(!e.broken){alive++; weighted += 1-clamp(e.damage,0,1)*.55;}
+  }
+  return edges.length ? weighted/edges.length : 0;
+}
+
+function hasSpanningPath(){
+  const adj=Array.from({length:nodes.length},()=>[]);
+  for(const e of edges) if(!e.broken){adj[e.a].push(e.b);adj[e.b].push(e.a);}
+  const q=[...anchorLeft], seen=new Uint8Array(nodes.length);
+  for(const x of q) seen[x]=1;
+  const right=new Set(anchorRight);
+  for(let qi=0;qi<q.length;qi++){
+    const v=q[qi]; if(right.has(v))return true;
+    for(const n of adj[v]) if(!seen[n]){seen[n]=1;q.push(n)}
+  }
+  return false;
+}
+
+function finishSetup(){
+  const rec={
+    iso:new Date().toISOString(),run:runNo,setup:setupIndex+1,name:current.name,
+    failure_s:failureTime==null?'':failureTime.toFixed(2),survived:failureTime==null?'YES':'NO',
+    max_wind_mph:maxWind.toFixed(2),max_gust_s:maxGustDuration.toFixed(2),ruptures:ruptureEvents,
+    final_integrity_pct:(networkIntegrity()*100).toFixed(1)
+  };
+  const logs=JSON.parse(localStorage.getItem('mz_wind_logs')||'[]'); logs.push(rec);
+  while(logs.length>500)logs.shift(); localStorage.setItem('mz_wind_logs',JSON.stringify(logs));
+
+  if(setupIndex===setups.length-1){
+    runNo++; localStorage.setItem('mz_wind_run_no',runNo); runElapsed=0; runStartWall=Date.now(); initSetup(0);
+  }else initSetup(setupIndex+1);
+}
+
+// ---------- audio ----------
+let audioCtx=null, master=null, windGain=null, droneGain=null, noiseFilter=null, oscs=[];
+let lastBreakSound=0;
+function initAudio(){
+  if(!audioEnabled || audioCtx) return;
+  const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
+  audioCtx=new AC();
+  master=audioCtx.createGain(); master.gain.value=.11; master.connect(audioCtx.destination);
+  droneGain=audioCtx.createGain(); droneGain.gain.value=.05; droneGain.connect(master);
+  const freqs=[42,63,84];
+  freqs.forEach((f,i)=>{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain(), filt=audioCtx.createBiquadFilter();
+    o.type=i===0?'sine':(i===1?'triangle':'sine'); o.frequency.value=f; g.gain.value=[.36,.12,.07][i];
+    filt.type='lowpass'; filt.frequency.value=420; filt.Q.value=.4; o.connect(g).connect(filt).connect(droneGain); o.start();
+    oscs.push({o,g,filt,base:f});
+  });
+  // 2-second looping noise buffer for wind
+  const len=audioCtx.sampleRate*2, b=audioCtx.createBuffer(1,len,audioCtx.sampleRate), data=b.getChannelData(0);
+  let lp=0; for(let i=0;i<len;i++){lp=lp*.985+(Math.random()*2-1)*.015;data[i]=lp*2.2;}
+  const src=audioCtx.createBufferSource();src.buffer=b;src.loop=true;
+  noiseFilter=audioCtx.createBiquadFilter();noiseFilter.type='bandpass';noiseFilter.frequency.value=260;noiseFilter.Q.value=.55;
+  windGain=audioCtx.createGain();windGain.gain.value=.018;src.connect(noiseFilter).connect(windGain).connect(master);src.start();
+  refreshAudioGate();
+}
+function refreshAudioGate(){ if(!audioCtx||!audioEnabled){gate.classList.remove('show');return;} gate.classList.toggle('show',audioCtx.state!=='running'); }
+async function resumeAudio(){initAudio(); if(audioCtx&&audioCtx.state!=='running'){try{await audioCtx.resume()}catch{}} refreshAudioGate();}
+gate.onclick=resumeAudio;
+addEventListener('pointerdown',resumeAudio,{once:false});
+addEventListener('keydown',resumeAudio,{once:false});
+
+function updateAudio(){
+  if(!audioCtx||!audioEnabled)return;
+  const now=audioCtx.currentTime, integ=networkIntegrity();
+  windGain.gain.setTargetAtTime(.005 + (wind/70)*.055,now,.35);
+  noiseFilter.frequency.setTargetAtTime(160 + wind*13,now,.4);
+  droneGain.gain.setTargetAtTime(.025 + integ*.05,now,.5);
+  oscs.forEach((x,i)=>{
+    x.o.frequency.setTargetAtTime(x.base*(1 + (1-integ)*.018 + Math.sin(simTime*.09+i)*.002),now,.8);
+    x.filt.frequency.setTargetAtTime(220+integ*480+wind*3,now,.7);
+  });
+}
+function ruptureSound(amount=.5){
+  if(!audioCtx||!audioEnabled||audioCtx.state!=='running')return;
+  const now=audioCtx.currentTime; if(now-lastBreakSound<.045)return; lastBreakSound=now;
+  const dur=.12+amount*.18, len=(audioCtx.sampleRate*dur)|0, b=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<len;i++){const t=i/len; d[i]=(Math.random()*2-1)*Math.pow(1-t,3)*(0.4+amount*.6);}
+  const s=audioCtx.createBufferSource(),f=audioCtx.createBiquadFilter(),g=audioCtx.createGain(),p=audioCtx.createStereoPanner();
+  s.buffer=b;f.type='bandpass';f.frequency.value=rr(220,1600);f.Q.value=rr(.6,2);g.gain.value=.18;p.pan.value=rr(-.8,.8);
+  s.connect(f).connect(g).connect(p).connect(master);s.start(now);
+}
+
+// ---------- rendering ----------
+function draw(){
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  drawPaperGrid();
+  drawWindField();
+  drawMesh();
+  drawBreaks();
+  if(hud)drawHUD();
+}
+function drawPaperGrid(){
+  ctx.lineWidth=1;ctx.strokeStyle='rgba(23,26,51,.055)';
+  const sx=Math.max(54,W/30),sy=Math.max(54,H/18);
+  ctx.beginPath();for(let x=0;x<W;x+=sx){ctx.moveTo(x,0);ctx.lineTo(x,H)}for(let y=0;y<H;y+=sy){ctx.moveTo(0,y);ctx.lineTo(W,y)}ctx.stroke();
+}
+function drawWindField(){
+  const count=14, left=.03*W, right=.42*W;
+  for(let i=0;i<count;i++){
+    const y=.19*H+i*(.60*H/(count-1));
+    const a=.10+wind/90*.36;ctx.strokeStyle=`rgba(23,26,51,${a})`;ctx.fillStyle=ctx.strokeStyle;ctx.lineWidth=1+(wind/70)*1.5;
+    const jitter=Math.sin(simTime*2+i*1.3)*8;
+    const len=lerp(.08*W,.22*W,clamp(wind/55,0,1))*(.6+((i*17)%11)/20);
+    const x=left + ((simTime*48 + i*91)%(right-left));
+    ctx.beginPath();ctx.moveTo(x-len,y+jitter);ctx.lineTo(x,y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-10,y-5);ctx.lineTo(x-10,y+5);ctx.closePath();ctx.fill();
+  }
+}
+function drawMesh(){
+  for(let i=0;i<edges.length;i++){
+    const e=edges[i],A=nodes[e.a],B=nodes[e.b];
+    if(e.broken)continue;
+    const dmg=clamp(e.damage,0,1);
+    ctx.strokeStyle=dmg>.55?C.orange:(dmg>.25?e.color:'rgba(23,26,51,.56)');
+    ctx.lineWidth=1 + dmg*2.1;
+    ctx.globalAlpha=.45+dmg*.5;
+    ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  // nodes
+  for(let i=0;i<nodes.length;i++){
+    const n=nodes[i];
+    const incident=edges.filter?null:null; // no-op, keeps render path simple
+    ctx.fillStyle=n.fixed?C.ink:palette[(n.r+n.c+setupIndex)%palette.length];
+    const r=n.fixed?3.8:2.0;
+    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();
+  }
+  // anchors
+  ctx.strokeStyle=C.ink;ctx.lineWidth=3;
+  const lx=nodes[anchorLeft[0]]?.x||.1*W, rx=nodes[anchorRight[0]]?.x||.9*W;
+  ctx.beginPath();ctx.moveTo(lx,.15*H);ctx.lineTo(lx,.85*H);ctx.moveTo(rx,.15*H);ctx.lineTo(rx,.85*H);ctx.stroke();
+}
+function drawBreaks(){
+  for(let i=breakQueue.length-1;i>=0;i--){
+    const b=breakQueue[i];b.t+=1/60; if(b.t>1.8){breakQueue.splice(i,1);continue}
+    const p=b.t/1.8;ctx.globalAlpha=1-p;ctx.strokeStyle=b.color;ctx.lineWidth=2;
+    const r=8+p*42;ctx.beginPath();ctx.arc(b.x,b.y,r,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+  }
+}
+function drawHUD(){
+  const integrity=networkIntegrity(), fat=1-integrity;
+  const pad=Math.max(22,W*.025), top=pad;
+  ctx.fillStyle=C.ink;ctx.textBaseline='top';
+  ctx.font=`600 ${Math.max(18,W*.018)}px ui-monospace,monospace`;ctx.fillText('MZTV / WIND FATIGUE TEST 001',pad,top);
+  ctx.font=`500 ${Math.max(11,W*.0092)}px ui-monospace,monospace`;
+  ctx.fillStyle=C.orange;ctx.fillText('● LIVE',pad,top+40);
+  ctx.fillStyle=C.ink;ctx.fillText(`RUN ${String(runNo).padStart(3,'0')}   SETUP ${String(setupIndex+1).padStart(2,'0')}/06   ${current.name}`,pad+86,top+40);
+  ctx.fillText(`ELAPSED ${fmtTime(setupElapsed)} / ${fmtTime(SETUP_SECONDS)}`,pad+86,top+59);
+
+  const boxW=Math.min(590,W*.39), bx=W-pad-boxW, by=pad;
+  ctx.fillStyle='rgba(242,238,220,.82)';ctx.fillRect(bx-14,by-8,boxW+14,104);
+  const cols=[
+    ['WIND',`${wind.toFixed(1)} MPH`],['GUST',gustType],['FATIGUE',`${Math.round(fat*100)}%`],['INTEGRITY',`${Math.round(integrity*100)}%`],['RUPTURE',String(ruptureEvents).padStart(2,'0')]
+  ];
+  const cw=boxW/cols.length;
+  cols.forEach((m,i)=>{
+    const x=bx+i*cw;ctx.fillStyle=C.mid;ctx.font=`600 ${Math.max(9,W*.0068)}px ui-monospace,monospace`;ctx.fillText(m[0],x,by);
+    ctx.fillStyle=(i===1&&gustType!=='BASELINE')?C.orange:C.ink;ctx.font=`600 ${Math.max(12,W*.0095)}px ui-monospace,monospace`;ctx.fillText(m[1],x,by+22);
+    if(i<cols.length-1){ctx.strokeStyle='rgba(23,26,51,.18)';ctx.beginPath();ctx.moveTo(x+cw-10,by);ctx.lineTo(x+cw-10,by+70);ctx.stroke();}
+  });
+
+  // fatigue bar
+  const barX=bx,barY=by+71,barW=boxW-10,barH=8;
+  ctx.fillStyle='rgba(23,26,51,.12)';ctx.fillRect(barX,barY,barW,barH);
+  ctx.fillStyle=C.orange;ctx.fillRect(barX,barY,barW*fat,barH);
+
+  // bottom strip
+  const y=H-pad-70;
+  ctx.strokeStyle='rgba(23,26,51,.30)';ctx.beginPath();ctx.moveTo(pad,y-12);ctx.lineTo(W-pad,y-12);ctx.stroke();
+  ctx.font=`600 ${Math.max(9,W*.0072)}px ui-monospace,monospace`;ctx.fillStyle=C.ink;ctx.fillText('TEST SEQUENCE / 30:00 RUN',pad,y);
+  const sw=Math.min(420,W*.30), seg=sw/6;
+  for(let i=0;i<6;i++){
+    const x=pad+i*seg;ctx.fillStyle=i===setupIndex?C.orange:'rgba(23,26,51,.10)';ctx.fillRect(x,y+22,seg-8,8);
+    ctx.fillStyle=i===setupIndex?C.orange:C.mid;ctx.fillText(String(i+1).padStart(2,'0'),x,y+36);
+  }
+  const infoX=pad+sw+40;
+  ctx.fillStyle=C.ink;ctx.fillText(`TIME TO FAILURE  ${failureTime==null?'—':fmtTime(failureTime)}`,infoX,y);
+  ctx.fillText(`MAX WIND  ${maxWind.toFixed(1)} MPH`,infoX,y+22);
+  ctx.fillText(`MAX GUST  ${maxGustDuration.toFixed(1)} SEC`,infoX,y+44);
+
+  drawWindGraph(W-pad-Math.min(390,W*.25), y, Math.min(390,W*.25), 58);
+  if(catastrophic){
+    ctx.save();ctx.translate(W*.5,H*.51);ctx.textAlign='center';ctx.font=`700 ${Math.max(24,W*.027)}px ui-monospace,monospace`;ctx.fillStyle=C.orange;ctx.fillText('SPAN FAILURE',0,0);ctx.restore();ctx.textAlign='start';
+  }
+}
+function drawWindGraph(x,y,w,h){
+  ctx.fillStyle=C.paper;ctx.fillRect(x-8,y-5,w+8,h+9);
+  ctx.strokeStyle='rgba(23,26,51,.22)';ctx.strokeRect(x,y,w,h);
+  if(windHistory.length<2)return;
+  ctx.beginPath();
+  for(let i=0;i<windHistory.length;i++){
+    const px=x+i/(windHistory.length-1)*w, py=y+h-clamp(windHistory[i]/70,0,1)*h;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+  }
+  ctx.strokeStyle=gustType==='BASELINE'?C.ink:C.orange;ctx.lineWidth=1.5;ctx.stroke();
+}
+
+// ---------- logging ----------
+function downloadCSV(){
+  const rows=JSON.parse(localStorage.getItem('mz_wind_logs')||'[]'); if(!rows.length)return;
+  const keys=Object.keys(rows[0]);const csv=[keys.join(','),...rows.map(r=>keys.map(k=>JSON.stringify(r[k]??'')).join(','))].join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='MZTV_WIND_FATIGUE_LOG.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+// ---------- keyboard ----------
+addEventListener('keydown',e=>{
+  if(e.repeat)return;
+  if(e.key==='h'||e.key==='H')hud=!hud;
+  else if(e.key==='m'||e.key==='M'){
+    audioEnabled=!audioEnabled; if(audioEnabled){initAudio();resumeAudio();if(master)master.gain.value=.11}else if(master)master.gain.value=0;
+  }
+  else if(e.key==='n'||e.key==='N')finishSetup();
+  else if(e.key==='r'||e.key==='R')initSetup(setupIndex);
+  else if(e.key==='l'||e.key==='L')downloadCSV();
+  else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.();}
+});
+
+// ---------- main loop ----------
+let histAcc=0;
+function frame(now){
+  let dt=Math.min(.034,(now-lastFrame)/1000)*TIME_SCALE; lastFrame=now;
+  setupElapsed += dt; runElapsed += dt;
+  simulate(dt); updateAudio();
+  histAcc+=dt;if(histAcc>.5){histAcc=0;windHistory.push(wind);if(windHistory.length>180)windHistory.shift();}
+  if(setupElapsed>=SETUP_SECONDS)finishSetup();
+  draw(); requestAnimationFrame(frame);
+}
+
+initSetup(0);
+if(audioEnabled){initAudio();setTimeout(resumeAudio,100)}
+requestAnimationFrame(frame);
+setInterval(refreshAudioGate,1000);
+})();
+</script>
+</body>
+</html>
