@@ -15,12 +15,7 @@ Galway Bay off Inverin, at water level. The only subject is light on moving wate
 
 The marine values are a model's nearest-cell estimate for the bay, not a buoy reading. The info box shows which cell was used and when it last updated. If a request fails, the piece keeps the last reading (cached up to 3 h) or falls back to typical bay values, and says so.
 
-- **Stream (latest):** https://www.matchzimmerman.com/MZTV/sources/bit-field-022-water-studies/
-
-## Versions
-Each iteration lives in its own folder and is never overwritten. The root URL always serves the latest version.
-- **v1** · open water, no data: the sun and moon on the Baltimore clock, sea state drifting on its own, night flares. https://www.matchzimmerman.com/MZTV/sources/bit-field-022-water-studies/v1/
-- **v2** · Galway Bay off Inverin: the real sun and moon over Inverin, with the bay's swell, wind, cloud and sea temperature from Open-Meteo. https://www.matchzimmerman.com/MZTV/sources/bit-field-022-water-studies/v2/
+- **Stream:** https://www.matchzimmerman.com/MZTV/sources/bit-field-022-water-studies/
 
 Params: `?info=0` `?audio=0` `?seed=N` `?rate=N` (clock speed) `?hour=H` (Inverin start hour, today) `?utc=ISO` `?data={json}` (override readings) `?sea=0..1` (ignore data, fix sea state) `?cover=0..1` `?flares=N` (per hour at night) `?face=sun|moon` `?yaw=RAD` `?q=0..2` `?capture=1`
 Keys: `i` info · `f` fire a flare now

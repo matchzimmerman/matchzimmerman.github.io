@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · BIT FIELD 022 · WATER STUDIES · v1</title>
+<!--
+  MZTV · BIT FIELD 022 · WATER STUDIES
+  Open sea at water level. The only subject is light on moving water: the sun and moon on the real Baltimore clock,
+  and parachute flares at night that rise, ignite, drift down on the wind and throw their own paths across the swell.
+  Params: ?info=0 ?audio=0 ?seed=N ?rate=N (clock speed) ?hour=H (start hour) ?sea=0..1 ?capture=1 ?q=0..2 ?flares=N (per hour at night)
+  Keys: i info · f fire a flare
+-->
+<style>
+@font-face { font-family: 'JBM'; src: url('JetBrainsMono-Regular.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JBM'; src: url('JetBrainsMono-Medium.woff2') format('woff2'); font-weight: 500; }
+html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; }
+#gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#info { position: fixed; left: 2.2vw; bottom: 2.4vh; font: 400 clamp(10px, 0.72vw, 15px)/1.5 'JBM', monospace; color: var(--ink, #e9e4d6);
+  background: rgba(6, 9, 16, 0.55); padding: 0.8em 1em; letter-spacing: 0.02em; white-space: pre; }
+#info b { font-weight: 500; color: var(--hi, #fff); }
+#go[hidden] { display: none !important; }
+#go { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font: 500 20px 'JBM', monospace; color: #e9e4d6; background: rgba(5, 7, 13, 0.35); cursor: pointer; letter-spacing: 0.1em; }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="info"></div>
+<div id="go" hidden>▶ WATER STUDIES</div>
+<script type="module">
+import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { Water } from 'three/addons/objects/Water.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+
+const Q = new URLSearchParams(location.search), num = (k, d) => Q.has(k) ? +Q.get(k) : d;
+const CAPTURE = Q.get('capture') === '1', QUAL = num('q', 2), RATE = num('rate', 1), MUTE = Q.get('audio') === '0';
+const SEED = num('seed', 20260929), FLARES_PER_HOUR = num('flares', 26);
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x, lerp = (a, b, k) => a + (b - a) * k, smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+const fract = x => x - Math.floor(x), TAU = Math.PI * 2, V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function h1(n) { n = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b); n ^= n >>> 13; n = Math.imul(n, 0xc2b2ae35); return ((n ^ n >>> 16) >>> 0) / 4294967296; }
+function vn1(x) { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(h1(i + SEED), h1(i + 1 + SEED), u); }
+
+/* ================= clock: Baltimore local time drives the sky ================= */
+function baltimoreHour() { const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false }).formatToParts(new Date());
+  const g = k => +(p.find(x => x.type === k) || { value: 0 }).value; return (g('hour') % 24) + g('minute') / 60 + g('second') / 3600; }
+const H0 = Q.has('hour') ? num('hour', 21) : (CAPTURE ? 20.6 : baltimoreHour());
+let T = 0;                                                     // piece seconds since start
+const hourAt = t => ((H0 + t * RATE / 3600) % 24 + 24) % 24;
+const RISE = 6.95, SET = 18.9;                                 // late-September Baltimore
+function sunState(H) {
+  const day = (H - RISE) / (SET - RISE), th = day * Math.PI;   // 0 at sunrise, π at sunset
+  const el = day >= -0.25 && day <= 1.25 ? 49 * Math.sin(th) : -35;
+  const eR = THREE.MathUtils.degToRad(el), az = lerp(-0.35, Math.PI + 0.35, clamp(day, -0.2, 1.2));   // rises east (ahead, -z), arcs south, sets west (behind)
+  return { el, dir: V3(Math.sin(az) * 0.8 * Math.cos(eR), Math.sin(eR), -Math.cos(az) * Math.cos(eR)).normalize() };
+}
+function moonState(H) {
+  const u = ((H - 19.8 + 24) % 24) / 12.4, th = u * Math.PI, el = u <= 1 ? 42 * Math.sin(th) : -20;   // rises over the sea after dusk
+  const eR = THREE.MathUtils.degToRad(el), az = lerp(-0.25, Math.PI + 0.2, clamp(u, 0, 1));
+  return { el, dir: V3(Math.sin(az) * 0.7 * Math.cos(eR), Math.sin(eR), -Math.cos(az) * Math.cos(eR)).normalize() };
+}
+
+/* ================= renderer ================= */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: CAPTURE, powerPreference: 'high-performance' });
+renderer.setPixelRatio(CAPTURE ? 1 : Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight, false);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.5;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 20000);
+
+/* sky, clouds, stars, moon */
+const skyFix = m => { m.fragmentShader = m.fragmentShader.replace('vec3 direction = normalize( vWorldPosition - cameraPosition );', 'vec3 direction = normalize( vWorldPosition - cameraPosition ); direction.y = max(direction.y, 0.002); direction = normalize(direction);'); };
+const sky = new Sky(); skyFix(sky.material); sky.scale.setScalar(12000); scene.add(sky); const SU = sky.material.uniforms; SU.mieDirectionalG.value = 0.84;
+const cloudMat = new THREE.ShaderMaterial({ side: THREE.BackSide, transparent: true, depthWrite: false,
+  uniforms: { uSun: { value: V3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uAmb: { value: new THREE.Color(0.5, 0.55, 0.6) }, uTime: { value: 0 }, uCover: { value: 0.4 },
+    uF: { value: Array.from({ length: 6 }, () => V3(0, -1e5, 0)) }, uFC: { value: Array.from({ length: 6 }, () => new THREE.Color(0, 0, 0)) } },
+  vertexShader: `varying vec3 vD; void main(){ vD = normalize((modelMatrix*vec4(position,1.0)).xyz - cameraPosition); gl_Position = projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.0); gl_Position.z = gl_Position.w; }`,
+  fragmentShader: `varying vec3 vD; uniform vec3 uSun, uSunCol, uAmb; uniform float uTime, uCover; uniform vec3 uF[6]; uniform vec3 uFC[6];
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+    float fbm(vec2 p){ float a=0.0, s=0.5; for(int i=0;i<6;i++){ a+=s*n(p); p=p*2.02+vec2(1.7,9.2); s*=0.5; } return a; }
+    void main(){ vec3 d = normalize(vD); if (d.y < 0.004) discard;
+      vec2 p = d.xz / (d.y + 0.06) * 1.3 + vec2(uTime*0.003, uTime*0.0012);
+      float c = fbm(p), cov = smoothstep(1.0 - uCover, 1.0 - uCover + 0.3, c), thick = smoothstep(0.35, 0.95, c);
+      float c2 = fbm(p + uSun.xz * 0.12), lit = clamp(0.55 + (c - c2) * 4.0, 0.0, 1.3);
+      float mu = max(dot(d, normalize(uSun)), 0.0);
+      vec3 col = mix(uAmb, uSunCol, lit * 0.8) * (1.0 - thick * 0.45) + uSunCol * pow(mu, 12.0) * 1.6 * (1.0 - thick);
+      // flares light the cloud base from below
+      for (int i = 0; i < 6; i++) { vec3 fd = uF[i]; float k = max(dot(d, normalize(fd)), 0.0); col += uFC[i] * (pow(k, 40.0) * 2.0 + pow(k, 6.0) * 0.25) * (0.4 + thick); }
+      gl_FragColor = vec4(col, cov * smoothstep(0.004, 0.1, d.y) * 0.95); }` });
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(10000, 48, 24), cloudMat); scene.add(clouds);
+const RNG = mulberry(SEED);
+const starGeo = new THREE.BufferGeometry(); { const p = [], s = []; for (let i = 0; i < 4000; i++) { const th = RNG() * TAU, y = RNG() * 0.97 + 0.03, r = Math.sqrt(1 - y * y); p.push(Math.cos(th) * r * 9000, y * 9000, Math.sin(th) * r * 9000); s.push(Math.pow(RNG(), 6) * 3 + 0.6); }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); starGeo.setAttribute('size', new THREE.Float32BufferAttribute(s, 1)); }
+const starMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uA: { value: 0 } },
+  vertexShader: `attribute float size; varying float vS; void main(){ vS = size; gl_PointSize = size; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position.z = gl_Position.w*0.9999; }`,
+  fragmentShader: `uniform float uA; varying float vS; void main(){ float a = smoothstep(0.5,0.0,length(gl_PointCoord-0.5)); gl_FragColor = vec4(vec3(0.9,0.93,1.0)*(0.6+vS*0.3), a*uA); }` });
+scene.add(new THREE.Points(starGeo, starMat));
+const moonMat = new THREE.ShaderMaterial({ uniforms: { uSunDir: { value: V3(0, -1, 0) }, uA: { value: 1 } }, transparent: true, depthWrite: false,
+  vertexShader: `varying vec3 vN; void main(){ vN = normalize(mat3(modelMatrix)*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `varying vec3 vN; uniform vec3 uSunDir; uniform float uA; void main(){ float l = smoothstep(-0.05, 0.25, dot(vN, normalize(uSunDir))); gl_FragColor = vec4(vec3(2.4,2.35,2.2)*(0.06 + l), uA); }` });
+const moon = new THREE.Mesh(new THREE.SphereGeometry(70, 32, 16), moonMat); scene.add(moon);
+
+/* ================= the sea: displaced swell under a mirror ================= */
+const WATER_N = new THREE.TextureLoader().load('waternormals.jpg'); WATER_N.wrapS = WATER_N.wrapT = THREE.RepeatWrapping;
+function seaGeometry() {   // dense near the camera, sparse to the horizon
+  const ax = n => { const a = []; for (let i = -n; i <= n; i++) { const u = i / n, s = Math.sign(u), m = Math.abs(u); a.push(s * (m < 0.7 ? m / 0.7 * 220 : 220 + Math.pow((m - 0.7) / 0.3, 2) * 7800)); } return a; };
+  const XS = ax(QUAL > 1 ? 150 : 90), ZS = ax(QUAL > 1 ? 150 : 90).map(z => z - 60), W = XS.length, pos = [], idx = [];
+  for (const z of ZS) for (const x of XS) pos.push(x, -z, 0);
+  for (let j = 0; j < ZS.length - 1; j++) for (let i = 0; i < W - 1; i++) { const a = j * W + i, b = a + W; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); g.boundingSphere = new THREE.Sphere(V3(0, 0, 0), 1e5); return g;
+}
+const sea = new Water(seaGeometry(), { textureWidth: QUAL > 1 ? 1024 : 512, textureHeight: QUAL > 1 ? 1024 : 512, waterNormals: WATER_N, sunDirection: V3(0, 1, 0), sunColor: 0xffffff, waterColor: 0x06222c, distortionScale: 2.5, fog: false });
+sea.rotation.x = -Math.PI / 2; sea.material.side = THREE.DoubleSide; sea.material.uniforms.size.value = 2.4; scene.add(sea);
+Object.assign(sea.material.uniforms, { uDay: { value: 1 }, uT: { value: 0 }, uAmp: { value: 0.6 }, uCap: { value: 0 }, uRf0: { value: 0.04 },
+  uF: { value: Array.from({ length: 6 }, () => V3(0, -1e5, 0)) }, uFC: { value: Array.from({ length: 6 }, () => new THREE.Color(0, 0, 0)) },
+  uMoonDir: { value: V3(0, -1, 0) }, uMoonCol: { value: new THREE.Color(0, 0, 0) } });
+const GERST = `
+  uniform float uT, uAmp; varying vec3 vGN; varying float vCrest;
+  vec3 gw(vec2 p, vec2 dir, float L, float A, float Q, inout vec3 T, inout vec3 B) {
+    float k = 6.2831853 / L, c = sqrt(9.8 / k), f = k * (dot(dir, p) - c * uT), s = sin(f), co = cos(f), wa = k * A;
+    T += vec3(-Q * dir.x * dir.x * wa * s, dir.x * wa * co, -Q * dir.x * dir.y * wa * s);
+    B += vec3(-Q * dir.x * dir.y * wa * s, dir.y * wa * co, -Q * dir.y * dir.y * wa * s);
+    return vec3(Q * A * dir.x * co, A * s, Q * A * dir.y * co); }
+  vec3 waves(vec3 wp, out vec3 N, out float crest) {
+    vec2 p = wp.xz; float far = 1.0 - smoothstep(600.0, 2200.0, length(wp.xz - cameraPosition.xz));
+    float A = uAmp * far; vec3 T = vec3(1.0, 0.0, 0.0), B = vec3(0.0, 0.0, 1.0), d = vec3(0.0);
+    d += gw(p, normalize(vec2(0.1, 1.0)), 62.0, 0.62 * A, 0.5, T, B);
+    d += gw(p, normalize(vec2(-0.35, 1.0)), 31.0, 0.34 * A, 0.6, T, B);
+    d += gw(p, normalize(vec2(0.5, 1.0)), 17.0, 0.2 * A, 0.65, T, B);
+    d += gw(p, normalize(vec2(-0.8, 1.0)), 9.4, 0.12 * A, 0.7, T, B);
+    d += gw(p, normalize(vec2(1.0, 0.45)), 5.3, 0.07 * A, 0.7, T, B);
+    d += gw(p, normalize(vec2(-0.25, -1.0)), 3.4, 0.045 * A, 0.6, T, B);
+    d += gw(p, normalize(vec2(0.7, -0.6)), 2.1, 0.025 * A, 0.5, T, B);
+    N = normalize(cross(B, T)); crest = d.y / max(0.05, 1.3 * A); return d; }`;
+{ const m = sea.material;
+  m.vertexShader = m.vertexShader.replace('void main() {', GERST + '\nvoid main() {')
+    .replace('mirrorCoord = modelMatrix * vec4( position, 1.0 );', 'vec3 wp0 = (modelMatrix * vec4(position, 1.0)).xyz; vec3 gN; float cr; vec3 wd = waves(wp0, gN, cr); vec3 wp = wp0 + wd; vGN = gN; vCrest = cr;\n mirrorCoord = vec4(wp, 1.0);')
+    .replace('vec4 mvPosition =  modelViewMatrix * vec4( position, 1.0 );', 'vec4 mvPosition = viewMatrix * vec4(wp, 1.0);');
+  const FN = `uniform float uT, uCap, uRf0, uDay; uniform vec3 uF[6]; uniform vec3 uFC[6]; uniform vec3 uMoonDir, uMoonCol; varying vec3 vGN; varying float vCrest;
+    float fh(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float fn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(fh(i),fh(i+vec2(1,0)),f.x), mix(fh(i+vec2(0,1)),fh(i+vec2(1,1)),f.x), f.y); }
+    float ffbm(vec2 p){ float a=0.0, s=0.5; for(int i=0;i<5;i++){ a+=s*fn(p); p=p*2.07+vec2(3.1,1.7); s*=0.5; } return a; }`;
+  m.fragmentShader = m.fragmentShader.replace('float rf0 = 0.3;', 'float rf0 = uRf0;').replace('( vec3( 0.1 ) + reflectionSample * 0.9', '( vec3( 0.1 * uDay ) + reflectionSample * 0.9').replace('void main() {', FN + '\nvoid main() {')
+    .replace('vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) );', 'vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) ); surfaceNormal = normalize(vGN + (surfaceNormal - vec3(0.0, 1.0, 0.0)) * 0.6);')
+    .replace('gl_FragColor = vec4( outgoingLight, alpha );', `
+      vec3 N = surfaceNormal, E = eyeDirection;
+      // moonlight glade: sharp specular on every facet that faces it
+      { vec3 Hm = normalize(normalize(uMoonDir) + E); outgoingLight += uMoonCol * (pow(max(dot(N, Hm), 0.0), 900.0) * 18.0 + pow(max(dot(N, Hm), 0.0), 60.0) * 0.08); }
+      // flares: each is a point light above the sea. glitter path + a soft pool on the water body
+      for (int i = 0; i < 6; i++) {
+        vec3 Lv = uF[i] - worldPosition.xyz; float d2 = dot(Lv, Lv); vec3 L = Lv * inversesqrt(d2); vec3 Hf = normalize(L + E);
+        float nh = max(dot(N, Hf), 0.0), att = 1.0 / (1.0 + d2 * 4e-6);
+        float glint = pow(nh, 1400.0) * 24.0 + pow(nh, 180.0) * 0.9 + pow(nh, 24.0) * 0.03;
+        float pool = max(dot(N, L), 0.0) * 0.025;
+        outgoingLight += uFC[i] * att * (glint * (0.25 + reflectance) + pool * (1.0 - reflectance));
+      }
+      float patchy = ffbm(worldPosition.xz * vec2(0.08, 0.14) + vec2(uT * 0.02, uT * 0.06));
+      float cap = uCap * smoothstep(0.2, 0.7, vCrest + (patchy - 0.5) * 0.8) * smoothstep(0.35, 0.7, ffbm(worldPosition.xz * 0.9 + uT * 0.3));
+      outgoingLight = mix(outgoingLight, (vec3(0.78, 0.82, 0.86) * max(0.03, sunColor.g * 0.6)) + diffuseLight * 0.0, cap * 0.8);
+      outgoingLight = min(outgoingLight, vec3(60.0));
+      gl_FragColor = vec4( outgoingLight, alpha );`);
+}
+
+/* ================= flares ================= */
+const FLARE_KINDS = [
+  { name: 'red', col: new THREE.Color(1.0, 0.16, 0.08), w: 6 }, { name: 'white', col: new THREE.Color(1.0, 0.92, 0.82), w: 2 },
+  { name: 'magenta', col: new THREE.Color(1.0, 0.18, 0.55), w: 1.4 }, { name: 'green', col: new THREE.Color(0.3, 1.0, 0.45), w: 1 },
+];
+const spriteTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.08, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+const smokeTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const r = mulberry(7);
+  for (let i = 0; i < 40; i++) { const x = 64 + (r() - 0.5) * 50, y = 64 + (r() - 0.5) * 50, rr = 14 + r() * 26, gr = g.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }
+  return new THREE.CanvasTexture(c); })();
+const MAXF = 6, flareObjs = [];
+for (let i = 0; i < MAXF; i++) {
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
+  const trail = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 6, 1, true), new THREE.MeshBasicMaterial({ color: 0xffe0c0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const smoke = []; for (let k = 0; k < 14; k++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x888888, transparent: true, depthWrite: false, opacity: 0 })); scene.add(s); smoke.push(s); }
+  scene.add(core, halo, trail); flareObjs.push({ core, halo, trail, smoke });
+}
+// deterministic schedule: flares are events in piece time. Night only; they come in volleys.
+const FL = []; let flNext = 0, flSeq = 0;
+function isNight(t) { return sunState(hourAt(t)).el < -4; }
+function planFlares(upto) {
+  while (flNext < upto) {
+    const r = mulberry(SEED + 977 * (flSeq + 1)); flSeq++;
+    const gap = (-Math.log(1 - r() * 0.98) * 3600 / FLARES_PER_HOUR) * (0.6 + r() * 0.8);
+    const t0 = flNext + gap / RATE; flNext = t0;
+    if (!isNight(t0)) continue;
+    const volley = r() < 0.3 ? 2 + Math.floor(r() * 3) : 1, bx = (r() - 0.5) * 1400, bz = -300 - r() * 900;
+    for (let v = 0; v < volley; v++) { let s = 0, pick = r() * 10.4, kind = FLARE_KINDS[0]; for (const k of FLARE_KINDS) { s += k.w; if (pick <= s) { kind = k; break; } }
+      FL.push({ t0: t0 + v * (1.5 + r() * 5), x: bx + (r() - 0.5) * 160, z: bz + (r() - 0.5) * 120, apex: 220 + r() * 160, rise: 3.6 + r() * 1.2, burn: 38 + r() * 22,
+        drift: V3(2.5 + r() * 2, 0, (r() - 0.5) * 1.5), col: kind.col, name: kind.name, seed: Math.floor(r() * 1e6) }); }
+  }
+}
+function flareAt(F, t) {   // → { pos, I (0..1+), phase }
+  const a = t - F.t0; if (a < 0) return null;
+  if (a < F.rise) { const k = a / F.rise, y = F.apex * (1 - (1 - k) * (1 - k)); return { pos: V3(F.x, 2 + y, F.z), I: 0.18, phase: 'rise', k }; }
+  const b = a - F.rise; if (b > F.burn + 4) return null;
+  const ign = smooth(b / 1.2), fade = 1 - smooth((b - F.burn) / 4), fl = 0.82 + 0.18 * vn1(F.seed + b * 9) * (0.7 + 0.3 * vn1(F.seed + b * 31));
+  const sway = Math.sin(b * 0.7 + F.seed) * 3;
+  return { pos: V3(F.x + F.drift.x * b + sway, F.apex + 2 - b * 2.3, F.z + F.drift.z * b), I: ign * fade * fl * (1 - 0.35 * smooth(b / F.burn)), phase: 'burn', b };
+}
+// manual fire (key f) for live use
+function fireNow() { const r = mulberry(Date.now() & 0xffff); const kind = FLARE_KINDS[Math.floor(r() * 4)];
+  FL.push({ t0: T, x: (r() - 0.5) * 800, z: -300 - r() * 600, apex: 240 + r() * 120, rise: 4, burn: 45, drift: V3(3, 0, 0), col: kind.col, name: kind.name, seed: Math.floor(r() * 1e6) }); }
+
+/* ================= lens: dust and moisture on the glass catch the bright sources (no ghost streaks) ================= */
+const dustTex = (() => { const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'), r = mulberry(SEED + 3); g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 900; i++) { const x = r() * S, y = r() * S, rr = 1 + Math.pow(r(), 4) * 18, a = 0.08 + r() * 0.3, gr = g.createRadialGradient(x, y, 0, x, y, rr);
+    gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(0.7, `rgba(255,255,255,${a * 0.5})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fill(); }
+  for (let i = 0; i < 26; i++) { const x = r() * S, y = r() * S; g.strokeStyle = `rgba(255,255,255,${0.02 + r() * 0.04})`; g.lineWidth = 6 + r() * 30; g.beginPath(); g.moveTo(x, y); g.bezierCurveTo(x + (r() - 0.5) * 300, y + (r() - 0.5) * 300, x + (r() - 0.5) * 300, y + (r() - 0.5) * 300, x + (r() - 0.5) * 400, y + (r() - 0.5) * 400); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); return t; })();
+
+/* ================= post ================= */
+const composer = new EffectComposer(renderer); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+const bokeh = new BokehPass(scene, camera, { focus: 60, aperture: 0.0008, maxblur: 0.006 }); composer.addPass(bokeh);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.35, 0.55, 1.4); composer.addPass(bloom);
+const lens = new ShaderPass({ uniforms: { tDiffuse: { value: null }, tDust: { value: dustTex }, uL: { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 0)) }, uLC: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) }, uAsp: { value: 1.78 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse, tDust; uniform vec3 uL[8]; uniform vec3 uLC[8]; uniform float uAsp; varying vec2 vUv;
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); float dust = texture2D(tDust, vUv * vec2(uAsp, 1.0) * 0.6).r; vec3 add = vec3(0.0);
+      for (int i = 0; i < 8; i++) { vec2 d = (vUv - uL[i].xy) * vec2(uAsp, 1.0); float r = length(d); add += uLC[i] * (dust * 0.45 * exp(-r * 3.5) + 0.006 * exp(-r * 8.0)); }
+      c.rgb += add; gl_FragColor = c; }` });
+composer.addPass(lens);
+composer.addPass(new OutputPass());
+const grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uTime: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + uTime*7.13)*43758.5453); }
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 q = vUv-0.5; c.rgb *= 1.0 - 0.3*dot(q,q)*2.2; c.rgb += (h(vUv*vec2(1920.0,1080.0)) - 0.5) * 0.03; gl_FragColor = c; }` });
+composer.addPass(grade);
+if (QUAL > 0) composer.addPass(new SMAAPass(innerWidth, innerHeight));
+
+/* ================= env light for reflections ================= */
+const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(), envSky = new Sky(); skyFix(envSky.material); envSky.scale.setScalar(9000); envScene.add(envSky); let envKey = '', envRT = null;
+
+/* ================= camera: a slow drift at water level, bobbing with the swell ================= */
+function waveHeightCPU(x, z, t, A) {   // same sum as the shader (vertical part only), for the camera bob
+  const W = [[0.1, 1, 62, 0.62], [-0.35, 1, 31, 0.34], [0.5, 1, 17, 0.2], [-0.8, 1, 9.4, 0.12]]; let y = 0;
+  for (const [dx, dz, L, a] of W) { const l = Math.hypot(dx, dz), k = TAU / L, c = Math.sqrt(9.8 / k); y += a * A * Math.sin(k * ((dx * x + dz * z) / l - c * t)); } return y; }
+function seaStateAt(t) { const s = Q.has('sea') ? num('sea', 0.5) : 0.35 + 0.5 * vn1(t * RATE / 2400 + 11); return s; }
+
+/* ================= frame ================= */
+const STATE = { hour: 0, sun: null, moon: null, sea: 0, flares: [], focus: 60 };
+const tmpV = new THREE.Vector3();
+function render(t) {
+  T = t; planFlares(t + 120);
+  const H = hourAt(t), S = sunState(H), M = moonState(H), sea_s = seaStateAt(t);
+  const day = smooth((S.el + 4) / 14), night = 1 - smooth((S.el + 10) / 10), warm = 1 - smooth((S.el - 2) / 24);
+  // sky
+  SU.sunPosition.value.copy(S.dir); SU.turbidity.value = lerp(2.2, 5, warm * day); SU.rayleigh.value = lerp(1.2, 2.8, warm); SU.mieCoefficient.value = 0.004;
+  sky.visible = night < 0.99;
+  const sc = new THREE.Color().setRGB(1, lerp(0.96, 0.6, warm), lerp(0.92, 0.36, warm));
+  cloudMat.uniforms.uSun.value.copy(S.dir); cloudMat.uniforms.uTime.value = t; cloudMat.uniforms.uCover.value = 0.3 + 0.3 * vn1(t * RATE / 1800 + 4);
+  cloudMat.uniforms.uSunCol.value.setRGB(lerp(0.05, sc.r * 1.3, day), lerp(0.05, sc.g * 1.25, day), lerp(0.08, sc.b * 1.2, day));
+  cloudMat.uniforms.uAmb.value.setRGB(lerp(0.02, 0.5, day) + warm * day * 0.2, lerp(0.025, 0.54, day) + warm * day * 0.05, lerp(0.045, 0.62, day));
+  starMat.uniforms.uA.value = night * (1 - 0.6 * cloudMat.uniforms.uCover.value);
+  moon.position.copy(M.dir).multiplyScalar(8000); moon.visible = M.el > -2; moonMat.uniforms.uSunDir.value.copy(S.dir); moonMat.uniforms.uA.value = 1 - day * 0.7;
+  // sea
+  const su = sea.material.uniforms; su.uT.value = t; su.time.value = t * 0.45; su.uAmp.value = lerp(0.25, 1.35, sea_s); su.uCap.value = smooth((sea_s - 0.55) / 0.35);
+  su.distortionScale.value = lerp(1.2, 4.5, sea_s); su.sunDirection.value.copy(S.el > -3 ? S.dir : M.dir);
+  su.sunColor.value.setRGB(sc.r * day, sc.g * day, sc.b * day);
+  su.waterColor.value.setRGB(lerp(0.003, 0.03, day), lerp(0.01, 0.13, day), lerp(0.02, 0.17, day));
+  su.uRf0.value = lerp(0.3, 0.05, day); su.uDay.value = day;
+  const moonUp = smooth(M.el / 6) * night; su.uMoonDir.value.copy(M.dir); su.uMoonCol.value.setRGB(0.55 * moonUp, 0.6 * moonUp, 0.7 * moonUp);
+  renderer.toneMappingExposure = lerp(0.8, 0.36, day);
+  // env map for any reflective sprites/objects (and a sky-matched fog of light)
+  const key = S.dir.toArray().map(v => v.toFixed(2)).join(); if (key !== envKey) { envKey = key; for (const k of ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG']) envSky.material.uniforms[k].value = SU[k].value; envSky.material.uniforms.sunPosition.value.copy(S.dir); const o = envRT; envRT = pmrem.fromScene(envScene, 0, 0.1, 20000); scene.environment = envRT.texture; if (o) o.dispose(); }
+  // camera
+  const A = lerp(0.25, 1.35, sea_s), cx = 12 * Math.sin(t * RATE * 0.0021), cz = 8 * Math.cos(t * RATE * 0.0017);
+  const hgt = 1.6 + 2.2 * smooth(vn1(t * RATE / 900 + 2)) , bob = waveHeightCPU(cx, cz, t, A) * 0.85;
+  camera.position.set(cx, hgt + bob, cz);
+  const faceDir = Q.get('face') === 'moon' ? M.dir : Q.get('face') === 'sun' ? S.dir : null;
+  const yaw = (faceDir ? Math.atan2(-faceDir.x, -faceDir.z) : Q.has('yaw') ? num('yaw', 0) : t * RATE * TAU / 2700) + 0.22 * Math.sin(t * RATE * 0.0013 + 1) + 0.08 * Math.sin(t * 0.05), pitch = -0.035 - 0.03 * smooth(hgt / 4) + 0.01 * Math.sin(t * 0.37);
+  const roll = 0.035 * Math.sin(t * 0.61) * sea_s;
+  // flares
+  const live = []; for (const F of FL) { const s = flareAt(F, t); if (s) live.push({ F, s }); if (live.length >= MAXF) break; }
+  // the camera drifts toward whatever is burning: framing the flare and its path on the water together
+  let wsum = 0, fy = 0, fp = 0; for (const L of live) { if (L.s.phase !== 'burn' || Q.has('yaw') || Q.has('face')) continue; const w = L.s.I; const dx = L.s.pos.x - camera.position.x, dz = L.s.pos.z - camera.position.z, dh = Math.hypot(dx, dz);
+    let ya = Math.atan2(-dx, -dz); const base = yaw; while (ya - base > Math.PI) ya -= TAU; while (ya - base < -Math.PI) ya += TAU;
+    fy += w * ya; fp += w * Math.atan2(L.s.pos.y * 0.42 - camera.position.y, dh); wsum += w; }
+  let yawF = yaw, pitchF = pitch; if (wsum > 0) { const k = smooth(wsum / 0.8) * 0.85; yawF = lerp(yaw, fy / wsum, k); pitchF = lerp(pitch, fp / wsum, k * 0.9); }
+  camera.rotation.set(0, 0, 0); camera.rotateY(yawF); camera.rotateX(pitchF); camera.rotateZ(roll);
+  const lensL = [];
+  flareObjs.forEach((o, i) => { const L = live[i]; const vis = !!L; o.core.visible = o.halo.visible = vis; o.trail.visible = vis && L.s.phase === 'rise';
+    su.uF.value[i].set(0, -1e5, 0); su.uFC.value[i].setRGB(0, 0, 0); cloudMat.uniforms.uFC.value[i].setRGB(0, 0, 0);
+    o.smoke.forEach(s => s.material.opacity = 0);
+    if (!vis) return; const { F, s } = L, I = s.I, c = F.col;
+    o.core.position.copy(s.pos); o.halo.position.copy(s.pos); const dist = camera.position.distanceTo(s.pos);
+    o.core.scale.setScalar(dist * 0.009 * (0.8 + I)); o.core.material.color.setRGB(lerp(1, c.r, 0.35) * (1 + 5 * I), lerp(1, c.g, 0.35) * (1 + 5 * I), lerp(1, c.b, 0.35) * (1 + 5 * I));
+    o.halo.scale.setScalar(dist * 0.02 * I + 1); o.halo.material.color.setRGB(c.r * 0.35 * I, c.g * 0.35 * I, c.b * 0.35 * I);
+    if (s.phase === 'rise') { const base = V3(F.x, 2, F.z), len = s.pos.y - 2; o.trail.position.set(F.x, 2 + len / 2, F.z); o.trail.scale.set(0.6, Math.max(1, len), 0.6); o.trail.material.opacity = 0.5 * (1 - s.k * 0.4); }
+    const Ieff = I * (s.phase === 'burn' ? 1 : 0.12) * 1.6;
+    su.uF.value[i].copy(s.pos); su.uFC.value[i].setRGB(c.r * Ieff, c.g * Ieff, c.b * Ieff);
+    tmpV.copy(s.pos).sub(camera.position).normalize(); cloudMat.uniforms.uF.value[i].copy(tmpV); cloudMat.uniforms.uFC.value[i].setRGB(c.r * I * 0.6, c.g * I * 0.6, c.b * I * 0.6);
+    // smoke: a hanging column above the flare, lit from below
+    if (s.phase === 'burn') o.smoke.forEach((sm, k) => { const age = s.b - k * 2.6; if (age < 0) return; const p0 = flareAt(F, t - k * 2.6); if (!p0) return;
+      sm.position.copy(p0.pos).add(V3(k * 0.8, 6 + k * 1.5, 0)); sm.scale.setScalar(10 + k * 4); const lit = I * Math.exp(-k * 0.25);
+      sm.material.color.setRGB(0.05 + c.r * lit * 1.5, 0.05 + c.g * lit * 1.5, 0.05 + c.b * lit * 1.5); sm.material.opacity = 0.5 * Math.exp(-k * 0.12) * smooth(age / 2); });
+    const sp = s.pos.clone().project(camera); if (sp.z < 1 && Math.abs(sp.x) < 1.6 && Math.abs(sp.y) < 1.6) lensL.push([sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5, c, I * (s.phase === 'burn' ? 0.5 : 0.08)]);
+  });
+  // lens: sun and moon also catch the dust
+  { const sp = S.dir.clone().multiplyScalar(8000).add(camera.position).project(camera); if (S.el > -1 && sp.z < 1) lensL.push([sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5, sc, 0.35 * smooth((S.el + 1) / 4) * (0.4 + 0.6 * warm)]); }
+  { const mp = moon.position.clone().project(camera); if (moon.visible && mp.z < 1) lensL.push([mp.x * 0.5 + 0.5, mp.y * 0.5 + 0.5, new THREE.Color(0.7, 0.75, 0.85), 0.05 * night]); }
+  for (let i = 0; i < 8; i++) { const L = lensL[i]; if (L) { lens.uniforms.uL.value[i].set(L[0], L[1], 0); lens.uniforms.uLC.value[i].setRGB(L[2].r * L[3], L[2].g * L[3], L[2].b * L[3]); } else lens.uniforms.uLC.value[i].setRGB(0, 0, 0); }
+  lens.uniforms.uAsp.value = camera.aspect;
+  // focus: slow racks between near water and far
+  const rack = smooth(vn1(t * RATE / 70 + 5)); const focus = lerp(6, 400, Math.pow(rack, 0.6)); STATE.focus = focus;
+  bokeh.uniforms.focus.value = focus; bokeh.uniforms.aperture.value = 0.00012 + 0.0005 * (1 - rack); bokeh.uniforms.maxblur.value = 0.006; bokeh.enabled = QUAL > 0;
+  bloom.strength = lerp(0.2, 0.32, night); grade.uniforms.uTime.value = t;
+  composer.render();
+  Object.assign(STATE, { hour: H, sun: S, moon: M, sea: sea_s, flares: live.map(l => l.F.name + (l.s.phase === 'rise' ? ' (rising)' : '')), day, night });
+}
+
+/* ================= sound: sea bed, drone, flares ================= */
+const AU = { ctx: null, g: null, sched: 0 };
+function makeNoise(ctx, secs) { const n = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, n, ctx.sampleRate), r = mulberry(SEED + 41);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let l = 0; for (let i = 0; i < n; i++) { l = l * 0.996 + (r() * 2 - 1) * 0.06; d[i] = l * 0.7; }
+    const f = Math.floor(ctx.sampleRate * 0.5); for (let i = 0; i < f; i++) { const k = i / f; d[n - f + i] = d[n - f + i] * (1 - k) + d[i] * k; } } return b; }
+function buildAudio(ctx) {
+  const out = ctx.createGain(); out.gain.value = 0; out.connect(ctx.destination);
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 3; comp.connect(out);
+  const top = ctx.createBiquadFilter(); top.type = 'lowpass'; top.frequency.value = 2400; top.connect(comp);
+  const verbIR = (() => { const len = Math.floor(ctx.sampleRate * 6), b = ctx.createBuffer(2, len, ctx.sampleRate), r = mulberry(5); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < len; i++) { lp = lp * 0.8 + (r() * 2 - 1) * 0.2; d[i] = lp * Math.pow(1 - i / len, 2.4); } } return b; })();
+  const verb = ctx.createConvolver(); verb.buffer = verbIR; const vf = ctx.createBiquadFilter(); vf.type = 'lowpass'; vf.frequency.value = 900; const vg = ctx.createGain(); vg.gain.value = 0.45; verb.connect(vf); vf.connect(vg); vg.connect(top);
+  // sea bed: brown noise swelling with the swell period
+  const sea = ctx.createBufferSource(); sea.buffer = makeNoise(ctx, 21); sea.loop = true; const sf = ctx.createBiquadFilter(); sf.type = 'lowpass'; sf.frequency.value = 500; const sg = ctx.createGain(); sg.gain.value = 0.4;
+  sea.connect(sf); sf.connect(sg); sg.connect(top); sg.connect(verb); sea.start();
+  // drone: a low fifth whose colour follows the sky
+  const dg = ctx.createGain(); dg.gain.value = 0.1; const df = ctx.createBiquadFilter(); df.type = 'lowpass'; df.frequency.value = 300; df.connect(dg); dg.connect(top); dg.connect(verb);
+  const osc = [[49, "sine", 0.3], [73.4, 'sine', 0.3], [98, 'triangle', 0.18], [146.8, 'sine', 0.07]].map(([f, ty, a]) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = ty; o.frequency.value = f; g.gain.value = a; o.connect(g); g.connect(df); o.start(); return o; });
+  return { out, top, verb, sea, sf, sg, dg, df, osc };
+}
+function scheduleFlareSound(ctx, g, F, when) {   // launch thunk, rising hiss, ignition boom, burning crackle (all low)
+  const t0 = when; const nb = ctx.createBufferSource(); nb.buffer = g.sea.buffer; nb.loop = true;
+  const thump = ctx.createOscillator(), tg = ctx.createGain(); thump.frequency.setValueAtTime(90, t0); thump.frequency.exponentialRampToValueAtTime(38, t0 + 0.4);
+  tg.gain.setValueAtTime(0, t0); tg.gain.linearRampToValueAtTime(0.35, t0 + 0.01); tg.gain.exponentialRampToValueAtTime(0.001, t0 + 1.2); thump.connect(tg); tg.connect(g.top); tg.connect(g.verb); thump.start(t0); thump.stop(t0 + 1.3);
+  const hf = ctx.createBiquadFilter(); hf.type = 'bandpass'; hf.Q.value = 2; hf.frequency.setValueAtTime(300, t0); hf.frequency.exponentialRampToValueAtTime(900, t0 + F.rise);
+  const hg = ctx.createGain(); hg.gain.setValueAtTime(0, t0); hg.gain.linearRampToValueAtTime(0.12, t0 + 0.3); hg.gain.linearRampToValueAtTime(0, t0 + F.rise);
+  const ig = ctx.createOscillator(), igg = ctx.createGain(), ti = t0 + F.rise; ig.frequency.setValueAtTime(60, ti); ig.frequency.exponentialRampToValueAtTime(30, ti + 1.5);
+  igg.gain.setValueAtTime(0, ti); igg.gain.linearRampToValueAtTime(0.25, ti + 0.05); igg.gain.exponentialRampToValueAtTime(0.001, ti + 3); ig.connect(igg); igg.connect(g.top); igg.connect(g.verb); ig.start(ti); ig.stop(ti + 3.2);
+  const bf = ctx.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 420; bf.Q.value = 0.8; const bg = ctx.createGain(); bg.gain.setValueAtTime(0, ti); bg.gain.linearRampToValueAtTime(0.05, ti + 1.5);
+  bg.gain.setValueAtTime(0.05, ti + F.burn); bg.gain.linearRampToValueAtTime(0, ti + F.burn + 4); const pan = ctx.createStereoPanner(); pan.pan.value = clamp(F.x / 700, -0.9, 0.9);
+  nb.connect(hf); hf.connect(hg); hg.connect(pan); nb.connect(bf); bf.connect(bg); bg.connect(pan); pan.connect(g.top); pan.connect(g.verb); nb.start(t0, (F.seed % 17)); nb.stop(ti + F.burn + 4.5);
+}
+function audioTick(tNow, tAudio) {   // tNow: piece time; tAudio: ctx time for tNow
+  const ctx = AU.ctx, g = AU.g; if (!ctx) return;
+  const S = sunState(hourAt(tNow)), day = smooth((S.el + 4) / 14), sea_s = seaStateAt(tNow), sw = 0.5 + 0.5 * Math.sin(tNow * TAU / 11);
+  g.sg.gain.setTargetAtTime(lerp(0.18, 0.55, sea_s) * (0.55 + 0.45 * sw), tAudio, 0.6); g.sf.frequency.setTargetAtTime(lerp(280, 900, sea_s) * (0.7 + 0.5 * sw), tAudio, 0.6);
+  g.df.frequency.setTargetAtTime(lerp(160, 520, day), tAudio, 4); g.dg.gain.setTargetAtTime(lerp(0.12, 0.07, day), tAudio, 4);
+  g.osc[1].frequency.setTargetAtTime(day > 0.5 ? 73.4 : 69.3, tAudio, 8);   // the fifth sinks a semitone at night
+  planFlares(tNow + 10); for (const F of FL) if (!F.heard && F.t0 >= tNow - 0.05 && F.t0 < tNow + 1.0) { F.heard = true; scheduleFlareSound(ctx, g, F, tAudio + (F.t0 - tNow)); }
+}
+async function renderAudioOffline(t0, secs) {   // capture: sound for [t0, t0+secs], sample-locked to render(t)
+  const ctx = new OfflineAudioContext(2, Math.ceil(secs * 48000), 48000); AU.ctx = ctx; AU.g = buildAudio(ctx); AU.g.out.gain.setValueAtTime(0.9, 0);
+  for (const F of FL) F.heard = false; for (let t = 0; t < secs; t += 0.25) { audioTick(t0 + t, t); }
+  const buf = await ctx.startRendering(), n = buf.length, L = buf.getChannelData(0), R = buf.getChannelData(1), ab = new ArrayBuffer(44 + n * 4), d = new DataView(ab);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); d.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 2, true); d.setUint32(24, 48000, true); d.setUint32(28, 192000, true); d.setUint16(32, 4, true); d.setUint16(34, 16, true); w(36, 'data'); d.setUint32(40, n * 4, true);
+  for (let i = 0; i < n; i++) { d.setInt16(44 + i * 4, clamp(L[i], -1, 1) * 32767, true); d.setInt16(46 + i * 4, clamp(R[i], -1, 1) * 32767, true); }
+  const u = new Uint8Array(ab); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s);
+}
+
+/* ================= info box ================= */
+const infoEl = document.getElementById('info'); let INFO = Q.get('info') !== '0';
+const hhmm = H => String(Math.floor(H)).padStart(2, '0') + ':' + String(Math.floor(fract(H) * 60)).padStart(2, '0');
+function renderInfo() { infoEl.style.display = INFO ? 'block' : 'none'; if (!INFO) return; const S = STATE;
+  const phase = S.sun.el > 12 ? 'day' : S.sun.el > -1 ? (S.hour < 12 ? 'sunrise' : 'dusk') : S.sun.el > -10 ? 'twilight' : 'night';
+  infoEl.innerHTML = `<b>MZTV · BIT FIELD 022 · WATER STUDIES</b>
+BALTIMORE ${hhmm(S.hour)} · ${phase} · sun ${S.sun.el.toFixed(0)}° · moon ${S.moon.el.toFixed(0)}°
+sea state ${S.sea.toFixed(2)} · focus ${S.focus.toFixed(0)} m
+flares ${S.flares.length ? S.flares.join(', ') : '—'}
+<b>what controls what</b>
+clock → sun + moon → the glitter path, sky, drone colour
+sea state → swell height, whitecaps, sea-bed level
+each flare → its own light path on the water, cloud glow,
+             a thump when fired, a hiss while it burns`; }
+addEventListener('keydown', e => { if (e.key === 'i') { INFO = !INFO; renderInfo(); } if (e.key === 'f') fireNow(); });
+
+/* ================= boot ================= */
+function onResize() { renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', () => { if (!CAPTURE) onResize(); });
+await new Promise(r => { THREE.DefaultLoadingManager.onLoad = r; setTimeout(r, 3000); });
+render(0); renderInfo();
+window.MZ = { ready: true, seek(t) { render(t); renderInfo(); }, get S() { return STATE; }, audioWav: renderAudioOffline, flares: () => { planFlares(T + 3600); return FL.map(f => ({ t0: f.t0, name: f.name })); } };
+if (!CAPTURE) {
+  let last = performance.now(), infoAcc = 0; const loop = () => { const n = performance.now(); T += (n - last) / 1000; last = n; render(T); infoAcc += 1; if (infoAcc > 15) { infoAcc = 0; renderInfo(); }
+    if (AU.ctx && AU.ctx.currentTime > AU.sched - 0.5) { audioTick(T, AU.ctx.currentTime); AU.sched = AU.ctx.currentTime + 0.25; } requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  const startAudio = async () => { if (MUTE || AU.ctx) return; AU.ctx = new AudioContext(); AU.g = buildAudio(AU.ctx); AU.g.out.gain.setTargetAtTime(0.9, AU.ctx.currentTime, 2); for (const F of FL) F.heard = F.t0 < T; };
+  const go = document.getElementById('go');
+  if (!MUTE) { startAudio(); setTimeout(() => { if (!AU.ctx || AU.ctx.state !== 'running') { go.hidden = false; go.onclick = async () => { go.hidden = true; await AU.ctx.resume(); }; } }, 600); }
+}
+</script>
+</body>
+</html>
