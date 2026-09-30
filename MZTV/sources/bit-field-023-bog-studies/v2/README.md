@@ -24,7 +24,7 @@ Standing in the bog above Inverin, a sister piece to WATER STUDIES. The only sub
 
 If the weather request fails, the piece keeps the last reading (cached up to 3 h) or falls back to typical values, and the info box says so.
 
-- **Stream (latest):** https://www.matchzimmerman.com/MZTV/sources/bit-field-023-bog-studies/
+- **This version (v2):** https://www.matchzimmerman.com/MZTV/sources/bit-field-023-bog-studies/v2/
 
 ## Versions
 Each iteration lives in its own folder and is never overwritten. The root URL always serves the latest version.
