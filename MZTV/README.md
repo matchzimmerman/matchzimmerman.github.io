@@ -137,6 +137,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-022-water-studies/`
 
+### BIT FIELD 023 — BOG STUDIES · INVERIN
+Standing in the bog above Inverin, a sister piece to WATER STUDIES: wind moving through purple moor grass, heather, a rhododendron and bog pools. Gusts are one field carried across the bog at the live Inverin wind speed. Every blade, leaf, pool and sound reads that same field, so a gust is heard as it passes you. Live wind, gusts, cloud (with moving cloud shadows), rain, humidity (mist in the hollows) and visibility from Open-Meteo, the real sun and moon, and the date's colour. The grass keeps the lay of the last hours of wind as memory, and the stems sing in D Phrygian as the wind rises.
+
+Path:
+`sources/bit-field-023-bog-studies/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-023-bog-studies/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
