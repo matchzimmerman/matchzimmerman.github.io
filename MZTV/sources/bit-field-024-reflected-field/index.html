@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>MZTV · BIT FIELD 024 · REFLECTED FIELD</title>
+<style>
+  :root{--paper:#e9e2cf;--ink:#221f2b;--panel:rgba(233,226,207,.82)}
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--paper);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+  #field{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;cursor:crosshair;touch-action:none}
+  #hud{position:fixed;left:18px;top:16px;color:var(--ink);font-size:11px;line-height:1.45;letter-spacing:.055em;text-transform:uppercase;pointer-events:none;text-shadow:0 1px 0 rgba(255,255,255,.25)}
+  #hud b{font-weight:800}
+  #hud .dim{opacity:.6}
+  #status{position:fixed;right:18px;top:16px;max-width:min(390px,58vw);text-align:right;color:var(--ink);font-size:10px;line-height:1.45;letter-spacing:.05em;text-transform:uppercase;pointer-events:none}
+  #start{position:fixed;inset:0;display:grid;place-items:center;background:rgba(233,226,207,.22);backdrop-filter:blur(1.5px);-webkit-backdrop-filter:blur(1.5px);cursor:pointer}
+  #start[hidden]{display:none}
+  #start .card{border:2px solid var(--ink);padding:14px 18px 13px;background:rgba(233,226,207,.88);box-shadow:6px 6px 0 var(--ink);font-size:12px;line-height:1.45;letter-spacing:.08em;text-transform:uppercase;text-align:center}
+  #start small{display:block;margin-top:7px;font-size:9px;opacity:.62;letter-spacing:.05em}
+  #info{position:fixed;left:18px;bottom:17px;max-width:min(660px,80vw);padding:10px 12px;background:var(--panel);border-left:3px solid var(--ink);color:var(--ink);font-size:10px;line-height:1.45;letter-spacing:.025em;pointer-events:none}
+  #info[hidden]{display:none}
+  @media(max-width:700px){#hud{left:10px;top:10px;font-size:9px}#status{right:10px;top:10px;font-size:8px;max-width:50vw}#info{left:10px;bottom:10px;max-width:90vw;font-size:9px}}
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<div id="hud"><b>MZTV · BIT FIELD 024</b><br>REFLECTED FIELD<br><span class="dim">STUDY IN INFLUENCE / BOUNCED ENERGY</span></div>
+<div id="status"></div>
+<div id="info">A source enters the field. Every object alters the signal, then returns a changed version to the field. Light and sound use the same path. Move the pointer to reposition the listener. Click / SPACE injects energy. D toggles the direct source. I hides this text.</div>
+<div id="start"><div class="card">▶ ENTER REFLECTED FIELD<small>CLICK TO ENABLE THE SONIC FIELD</small></div></div>
+<script>
+(() => {
+'use strict';
+
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d', { alpha:false });
+const start = document.getElementById('start');
+const status = document.getElementById('status');
+const info = document.getElementById('info');
+
+const TAU = Math.PI*2;
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const mix=(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)];
+const mul=(a,b)=>[a[0]*b[0]/255,a[1]*b[1]/255,a[2]*b[2]/255];
+const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const fract=x=>x-Math.floor(x);
+let seed = 240930;
+function rand(){ seed|=0; seed=(seed+0x6D2B79F5)|0; let t=seed; t=Math.imul(t^(t>>>15),1|t); t^=t+Math.imul(t^(t>>>7),61|t); return ((t^(t>>>14))>>>0)/4294967296; }
+
+const palette = [
+  [246,69,115],   // hot pink
+  [255,126,40],   // orange
+  [255,221,41],   // acid yellow
+  [58,219,156],   // green
+  [34,190,238],   // cyan
+  [63,98,244],    // blue
+  [142,72,224],   // violet
+  [238,78,206]    // magenta
+];
+const PAPER=[233,226,207], INK=[34,31,43], WHITE=[255,251,238];
+
+let W=384,H=216,dpr=1;
+function resize(){
+  const ar=innerWidth/innerHeight;
+  if(ar>=16/9){ H=216; W=Math.round(H*ar); }
+  else { W=384; H=Math.round(W/ar); }
+  canvas.width=W; canvas.height=H;
+  canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px';
+}
+addEventListener('resize',resize); resize();
+
+const source={x:.5,y:.5,phase:0};
+const listener={x:.52,y:.74,tx:.52,ty:.74};
+let direct=true, showInfo=true, audioOn=false, ctxA=null, master=null, comp=null, noiseBuffer=null;
+
+const N=14;
+const nodes=[];
+for(let i=0;i<N;i++){
+  const a=(i/N)*TAU + rand()*.34;
+  const ring=i%3;
+  const rr=[.23,.34,.43][ring] + (rand()-.5)*.045;
+  const x=.5+Math.cos(a)*rr*(.95+.15*rand());
+  const y=.5+Math.sin(a)*rr*(.58+.14*rand());
+  const base=palette[(i*3 + (rand()*palette.length|0))%palette.length];
+  nodes.push({
+    id:i,x,y,base,
+    reflect:.42+rand()*.43,
+    rough:.1+rand()*.75,
+    absorb:.12+rand()*.66,
+    resonance:75*Math.pow(2,rand()*4.3),
+    q:1.8+rand()*10,
+    size:3.5+rand()*4.5,
+    energy:0,
+    memory:[0,0,0],
+    memoryW:0,
+    last:0,
+    neigh:[]
+  });
+}
+// Build a sparse geometric influence graph: nearest neighbors plus one long edge.
+for(const n of nodes){
+  const sorted=nodes.filter(m=>m!==n).sort((a,b)=>dist(n,a)-dist(n,b));
+  n.neigh=sorted.slice(0,3).map(m=>m.id);
+  const far=sorted.slice(Math.floor(sorted.length*.55));
+  const extra=far[(rand()*far.length)|0];
+  if(extra && !n.neigh.includes(extra.id)) n.neigh.push(extra.id);
+}
+
+function objectColor(n){
+  if(n.memoryW<.001) return mix(n.base,PAPER,.42);
+  const mem=n.memory.map(v=>v/Math.max(.0001,n.memoryW));
+  const stained=mix(n.base,mem,.58);
+  const glow=clamp(n.energy*.85);
+  return mix(stained,WHITE,glow*.24);
+}
+
+let pulses=[];
+let waveId=0;
+function chooseStart(){
+  let best=nodes[0],bd=1e9;
+  for(const n of nodes){const d=Math.hypot(n.x-source.x,n.y-source.y);if(d<bd){bd=d;best=n;}}
+  return best;
+}
+function nextNode(cur,prev){
+  const options=cur.neigh.filter(id=>id!==prev);
+  if(!options.length) return nodes[cur.neigh[0]];
+  // Bias toward nodes that have not lit recently, so the field keeps moving.
+  let sum=0, weighted=[];
+  for(const id of options){const n=nodes[id], w=.35+Math.max(0,3-(performance.now()/1000-n.last)); const inv=1/w; weighted.push([n,inv]); sum+=inv;}
+  let r=rand()*sum; for(const [n,w] of weighted){r-=w;if(r<=0)return n;} return weighted[0][0];
+}
+function spawnPulse(strength=1,manual=false){
+  const first=chooseStart();
+  let incoming=mix(WHITE,palette[(waveId*5)%palette.length],.32);
+  let e=.9*strength;
+  let prev=null,cur=first;
+  let t=performance.now()/1000 + .06;
+  const steps=manual?7:5+((rand()*4)|0);
+  const sx=source.x,sy=source.y;
+  // Source -> first object.
+  pulses.push({id:waveId,from:{x:sx,y:sy},to:cur,t0:t,t1:t+.24,energy:e,color:incoming,arrived:false,kind:'source'});
+  t+=.24;
+  for(let s=0;s<steps;s++){
+    // Material modifies what survives the encounter.
+    const colored=mul(incoming, mix(cur.base,WHITE,.24+cur.rough*.16));
+    incoming=mix(incoming,colored,.44+.28*cur.reflect);
+    e*=cur.reflect*(.82-.22*cur.absorb);
+    const nxt=nextNode(cur,prev?prev.id:-1);
+    const d=dist(cur,nxt);
+    const travel=.10+d*1.15; // visible propagation delay, analogous to acoustic path time.
+    pulses.push({id:waveId,from:cur,to:nxt,t0:t,t1:t+travel,energy:e,color:incoming,arrived:false,kind:'bounce',depth:s+1,mat:cur});
+    t+=travel;
+    prev=cur;cur=nxt;
+    if(e<.035) break;
+  }
+  waveId++;
+}
+
+function absorbInto(n,color,e,now,depth){
+  n.energy=Math.min(1.4,n.energy+e*1.05);
+  const w=e*(.35+n.absorb*.45);
+  n.memory[0]+=color[0]*w;n.memory[1]+=color[1]*w;n.memory[2]+=color[2]*w;n.memoryW+=w;
+  n.last=now;
+  if(audioOn) soundBounce(n,color,e,depth);
+}
+
+function initAudio(){
+  if(audioOn) return;
+  ctxA=new (window.AudioContext||window.webkitAudioContext)();
+  master=ctxA.createGain(); master.gain.value=.7;
+  comp=ctxA.createDynamicsCompressor();
+  comp.threshold.value=-24; comp.knee.value=18; comp.ratio.value=4; comp.attack.value=.018; comp.release.value=.35;
+  master.connect(comp).connect(ctxA.destination);
+  const len=Math.floor(ctxA.sampleRate*.35), buf=ctxA.createBuffer(1,len,ctxA.sampleRate), data=buf.getChannelData(0);
+  for(let i=0;i<len;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.4);
+  noiseBuffer=buf;
+  audioOn=true;
+  start.hidden=true;
+  spawnPulse(1.12,true);
+}
+
+function panFor(n){
+  const dx=(n.x-listener.x);
+  const dy=(n.y-listener.y);
+  const d=Math.hypot(dx,dy);
+  return {pan:clamp(dx/.48,-1,1), gain:1/(1+Math.pow(d*3.2,1.45))};
+}
+function hueMetric(c){return (c[0]*.19+c[1]*.33+c[2]*.48)/255;}
+function soundBounce(n,color,e,depth=0){
+  if(!ctxA||ctxA.state!=='running') return;
+  const now=ctxA.currentTime+.006;
+  const pos=panFor(n);
+  const life=.12 + n.rough*.28 + e*.18;
+  const gain=ctxA.createGain();
+  gain.gain.setValueAtTime(.0001,now);
+  gain.gain.exponentialRampToValueAtTime(Math.max(.0002,e*.085*pos.gain),now+.012);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+life);
+  const pan=ctxA.createStereoPanner(); pan.pan.value=pos.pan;
+  const filter=ctxA.createBiquadFilter(); filter.type='bandpass';
+  const chroma=.66+1.25*hueMetric(color);
+  filter.frequency.value=clamp(n.resonance*chroma,65,4200); filter.Q.value=n.q;
+  filter.connect(gain).connect(pan).connect(master);
+  // Resonant body.
+  const osc=ctxA.createOscillator();
+  osc.type=n.rough>.56?'triangle':'sine';
+  const octave=depth%3===2?.5:1;
+  osc.frequency.value=clamp(n.resonance*chroma*octave,48,1800);
+  osc.detune.value=(n.id%5-2)*3.2;
+  osc.connect(filter); osc.start(now); osc.stop(now+life+.03);
+  // Surface noise = roughness / diffusion.
+  if(n.rough>.18){
+    const ns=ctxA.createBufferSource(); ns.buffer=noiseBuffer;
+    const nf=ctxA.createBiquadFilter(); nf.type='lowpass'; nf.frequency.value=900+4800*(1-n.absorb);
+    const ng=ctxA.createGain(); ng.gain.value=e*.035*n.rough*pos.gain;
+    ns.connect(nf).connect(ng).connect(pan); ns.start(now); ns.stop(now+Math.min(.26,life));
+  }
+}
+function soundDirect(){
+  if(!audioOn||!direct) return;
+  const now=ctxA.currentTime+.005;
+  const o=ctxA.createOscillator(), g=ctxA.createGain(), f=ctxA.createBiquadFilter();
+  o.type='sine'; o.frequency.value=54+18*Math.sin(performance.now()/4300);
+  f.type='lowpass'; f.frequency.value=260;
+  g.gain.setValueAtTime(.0001,now); g.gain.exponentialRampToValueAtTime(.055,now+.02); g.gain.exponentialRampToValueAtTime(.0001,now+.25);
+  o.connect(f).connect(g).connect(master);o.start(now);o.stop(now+.28);
+}
+
+let nextAuto=0, last=performance.now()/1000;
+function tick(ts){
+  const now=ts/1000,dt=Math.min(.05,now-last);last=now;
+  source.phase+=dt;
+  source.x=.5 + Math.sin(source.phase*.23)*.31 + Math.sin(source.phase*.067)*.05;
+  source.y=.5 + Math.cos(source.phase*.31)*.22 + Math.sin(source.phase*.093)*.035;
+  listener.x=lerp(listener.x,listener.tx,1-Math.pow(.001,dt));
+  listener.y=lerp(listener.y,listener.ty,1-Math.pow(.001,dt));
+  for(const n of nodes){
+    n.energy*=Math.pow(.20,dt);
+    const loss=Math.pow(.985,dt*60);
+    n.memory[0]*=loss;n.memory[1]*=loss;n.memory[2]*=loss;n.memoryW*=loss;
+  }
+  if(now>nextAuto){ spawnPulse(.7+.35*rand()); soundDirect(); nextAuto=now+1.25+rand()*1.75; }
+  for(const p of pulses){
+    if(!p.arrived && now>=p.t1){
+      p.arrived=true;
+      if(p.to.id!=null) absorbInto(p.to,p.color,p.energy,now,p.depth||0);
+    }
+  }
+  pulses=pulses.filter(p=>now<p.t1+1.8);
+  draw(now);
+  requestAnimationFrame(tick);
+}
+
+function px(n){return n.x*W} function py(n){return n.y*H}
+function ditherRect(x,y,w,h,c1,c2,amount=.5){
+  const ix=x|0,iy=y|0,iw=Math.max(1,w|0),ih=Math.max(1,h|0);
+  for(let yy=iy;yy<iy+ih;yy+=2){for(let xx=ix;xx<ix+iw;xx+=2){ctx.fillStyle=((xx+yy*3)&3)<amount*4?c1:c2;ctx.fillRect(xx,yy,2,2)}}
+}
+function draw(now){
+  ctx.fillStyle=rgb(PAPER);ctx.fillRect(0,0,W,H);
+  // quantized shifting bands: the field itself is active, but does not define object color.
+  for(let y=0;y<H;y+=12){
+    const k=(Math.sin(now*.13+y*.12)+1)*.5;
+    const c=mix(PAPER,[220,213,198],.11*k);
+    ctx.fillStyle=rgb(c);ctx.fillRect(0,y,W,6);
+  }
+
+  // Influence graph: dormant edges.
+  ctx.lineWidth=1;ctx.globalAlpha=.15;ctx.strokeStyle=rgb(INK);
+  const seen=new Set();
+  for(const n of nodes) for(const id of n.neigh){const key=[n.id,id].sort().join('-');if(seen.has(key))continue;seen.add(key);const m=nodes[id];ctx.beginPath();ctx.moveTo(px(n),py(n));ctx.lineTo(px(m),py(m));ctx.stroke();}
+  ctx.globalAlpha=1;
+
+  // Active signal paths and moving quanta.
+  for(const p of pulses){
+    const t=clamp((now-p.t0)/(p.t1-p.t0));
+    const fade=clamp(1-(now-p.t1)/1.3);
+    const ax=p.from.x*W, ay=p.from.y*H, bx=p.to.x*W, by=p.to.y*H;
+    ctx.globalAlpha=.12+.43*fade*p.energy;
+    ctx.strokeStyle=rgb(p.color);ctx.lineWidth=1+2*p.energy;
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(lerp(ax,bx,t),lerp(ay,by,t));ctx.stroke();
+    if(now<=p.t1){
+      const qx=lerp(ax,bx,t),qy=lerp(ay,by,t),s=1+Math.round(3.8*p.energy);
+      ctx.globalAlpha=.9;ctx.fillStyle=rgb(p.color);ctx.fillRect((qx-s/2)|0,(qy-s/2)|0,s,s);
+    }
+  }
+  ctx.globalAlpha=1;
+
+  // Objects. Their visible state is base material + accumulated reflected color.
+  for(const n of nodes){
+    const x=px(n),y=py(n),s=n.size*(1+n.energy*.55);
+    const c=objectColor(n), shade=mix(c,INK,.20+n.absorb*.18);
+    const r=Math.max(3,Math.round(s));
+    // pixel/dither halo
+    if(n.energy>.025){
+      ctx.globalAlpha=clamp(n.energy*.30);
+      ditherRect(x-r*2.4,y-r*2.4,r*4.8,r*4.8,rgb(mix(c,WHITE,.35)),rgb(PAPER),.22+n.energy*.3);
+      ctx.globalAlpha=1;
+    }
+    // irregular 1-bit block form
+    ctx.fillStyle=rgb(shade);ctx.fillRect((x-r)|0,(y-r)|0,r*2,r*2);
+    ctx.fillStyle=rgb(c);ctx.fillRect((x-r+2)|0,(y-r+2)|0,Math.max(2,r*2-4),Math.max(2,r*2-4));
+    if(n.rough>.48){ctx.fillStyle=rgb(mix(c,WHITE,.52));ctx.fillRect((x-r+2)|0,(y-r+2)|0,2,Math.max(2,r*2-4));}
+    if(n.energy>.11){ctx.fillStyle=rgb(WHITE);const q=Math.max(1,Math.round(n.energy*3));ctx.fillRect((x-q/2)|0,(y-q/2)|0,q,q);}
+  }
+
+  // Moving source: small, visibly distinct but not dominant.
+  const sx=source.x*W,sy=source.y*H;
+  ctx.strokeStyle=rgb(INK);ctx.lineWidth=1;ctx.globalAlpha=.55;
+  ctx.strokeRect((sx-5)|0,(sy-5)|0,10,10);ctx.fillStyle=rgb(WHITE);ctx.fillRect((sx-2)|0,(sy-2)|0,4,4);
+  ctx.globalAlpha=1;
+
+  // Listener cursor.
+  const lx=listener.x*W,ly=listener.y*H;
+  ctx.strokeStyle=rgb(INK);ctx.globalAlpha=.75;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(lx-7,ly);ctx.lineTo(lx+7,ly);ctx.moveTo(lx,ly-7);ctx.lineTo(lx,ly+7);ctx.stroke();
+  ctx.globalAlpha=.28;ctx.beginPath();ctx.arc(lx,ly,12,0,TAU);ctx.stroke();ctx.globalAlpha=1;
+
+  const active=pulses.filter(p=>now<=p.t1).length;
+  const memory=nodes.reduce((s,n)=>s+n.memoryW,0);
+  status.innerHTML=`ENERGY PATHS ${active}<br>FIELD MEMORY ${memory.toFixed(2)}<br>DIRECT SOURCE ${direct?'ON':'OFF'}<br>AUDIO ${audioOn?'ON':'CLICK TO ENABLE'}`;
+}
+
+function pointer(e){
+  const r=canvas.getBoundingClientRect();
+  listener.tx=clamp((e.clientX-r.left)/r.width,.02,.98);
+  listener.ty=clamp((e.clientY-r.top)/r.height,.03,.97);
+}
+canvas.addEventListener('pointermove',pointer);
+canvas.addEventListener('pointerdown',e=>{pointer(e); if(!audioOn)initAudio(); spawnPulse(1.22,true); soundDirect();});
+start.addEventListener('click',()=>{initAudio();});
+addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault(); if(!audioOn)initAudio();spawnPulse(1.35,true);soundDirect();}
+  if(e.key==='d'||e.key==='D') direct=!direct;
+  if(e.key==='i'||e.key==='I'){showInfo=!showInfo;info.hidden=!showInfo;}
+  if(e.key==='a'||e.key==='A'){ if(!audioOn)initAudio(); else {audioOn=false;start.hidden=false;ctxA.suspend();} }
+});
+
+// Audio unlock/resume after browser interruptions.
+document.addEventListener('visibilitychange',()=>{if(audioOn&&ctxA&&document.visibilityState==='visible'&&ctxA.state==='suspended')ctxA.resume();});
+
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
