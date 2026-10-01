@@ -8,6 +8,14 @@ Canonical source library for MZTV broadcast experiments, OBS control scripts, li
 - `sources/` — browser-rendered visual sources for OBS
 - future directories may include `overlays/`, `idents/`, `archive/`, and `audio/`
 
+## Working lineages
+
+MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
+
+- **OBAS** — formal/generative visual systems: limited-bit rendering, rupture, topology, evolving organisms, recursive form and color behavior.
+- **FIELD ENGINE** — environments in which forces enter, propagate, interact, accumulate and alter materials, sound, light, memory and perception. A Field Engine piece may use OBAS as a rendering language without becoming an OBAS experiment conceptually. BIT FIELD 020–024 mark the emergence of this branch; their historical names are retained.
+- **LIVE CODE** — autonomous compositional systems in which the running logic/state is exposed as part of the work.
+
 ## Current sources
 
 ### BIT FIELD 001
@@ -145,6 +153,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-023-bog-studies/`
+
+### FIELD ENGINE 001 — RESIDUE
+A moving source presses into one heterogeneous material field. The same pressure event becomes motion, reflected color, sound and persistent memory. Repeated exposure leaves residue that slightly hardens traveled paths; rupture leaves scars that soften them. Because those material changes feed back into the propagation model, later forces encounter a field altered by its own history. Four-color quantization and Bayer dithering borrow an OBAS-adjacent rendering grammar while FIELD ENGINE remains the behavioral system underneath.
+
+Path:
+`sources/field-engine-001-residue/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/field-engine-001-residue/`
 
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
