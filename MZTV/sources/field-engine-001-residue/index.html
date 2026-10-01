@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>MZTV · FIELD ENGINE 001 · RESIDUE</title>
+<style>
+:root{--paper:#efe9d6;--ink:#17182c;--hot:#ef4f86;--cyan:#00c9ca;--panel:rgba(239,233,214,.88)}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--paper);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;color:var(--ink)}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;cursor:crosshair;touch-action:none}
+#hud{position:fixed;left:16px;top:14px;font-size:10px;line-height:1.45;letter-spacing:.06em;text-transform:uppercase;pointer-events:none;text-shadow:0 1px 0 rgba(255,255,255,.3)}
+#hud b{font-size:11px}
+#stats{position:fixed;right:16px;top:14px;text-align:right;font-size:9px;line-height:1.45;letter-spacing:.055em;text-transform:uppercase;pointer-events:none}
+#info{position:fixed;left:16px;bottom:14px;max-width:min(700px,82vw);padding:9px 11px;border-left:3px solid var(--ink);background:var(--panel);font-size:9px;line-height:1.5;letter-spacing:.02em;pointer-events:none}
+#gate{position:fixed;inset:0;display:grid;place-items:center;background:rgba(239,233,214,.18);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);cursor:pointer}
+#gate[hidden]{display:none}
+#gate div{padding:13px 16px 12px;background:rgba(239,233,214,.94);border:2px solid var(--ink);box-shadow:6px 6px 0 var(--ink);font-size:11px;line-height:1.5;letter-spacing:.08em;text-align:center;text-transform:uppercase}
+#gate small{display:block;margin-top:6px;font-size:8px;opacity:.65}
+@media(max-width:720px){#hud{left:9px;top:9px;font-size:8px}#stats{right:9px;top:9px;font-size:7px}#info{left:9px;bottom:9px;max-width:92vw;font-size:8px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><b>MZTV · FIELD ENGINE 001</b><br>RESIDUE<br><span style="opacity:.58">ONE FORCE / FOUR CONSEQUENCES</span></div>
+<div id="stats"></div>
+<div id="info">A moving source presses into one material field. The same pressure event becomes motion, reflected color, sound and memory. Repeated exposure changes the material, so later forces do not travel through the same field in the same way. Move the pointer to become the source. Click injects force. SPACE ruptures. I hides this text. R clears memory.</div>
+<div id="gate"><div>▶ ENTER FIELD ENGINE<small>CLICK ONCE TO ENABLE THE SONIC FIELD</small></div></div>
+<script>
+(() => {
+'use strict';
+
+const Q=new URLSearchParams(location.search);
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+const stats=document.getElementById('stats');
+const info=document.getElementById('info');
+const gate=document.getElementById('gate');
+const RATE=Math.max(.15,+(Q.get('rate')||1));
+const FRESH=Q.get('fresh')==='1';
+const AUDIO_PARAM=Q.get('audio')!=='0';
+const SHOW_INFO=Q.get('info')!=='0';
+const CAPTURE=Q.get('capture')==='1';
+let seed=((+(Q.get('seed')||24093001))>>>0)||24093001;
+const rand=()=>{seed|=0;seed=(seed+0x6D2B79F5)|0;let t=seed;t=Math.imul(t^(t>>>15),1|t);t^=t+Math.imul(t^(t>>>7),61|t);return((t^(t>>>14))>>>0)/4294967296};
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const TAU=Math.PI*2;
+const C={paper:[239,233,214],ink:[23,24,44],hot:[239,79,134],cyan:[0,201,202]};
+const css=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
+const mix=(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)];
+
+info.hidden=!SHOW_INFO;
+let W=384,H=216;
+function resize(){
+  const ar=innerWidth/innerHeight;
+  if(ar>=16/9){H=216;W=Math.round(H*ar)}else{W=384;H=Math.round(W/ar)}
+  canvas.width=W;canvas.height=H;canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';
+}
+addEventListener('resize',resize);resize();
+
+// FIELD ENGINE CORE -----------------------------------------------------------
+// Each cell owns material properties + dynamic pressure + persistent memory.
+// Pressure -> motion, reflected colour, sound excitation, material change.
+const GW=72,GH=42,N=GW*GH;
+const p=new Float32Array(N),v=new Float32Array(N),nextV=new Float32Array(N);
+const memory=new Float32Array(N),scar=new Float32Array(N);
+const stiffness=new Float32Array(N),absorb=new Float32Array(N),reflect=new Float32Array(N);
+const grain=new Float32Array(N);
+const idx=(x,y)=>y*GW+x;
+
+function makeMaterial(){
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=idx(x,y);
+    const n1=Math.sin(x*.31+y*.17)+Math.sin(x*.08-y*.37)*.55;
+    const n2=Math.sin(x*.73+y*.49)*.22;
+    stiffness[i]=clamp(.38+.18*n1+.12*n2+rand()*.08,.16,.86);
+    absorb[i]=clamp(.07+rand()*.2+(1-stiffness[i])*.17,.04,.43);
+    reflect[i]=clamp(.42+stiffness[i]*.46-rand()*.08,.28,.9);
+    grain[i]=rand();
+  }
+}
+makeMaterial();
+
+const STORE='mztv_field_engine_001_residue_v1';
+function loadMemory(){
+  if(FRESH)return;
+  try{
+    const s=JSON.parse(localStorage.getItem(STORE)||'null');
+    if(!s||!s.m||s.m.length!==N)return;
+    const age=Math.max(0,(Date.now()-s.t)/3600000);
+    const decay=Math.pow(.5,age/72); // 72 h half-life
+    for(let i=0;i<N;i++){memory[i]=clamp(s.m[i]*decay);scar[i]=clamp((s.s?.[i]||0)*Math.pow(.5,age/168));}
+  }catch{}
+}
+function saveMemory(){
+  try{localStorage.setItem(STORE,JSON.stringify({t:Date.now(),m:Array.from(memory,x=>+x.toFixed(3)),s:Array.from(scar,x=>+x.toFixed(3))}))}catch{}
+}
+loadMemory();
+setInterval(saveMemory,60000);
+addEventListener('beforeunload',saveMemory);
+
+let source={x:.5,y:.5,tx:.5,ty:.5,auto:true,phase:0,energy:0};
+let simT=0,last=performance.now()/1000;
+let ruptureFlash=0,ruptureCount=0,totalInjected=0;
+let nextPulse=.8;
+const events=[];
+
+function inject(nx,ny,amp=1.5,radius=2.3,kind='pulse'){
+  const cx=nx*(GW-1),cy=ny*(GH-1);
+  const r=Math.ceil(radius*2.2);
+  for(let yy=-r;yy<=r;yy++)for(let xx=-r;xx<=r;xx++){
+    const x=Math.round(cx+xx),y=Math.round(cy+yy);if(x<1||y<1||x>=GW-1||y>=GH-1)continue;
+    const d=Math.hypot(xx,yy),fall=Math.exp(-(d*d)/(radius*radius));
+    v[idx(x,y)]+=amp*fall;
+  }
+  totalInjected+=amp;
+  events.push({x:nx,y:ny,a:amp,t:simT,kind});
+  if(events.length>24)events.shift();
+}
+
+function rupture(nx=source.x,ny=source.y){
+  ruptureCount++;ruptureFlash=1;
+  inject(nx,ny,5.8,4.4,'rupture');
+  const cx=nx*(GW-1),cy=ny*(GH-1);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=idx(x,y),d=Math.hypot(x-cx,y-cy);
+    if(d<8){const f=1-d/8;scar[i]=clamp(scar[i]+f*.22);stiffness[i]=clamp(stiffness[i]*(1-f*.08),.12,.92)}
+  }
+  burstSound(nx,1);
+}
+
+function step(dt){
+  const sub=2,h=dt/sub;
+  for(let pass=0;pass<sub;pass++){
+    for(let y=1;y<GH-1;y++)for(let x=1;x<GW-1;x++){
+      const i=idx(x,y);
+      const lap=p[idx(x-1,y)]+p[idx(x+1,y)]+p[idx(x,y-1)]+p[idx(x,y+1)]-4*p[i];
+      // material memory slightly hardens well-used channels; scars soften/break them.
+      const k=stiffness[i]*(.84+memory[i]*.22)*(1-scar[i]*.33);
+      const damping=.982-absorb[i]*.065-memory[i]*.008;
+      nextV[i]=(v[i]+lap*k*18*h)*damping;
+    }
+    for(let y=1;y<GH-1;y++)for(let x=1;x<GW-1;x++){
+      const i=idx(x,y);v[i]=nextV[i];p[i]+=v[i]*h;
+      const e=Math.min(2.5,Math.abs(p[i])*.75+Math.abs(v[i])*.22);
+      if(e>.03){
+        memory[i]=clamp(memory[i]+e*.00055*h*60);
+        if(e>1.05)scar[i]=clamp(scar[i]+(e-1.05)*.00034*h*60);
+      }
+      p[i]*=.9991;
+      if(Math.abs(p[i])<.00001)p[i]=0;
+    }
+    simT+=h;
+  }
+}
+
+function fieldMetrics(){
+  let e=0,m=0,s=0,cx=0,cy=0,ws=0;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=idx(x,y),q=Math.abs(p[i]);e+=q;m+=memory[i];s+=scar[i];cx+=x*q;cy+=y*q;ws+=q;
+  }
+  return {energy:e/N,memory:m/N,scar:s/N,cx:ws?cx/ws/(GW-1):.5,cy:ws?cy/ws/(GH-1):.5};
+}
+
+// AUDIO ----------------------------------------------------------------------
+let ac=null,master=null,bed=null,bedGain=null,bedFilter=null,drone=[],audioOn=false,lastAudioEvent=0;
+function makeNoise(seconds=2){const b=ac.createBuffer(1,(ac.sampleRate*seconds)|0,ac.sampleRate),d=b.getChannelData(0);let lp=0;for(let i=0;i<d.length;i++){lp=lp*.985+(Math.random()*2-1)*.02;d[i]=lp*2.1}return b}
+function initAudio(){
+  if(audioOn||!AUDIO_PARAM)return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain();master.gain.value=.13;master.connect(ac.destination);
+  bed=ac.createBufferSource();bed.buffer=makeNoise(3);bed.loop=true;
+  bedFilter=ac.createBiquadFilter();bedFilter.type='lowpass';bedFilter.frequency.value=380;
+  bedGain=ac.createGain();bedGain.gain.value=.012;bed.connect(bedFilter).connect(bedGain).connect(master);bed.start();
+  [41.2,55,73.42].forEach((f,j)=>{const o=ac.createOscillator(),g=ac.createGain(),flt=ac.createBiquadFilter();o.type=j===1?'triangle':'sine';o.frequency.value=f;g.gain.value=[.02,.012,.008][j];flt.type='lowpass';flt.frequency.value=180;o.connect(flt).connect(g).connect(master);o.start();drone.push({o,g,flt,base:f})});
+  audioOn=true;gate.hidden=true;
+  ac.resume?.();
+}
+function resumeAudio(){if(!audioOn)initAudio();if(ac&&ac.state!=='running')ac.resume?.()}
+function exciteSound(nx,ny,amp=.5){
+  if(!audioOn||!ac||ac.state!=='running')return;
+  const now=ac.currentTime+.005;if(now-lastAudioEvent<.045)return;lastAudioEvent=now;
+  const gx=Math.round(nx*(GW-1)),gy=Math.round(ny*(GH-1)),i=idx(clamp(gx,0,GW-1),clamp(gy,0,GH-1));
+  const mat=stiffness[i],mem=memory[i],sc=scar[i];
+  const scale=[0,3,5,7,10];const degree=scale[(Math.floor((ny*.7+nx*.3)*9)+ruptureCount)%scale.length];
+  const freq=55*Math.pow(2,(degree+12*(mat>.64?1:0))/12)*(1+mem*.05-sc*.04);
+  const o=ac.createOscillator(),g=ac.createGain(),f=ac.createBiquadFilter(),pan=ac.createStereoPanner();
+  o.type=mat>.62?'triangle':'sine';o.frequency.value=freq;f.type='bandpass';f.frequency.value=clamp(freq*(1.5+reflect[i]*2.4),90,1600);f.Q.value=2+reflect[i]*7;
+  pan.pan.value=clamp((nx-.5)*1.7,-1,1);
+  const life=.16+absorb[i]*.3+mem*.2;
+  g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.012+amp*.045,now+.012);g.gain.exponentialRampToValueAtTime(.0001,now+life);
+  o.connect(f).connect(g).connect(pan).connect(master);o.start(now);o.stop(now+life+.03);
+}
+function burstSound(nx=.5,amp=1){
+  if(!audioOn||!ac||ac.state!=='running')return;
+  const now=ac.currentTime+.004,b=makeNoise(.5),s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain(),pan=ac.createStereoPanner();s.buffer=b;f.type='bandpass';f.frequency.value=150+600*nx;f.Q.value=.7;pan.pan.value=(nx-.5)*1.7;g.gain.setValueAtTime(.12*amp,now);g.gain.exponentialRampToValueAtTime(.0001,now+.34);s.connect(f).connect(g).connect(pan).connect(master);s.start(now);s.stop(now+.36)
+}
+function updateAudio(m){
+  if(!audioOn||!ac)return;const now=ac.currentTime;
+  bedGain.gain.setTargetAtTime(.008+clamp(m.energy*2.5,0,.07),now,.3);bedFilter.frequency.setTargetAtTime(180+clamp(m.energy*9000,0,720)+m.memory*220,now,.45);
+  drone.forEach((d,j)=>{d.g.gain.setTargetAtTime([.014,.009,.006][j]+m.memory*[.025,.018,.012][j],now,.8);d.flt.frequency.setTargetAtTime(135+m.energy*4200+m.memory*120,now,.6)});
+}
+
+// RENDER ---------------------------------------------------------------------
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+function quantColor(i,e){
+  const mem=memory[i],sc=scar[i],r=reflect[i];
+  if(sc>.48)return C.ink;
+  if(e>.66)return C.hot;
+  if(mem>.30+r*.12)return C.cyan;
+  return C.paper;
+}
+function draw(m){
+  ctx.fillStyle=css(C.paper);ctx.fillRect(0,0,W,H);
+  const cw=W/GW,ch=H/GH;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=idx(x,y),e=clamp(Math.abs(p[i])*.9+Math.abs(v[i])*.13);
+    let col=quantColor(i,e);
+    // memory becomes a dithered residue rather than a smooth alpha wash.
+    if(col===C.paper&&memory[i]>.035){
+      const threshold=BAYER[(x&3)+((y&3)<<2)]/15;
+      if(threshold<clamp(memory[i]*1.8))col=C.cyan;
+    }
+    if(col===C.paper&&e>.04){
+      const threshold=BAYER[((x+2)&3)+(((y+1)&3)<<2)]/15;
+      if(threshold<clamp(e*.95))col=C.hot;
+    }
+    ctx.fillStyle=css(col);ctx.fillRect(Math.floor(x*cw),Math.floor(y*ch),Math.ceil(cw)+1,Math.ceil(ch)+1);
+    if(scar[i]>.16&&((x+y)%2===0)){ctx.fillStyle=css(C.ink);ctx.fillRect(Math.floor(x*cw),Math.floor(y*ch),Math.max(1,Math.ceil(cw*.38)),Math.max(1,Math.ceil(ch*.38)))}
+  }
+  // current force center
+  const sx=source.x*W,sy=source.y*H;
+  ctx.strokeStyle=css(C.ink);ctx.lineWidth=1;ctx.globalAlpha=.74;ctx.beginPath();ctx.arc(sx,sy,5+source.energy*4,0,TAU);ctx.stroke();ctx.beginPath();ctx.moveTo(sx-8,sy);ctx.lineTo(sx+8,sy);ctx.moveTo(sx,sy-8);ctx.lineTo(sx,sy+8);ctx.stroke();ctx.globalAlpha=1;
+  // show recent force paths as sparse, fading marks
+  for(const ev of events){const age=simT-ev.t;if(age>5)continue;ctx.globalAlpha=clamp(1-age/5)*.45;ctx.strokeStyle=ev.kind==='rupture'?css(C.ink):css(C.hot);ctx.beginPath();ctx.arc(ev.x*W,ev.y*H,3+age*3,0,TAU);ctx.stroke()}
+  ctx.globalAlpha=1;
+  if(ruptureFlash>0){ctx.globalAlpha=ruptureFlash*.18;ctx.fillStyle=css(C.ink);ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
+  stats.innerHTML=`FIELD ENERGY ${(m.energy*100).toFixed(1)}<br>RESIDUE ${(m.memory*100).toFixed(1)}<br>SCAR ${(m.scar*100).toFixed(1)}<br>RUPTURES ${String(ruptureCount).padStart(2,'0')}<br>SOURCE ${source.auto?'AUTONOMOUS':'HUMAN'}<br>AUDIO ${audioOn?'ON':AUDIO_PARAM?'CLICK TO ENABLE':'OFF'}`;
+}
+
+function resetMemory(){memory.fill(0);scar.fill(0);p.fill(0);v.fill(0);try{localStorage.removeItem(STORE)}catch{}ruptureCount=0;events.length=0}
+function pointer(e){const r=canvas.getBoundingClientRect();source.tx=clamp((e.clientX-r.left)/r.width,.02,.98);source.ty=clamp((e.clientY-r.top)/r.height,.03,.97);source.auto=false}
+canvas.addEventListener('pointermove',pointer);
+canvas.addEventListener('pointerdown',e=>{pointer(e);resumeAudio();inject(source.x,source.y,2.2,2.7,'human');exciteSound(source.x,source.y,.8)});
+gate.addEventListener('click',()=>{resumeAudio();gate.hidden=audioOn||!AUDIO_PARAM});
+addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();resumeAudio();rupture()}
+  else if(e.key==='i'||e.key==='I')info.hidden=!info.hidden;
+  else if(e.key==='r'||e.key==='R')resetMemory();
+  else if(e.key==='a'||e.key==='A'){source.auto=!source.auto;}
+});
+
+function frame(ts){
+  const now=ts/1000,dt=Math.min(.04,(now-last))*RATE;last=now;
+  source.phase+=dt;
+  if(source.auto){
+    source.tx=.5+Math.sin(source.phase*.113)*.33+Math.sin(source.phase*.037)*.06;
+    source.ty=.5+Math.cos(source.phase*.151)*.26+Math.sin(source.phase*.051)*.05;
+  }
+  source.x=lerp(source.x,source.tx,1-Math.pow(.002,dt));source.y=lerp(source.y,source.ty,1-Math.pow(.002,dt));
+  source.energy=lerp(source.energy,0,1-Math.pow(.04,dt));
+  nextPulse-=dt;
+  if(nextPulse<=0){
+    const amp=.62+rand()*.58;inject(source.x,source.y,amp,1.5+rand()*1.2,'auto');source.energy=amp;exciteSound(source.x,source.y,amp*.42);
+    nextPulse=.55+rand()*1.45;
+  }
+  // occasional long-pressure event, not a rupture: sustained influence leaves a stronger path.
+  if(Math.sin(simT*.019)>.9975){inject(source.x,source.y,.34,3.4,'pressure')}
+  step(dt);
+  const m=fieldMetrics();updateAudio(m);draw(m);
+  ruptureFlash*=Math.pow(.035,dt);
+  requestAnimationFrame(frame);
+}
+
+if(!AUDIO_PARAM)gate.hidden=true;
+if(CAPTURE){source.auto=true;}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
