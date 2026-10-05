@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>MZTV · FIELD ENGINE 002 · THE FIELD DOES NOT RESET</title>
+<style>
+:root{--paper:#efe9d6;--ink:#17182c;--hot:#ef4f86;--cyan:#00c9ca;--panel:rgba(239,233,214,.9)}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--paper);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;color:var(--ink)}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;cursor:none;touch-action:none}
+#hud{position:fixed;left:16px;top:14px;font-size:9px;line-height:1.5;letter-spacing:.07em;text-transform:uppercase;pointer-events:none}
+#hud b{font-size:11px}
+#status{position:fixed;right:16px;top:14px;text-align:right;font-size:8px;line-height:1.5;letter-spacing:.06em;text-transform:uppercase;pointer-events:none}
+#info{position:fixed;left:16px;bottom:14px;max-width:min(700px,84vw);padding:9px 11px;border-left:3px solid var(--ink);background:var(--panel);font-size:8px;line-height:1.55;letter-spacing:.025em;pointer-events:none}
+#gate{position:fixed;inset:0;display:grid;place-items:center;background:rgba(239,233,214,.14);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);cursor:pointer}
+#gate[hidden]{display:none}
+#gate div{padding:13px 16px 12px;background:rgba(239,233,214,.95);border:2px solid var(--ink);box-shadow:6px 6px 0 var(--ink);font-size:11px;line-height:1.5;letter-spacing:.08em;text-align:center;text-transform:uppercase}
+#gate small{display:block;margin-top:6px;font-size:8px;opacity:.62}
+@media(max-width:720px){#hud{left:9px;top:9px;font-size:7px}#status{right:9px;top:9px;font-size:7px}#info{left:9px;bottom:9px;max-width:92vw;font-size:7px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><b>MZTV · FIELD ENGINE 002</b><br>THE FIELD DOES NOT RESET<br><span style="opacity:.56">ONE YEAR / ONE FIELD</span></div>
+<div id="status"></div>
+<div id="info">Public incident records are replayed in chronological order. Each event enters once at its recorded position. The field attempts to settle, but a small part of every disturbance remains and changes what receives the next one. No event is enlarged for drama. I hides this text. SPACE pauses. R restarts the year.</div>
+<div id="gate"><div>▶ ENTER FIELD<small>CLICK ONCE TO ENABLE SOUND</small></div></div>
+<script>
+(() => {
+'use strict';
+
+const Q=new URLSearchParams(location.search);
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+const statusEl=document.getElementById('status');
+const info=document.getElementById('info');
+const gate=document.getElementById('gate');
+const AUDIO_PARAM=Q.get('audio')!=='0';
+const SHOW_INFO=Q.get('info')!=='0';
+const CAPTURE=Q.get('capture')==='1';
+const YEAR_DAYS=Math.max(30,+(Q.get('days')||365));
+const PLAY_MIN=Math.max(.25,+(Q.get('minutes')||12));
+const HOLD_SEC=Math.max(5,+(Q.get('hold')||30));
+const AUTO_LOOP=Q.get('loop')!=='0';
+const SPEED=Math.max(.1,+(Q.get('speed')||1));
+const TAU=Math.PI*2;
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const C={paper:[239,233,214],ink:[23,24,44],hot:[239,79,134],cyan:[0,201,202]};
+const css=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
+const API='https://services1.arcgis.com/UWYHeuuJISiGmgXx/arcgis/rest/services/NIBRS_GroupA_Crime_Data/FeatureServer/0/query';
+const NEG=/^(n|no|none|false|0|null|not a shooting)$/i;
+
+info.hidden=!SHOW_INFO;
+let W=384,H=216;
+function resize(){
+  const ar=innerWidth/innerHeight;
+  if(ar>=16/9){H=216;W=Math.round(H*ar)}else{W=384;H=Math.round(W/ar)}
+  canvas.width=W;canvas.height=H;canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';
+}
+addEventListener('resize',resize);resize();
+
+// FIELD ----------------------------------------------------------------------
+const GW=96,GH=54,N=GW*GH;
+const p=new Float32Array(N),v=new Float32Array(N),nv=new Float32Array(N);
+const residue=new Float32Array(N),absence=new Float32Array(N),grain=new Float32Array(N);
+const stiffness=new Float32Array(N),absorb=new Float32Array(N);
+const idx=(x,y)=>y*GW+x;
+
+let rng=0x4d5a5456;
+function rand(){
+  rng|=0;rng=(rng+0x6D2B79F5)|0;let t=rng;
+  t=Math.imul(t^(t>>>15),1|t);t^=t+Math.imul(t^(t>>>7),61|t);
+  return((t^(t>>>14))>>>0)/4294967296;
+}
+function materialize(){
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=idx(x,y);
+    const f=Math.sin(x*.16+y*.11)*.5+Math.sin(x*.53-y*.27)*.24+Math.sin(x*.07+y*.61)*.14;
+    stiffness[i]=clamp(.42+f*.16+(rand()-.5)*.08,.18,.82);
+    absorb[i]=clamp(.08+(1-stiffness[i])*.19+rand()*.06,.05,.36);
+    grain[i]=rand();
+  }
+}
+materialize();
+
+let events=[],active=[],dataState='CONNECTING';
+let startMs=0,endMs=1,playheadMs=0,playStartReal=0,paused=false,pauseAt=0;
+let eventIndex=0,phase='loading',holdStarted=0,cycle=0,lastFrame=performance.now()/1000;
+let fieldEnergy=0,totalResidue=0,totalAbsence=0;
+
+function clearField(){
+  p.fill(0);v.fill(0);nv.fill(0);residue.fill(0);absence.fill(0);
+  active.length=0;fieldEnergy=0;totalResidue=0;totalAbsence=0;
+}
+function normalizeData(rows){
+  const parsed=[];
+  for(const a of rows){
+    const flag=String(a.Shooting??'').trim();
+    if(!flag||NEG.test(flag))continue;
+    const lat=parseFloat(a.Latitude),lon=parseFloat(a.Longitude),t=+a.CrimeDateTime;
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(t))continue;
+    if(lat<20||lat>50||lon>-60||lon<-100)continue;
+    parsed.push({t,lat,lon,id:String(a.CCNumber||a.RowID||parsed.length)});
+  }
+  parsed.sort((a,b)=>a.t-b.t);
+  if(!parsed.length)return [];
+  const newest=parsed[parsed.length-1].t;
+  const cutoff=newest-YEAR_DAYS*86400000;
+  const windowed=parsed.filter(e=>e.t>=cutoff);
+  const source=windowed.length?windowed:parsed.slice(-400);
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  source.forEach(e=>{minLat=Math.min(minLat,e.lat);maxLat=Math.max(maxLat,e.lat);minLon=Math.min(minLon,e.lon);maxLon=Math.max(maxLon,e.lon)});
+  const padLat=(maxLat-minLat)*.035||.01,padLon=(maxLon-minLon)*.035||.01;
+  minLat-=padLat;maxLat+=padLat;minLon-=padLon;maxLon+=padLon;
+  source.forEach(e=>{
+    e.x=clamp((e.lon-minLon)/(maxLon-minLon),.03,.97);
+    e.y=clamp(1-(e.lat-minLat)/(maxLat-minLat),.04,.96);
+  });
+  return source;
+}
+async function loadEvents(){
+  dataState='CONNECTING';
+  const params=new URLSearchParams({
+    where:"Shooting='Y'",
+    outFields:'RowID,CCNumber,CrimeDateTime,Shooting,Latitude,Longitude',
+    returnGeometry:'false',
+    orderByFields:'CrimeDateTime ASC',
+    resultRecordCount:'2000',
+    f:'json'
+  });
+  try{
+    const r=await fetch(`${API}?${params}`,{cache:'no-store'});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const j=await r.json();
+    if(j.error)throw new Error(j.error.message||'data error');
+    events=normalizeData((j.features||[]).map(f=>f.attributes||{}));
+    if(!events.length)throw new Error('no valid event records');
+    startMs=events[0].t;endMs=events[events.length-1].t;
+    dataState='LIVE DATA';
+    beginCycle();
+  }catch(err){
+    console.warn(err);
+    events=[];
+    dataState='DATA LINK LOST';
+    phase='error';
+  }
+}
+function beginCycle(){
+  clearField();eventIndex=0;playheadMs=startMs;playStartReal=performance.now();phase='play';cycle++;
+}
+function restartCycle(){beginCycle()}
+function pauseToggle(){
+  if(phase!=='play')return;
+  paused=!paused;
+  if(paused)pauseAt=performance.now();
+  else playStartReal+=performance.now()-pauseAt;
+}
+function injectEvent(e){
+  const cx=e.x*(GW-1),cy=e.y*(GH-1),radius=2.25;
+  const R=7;
+  for(let yy=-R;yy<=R;yy++)for(let xx=-R;xx<=R;xx++){
+    const x=Math.round(cx+xx),y=Math.round(cy+yy);
+    if(x<1||y<1||x>=GW-1||y>=GH-1)continue;
+    const d=Math.hypot(xx,yy),fall=Math.exp(-(d*d)/(radius*radius));
+    const i=idx(x,y);
+    v[i]+=1.65*fall;
+    residue[i]=clamp(residue[i]+fall*.055);
+    absence[i]=clamp(absence[i]+fall*.017);
+  }
+  active.push({x:e.x,y:e.y,born:performance.now()/1000});
+  if(active.length>36)active.shift();
+  soundEvent(e.x,e.y);
+}
+function stepField(dt){
+  const h=Math.min(.025,dt),passes=Math.max(1,Math.ceil(dt/h)),sh=dt/passes;
+  for(let pass=0;pass<passes;pass++){
+    for(let y=1;y<GH-1;y++)for(let x=1;x<GW-1;x++){
+      const i=idx(x,y);
+      const lap=p[idx(x-1,y)]+p[idx(x+1,y)]+p[idx(x,y-1)]+p[idx(x,y+1)]-4*p[i];
+      const k=stiffness[i]*(1-residue[i]*.14)*(1-absence[i]*.27);
+      nv[i]=(v[i]+lap*k*17*sh)*(.986-absorb[i]*.055);
+    }
+    for(let y=1;y<GH-1;y++)for(let x=1;x<GW-1;x++){
+      const i=idx(x,y);v[i]=nv[i];p[i]+=v[i]*sh;
+      const e=Math.abs(p[i])*.62+Math.abs(v[i])*.16;
+      if(e>.08)residue[i]=clamp(residue[i]+e*.000025*sh*60);
+      p[i]*=.99925;
+    }
+  }
+}
+
+// AUDIO ----------------------------------------------------------------------
+let ac=null,master=null,bed=null,bedGain=null,bedFilter=null,drone=[],audioOn=false;
+function makeNoise(seconds=2){
+  const b=ac.createBuffer(1,(ac.sampleRate*seconds)|0,ac.sampleRate),d=b.getChannelData(0);
+  let lp=0;for(let i=0;i<d.length;i++){lp=lp*.989+(Math.random()*2-1)*.012;d[i]=lp*2.4}
+  return b;
+}
+function initAudio(){
+  if(audioOn||!AUDIO_PARAM)return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain();master.gain.value=.12;master.connect(ac.destination);
+  bed=ac.createBufferSource();bed.buffer=makeNoise(4);bed.loop=true;
+  bedFilter=ac.createBiquadFilter();bedFilter.type='lowpass';bedFilter.frequency.value=220;
+  bedGain=ac.createGain();bedGain.gain.value=.012;
+  bed.connect(bedFilter).connect(bedGain).connect(master);bed.start();
+  [36.71,55,73.42].forEach((f,j)=>{
+    const o=ac.createOscillator(),g=ac.createGain(),flt=ac.createBiquadFilter();
+    o.type=j===0?'sine':'triangle';o.frequency.value=f;g.gain.value=[.018,.009,.006][j];
+    flt.type='lowpass';flt.frequency.value=130;
+    o.connect(flt).connect(g).connect(master);o.start();drone.push({o,g,flt});
+  });
+  audioOn=true;gate.hidden=true;ac.resume?.();
+}
+function resumeAudio(){if(!audioOn)initAudio();if(ac&&ac.state!=='running')ac.resume?.()}
+function soundEvent(x,y){
+  if(!audioOn||!ac||ac.state!=='running')return;
+  const now=ac.currentTime+.004;
+  const o=ac.createOscillator(),g=ac.createGain(),f=ac.createBiquadFilter(),pan=ac.createStereoPanner();
+  o.type='sine';o.frequency.value=49*Math.pow(2,((Math.floor(y*5)*2)%12)/12);
+  f.type='bandpass';f.frequency.value=120+520*(1-y);f.Q.value=1.2;
+  pan.pan.value=clamp((x-.5)*1.5,-1,1);
+  g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.028,now+.008);g.gain.exponentialRampToValueAtTime(.0001,now+.42);
+  o.connect(f).connect(g).connect(pan).connect(master);o.start(now);o.stop(now+.45);
+  const n=ac.createBufferSource(),nf=ac.createBiquadFilter(),ng=ac.createGain();
+  n.buffer=makeNoise(.3);nf.type='lowpass';nf.frequency.value=180+220*y;
+  ng.gain.setValueAtTime(.018,now);ng.gain.exponentialRampToValueAtTime(.0001,now+.24);
+  n.connect(nf).connect(ng).connect(pan).connect(master);n.start(now);n.stop(now+.26);
+}
+function updateAudio(){
+  if(!audioOn||!ac)return;
+  const now=ac.currentTime;
+  bedFilter.frequency.setTargetAtTime(170+fieldEnergy*2600+totalResidue*110,now,.7);
+  bedGain.gain.setTargetAtTime(.008+totalResidue*.055,now,1.2);
+  drone.forEach((d,j)=>{
+    d.g.gain.setTargetAtTime([.012,.007,.004][j]+totalAbsence*[.026,.014,.009][j],now,1.4);
+    d.flt.frequency.setTargetAtTime(105+fieldEnergy*1700+totalResidue*150,now,.9);
+  });
+}
+
+// RENDER ---------------------------------------------------------------------
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+function metrics(){
+  let e=0,r=0,a=0;
+  for(let i=0;i<N;i++){e+=Math.abs(p[i])*.68+Math.abs(v[i])*.14;r+=residue[i];a+=absence[i]}
+  fieldEnergy=e/N;totalResidue=r/N;totalAbsence=a/N;
+}
+function draw(){
+  ctx.fillStyle=css(C.paper);ctx.fillRect(0,0,W,H);
+  const cw=W/GW,ch=H/GH;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=idx(x,y),dyn=clamp(Math.abs(p[i])*.55+Math.abs(v[i])*.1),r=residue[i],a=absence[i];
+    const b=BAYER[(x&3)+((y&3)<<2)]/15;
+    let col=C.paper;
+    if(a>.12&&b<clamp(a*2.15))col=C.ink;
+    else if(r>.035&&b<clamp(r*1.78))col=C.cyan;
+    else if(dyn>.035&&b<clamp(dyn*.92))col=C.hot;
+    ctx.fillStyle=css(col);
+    ctx.fillRect(Math.floor(x*cw),Math.floor(y*ch),Math.ceil(cw)+1,Math.ceil(ch)+1);
+    if(a>.27&&((x*3+y*5)%11===0)){
+      ctx.fillStyle=css(C.paper);
+      ctx.fillRect(Math.floor(x*cw),Math.floor(y*ch),Math.max(1,Math.ceil(cw*.35)),Math.max(1,Math.ceil(ch*.35)));
+    }
+  }
+
+  // Events appear only briefly; the lasting image is what they leave behind.
+  const now=performance.now()/1000;
+  for(const ev of active){
+    const age=now-ev.born;if(age>4.8)continue;
+    const q=clamp(1-age/4.8),rad=2+age*5.2;
+    ctx.globalAlpha=q*.55;
+    ctx.strokeStyle=css(age<.55?C.hot:C.ink);ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(ev.x*W,ev.y*H,rad,0,TAU);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // faint scan line: time moving through the field, not a map axis.
+  if(phase==='play'){
+    const prog=clamp((playheadMs-startMs)/(endMs-startMs));
+    ctx.globalAlpha=.13;ctx.fillStyle=css(C.ink);
+    const yy=Math.floor((.08+.84*prog)*H);ctx.fillRect(0,yy,W,1);ctx.globalAlpha=1;
+  }
+
+  let temporal='—',progress=0;
+  if(events.length){
+    const d=new Date(playheadMs||startMs);
+    temporal=d.toLocaleDateString(undefined,{month:'short',day:'2-digit',year:'numeric'}).toUpperCase();
+    progress=clamp((playheadMs-startMs)/(endMs-startMs));
+  }
+  statusEl.innerHTML=[
+    dataState,
+    events.length?`EVENT ${String(Math.min(eventIndex,events.length)).padStart(3,'0')} / ${String(events.length).padStart(3,'0')}`:'EVENT —',
+    events.length?temporal:'DATE —',
+    `FIELD ${(fieldEnergy*100).toFixed(1)}`,
+    `RESIDUE ${(totalResidue*100).toFixed(1)}`,
+    phase==='hold'?'AFTER':paused?'PAUSED':phase==='play'?`${Math.round(progress*100)}%`:'—',
+    audioOn?'AUDIO ON':AUDIO_PARAM?'AUDIO CLICK':'AUDIO OFF'
+  ].join('<br>');
+}
+
+// TIMELINE -------------------------------------------------------------------
+function updateTimeline(nowMs){
+  if(phase==='loading'||phase==='error'||!events.length)return;
+  if(phase==='play'){
+    if(paused)return;
+    const elapsed=((nowMs-playStartReal)/1000)*SPEED;
+    const dur=PLAY_MIN*60;
+    const prog=clamp(elapsed/dur);
+    playheadMs=lerp(startMs,endMs,prog);
+    while(eventIndex<events.length&&events[eventIndex].t<=playheadMs){
+      injectEvent(events[eventIndex]);eventIndex++;
+    }
+    if(prog>=1){
+      phase='hold';holdStarted=nowMs;playheadMs=endMs;
+    }
+  }else if(phase==='hold'){
+    if(AUTO_LOOP&&(nowMs-holdStarted)/1000>=HOLD_SEC)beginCycle();
+  }
+}
+
+gate.addEventListener('click',()=>{resumeAudio();gate.hidden=audioOn||!AUDIO_PARAM});
+canvas.addEventListener('pointerdown',()=>resumeAudio());
+addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();pauseToggle()}
+  else if(e.key==='i'||e.key==='I')info.hidden=!info.hidden;
+  else if(e.key==='r'||e.key==='R')restartCycle();
+});
+function frame(ts){
+  const now=ts/1000,dt=Math.min(.05,now-lastFrame);lastFrame=now;
+  updateTimeline(ts);
+  stepField(dt);
+  metrics();updateAudio();draw();
+  requestAnimationFrame(frame);
+}
+if(!AUDIO_PARAM)gate.hidden=true;
+if(CAPTURE){gate.hidden=true;}
+loadEvents();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
