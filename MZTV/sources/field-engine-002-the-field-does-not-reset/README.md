@@ -1,57 +1,63 @@
 # MZTV · FIELD ENGINE 002 · THE FIELD DOES NOT RESET
 
-A data-driven FIELD ENGINE work.
+A data-driven FIELD ENGINE work built in the spatial rendering grammar established by **BIT FIELD 014 — SOUNDING**.
 
-Public incident records flagged as shootings are replayed in chronological order across one continuous material field. Each event enters at its recorded geographic position with the same initial force. There is no severity scaling, no iconography, and no attempt to turn an individual incident into a visual climax.
+A rolling year of public incident records flagged as shootings is replayed chronologically into one evolving terrain. Each event enters at its recorded geographic position with the same initial force. There is no severity scaling, victim visualization, weapon imagery, street map, neighborhood labeling, or place-name display.
 
-The field tries to settle after each event, but it does not fully return to its earlier state.
+The terrain attempts to settle after each event, but does not return to its prior state.
 
 ## Behavior
 
-- A rolling year of shooting-flagged public incident data is fetched from the official NIBRS Group A ArcGIS dataset.
+- A rolling year of shooting-flagged public incident records is fetched from the official NIBRS Group A ArcGIS layer.
 - Events are sorted by occurrence time and replayed proportionally across the performance.
-- Geographic coordinates determine position only. The piece does not draw a street map or display addresses, neighborhoods, victim demographics, or place names.
-- Each event injects the same pressure pulse.
-- Pressure decays.
-- A smaller residue remains.
-- A still smaller absence layer remains and changes later propagation.
-- At the end of the year, the field is held without new events before the performance can loop.
-
-The point is accumulation rather than spectacle: the data acts on the material system, and the altered system becomes the record.
+- Geographic coordinates determine event position only.
+- Each recorded event produces the same terrain impact and memory pressure.
+- Impact energy decays while wear/scarring remains in the simulated ground.
+- Accumulated impacts feed the same terrain-memory and rule-pressure systems that make SOUNDING evolve.
+- Synthetic/random impact events from SOUNDING are disabled; recorded events are the only true impact source.
+- The camera remains autonomous but slowly bends toward the next/recent disturbance rather than teleporting to it.
+- After the final event, the altered ground remains onscreen. Looping is opt-in.
 
 ## Visual system
 
-FIELD ENGINE supplies the behavior. The rendering borrows the established MZTV four-color / low-resolution / ordered-dither grammar:
+The work now uses SOUNDING's spatial language rather than the earlier flat FIELD ENGINE panel:
 
-- paper — unaltered field
-- hot — current disturbance
-- cyan — accumulated residue
-- ink — persistent absence / structural loss
+- low drifting camera
+- ray-marched terrain
+- contour strata and world-space hatching
+- persistent impact scars
+- long sun/moon shadows
+- fog, cloud shadow, rain and atmospheric depth
+- low-resolution four-ink rendering
+- ordered / halftone / grain dither
+- registration drift and temporal image smear
+- visible plumb-line/ring traces for very recent impacts
 
-No event is enlarged based on outcome.
+The terrain is not a literal map. Geographic relationships become positions within the material world.
 
 ## Audio
 
-Web Audio uses the same events that disturb the visual field. Each event creates a brief low resonant excitation at a stereo position derived from its field position. Accumulated residue and absence gradually alter the noise bed, drone level and filtering.
-
-Click once to enable sound in a normal browser.
+The SOUNDING audio environment remains coupled to the same simulated terrain. Recorded impacts use its distance-aware impact system: an event is visible before it is heard when it occurs far from the camera, and the terrain beneath it changes the response.
 
 ## Controls
 
-- `I` — toggle the explanatory text
-- `SPACE` — pause / continue the timeline
-- `R` — restart the year
+- `I` — toggle information overlay
+- `SPACE` — pause / continue the yearly replay
+- `R` — rebuild the ground and restart the year
+- `T` — manually force a FIELD ENGINE rule transition
 
 ## Runtime parameters
 
 - `?minutes=12` — compressed duration of the year
-- `?hold=30` — seconds to hold the altered field after the last event
+- `?hold=30` — minimum after-state duration
 - `?days=365` — data window
-- `?loop=0` — stop after the final hold instead of looping
+- `?loop=1` — rebuild and replay after the hold; default is no loop
 - `?audio=0` — disable audio
-- `?info=0` — hide explanatory text
-- `?speed=N` — timeline speed multiplier
-- `?capture=1` — capture / OBS mode
+- `?info=0` — hide information overlay
+- `?fresh=0` — allow saved terrain state; fresh ground is the default
+- `?rate=N` — FIELD ENGINE evolution-rate multiplier
+- `?lines=N` — internal rendering resolution
+- `?capture=1` — offline/capture timing mode inherited from SOUNDING
 
 Path:
 
