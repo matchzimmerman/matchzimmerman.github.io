@@ -190,6 +190,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-025-played-ground/`
 
+### FIELD ENGINE 004 — TAUT
+A second interpretation of the FIELD ENGINE 002 brief. Five voices hold a membrane at tension; their interference is the standing pattern you see and the low chord you hear. Public shooting-flagged incident records (time and position only, one equal impulse per incident, geography rotated and warped so it never reads as a map) strike the membrane in order, about a year per day of broadcast. Each impulse rings out and fades, but the ground stays changed: damaged membrane carries waves more slowly so they bend, absorbs them so dead ground goes dark, and past a threshold it tears. Voices on dead ground fall silent and try to regrow on intact ground; when none remains they are gone, and their frequency is notched out of the room. Clusters raise pressure that slows healing and lengthens the echoes; gaps let it recover. The field does not reset.
+
+Path:
+`sources/field-engine-004-taut/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/field-engine-004-taut/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 

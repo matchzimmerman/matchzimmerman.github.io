@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · FIELD ENGINE 004 · TAUT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d1230}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;image-rendering:pixelated}
+  #info{position:fixed;left:22px;bottom:20px;max-width:640px;font:400 12px/1.5 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing:.02em;padding:10px 13px 11px;white-space:pre-wrap;pointer-events:none;border-left:3px solid;
+    -webkit-font-smoothing:none}
+  #info b{font-weight:600}
+  #info .d{opacity:.62}
+  #info.off{display:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info"></div>
+<script>
+/*
+  MZTV · FIELD ENGINE 004 · TAUT
+  A membrane held under tension by a small chord of voices. Public incident records
+  (time + position only, one equal impulse per incident) are replayed in order and
+  strike it. Each impulse rings out and fades; the damage it leaves heals toward a
+  floor, never to zero. Damaged ground carries waves more slowly (they bend) and
+  absorbs them (dead ground); past a threshold the membrane tears. Voices whose
+  ground dies fall silent and try to regrow on intact ground; when none is left
+  they are gone. The field does not reset.
+
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?pace=MIN (real minutes per record day, default 4)
+          ?ff=H (fast-forward H hours of replay at boot) ?capture=1 ?testdata=1 (synthetic records, tests only)
+  Keys:   I info · M mute
+*/
+'use strict';
+const Q = new URLSearchParams(location.search);
+const KEY = 'mztv-fe004-v1', RKEY = 'mztv-fe004-records-v1';
+const SHOW_INFO = Q.get('info') !== '0';
+const AUDIO_ON = Q.get('audio') !== '0';
+const PACE = Math.max(0.05, +(Q.get('pace') || 4));          // real minutes per record day
+const DATA_PER_REAL = 1440 / PACE;                             // record-ms per real-ms
+const TEST = Q.get('testdata') === '1';
+const CAPTURE = Q.get('capture') === '1';
+const SEED = +(Q.get('seed') || 7);
+if (Q.get('fresh') === '1') { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+const DATA_API = 'https://services1.arcgis.com/UWYHeuuJISiGmgXx/arcgis/rest/services/NIBRS_GroupA_Crime_Data/FeatureServer/0/query';
+const W = 480, H = 270;           // membrane resolution
+const SW = 240, SH = 135;         // saved damage map
+const RW = 64, RH = 36;           // readback map
+const SUB = 4;                    // wave steps per frame
+const RATIOS = [1.0, 1.594, 2.136, 2.653, 3.156];   // circular-membrane mode ratios
+const F0 = 49.0;                                      // Hz, lowest voice
+const HOME = { bg: [13, 18, 48], mid: [58, 84, 222], lit: [236, 233, 255], res: [176, 222, 92] };
+
+// ---------- rng ----------
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let rnd = mulberry(SEED * 9973 + 11);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const fin = (v, d = 0) => Number.isFinite(v) ? v : d;
+
+// ---------- state ----------
+const S = {
+  v: 1, born: Date.now(), elapsed: 0,
+  play: null, idx: 0, applied: 0, pressure: 0, live: false,
+  voices: RATIOS.map((r, i) => ({ i, r, x: 0, y: 0, life: 1, low: 0, state: 'sing', until: 0, moves: 0 })),
+  knock: { off: new Array(13).fill(0), a: 0 },
+  marks: {}, log: [], pal: null, gain: 6, quietRec: 0,
+};
+// initial voice placement: a loose pentagon on the membrane
+S.voices.forEach((v, i) => { const a = i / 5 * Math.PI * 2 + 0.4; v.x = W * (0.5 + 0.30 * Math.cos(a)); v.y = H * (0.5 + 0.30 * Math.sin(a)); });
+S.pal = JSON.parse(JSON.stringify(HOME));
+
+function logl(s) { S.log.push([S.elapsed, s]); if (S.log.length > 60) S.log.splice(0, S.log.length - 60); }
+function fmtT(sec) { sec = Math.floor(sec); const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60; return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; }
+
+// ---------- records ----------
+let REC = [];         // [{t, x, y}] sorted, mapped to membrane coords
+let RAW = [];         // [[t, lat, lon]]
+let recStatus = 'loading', recNewest = 0, recFirst = 0;
+const liveQueue = [];
+
+function mapRecords(raw) {
+  if (!S.geo && raw.length) {
+    const la = raw.map(r => r[1]).sort((a, b) => a - b), lo = raw.map(r => r[2]).sort((a, b) => a - b);
+    const q = (a, p) => a[Math.floor(clamp(p, 0, 1) * (a.length - 1))];
+    S.geo = { la0: q(la, .02), la1: q(la, .98), lo0: q(lo, .02), lo1: q(lo, .98) };
+  }
+  // obscure the geography: percentile bounds -> rotate -> stretch to fill -> smooth warp.
+  // Continuous, so neighbours stay neighbours; the outline no longer reads as a map.
+  if (!raw.length) return [];
+  const { la0, la1, lo0, lo1 } = S.geo;
+  const pts = raw.map(r => {
+    let u = (r[2] - lo0) / Math.max(1e-9, lo1 - lo0) - 0.5, v = (r[1] - la0) / Math.max(1e-9, la1 - la0) - 0.5;
+    const A = 2.31; const ru = u * Math.cos(A) - v * Math.sin(A), rv = u * Math.sin(A) + v * Math.cos(A);
+    return [ru, rv];
+  });
+  if (S.geo.mnx == null) {
+    const xs = pts.map(p => p[0]).sort((a, b) => a - b), ys = pts.map(p => p[1]).sort((a, b) => a - b);
+    const q = (a, p) => a[Math.floor(p * (a.length - 1))];
+    Object.assign(S.geo, { mnx: q(xs, .01), mxx: q(xs, .99), mny: q(ys, .01), mxy: q(ys, .99) });
+  }
+  const { mnx, mxx, mny, mxy } = S.geo;
+  return raw.map((r, i) => {
+    let x = (pts[i][0] - mnx) / Math.max(1e-9, mxx - mnx), y = (pts[i][1] - mny) / Math.max(1e-9, mxy - mny);
+    const wx = 0.07 * Math.sin(y * 5.1 + 1.3) + 0.04 * Math.sin(x * 3.7 + y * 2.2);
+    const wy = 0.07 * Math.sin(x * 4.3 + 0.7) + 0.04 * Math.cos(y * 6.1 - x * 1.9);
+    x = clamp(0.06 + 0.88 * (x + wx), 0.04, 0.96); y = clamp(0.07 + 0.86 * (y + wy), 0.05, 0.95);
+    return { t: r[0], x: x * W, y: y * H };
+  });
+}
+function dedupe(raw) {
+  // one record row per incident: rows sharing a minute and ~100 m are one event (no victim-count scaling)
+  const seen = new Set(), out = [];
+  for (const r of raw) {
+    if (!Number.isFinite(r[0]) || !Number.isFinite(r[1]) || !Number.isFinite(r[2]) || Math.abs(r[1]) < 1 || Math.abs(r[2]) < 1) continue;
+    const k = Math.round(r[0] / 60000) + ':' + r[1].toFixed(3) + ':' + r[2].toFixed(3);
+    if (seen.has(k)) continue; seen.add(k); out.push(r);
+  }
+  return out.sort((a, b) => a[0] - b[0]);
+}
+async function arcgis(params) {
+  const u = DATA_API + '?' + new URLSearchParams(Object.assign({ f: 'json' }, params));
+  const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('http ' + r.status);
+  const j = await r.json(); if (j.error) throw new Error(j.error.message || 'arcgis'); return j;
+}
+const tsql = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+async function fetchSince(afterMs) {
+  const out = []; let off = 0;
+  for (let page = 0; page < 40; page++) {
+    const where = afterMs ? `Shooting='Y' AND CrimeDateTime > timestamp '${tsql(afterMs)}'` : `Shooting='Y'`;
+    const j = await arcgis({ where, outFields: 'CrimeDateTime,Latitude,Longitude', returnGeometry: 'false', orderByFields: 'CrimeDateTime ASC', resultRecordCount: '2000', resultOffset: String(off) });
+    const f = j.features || [];
+    for (const g of f) { const a = g.attributes || {}; out.push([+a.CrimeDateTime, +a.Latitude, +a.Longitude]); }
+    if (f.length < 2000 && !j.exceededTransferLimit) break; off += f.length; if (!f.length) break;
+  }
+  return out;
+}
+function testRecords() {
+  const r = mulberry(4242), out = []; let t = Date.UTC(2023, 0, 1);
+  const hubs = [[39.29, -76.62], [39.31, -76.58], [39.27, -76.65], [39.33, -76.66], [39.30, -76.55]];
+  for (let i = 0; i < 2600; i++) {
+    t += -Math.log(1 - r()) * 86400000 * (r() < 0.15 ? 0.08 : 0.55);
+    const h = hubs[Math.floor(Math.pow(r(), 1.6) * hubs.length)];
+    out.push([t, h[0] + (r() - .5) * 0.05 + (r() - .5) * 0.02, h[1] + (r() - .5) * 0.07 + (r() - .5) * 0.03]);
+  }
+  return out;
+}
+function setRecords(raw) {
+  RAW = dedupe(raw); REC = mapRecords(RAW);
+  recFirst = REC.length ? REC[0].t : 0; recNewest = REC.length ? REC[REC.length - 1].t : 0;
+  if (S.play == null && REC.length) S.play = recFirst - 86400000;
+  // resume by time, not index, so revisions in the source never replay or skip records
+  if (S.lastT != null && !S.live) { let i = 0; while (i < REC.length && REC[i].t <= S.lastT) i++; S.idx = i; }
+  // records cached so the field keeps receiving if the source is briefly unreachable
+  if (!TEST) try { localStorage.setItem(RKEY, JSON.stringify(RAW.map(r => [r[0], +r[1].toFixed(5), +r[2].toFixed(5)]))); } catch (e) {}
+}
+async function loadRecords() {
+  if (TEST) { setRecords(testRecords()); recStatus = 'TEST DATA (synthetic)'; return; }
+  try { const c = JSON.parse(localStorage.getItem(RKEY) || 'null'); if (Array.isArray(c) && c.length) { setRecords(c); recStatus = 'cached'; } } catch (e) {}
+  try {
+    const add = await fetchSince(RAW.length ? RAW[RAW.length - 1][0] : 0);
+    const before = recNewest; setRecords(RAW.concat(add)); recStatus = 'receiving';
+    if (before && add.length) logl(`${add.length} new records arrived`);
+  } catch (e) { recStatus = RAW.length ? 'cached · source unreachable' : 'source unreachable · retrying'; setTimeout(loadRecords, 60000); return; }
+  setTimeout(refreshRecords, 20 * 60000);
+}
+async function refreshRecords() {
+  if (TEST) return;
+  try {
+    const add = dedupe(await fetchSince(recNewest));
+    if (add.length) {
+      const prevNewest = recNewest; setRecords(RAW.concat(add)); recStatus = 'receiving';
+      if (S.live) { liveQueue.length = 0; for (const r of REC) if (r.t > (S.lastT || prevNewest)) liveQueue.push(r); S.idx = REC.length - liveQueue.length; logl(`${add.length} new records arrived`); }
+    }
+  } catch (e) { recStatus = 'cached · source unreachable'; }
+  setTimeout(refreshRecords, 20 * 60000);
+}
+
+// ---------- WebGL ----------
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: CAPTURE, powerPreference: 'high-performance' });
+if (!gl) { document.getElementById('info').textContent = 'WebGL2 unavailable'; throw new Error('no webgl2'); }
+const VS = `#version 300 es
+in vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
+const SIM = `#version 300 es
+precision highp float;
+uniform sampler2D A; uniform sampler2D B;
+uniform vec4 uVoice[5]; uniform float uVoiceAmp[5];
+uniform vec4 uHit[8]; uniform float uWave; uniform float uDt; uniform float uHeal; uniform float uTension;
+layout(location=0) out vec4 oA; layout(location=1) out vec4 oB;
+float U(ivec2 q){ if(q.x<0||q.y<0||q.x>=${W}||q.y>=${H}) return 0.; return texelFetch(A,q,0).r; }
+float P0(ivec2 q){ if(q.x<0||q.y<0||q.x>=${W}||q.y>=${H}) return 0.; return texelFetch(A,q,0).g; }
+void main(){
+  ivec2 q = ivec2(gl_FragCoord.xy);
+  vec4 a = texelFetch(A,q,0); vec4 b = texelFetch(B,q,0);
+  float u=a.r, up=a.g, E=a.b; float T=b.r, P=b.g;
+  vec2 x = vec2(q)+.5;
+  // impulses: equal force, a wave bump plus damage that heals toward a floor
+  for(int i=0;i<8;i++){ vec4 h=uHit[i]; if(h.w<=0.) continue; vec2 d=x-h.xy; float r2=dot(d,d);
+    T += h.w*.55*exp(-r2/72.)*(1.-T);
+    P += h.w*.045*exp(-r2/32.)*(1.-P); }
+  T = T*exp(-uHeal*uDt*(1.-.75*P));          // scarred ground heals slower
+  float hl = clamp(1.-P-.6*T,0.,1.);
+  float torn = step(.5,P);
+  float un=0.;
+  if(uWave>0.){
+    float lap = U(q+ivec2(1,0))+U(q-ivec2(1,0))+U(q+ivec2(0,1))+U(q-ivec2(0,1))-4.*u;
+    float lapP = P0(q+ivec2(1,0))+P0(q-ivec2(1,0))+P0(q+ivec2(0,1))+P0(q-ivec2(0,1))-4.*up;
+    float c2 = .25*uTension*mix(.28,1.,hl);
+    float dmp = .004+.03*(1.-hl);
+    float f=0.;
+    for(int i=0;i<5;i++){ vec2 d=x-uVoice[i].xy; f += uVoiceAmp[i]*uVoice[i].z*exp(-dot(d,d)/12.5); }
+    for(int i=0;i<8;i++){ vec4 h=uHit[i]; if(h.z<=0.) continue; vec2 d=x-h.xy; f += h.z*exp(-dot(d,d)/9.); }
+    un = 2.*u-up+c2*lap-dmp*(u-up)+.06*(lap-lapP)+f*hl;
+    if(torn>.5) un=0.;
+    if(!(abs(un)<8.)) un=0.;
+    E = mix(E, un*un, .004); if(!(E>=0.&&E<64.)) E=0.;
+    oA = vec4(un,u,E,1.);
+  } else { if(!(abs(u)<8.)) u=0.; if(!(abs(up)<8.)) up=0.; if(!(E>=0.&&E<64.)) E=0.; oA = vec4(u*(1.-torn),up*(1.-torn),E,1.); }
+  if(!(T>=0.&&T<=1.)) T=0.; if(!(P>=0.&&P<=1.)) P=0.;
+  oB = vec4(T,P,hl,1.);
+}`;
+const DISP = `#version 300 es
+precision highp float;
+uniform sampler2D A; uniform sampler2D B; uniform vec2 uRes; uniform float uPx; uniform float uGain; uniform float uTime;
+uniform vec3 cBg, cMid, cLit, cRes; uniform vec2 uReg; uniform vec4 uVoice[5]; uniform float uVoiceLife[5];
+out vec4 o;
+vec4 bil(sampler2D t, vec2 p){ p-= .5; ivec2 i=ivec2(floor(p)); vec2 f=fract(p);
+  ivec2 m=ivec2(${W - 1},${H - 1});
+  vec4 a=texelFetch(t,clamp(i,ivec2(0),m),0), b=texelFetch(t,clamp(i+ivec2(1,0),ivec2(0),m),0),
+       c=texelFetch(t,clamp(i+ivec2(0,1),ivec2(0),m),0), d=texelFetch(t,clamp(i+ivec2(1,1),ivec2(0),m),0);
+  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }
+float bayer(ivec2 p){ int x=p.x&3, y=p.y&3; int m[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5); return (float(m[y*4+x])+.5)/16.; }
+void main(){
+  vec2 fc = vec2(gl_FragCoord.x, uRes.y-gl_FragCoord.y);
+  ivec2 cell = ivec2(floor(fc/uPx));
+  vec2 gridN = vec2(ceil(uRes.x/uPx), ceil(uRes.y/uPx));
+  vec2 sp = (vec2(cell)+.5)/gridN*vec2(${W}.,${H}.);
+  vec4 a = bil(A, sp); vec4 b = bil(B, sp);
+  float u=a.r, E=a.b, T=b.r, P=b.g, hl=b.b;
+  float env = sqrt(max(E,0.))*uGain;
+  float crest = tanh(u*uGain*.9);
+  float tone = clamp(.16 + .55*env + .30*crest*min(env*1.6,1.), 0., 1.);
+  tone *= mix(.45, 1., smoothstep(.25, .95, hl));      // dead ground goes dark and still
+  float th = bayer(cell);
+  float lv = tone*2.; float k = floor(lv) + step(th, fract(lv));
+  vec3 col = k<.5 ? cBg : (k<1.5 ? cMid : cLit);
+  // fresh damage: a fine line screen pulls the ground toward the dark ink while it heals
+  if(T>.04){ float ls = fract((float(cell.x)+float(cell.y))*.25); if(ls < T*.55) col = mix(col, cBg, .75); }
+  // residue: misregistered halftone dots, density by permanent damage
+  vec4 b2 = bil(B, sp+uReg); float P2=b2.g;
+  if(P2>.015){
+    vec2 hp = vec2(cell)*mat2(.866,-.5,.5,.866)/5.;
+    float dd = length(fract(hp)-.5);
+    float rad = sqrt(clamp((P2-.015)*1.1,0.,1.))*.46;
+    if(dd<rad) col = mix(col, cRes, .78);
+  }
+  // torn: the membrane is gone here; a stippled rim of residue ink
+  if(P>.5){ col = cBg*.72; }
+  else if(P>.45){ if(th<.5) col=cRes; }
+  // voice exciters: small ticks, hollow when silent
+  for(int i=0;i<5;i++){ vec2 d = (sp-uVoice[i].xy)*gridN/vec2(${W}.,${H}.); vec2 ad=abs(d);
+    float ring = step(max(ad.x,ad.y),2.6)*step(1.4,max(ad.x,ad.y));
+    float dot_ = step(max(ad.x,ad.y),1.4);
+    if(uVoice[i].w>0.){ if(ring>.5 && uVoiceLife[i]>.05) col=cLit; if(dot_>.5 && uVoiceLife[i]>.5) col=cRes; }
+  }
+  o = vec4(col/255.,1.);
+}`;
+const RB = `#version 300 es
+precision highp float;
+uniform sampler2D A; uniform sampler2D B; uniform float uGain; uniform vec2 uOut; uniform float uMode;
+out vec4 o;
+void main(){
+  vec2 c = gl_FragCoord.xy/uOut*vec2(${W}.,${H}.);
+  vec4 acc=vec4(0.);
+  for(int j=0;j<3;j++) for(int i=0;i<3;i++){ ivec2 q=ivec2(c+vec2(float(i)-1.,float(j)-1.)*(${W}./uOut.x)*.33);
+    q=clamp(q,ivec2(0),ivec2(${W - 1},${H - 1})); vec4 a=texelFetch(A,q,0), b=texelFetch(B,q,0);
+    acc += vec4(sqrt(max(a.b,0.)), b.b, b.g, b.r); }
+  acc/=9.;
+  if(uMode>.5){ float P=acc.b; float hi=floor(P*255.)/255.; o=vec4(hi,(P-hi)*255.,acc.a,1.); }
+  else o = vec4(clamp(acc.r*uGain*.5,0.,1.), acc.g, acc.b, acc.a);
+}`;
+const INIT = `#version 300 es
+precision highp float;
+uniform sampler2D L; uniform float uHas;
+layout(location=0) out vec4 oA; layout(location=1) out vec4 oB;
+void main(){ vec2 uv = gl_FragCoord.xy/vec2(${W}.,${H}.);
+  vec4 s = uHas>.5 ? texture(L, uv) : vec4(0.);
+  float P = clamp(s.r + s.g/255.,0.,1.), T = clamp(s.b,0.,1.);
+  oA = vec4(0.,0.,0.,1.); oB = vec4(T,P,clamp(1.-P-.6*T,0.,1.),1.); }`;
+
+let prog = {}, tex = {}, fbo = {}, quad, ping = 0, glOK = false, fmt;
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+function mk(fs) { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); const nm = info.name.replace(/\[0\]$/, ''); u[nm] = gl.getUniformLocation(p, info.name); } return { p, u }; }
+function mkTex(w, h, f, data) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  if (f === 'f') gl.texImage2D(gl.TEXTURE_2D, 0, fmt.i, w, h, 0, gl.RGBA, fmt.t, null); else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data || null); return t; }
+function mkFbo(ts) { const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); ts.forEach((t, i) => gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, t, 0)); gl.drawBuffers(ts.map((_, i) => gl.COLOR_ATTACHMENT0 + i)); return f; }
+function glInit(saved) {
+  const ext = gl.getExtension('EXT_color_buffer_float');
+  fmt = ext ? { i: gl.RGBA32F, t: gl.FLOAT } : { i: gl.RGBA16F, t: gl.HALF_FLOAT };
+  if (!ext) gl.getExtension('EXT_color_buffer_half_float');
+  prog.sim = mk(SIM); prog.disp = mk(DISP); prog.rb = mk(RB); prog.init = mk(INIT);
+  quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  tex.A = [mkTex(W, H, 'f'), mkTex(W, H, 'f')]; tex.B = [mkTex(W, H, 'f'), mkTex(W, H, 'f')];
+  fbo.s = [mkFbo([tex.A[0], tex.B[0]]), mkFbo([tex.A[1], tex.B[1]])];
+  tex.rb = mkTex(RW, RH, 'b'); fbo.rb = mkFbo([tex.rb]);
+  tex.sv = mkTex(SW, SH, 'b'); fbo.sv = mkFbo([tex.sv]);
+  // load saved damage map
+  const L = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, L);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, SW, SH, 0, gl.RGBA, gl.UNSIGNED_BYTE, saved || new Uint8Array(SW * SH * 4));
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.s[0]); gl.viewport(0, 0, W, H); gl.useProgram(prog.init.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, L); gl.uniform1i(prog.init.u.L, 0); gl.uniform1f(prog.init.u.uHas, saved ? 1 : 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.deleteTexture(L); ping = 0; glOK = true;
+}
+const hitBuf = new Float32Array(32); let hitN = 0;
+function queueHit(x, y, waveAmp, dmg) { if (hitN >= 8) return false; hitBuf.set([x, y, waveAmp, dmg], hitN * 4); hitN++; return true; }
+const NOHIT = new Float32Array(32);
+const vBuf = new Float32Array(20), vAmp = new Float32Array(5), vLife = new Float32Array(5);
+const vPhase = new Float64Array(5);
+function simStep(wave, dt, hits) {
+  const p = prog.sim, src = ping, dst = 1 - ping;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.s[dst]); gl.viewport(0, 0, W, H); gl.useProgram(p.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex.A[src]); gl.uniform1i(p.u.A, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex.B[src]); gl.uniform1i(p.u.B, 1);
+  gl.uniform4fv(p.u.uVoice, vBuf); gl.uniform1fv(p.u.uVoiceAmp, vAmp);
+  gl.uniform4fv(p.u.uHit, hits ? hitBuf : NOHIT);
+  gl.uniform1f(p.u.uWave, wave ? 1 : 0); gl.uniform1f(p.u.uDt, dt); gl.uniform1f(p.u.uHeal, healRate()); gl.uniform1f(p.u.uTension, tension());
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); ping = dst;
+}
+const rbPix = new Uint8Array(RW * RH * 4);
+function readback() {
+  const p = prog.rb; gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.rb); gl.viewport(0, 0, RW, RH); gl.useProgram(p.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex.A[ping]); gl.uniform1i(p.u.A, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex.B[ping]); gl.uniform1i(p.u.B, 1);
+  gl.uniform1f(p.u.uGain, S.gain); gl.uniform2f(p.u.uOut, RW, RH); gl.uniform1f(p.u.uMode, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.readPixels(0, 0, RW, RH, gl.RGBA, gl.UNSIGNED_BYTE, rbPix);
+}
+function snapshotDamage() {
+  const p = prog.rb, out = new Uint8Array(SW * SH * 4);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.sv); gl.viewport(0, 0, SW, SH); gl.useProgram(p.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex.A[ping]); gl.uniform1i(p.u.A, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex.B[ping]); gl.uniform1i(p.u.B, 1);
+  gl.uniform1f(p.u.uGain, 1); gl.uniform2f(p.u.uOut, SW, SH); gl.uniform1f(p.u.uMode, 1);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.readPixels(0, 0, SW, SH, gl.RGBA, gl.UNSIGNED_BYTE, out); return out;
+}
+function draw() {
+  const p = prog.disp, w = cv.width, h = cv.height;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); gl.useProgram(p.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex.A[ping]); gl.uniform1i(p.u.A, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex.B[ping]); gl.uniform1i(p.u.B, 1);
+  gl.uniform2f(p.u.uRes, w, h); gl.uniform1f(p.u.uPx, Math.max(1, Math.round(h / H))); gl.uniform1f(p.u.uGain, S.gain); gl.uniform1f(p.u.uTime, S.elapsed);
+  gl.uniform3fv(p.u.cBg, S.pal.bg); gl.uniform3fv(p.u.cMid, S.pal.mid); gl.uniform3fv(p.u.cLit, S.pal.lit); gl.uniform3fv(p.u.cRes, S.pal.res);
+  const rg = 0.9 + 1.4 * meanP; gl.uniform2f(p.u.uReg, rg * Math.sin(S.elapsed * 0.013), rg * Math.cos(S.elapsed * 0.009));
+  const vb = new Float32Array(20); S.voices.forEach((v, i) => { vb.set([v.x, v.y, 0, v.state === 'gone' ? 0 : 1], i * 4); vLife[i] = v.life; });
+  gl.uniform4fv(p.u.uVoice, vb); gl.uniform1fv(p.u.uVoiceLife, vLife);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+function resize() { const w = Math.round(innerWidth), h = Math.round(innerHeight); if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } }
+addEventListener('resize', resize);
+cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glOK = false; logl('display context lost'); });
+cv.addEventListener('webglcontextrestored', () => { prog = {}; tex = {}; fbo = {}; glInit(lastSaved()); logl('display context restored from memory'); });
+
+// ---------- field metrics ----------
+let meanP = 0, tornFrac = 0, meanE = 0, p90E = 0, readT = 0;
+function cellAt(x, y) { const cx = clamp(Math.floor(x / W * RW), 0, RW - 1), cy = clamp(Math.floor(y / H * RH), 0, RH - 1); const o = (cy * RW + cx) * 4; return { e: rbPix[o] / 255, h: rbPix[o + 1] / 255, P: rbPix[o + 2] / 255, T: rbPix[o + 3] / 255 }; }
+function analyse() {
+  let sp = 0, st = 0, se = 0; const es = [];
+  for (let i = 0; i < RW * RH; i++) { const o = i * 4; sp += rbPix[o + 2]; if (rbPix[o + 2] > 127) st++; se += rbPix[o]; es.push(rbPix[o]); }
+  meanP = sp / 255 / (RW * RH); tornFrac = st / (RW * RH); meanE = se / 255 / (RW * RH);
+  es.sort((a, b) => a - b); p90E = es[Math.floor(es.length * 0.9)] / 255;
+  // slow AGC so the pattern stays legible without hiding what damage removes (bounded range)
+  if (p90E > 0.001) { const want = S.gain * clamp(0.62 / p90E, 0.8, 1.25); S.gain = clamp(lerp(S.gain, want, 0.01), 1.5, 40); }
+}
+function tension() { return 1 - 0.18 * clamp(meanP * 3, 0, 1); }          // the whole membrane slackens as residue accrues
+function healRate() { return (1 / 240) / (1 + 2.2 * pressN()); }          // clusters slow recovery
+function pressN() { return 1 - Math.exp(-S.pressure / 8); }
+
+// ---------- voices (homeostasis) ----------
+function voiceTick(dt) {
+  for (const v of S.voices) {
+    if (v.state === 'gone') { v.life = Math.max(0, v.life - dt / 20); continue; }
+    const c = cellAt(v.x, v.y);
+    if (v.state === 'sing') {
+      v.life = Math.min(1, v.life + dt / 25);
+      if (c.h < 0.55) v.low += dt; else v.low = Math.max(0, v.low - dt * 0.5);
+      if (v.low > 90) { v.state = 'fall'; v.low = 0; logl(`voice ${v.i + 1} fell silent on dead ground`); }
+    } else if (v.state === 'fall') {
+      v.life = Math.max(0, v.life - dt / 20);
+      if (v.life <= 0) { v.state = 'rest'; v.until = S.elapsed + 60 + rnd() * 120; }
+    } else if (v.state === 'rest') {
+      if (S.elapsed >= v.until) {
+        // look for intact ground away from the other voices and the edges
+        let best = null, bs = -1;
+        for (let cy = 3; cy < RH - 3; cy++) for (let cx = 4; cx < RW - 4; cx++) {
+          const o = (cy * RW + cx) * 4, h = rbPix[o + 1] / 255; if (h < 0.78) continue;
+          const x = (cx + .5) / RW * W, y = (cy + .5) / RH * H;
+          let dmin = 1e9; for (const u of S.voices) if (u !== v && u.state !== 'gone') dmin = Math.min(dmin, Math.hypot(u.x - x, u.y - y));
+          if (dmin < 60) continue; const s = h + 0.002 * Math.min(dmin, 160) + rnd() * 0.05; if (s > bs) { bs = s; best = [x, y]; }
+        }
+        if (best) { v.x = best[0]; v.y = best[1]; v.state = 'sing'; v.moves++; v.life = 0; logl(`voice ${v.i + 1} took hold again at ${(v.x / W).toFixed(2)}, ${(v.y / H).toFixed(2)}`); }
+        else { v.state = 'gone'; logl(`voice ${v.i + 1} found no intact ground — gone`); }
+      }
+    }
+  }
+}
+function voiceUniforms() {
+  S.voices.forEach((v, i) => { vBuf.set([v.x, v.y, 0.006 * Math.pow(v.r, 1.3) * (1 + 0.15 * Math.sin(S.elapsed * 0.09 + i * 1.7)), 0], i * 4); vAmp[i] = v.state === 'gone' ? 0 : v.life; });
+}
+
+// ---------- replay ----------
+const pending = [];
+function applyRecord(r, live) {
+  S.applied++; S.pressure += 1; S.lastT = r.t;
+  pending.push(r);
+  if (A.ctx) audioImpulse(r);
+}
+function advance(dtReal) {
+  if (!REC.length || S.play == null) return;
+  if (!S.live) {
+    const prev = S.play; S.play += dtReal * 1000 * DATA_PER_REAL;
+    const dDays = (S.play - prev) / 86400000; S.pressure *= Math.exp(-dDays / 6);
+    let n = 0;
+    while (S.idx < REC.length && REC[S.idx].t <= S.play && n < 6) { applyRecord(REC[S.idx], false); S.idx++; n++; }
+    if (n === 6 && S.idx < REC.length && REC[S.idx].t <= S.play) S.play = REC[S.idx].t;   // never burst; let the playhead wait
+    if (S.idx >= REC.length) { S.live = true; S.play = recNewest; logl('archive replay complete — now receiving new records as they appear'); }
+  } else {
+    S.pressure *= Math.exp(-dtReal / (6 * 86400));
+    if (liveQueue.length && S.elapsed - (S.lastLive || 0) > 20) { S.lastLive = S.elapsed; applyRecord(liveQueue.shift(), true); S.idx = REC.length - liveQueue.length; }
+  }
+}
+function recordDay() { return S.play == null || !recFirst ? 0 : Math.max(0, Math.floor((Math.min(S.play, recNewest) - recFirst) / 86400000) + 1); }
+function recordDays() { return recFirst ? Math.ceil((recNewest - recFirst) / 86400000) + 1 : 0; }
+
+// marks — thresholds the field crosses once, logged as it changes character
+function marks() {
+  const M = S.marks;
+  const th = [[0.01, 'residue first visible across the field'], [0.03, 'membrane slackening — wavelengths shortening over scarred ground'], [0.06, 'standing pattern no longer symmetric'], [0.1, 'residue covers a tenth of the field'], [0.18, 'the chord can no longer be fully restored']];
+  for (const [v, s] of th) if (meanP >= v && !M['p' + v]) { M['p' + v] = 1; logl(s); }
+  if (tornFrac > 0 && !M.torn) { M.torn = 1; logl('the membrane tore'); }
+  const pn = pressN();
+  if (pn > 0.6 && !S.hiP) { S.hiP = 1; logl(`pressure ${pn.toFixed(2)} — healing slowed`); } else if (pn < 0.3 && S.hiP) { S.hiP = 0; logl('pressure eased — recovering'); }
+}
+
+// palette: slow drift with residue, pulled back toward home, hues clamped to family
+function paletteTick(dt) {
+  const k = clamp(meanP * 4, 0, 1), pn = pressN();
+  const tgt = {
+    bg: HOME.bg.map((c, i) => c + [6, 2, -10][i] * k),
+    mid: HOME.mid.map((c, i) => lerp(c, [96, 98, 150][i], 0.55 * k + 0.15 * pn)),
+    lit: HOME.lit.map((c, i) => c - [10, 18, 6][i] * k),
+    res: HOME.res.map((c, i) => lerp(c, [224, 248, 120][i], 0.4 * k)),
+  };
+  for (const n in tgt) for (let i = 0; i < 3; i++) S.pal[n][i] = clamp(lerp(S.pal[n][i], tgt[n][i], 1 - Math.exp(-dt / 40)), 0, 255);
+}
+
+// ---------- audio ----------
+const A = { ctx: null, built: false, lastT: 0, stallAt: 0, silentFor: 0, muted: false, lastSet: {} };
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(){super();this.b=0}process(i,o){const c=o[0];for(let k=0;k<c[0].length;k++){const w=Math.random()*2-1;this.b=(this.b+0.02*w)/1.02;const v=this.b*3.5;for(let j=0;j<c.length;j++)c[j][k]=v}return true}}registerProcessor('fe4-noise',N);`;
+function audioStart() {
+  if (!AUDIO_ON || A.ctx) return;
+  try { A.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { return; }
+  buildGraph();
+}
+function setP(param, v, tc = 0.4, key) { if (!param || !Number.isFinite(v)) return; if (key) { if (A.lastSet[key] !== undefined && Math.abs(A.lastSet[key] - v) < 1e-4) return; A.lastSet[key] = v; } param.setTargetAtTime(v, A.ctx.currentTime, tc); }
+function makeVerb(ctx, sec) {
+  const n = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, n, ctx.sampleRate); const r = mulberry(99);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { const w = r() * 2 - 1; lp += 0.12 * (w - lp); d[i] = lp * Math.pow(1 - i / n, 2.4) * (i < 400 ? i / 400 : 1); } }
+  const cv_ = ctx.createConvolver(); cv_.buffer = b; return cv_;
+}
+function shaper(ctx, k) { const ws = ctx.createWaveShaper(), n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / Math.tanh(k); } ws.curve = c; ws.oversample = '2x'; return ws; }
+function buildGraph(fade) {
+  const ctx = A.ctx, G = {}; const t = ctx.currentTime;
+  G.out = ctx.createGain(); G.out.gain.value = 0; G.out.gain.setTargetAtTime(A.muted ? 0 : 0.9, t, fade ? 1.3 : 0.6);
+  G.sat = shaper(ctx, 1.4); G.lp = ctx.createBiquadFilter(); G.lp.type = 'lowpass'; G.lp.frequency.value = 3800; G.lp.Q.value = 0.5;
+  G.hs = ctx.createBiquadFilter(); G.hs.type = 'highshelf'; G.hs.frequency.value = 1800; G.hs.gain.value = -9;
+  G.comp = ctx.createDynamicsCompressor(); G.comp.threshold.value = -16; G.comp.ratio.value = 3; G.comp.attack.value = 0.02; G.comp.release.value = 0.4;
+  G.an = ctx.createAnalyser(); G.an.fftSize = 2048;
+  G.bus = ctx.createGain(); G.bus.gain.value = 0.7;
+  G.bus.connect(G.sat); G.sat.connect(G.hs); G.hs.connect(G.lp); G.lp.connect(G.comp); G.comp.connect(G.out); G.out.connect(ctx.destination); G.out.connect(G.an);
+  // room
+  G.verb = makeVerb(ctx, 5.5); G.verbIn = ctx.createGain(); G.verbIn.gain.value = 0.5; G.verbLP = ctx.createBiquadFilter(); G.verbLP.type = 'lowpass'; G.verbLP.frequency.value = 1400;
+  G.verbIn.connect(G.verbLP); G.verbLP.connect(G.verb); G.verb.connect(G.bus);
+  // ping-pong dub echo with a bounded feedback loop
+  G.dIn = ctx.createGain(); G.dL = ctx.createDelay(4); G.dR = ctx.createDelay(4); G.dL.delayTime.value = 0.662; G.dR.delayTime.value = 0.441;
+  G.fb = ctx.createGain(); G.fb.gain.value = 0.38; G.fLP = ctx.createBiquadFilter(); G.fLP.type = 'lowpass'; G.fLP.frequency.value = 900; G.fHP = ctx.createBiquadFilter(); G.fHP.type = 'highpass'; G.fHP.frequency.value = 90; G.fSat = shaper(ctx, 1.8);
+  G.mL = ctx.createStereoPanner(); G.mL.pan.value = -0.7; G.mR = ctx.createStereoPanner(); G.mR.pan.value = 0.7;
+  G.dIn.connect(G.dL); G.dL.connect(G.dR); G.dR.connect(G.fLP); G.fLP.connect(G.fHP); G.fHP.connect(G.fSat); G.fSat.connect(G.fb); G.fb.connect(G.dL);
+  G.dL.connect(G.mL); G.dR.connect(G.mR); G.dRet = ctx.createGain(); G.dRet.gain.value = 0.55; G.mL.connect(G.dRet); G.mR.connect(G.dRet); G.dRet.connect(G.bus); G.dRet.connect(G.verbIn);
+  // notches where voices used to be: absence carved out of the bed and the echoes
+  G.notch = RATIOS.map(r => { const f = ctx.createBiquadFilter(); f.type = 'peaking'; f.frequency.value = F0 * r * 2; f.Q.value = 6; f.gain.value = 0; return f; });
+  // residue bed: brown noise, lowpassed, level from accumulated damage
+  G.bedLP = ctx.createBiquadFilter(); G.bedLP.type = 'lowpass'; G.bedLP.frequency.value = 260; G.bed = ctx.createGain(); G.bed.gain.value = 0;
+  let node = G.bedLP; for (const f of G.notch) { node.connect(f); node = f; } node.connect(G.bed); G.bed.connect(G.bus); G.bed.connect(G.verbIn);
+  startNoise(G);
+  // voices: continuous, phase-continuous oscillators; level and pitch follow the membrane
+  G.v = RATIOS.map((r, i) => {
+    const f = F0 * r, o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), o3 = ctx.createOscillator();
+    o1.type = 'sine'; o2.type = 'sine'; o3.type = 'triangle'; o1.frequency.value = f; o2.frequency.value = f * 2.003; o3.frequency.value = f * 1.002;
+    const g2 = ctx.createGain(); g2.gain.value = 0.18; const g3 = ctx.createGain(); g3.gain.value = 0.35; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.7;
+    const g = ctx.createGain(); g.gain.value = 0; const pan = ctx.createStereoPanner(); pan.pan.value = 0;
+    o1.connect(g); o2.connect(g2); g2.connect(g); o3.connect(g3); g3.connect(lp); lp.connect(g); g.connect(pan); pan.connect(G.bus); pan.connect(G.verbIn);
+    const vs = ctx.createGain(); vs.gain.value = 0.06; g.connect(vs); vs.connect(G.dIn);
+    o1.start(); o2.start(); o3.start(); return { o1, o2, o3, g, pan, lp, f };
+  });
+  // one-shot noise material for impulses (never looped)
+  const nb = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate), nd = nb.getChannelData(0), r = mulberry(5); for (let i = 0; i < nd.length; i++) nd[i] = r() * 2 - 1; G.nbuf = nb;
+  const old = A.G; A.G = G; A.built = true;
+  if (old) { const tt = ctx.currentTime; old.out.gain.setTargetAtTime(0, tt, 1.3); setTimeout(() => { try { old.out.disconnect(); old.v.forEach(v => { v.o1.stop(); v.o2.stop(); v.o3.stop(); }); if (old.noiseNode) old.noiseNode.disconnect(); clearInterval(old.noiseTimer); } catch (e) {} }, 6000); }
+  A.builtAt = ctx.currentTime;
+}
+function startNoise(G) {
+  const ctx = A.ctx;
+  const fallback = () => {          // crossfaded one-shot segments
+    const seg = () => { if (A.G !== G && A.G) return; const n = ctx.sampleRate * 5, b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0); let br = 0; for (let i = 0; i < n; i++) { br = (br + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = br * 3.5; }
+      const s = ctx.createBufferSource(); s.buffer = b; const g = ctx.createGain(); const t = ctx.currentTime + 0.05; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + 0.6); g.gain.setValueAtTime(1, t + 4.0); g.gain.linearRampToValueAtTime(0, t + 4.9);
+      s.connect(g); g.connect(G.bedLP); s.start(t); s.stop(t + 5); s.onended = () => { s.disconnect(); g.disconnect(); }; };
+    seg(); G.noiseTimer = setInterval(seg, 4300);
+  };
+  if (ctx.audioWorklet) {
+    ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET))
+      .catch(() => ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' }))))
+      .then(() => { const n = new AudioWorkletNode(ctx, 'fe4-noise', { outputChannelCount: [1] }); n.connect(G.bedLP); G.noiseNode = n; })
+      .catch(fallback);
+  } else fallback();
+}
+function env(g, t, peak, a, d) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setTargetAtTime(0, t + a, d / 4); return t + a + d * 1.6; }
+function audioImpulse(r) {
+  const ctx = A.ctx, G = A.G; if (!ctx || !G || ctx.state !== 'running') return;
+  const t = ctx.currentTime + 0.03, pan = clamp((r.x / W) * 2 - 1, -0.9, 0.9);
+  const out = ctx.createGain(); out.gain.value = 1; const p = ctx.createStereoPanner(); p.pan.value = pan; out.connect(p); p.connect(G.bus);
+  const ds = ctx.createGain(); ds.gain.value = 0.45; p.connect(ds); ds.connect(G.dIn); const vs = ctx.createGain(); vs.gain.value = 0.55; p.connect(vs); vs.connect(G.verbIn);
+  // pressure knock: a felt low body, not a report
+  const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(118, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.32);
+  const og = ctx.createGain(); const end1 = env(og, t, 0.62, 0.012, 1.2); o.connect(og); og.connect(out); o.start(t); o.stop(end1);
+  // the membrane rings in its current, damaged tuning
+  const s = ctx.createBufferSource(); s.buffer = G.nbuf; const sg = ctx.createGain(); const end2 = env(sg, t, 1.3, 0.02, 0.2); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+  s.connect(lp); lp.connect(sg); const nodes = [];
+  S.voices.forEach((v, i) => { if (v.state === 'gone') return; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = voiceFreq(i) * 2; bp.Q.value = 30; const bg = ctx.createGain(); bg.gain.value = 1.6 * (0.3 + 0.7 * v.life); sg.connect(bp); bp.connect(bg); bg.connect(out); nodes.push(bp, bg); });
+  s.start(t, rnd() * 2); s.stop(end2 + 2.5);
+  const all = [o, og, s, sg, lp, ...nodes];
+  s.onended = () => { setTimeout(() => { all.forEach(n => { try { n.disconnect(); } catch (e) {} }); [out, p, ds, vs].forEach(n => n.disconnect()); }, 4000); };
+}
+function voiceFreq(i) {
+  const v = S.voices[i]; const c = cellAt(v.x, v.y);
+  const local = -1200 * Math.log2(1 / Math.sqrt(lerp(0.28, 1, c.h))) * 0.16;
+  const global = -meanP * 90 - v.moves * 7;
+  return v.r * F0 * Math.pow(2, (local + global) / 1200);
+}
+function audioTick() {
+  const ctx = A.ctx, G = A.G; if (!ctx || !G) return;
+  const pn = pressN();
+  S.voices.forEach((v, i) => {
+    const c = cellAt(v.x, v.y), V = G.v[i];
+    const lvl = v.state === 'gone' ? 0 : v.life * clamp(0.35 + 1.1 * c.e, 0, 1.2) * (0.085 / Math.sqrt(v.r)) * (1 + 0.15 * Math.sin(S.elapsed * 0.09 + i * 1.7));
+    setP(V.g.gain, lvl, 0.8, 'vg' + i);
+    const f = voiceFreq(i), wob = 1 + 0.004 * pn * Math.sin(S.elapsed * (0.7 + i * 0.13));
+    setP(V.o1.frequency, f * wob, 0.6, 'vf' + i); setP(V.o2.frequency, f * 2.003 * wob, 0.6, 'vf2' + i); setP(V.o3.frequency, f * 1.002, 0.6, 'vf3' + i);
+    setP(V.pan.pan, clamp((v.x / W) * 1.6 - 0.8, -0.8, 0.8), 1.5, 'vp' + i);
+    const dead = v.state === 'gone' ? 1 : v.state === 'sing' ? 0 : 1 - v.life;
+    setP(G.notch[i].gain, -16 * dead, 2, 'nt' + i);
+  });
+  setP(G.bed.gain, clamp(0.004 + meanP * 0.6 + tornFrac * 0.4, 0, 0.16), 3, 'bed');
+  setP(G.fb.gain, clamp(0.34 + 0.32 * pn + 0.4 * meanP, 0, 0.78), 2, 'fb');
+  setP(G.verbIn.gain, clamp(0.4 + meanP * 1.5, 0, 0.9), 3, 'vb');
+  setP(G.out.gain, A.muted ? 0 : 0.9, 0.3, 'out');
+}
+// knock: the membrane's own Euclidean pulse, E(5,13). Each impulse displaces one step; the offset heals but not fully.
+const EU = (() => { const k = 5, n = 13, p = []; for (let i = 0; i < n; i++) p.push(((i * k) % n) < k ? 1 : 0); return p; })();
+let kStep = 0, kNext = 0; const STEP = 60 / 68 / 4;
+function knockSched() {
+  const ctx = A.ctx, G = A.G; if (!ctx || !G || ctx.state !== 'running') return;
+  if (kNext < ctx.currentTime - 0.2) kNext = ctx.currentTime + 0.05;         // after a stall: skip forward
+  while (kNext < ctx.currentTime + 0.4) {
+    const i = kStep % 13;
+    if (EU[i]) {
+      const kx = W * (0.5 + 0.38 * Math.sin(S.elapsed * 0.0031 + 1)), ky = H * (0.5 + 0.34 * Math.sin(S.elapsed * 0.0043));
+      const c = cellAt(kx, ky);
+      if (rnd() < 0.3 + 0.7 * c.h) {
+        const t = kNext + clamp(S.knock.off[i], -0.06, 0.06);
+        const o = ctx.createOscillator(); o.frequency.setValueAtTime(96 * (0.9 + 0.1 * c.h), t); o.frequency.exponentialRampToValueAtTime(64, t + 0.2);
+        const g = ctx.createGain(); const end = env(g, Math.max(t, ctx.currentTime + 0.01), 0.16 * (0.5 + 0.5 * c.h), 0.006, 0.22);
+        const p = ctx.createStereoPanner(); p.pan.value = clamp(kx / W * 1.4 - 0.7, -0.7, 0.7); const ds = ctx.createGain(); ds.gain.value = 0.3;
+        o.connect(g); g.connect(p); p.connect(G.bus); p.connect(ds); ds.connect(G.dIn); o.start(Math.max(t, ctx.currentTime)); o.stop(end);
+        o.onended = () => { o.disconnect(); g.disconnect(); p.disconnect(); ds.disconnect(); };
+        const delayMs = Math.max(0, (t - ctx.currentTime) * 1000); setTimeout(() => queueKnockBump(kx, ky), delayMs);
+      }
+    }
+    kStep++; kNext += STEP;
+  }
+}
+let knockBumps = [];
+function queueKnockBump(x, y) { knockBumps.push([x, y]); }
+function watchdog() {
+  if (!A.ctx) return; const ctx = A.ctx;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx.state === 'closed') { A.ctx = null; A.G = null; A.lastSet = {}; audioStart(); logl('audio context recreated'); return; }
+  if (ctx.state === 'running') {
+    if (ctx.currentTime === A.lastT) { A.stallAt += 1; if (A.stallAt > 6) { try { ctx.close(); } catch (e) {} A.ctx = null; A.G = null; A.lastSet = {}; audioStart(); logl('audio clock stalled — rebuilt'); return; } } else A.stallAt = 0;
+    A.lastT = ctx.currentTime;
+    const d = new Float32Array(A.G.an.fftSize); A.G.an.getFloatTimeDomainData(d); let s = 0, bad = false; for (const x of d) { if (!Number.isFinite(x)) { bad = true; break; } s += x * x; }
+    const rms = Math.sqrt(s / d.length);
+    if (!A.muted && rms < 1e-5) A.silentFor++; else A.silentFor = 0;
+    if (bad || A.silentFor > 20 || ctx.currentTime - A.builtAt > 3 * 3600) { A.silentFor = 0; A.lastSet = {}; buildGraph(true); logl(bad ? 'audio graph rebuilt (non-finite)' : 'audio graph refreshed'); }
+  }
+}
+
+// ---------- persistence ----------
+function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function unb64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+let savedMap = null;
+function lastSaved() { return savedMap; }
+function save() {
+  if (!glOK) return;
+  try { savedMap = snapshotDamage(); const o = Object.assign({}, S, { map: b64(savedMap) }); localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+}
+function load() {
+  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!o || o.v !== 1) return null;
+    for (const k of ['born', 'elapsed', 'play', 'idx', 'applied', 'pressure', 'live', 'marks', 'log', 'pal', 'gain', 'knock', 'geo', 'lastT', 'hiP']) if (o[k] !== undefined) S[k] = o[k];
+    if (Array.isArray(o.voices) && o.voices.length === 5) S.voices = o.voices.map((v, i) => Object.assign({}, S.voices[i], v));
+    S.elapsed = fin(S.elapsed); S.pressure = fin(S.pressure); S.gain = clamp(fin(S.gain, 6), 1.5, 40); S.applied = fin(S.applied);
+    for (const n of ['bg', 'mid', 'lit', 'res']) if (!S.pal[n] || S.pal[n].some(x => !Number.isFinite(x))) S.pal[n] = HOME[n].slice();
+    S.voices.forEach(v => { v.x = clamp(fin(v.x, W / 2), 4, W - 4); v.y = clamp(fin(v.y, H / 2), 4, H - 4); v.life = clamp(fin(v.life, 1), 0, 1); });
+    return o.map ? unb64(o.map) : null;
+  } catch (e) { return null; }
+}
+
+// ---------- info ----------
+const infoEl = document.getElementById('info'); let infoOn = SHOW_INFO && !CAPTURE;
+function rgb(c, a = 1) { return `rgba(${c.map(Math.round).join(',')},${a})`; }
+function renderInfo() {
+  infoEl.classList.toggle('off', !infoOn); if (!infoOn) return;
+  const P = S.pal; infoEl.style.background = rgb(P.bg, 0.86); infoEl.style.color = rgb(P.lit); infoEl.style.borderColor = rgb(P.res);
+  const vs = S.voices.map(v => v.state === 'gone' ? '×' : v.state === 'sing' ? (v.life > 0.5 ? '●' : '◐') : '○').join(' ');
+  const pending = Math.max(0, REC.length - S.idx);
+  const L = [];
+  L.push(`<b>FIELD ENGINE 004 · TAUT</b>   <span class="d">${fmtT(S.elapsed)} running</span>`);
+  L.push(`<span class="d">a membrane held at tension by five voices. impulses arrive from a public record stream (time + position only), one equal impulse per record, in order${S.live ? ', as records appear' : ` · ${PACE} min per record day`}</span>`);
+  L.push(`<span class="d">impulse → wave + damage · damage heals toward a floor, never to zero · damaged ground: slower waves (they bend), absorbs (dead) · past 0.5 it tears</span>`);
+  L.push(`<span class="d">voice pitch ← tension under it · voice level ← energy there · on dead ground a voice falls silent, then regrows on intact ground if any is left · gaps → recovery · clusters → pressure → slower healing, longer echoes</span>`);
+  L.push(`record day <b>${String(recordDay()).padStart(4, '0')}</b> / ${recordDays() || '—'} · impulses ${S.applied} · source: ${recStatus}${S.live ? ' · live' : ''}`);
+  L.push(`residue <b>${meanP.toFixed(3)}</b> · torn ${(tornFrac * 100).toFixed(1)}% · pressure ${pressN().toFixed(2)} · tension ${tension().toFixed(3)} · voices ${vs}${A.ctx && A.ctx.state !== 'running' ? ' · sound: click to start' : ''}${A.muted ? ' · muted' : ''}`);
+  for (const [t, s] of S.log.slice(-5)) L.push(`<span class="d">${fmtT(t)}</span> ${s}`);
+  infoEl.innerHTML = L.join('\n');
+}
+
+// ---------- main ----------
+let last = performance.now(), rbClock = 0, saveClock = 0, infoClock = 0, audioClock = 0;
+function frame(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (!document.hidden || CAPTURE) S.elapsed += dt;
+  resize();
+  if (glOK) {
+    advance(dt);
+    voiceUniforms();
+    // rings: equal amplitude for every impulse, scaled to the field's own typical motion
+    hitN = 0; hitBuf.fill(0);
+    const imp = 3.2 / Math.max(1.5, S.gain);
+    while (pending.length && hitN < 6) { const r = pending.shift(); queueHit(r.x, r.y, imp, 1); }
+    while (knockBumps.length && hitN < 8) { const [x, y] = knockBumps.shift(); queueHit(x, y, imp * 0.35, 0); }
+    for (let s = 0; s < SUB; s++) simStep(true, dt / SUB, s === 0 && hitN > 0);
+    rbClock += dt; if (rbClock > 0.5) { rbClock = 0; readback(); analyse(); voiceTick(0.5); marks(); }
+    paletteTick(dt);
+    draw();
+  }
+  audioClock += dt; if (audioClock > 0.1) { audioClock = 0; audioTick(); }
+  infoClock += dt; if (infoClock > 0.5) { infoClock = 0; renderInfo(); }
+  saveClock += dt; if (saveClock > 60) { saveClock = 0; save(); }
+  requestAnimationFrame(frame);
+}
+
+// voices oscillate inside the shader through a per-substep phase; keep it in double precision here
+const _simStep = simStep;
+simStep = function (wave, dt, hits) {
+  for (let i = 0; i < 5; i++) {
+    const v = S.voices[i]; const f = 0.5 / (64 / v.r);   // cycles per step
+    vPhase[i] = (vPhase[i] + f) % 1;
+    const amp = vBuf[i * 4 + 2] || 0.006; vBuf[i * 4 + 2] = Math.abs(amp);
+    vAmp[i] = (v.state === 'gone' ? 0 : v.life) * Math.sin(vPhase[i] * Math.PI * 2);
+  }
+  _simStep(wave, dt, hits);
+};
+
+function fastForward(hours) {
+  // replay `hours` of broadcast time into the damage maps without the wave: heal across each gap, then stamp
+  if (!REC.length || hours <= 0) return;
+  const target = S.play + hours * 3600 * 1000 * DATA_PER_REAL;
+  let passes = 0;
+  while (S.idx < REC.length && REC[S.idx].t <= target && passes < 40000) {
+    const gapReal = (REC[S.idx].t - S.play) / DATA_PER_REAL / 1000;
+    if (gapReal > 0.5) { simStep(false, gapReal, false); passes++; }
+    S.pressure *= Math.exp(-(REC[S.idx].t - S.play) / 86400000 / 6); S.elapsed += Math.max(0, gapReal); S.play = REC[S.idx].t;
+    hitN = 0; hitBuf.fill(0);
+    while (hitN < 8 && S.idx < REC.length && REC[S.idx].t <= target && (REC[S.idx].t - S.play) / DATA_PER_REAL / 1000 < 30) {
+      const r = REC[S.idx]; queueHit(r.x, r.y, 0, 1); S.idx++; S.applied++; S.pressure += 1; S.lastT = r.t;
+    }
+    simStep(false, 0, true); passes++;
+    if (passes % 400 === 0) { readback(); analyse(); voiceTick(Math.min(30, gapReal)); marks(); }
+  }
+  const rest = Math.max(0, (target - S.play) / DATA_PER_REAL / 1000);
+  if (rest > 0) { simStep(false, rest, false); S.elapsed += rest; }
+  S.play = Math.max(S.play, Math.min(target, recNewest));
+  if (S.idx >= REC.length) { S.live = true; S.play = recNewest; }
+  readback(); analyse(); marks();
+  logl(`fast-forwarded ${hours} h of replay`);
+}
+
+const saved = load();
+savedMap = saved;
+glInit(saved);
+for (let i = 0; i < 700; i++) { voiceUniforms(); simStep(true, 1 / 240, false); }   // pre-warm: it was running before you arrived
+readback(); analyse();
+if (!S.log.length) logl('membrane drawn taut · five voices holding it');
+else logl('resumed from memory');
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); if (k === 'i') infoOn = !infoOn; if (k === 'm') { A.muted = !A.muted; } audioStart(); if (A.ctx) A.ctx.resume(); });
+addEventListener('pointerdown', () => { audioStart(); if (A.ctx) A.ctx.resume(); });
+audioStart();
+setInterval(knockSched, 40);
+setInterval(watchdog, 1000);
+addEventListener('beforeunload', save);
+loadRecords().then(() => { const ff = +(Q.get('ff') || 0); if (ff > 0) fastForward(ff); });
+requestAnimationFrame(frame);
+
+function tick(dt, drawIt) {
+  S.elapsed += dt; advance(dt); voiceUniforms();
+  hitN = 0; hitBuf.fill(0); const imp = 3.2 / Math.max(1.5, S.gain);
+  while (pending.length && hitN < 6) { const r = pending.shift(); queueHit(r.x, r.y, imp, 1); }
+  while (knockBumps.length && hitN < 8) { const [x, y] = knockBumps.shift(); queueHit(x, y, imp * 0.35, 0); }
+  for (let s = 0; s < SUB; s++) simStep(true, dt / SUB, s === 0 && hitN > 0);
+  rbClock += dt; if (rbClock > 0.5) { rbClock = 0; readback(); analyse(); voiceTick(0.5); marks(); }
+  paletteTick(dt); if (drawIt) draw();
+}
+window.MZ = { S, inject(x, y) { applyRecord({ t: S.lastT || 0, x, y }, false); }, run(sec) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) tick(1 / 60, i === n - 1); renderInfo(); }, get rec() { return REC; }, ff: fastForward, save, load, A, metrics: () => ({ maxP: Math.max(...Array.from({ length: RW * RH }, (_, i) => rbPix[i * 4 + 2])) / 255, minH: Math.min(...Array.from({ length: RW * RH }, (_, i) => rbPix[i * 4 + 1])) / 255, meanP, tornFrac, meanE, p90E, gain: S.gain, idx: S.idx, n: REC.length, live: S.live }),
+  poison() { const d = new Float32Array(W * H * 4).fill(NaN); gl.bindTexture(gl.TEXTURE_2D, tex.A[ping]); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.FLOAT, d); },
+  loseContext() { const e = gl.getExtension('WEBGL_lose_context'); e.loseContext(); setTimeout(() => e.restoreContext(), 500); } };
+</script>
+</body>
+</html>
