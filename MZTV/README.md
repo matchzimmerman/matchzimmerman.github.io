@@ -163,6 +163,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/field-engine-001-residue/`
 
+### FIELD ENGINE 002 — THE FIELD DOES NOT RESET
+A rolling year of public incident records flagged as shootings is replayed chronologically through one material field. Every event enters with the same initial force at its recorded position. The visible disturbance settles, but a smaller residue and absence remain, altering how later pressure propagates. The piece withholds map labels, victim demographics, weapon imagery, dramatic severity scaling and explanatory statistics; the accumulation is the argument. Low resonant impulses and a changing drone/noise bed read the same field state as the image.
+
+Path:
+`sources/field-engine-002-the-field-does-not-reset/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/field-engine-002-the-field-does-not-reset/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
