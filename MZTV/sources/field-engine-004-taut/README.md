@@ -13,6 +13,7 @@ The question it puts to the system is what repeated real-world violence does to 
 - **Damage:** two layers. *T* is fresh damage. It heals on a half-life of a few minutes, and heals more slowly on scarred ground and under pressure. *P* is permanent residue and only ever grows. Health is `h = 1 − P − 0.6·T`. Wave speed is `c² ∝ mix(0.28, 1, h)` and damping is `0.004 + 0.03·(1−h)`. Where `P > 0.5` the membrane is torn and held at zero.
 - **Equal force:** each record adds the same wave bump and the same damage stamp. No attribute of a record scales its effect. Rows within the same minute and about 100 m of each other are merged into one event, so the number of people involved never scales an impulse either.
 - **Pressure:** a leaky count of recent records, with a 6 record-day half-life. Clusters raise it and gaps let it drain. Pressure slows healing, lengthens the dub echo and makes the voices waver.
+- **Tending:** each impulse draws singing voices within 170 px a few pixels toward it, and fresh damage heals up to 3.5× faster near a singing voice. The repair response moves the chord into harm’s way.
 - **Homeostasis:** a voice whose ground health stays below 0.55 for 90 s falls silent. After 1–3 minutes it searches the readback map for ground with health above 0.78, at least 60 px from the other voices. If it finds some, it regrows there. If not, it is gone.
 - **Slackening:** as residue accumulates, the whole membrane loses up to 18% of its tension. Wavelengths shorten and the pattern loses symmetry.
 
