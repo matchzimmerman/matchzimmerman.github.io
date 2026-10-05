@@ -6,24 +6,34 @@ A rolling year of public incident records flagged as shootings is replayed chron
 
 The terrain attempts to settle after each event, but does not return to its prior state.
 
+## Build (v2, 2026-10-05)
+
+`index.html` is now **SOUNDING's source with the FIELD ENGINE 002 event system ported in** (SOUNDING treated as the codebase). The renderer and the entire audio engine are SOUNDING's, unmodified.
+
+Why v1 was black: the earlier transplant deleted SOUNDING's persistence/info block (`save`, `load`, `info`, `fmtT`), so `setInterval(save, …)` threw at boot. Audio had already started; the animation loop and data fetch never ran. The previous build is kept as `v1-broken.html` for the record.
+
+Data fix: v1 asked for the oldest 2,000 records (ascending, capped), which returned 2022–23 rather than the last year. v2 first asks the source for its newest record, then fetches every shooting-flagged record in the `?days` window before it (paged), so the replay is the true rolling year.
+
 ## Behavior
 
 - A rolling year of shooting-flagged public incident records is fetched from the official NIBRS Group A ArcGIS layer.
 - Events are sorted by occurrence time and replayed proportionally across the performance.
 - Geographic coordinates determine event position only.
-- Each recorded event produces the same terrain impact and memory pressure.
-- Impact energy decays while wear/scarring remains in the simulated ground.
+- Each recorded event produces the same terrain impact and memory pressure (fixed force 0.78; no attribute scales it).
+- The disturbance settles; the scar fades slowly but never below a permanent residue each event leaves (`ef` floor), so the ground does not return to its prior state even over many hours.
+- Accumulated events add rule pressure: a year drives roughly three SOUNDING rule eras.
 - Accumulated impacts feed the same terrain-memory and rule-pressure systems that make SOUNDING evolve.
 - Synthetic/random impact events from SOUNDING are disabled; recorded events are the only true impact source.
 - The camera remains autonomous but slowly bends toward the next/recent disturbance rather than teleporting to it.
-- After the final event, the altered ground remains onscreen. Looping is opt-in.
+- After the final event, the altered ground keeps running with no new events. Looping is opt-in.
+- If the data source can't be reached, the ground runs with no events and retries every 60 s; nothing substitutes for records.
 
 ## Visual system
 
 The work now uses SOUNDING's spatial language rather than the earlier flat FIELD ENGINE panel:
 
 - low drifting camera
-- ray-marched terrain
+- ray-marched terrain (WebGL2; no canvas fallback any more)
 - contour strata and world-space hatching
 - persistent impact scars
 - long sun/moon shadows
@@ -58,6 +68,7 @@ The SOUNDING audio environment remains coupled to the same simulated terrain. Re
 - `?rate=N` — FIELD ENGINE evolution-rate multiplier
 - `?lines=N` — internal rendering resolution
 - `?capture=1` — offline/capture timing mode inherited from SOUNDING
+- `?seed=N` — fixed seed for the starting ground
 
 Path:
 

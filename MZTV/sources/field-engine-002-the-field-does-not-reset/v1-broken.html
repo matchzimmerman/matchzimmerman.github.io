@@ -7,6 +7,9 @@
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#120e24;cursor:none}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+#c{z-index:0}
+#fallback{z-index:1;display:none;pointer-events:none;image-rendering:pixelated}
+#info{z-index:2}
 #info{position:fixed;left:22px;bottom:20px;font:11px/1.55 "JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   padding:7px 11px 8px;white-space:pre;letter-spacing:.02em;pointer-events:none;max-width:calc(100vw - 44px);overflow:hidden;
   border:1px solid;display:none}
@@ -17,21 +20,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-renderi
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="fallback"></canvas>
 <div id="info"></div>
 <script>
 'use strict';
 /* =====================================================================
-   FIELD ENGINE 002 — THE FIELD DOES NOT RESET  (MZTV)
-   Built on the BIT FIELD 014 — SOUNDING renderer and audio (treated as the codebase).
-   A rolling year of public records flagged as shootings is replayed, in order,
-   as equal-force disturbances in SOUNDING's ground. Each disturbance settles;
-   a residue stays. The ground never returns to its prior state.
-   Recorded events are the only impact source (SOUNDING's random impacts are off).
-
-   FIELD ENGINE params: ?minutes=12 (length of the compressed year) · ?days=365
-     ?hold=30 · ?loop=1 (rebuild + replay after hold; default holds forever)
-   Keys: SPACE pause/continue replay · R rebuild ground + restart year · I info
-   ---- inherited SOUNDING header follows ----
+   FIELD ENGINE 002 — THE FIELD DOES NOT RESET
+   A low camera drifts across a ground altered by recorded events.
    The ground is a live field simulation on a torus (no edge, no centre).
    Its governing operators mutate over hours under accumulated pressure;
    the camera's path, impacts and eras are written into the field and
@@ -52,14 +47,20 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-renderi
 const Q = new URLSearchParams(location.search);
 const RATE = Math.max(0.01, parseFloat(Q.get('rate') || '1'));
 let SHOW_INFO = Q.get('info') !== '0';
-const FRESH = Q.get('fresh') !== '0';   // FIELD ENGINE 002: each performance starts on fresh ground
+const FRESH = Q.get('fresh') !== '0';
 const MUTE = Q.get('audio') === '0';
 const LINES = Math.max(120, parseInt(Q.get('lines') || '270', 10));
 // Two builds from one source: index.html = the autonomous stream (never listens to the mixer);
 // play.html sets window.MZTV_LINKED = true = mixer-linked, with its own separate memory.
-const LINKED = false;                       // FIELD ENGINE 002 has no mixer-linked build
-const KEY = 'mztv-field-engine-002-v3';
+const LINKED = false;
+const KEY = 'mztv-field-engine-002-v2';
 const CAPTURE = Q.get('capture') === '1';   // offline rendering: frames advance only when MZ.tick(dt) is called
+const YEAR_DAYS = Math.max(30, +(Q.get('days') || 365));
+const PLAY_MIN = Math.max(0.25, +(Q.get('minutes') || 12));
+const HOLD_SEC = Math.max(5, +(Q.get('hold') || 30));
+const AUTO_LOOP = Q.get('loop') === '1';
+const DATA_API = 'https://services1.arcgis.com/UWYHeuuJISiGmgXx/arcgis/rest/services/NIBRS_GroupA_Crime_Data/FeatureServer/0/query';
+const D = { events:[], state:'CONNECTING', startMs:0, endMs:1, playheadMs:0, index:0, phase:'loading', playStart:0, holdStart:0, paused:false, pauseAt:0, focus:null, cycle:0 };
 
 /* ---------------- utilities ---------------- */
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
@@ -70,17 +71,96 @@ const wrapA = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Ma
 const angLerp = (a, b, t) => a + wrapA(b - a) * t;
 const R = { s: 1, next() { let t = (this.s = (this.s + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; } };
 const rnd = () => R.next();
+
+/* ---------------- recorded field ---------------- */
+function torusDelta(a,b){ let d=b-a; if(d>N*0.5)d-=N; if(d<-N*0.5)d+=N; return d; }
+function normalizeRecorded(rows){
+  const parsed=[];
+  for(const a of rows){
+    const lat=+a.Latitude, lon=+a.Longitude, t=+a.CrimeDateTime;
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(t)) continue;
+    if(lat<20||lat>50||lon>-60||lon<-100) continue;
+    parsed.push({t,lat,lon,id:String(a.CCNumber||a.RowID||parsed.length)});
+  }
+  parsed.sort((a,b)=>a.t-b.t);
+  if(!parsed.length) return [];
+  const newest=parsed[parsed.length-1].t, cutoff=newest-YEAR_DAYS*86400000;
+  const source=parsed.filter(e=>e.t>=cutoff);
+  const use=source.length?source:parsed.slice(-400);
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  for(const e of use){minLat=Math.min(minLat,e.lat);maxLat=Math.max(maxLat,e.lat);minLon=Math.min(minLon,e.lon);maxLon=Math.max(maxLon,e.lon);}
+  const pLat=(maxLat-minLat)*0.045||0.01,pLon=(maxLon-minLon)*0.045||0.01;
+  minLat-=pLat;maxLat+=pLat;minLon-=pLon;maxLon+=pLon;
+  for(const e of use){
+    e.x=18+clamp((e.lon-minLon)/(maxLon-minLon),0,1)*(N-36);
+    e.z=18+clamp(1-(e.lat-minLat)/(maxLat-minLat),0,1)*(N-36);
+  }
+  return use;
+}
+async function loadRecorded(){
+  D.state='CONNECTING';
+  const p=new URLSearchParams({
+    where:"Shooting='Y'",
+    outFields:'RowID,CCNumber,CrimeDateTime,Shooting,Latitude,Longitude',
+    returnGeometry:'false', orderByFields:'CrimeDateTime ASC', resultRecordCount:'2000', f:'json'
+  });
+  try{
+    const r=await fetch(DATA_API+'?'+p,{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json(); if(j.error) throw new Error(j.error.message||'data error');
+    D.events=normalizeRecorded((j.features||[]).map(f=>f.attributes||{}));
+    if(!D.events.length) throw new Error('no valid records');
+    D.startMs=D.events[0].t; D.endMs=D.events[D.events.length-1].t;
+    D.state='LIVE DATA'; beginDataCycle(false);
+  }catch(err){ console.warn(err); D.state='DATA LINK LOST'; D.phase='error'; }
+}
+function prepareReplayGround(){
+  freshState(seed);
+  for(let i=0;i<160;i++){ slowStep(0.1); camStep(0.1); S.t+=0.1; }
+  S.imps=[]; S.events=0; S.P=0.18;
+}
+function beginDataCycle(resetGround){
+  if(resetGround) prepareReplayGround();
+  D.index=0; D.playheadMs=D.startMs; D.playStart=performance.now();
+  D.phase='play'; D.paused=false; D.focus=null; D.cycle++;
+}
+function pauseData(){
+  if(D.phase!=='play')return;
+  D.paused=!D.paused;
+  if(D.paused)D.pauseAt=performance.now();
+  else D.playStart+=performance.now()-D.pauseAt;
+}
+function dataTarget(){
+  if(D.focus && S.real < D.focus.until) return D.focus;
+  if(D.index<D.events.length) return D.events[D.index];
+  return null;
+}
+function injectRecorded(ev){
+  const x=ev.x,z=ev.z,str=0.78;
+  if(S.caps.waves && S.G.waves>0.05) stamp(wv,x,z,2.2,-str*5.0*(0.4+S.G.waves),false);
+  else stamp(h,x,z,2.5,-str*0.72,false);
+  ring(e,x,z,5.0,1.15,str*0.72);
+  stamp(m,x,z,3.8,0.045,true);
+  S.imps.push({x,z,age:0,s:str}); if(S.imps.length>4)S.imps.shift();
+  S.events++; S.P=clamp(S.P+0.028,0,1.15);
+  D.focus={x,z,until:S.real+7};
+  const c=S.cam,dx=torusDelta(c.x,x),dz=torusDelta(c.z,z),dist=Math.hypot(dx,dz),ang=Math.atan2(dz,dx);
+  audioPing(dist,str,wrapA(ang-c.yaw-(c.gaze||0)),samp(h,x,z),samp(e,x,z));
+}
+function updateRecordedTimeline(nowMs){
+  if(D.phase==='loading'||D.phase==='error'||!D.events.length)return;
+  if(D.phase==='play'){
+    if(D.paused)return;
+    const prog=clamp(((nowMs-D.playStart)/1000)/(PLAY_MIN*60));
+    D.playheadMs=lerp(D.startMs,D.endMs,prog);
+    while(D.index<D.events.length && D.events[D.index].t<=D.playheadMs) injectRecorded(D.events[D.index++]);
+    if(prog>=1){D.phase='hold';D.holdStart=nowMs;D.playheadMs=D.endMs;}
+  }else if(D.phase==='hold'&&AUTO_LOOP&&(nowMs-D.holdStart)/1000>=HOLD_SEC){
+    beginDataCycle(true);
+  }
+}
 const gauss = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * rnd()); };
 let NSEED = 1;
-
-/* ---------------- FIELD ENGINE 002 · recorded events ---------------- */
-const YEAR_DAYS = Math.max(7, +(Q.get('days') || 365));
-const PLAY_MIN = Math.max(0.25, +(Q.get('minutes') || 12));
-const HOLD_SEC = Math.max(5, +(Q.get('hold') || 30));
-const AUTO_LOOP = Q.get('loop') === '1';
-const DATA_API = 'https://services1.arcgis.com/UWYHeuuJISiGmgXx/arcgis/rest/services/NIBRS_GroupA_Crime_Data/FeatureServer/0/query';
-const EVENT_FORCE = 0.78;                   // identical for every record — nothing scales it
-const D = { events: [], state: 'CONNECTING', startMs: 0, endMs: 1, playheadMs: 0, index: 0, phase: 'loading', playStart: 0, holdStart: 0, paused: false, pauseAt: 0, focus: null, cycle: 0 };
 function hash1(i) { let x = Math.imul(i | 0, 374761393) ^ Math.imul(NSEED | 0, 668265263); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; }
 function vnoise(t, ch) { const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f); return lerp(hash1(i * 7 + ch * 1013), hash1((i + 1) * 7 + ch * 1013), u) * 2 - 1; }
 function fbm(t, ch) { return vnoise(t, ch) * 0.6 + vnoise(t * 2.13 + 5.1, ch + 1) * 0.28 + vnoise(t * 4.7 + 1.7, ch + 2) * 0.12; }
@@ -90,7 +170,6 @@ const N = 256, M = N - 1, NN = N * N;
 let h = new Float32Array(NN), hn = new Float32Array(NN);
 const w = new Float32Array(NN), wv = new Float32Array(NN);
 const m = new Float32Array(NN), e = new Float32Array(NN);
-const ef = new Float32Array(NN);   // FIELD ENGINE 002: residue each recorded event leaves; scars never fade below it
 const ta = new Float32Array(NN), tb = new Float32Array(NN), tc = new Float32Array(NN);
 
 function samp(a, x, z) {
@@ -346,7 +425,7 @@ function slowStep(dt) {
       dh -= 0.05 * hi * hi * hi;
       const v = hi + dt * dh;
       hn[i] = v;
-      m[i] = mi * mDecay; e[i] *= eDecay; if (e[i] < ef[i]) e[i] = ef[i];
+      m[i] = mi * mDecay; e[i] *= eDecay;
       hs += v; h2 += v * v; ms += mi; es += e[i];
     }
   }
@@ -402,104 +481,6 @@ function waveStep(dt) {
   wE = s / (NN / 7);
 }
 
-/* ---------------- FIELD ENGINE 002 · timeline ---------------- */
-function torusDelta(a, b) { let d = b - a; if (d > N * 0.5) d -= N; if (d < -N * 0.5) d += N; return d; }
-function normalizeRecorded(rows) {
-  const out = [];
-  for (const a of rows) {
-    const lat = +a.Latitude, lon = +a.Longitude, t = +a.CrimeDateTime;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(t) || lat === 0 || lon === 0) continue;
-    out.push({ t, lat, lon });
-  }
-  out.sort((a, b) => a.t - b.t);
-  if (!out.length) return out;
-  // position only: geographic extent → a square inside the torus (not a map; never drawn as one)
-  let a0 = Infinity, a1 = -Infinity, o0 = Infinity, o1 = -Infinity;
-  for (const e of out) { a0 = Math.min(a0, e.lat); a1 = Math.max(a1, e.lat); o0 = Math.min(o0, e.lon); o1 = Math.max(o1, e.lon); }
-  const span = Math.max(a1 - a0, o1 - o0, 1e-3), ca = (a0 + a1) / 2, co = (o0 + o1) / 2;
-  for (const e of out) {
-    e.x = N * 0.5 + (e.lon - co) / span * (N - 40);
-    e.z = N * 0.5 - (e.lat - ca) / span * (N - 40);
-  }
-  return out;
-}
-async function arcgis(params) {
-  const r = await fetch(DATA_API + '?' + new URLSearchParams(Object.assign({ f: 'json' }, params)), { cache: 'no-store' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const j = await r.json(); if (j.error) throw new Error(j.error.message || 'data error');
-  return j;
-}
-async function loadRecorded() {
-  D.state = 'CONNECTING';
-  try {
-    // the rolling window ends at the newest record the source holds
-    const st = await arcgis({ where: "Shooting='Y'", outStatistics: JSON.stringify([{ statisticType: 'max', onStatisticField: 'CrimeDateTime', outStatisticFieldName: 'mx' }]) });
-    const mx = +(st.features && st.features[0] && st.features[0].attributes.mx);
-    if (!Number.isFinite(mx)) throw new Error('no newest record');
-    const from = new Date(mx - YEAR_DAYS * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-    let rows = [], off = 0;
-    for (let page = 0; page < 20; page++) {
-      const j = await arcgis({ where: `Shooting='Y' AND CrimeDateTime >= timestamp '${from}'`, outFields: 'CrimeDateTime,Latitude,Longitude', returnGeometry: 'false', orderByFields: 'CrimeDateTime ASC', resultRecordCount: '2000', resultOffset: String(off) });
-      const f = (j.features || []).map(x => x.attributes || {}); rows = rows.concat(f); off += f.length;
-      if (!j.exceededTransferLimit || !f.length) break;
-    }
-    const ev = normalizeRecorded(rows);
-    if (!ev.length) throw new Error('no valid records');
-    D.events = ev; D.startMs = ev[0].t; D.endMs = Math.max(ev[ev.length - 1].t, D.startMs + 1);
-    D.state = 'LIVE DATA'; beginDataCycle(false);
-  } catch (err) {
-    console.warn('FIELD ENGINE 002 data:', err);
-    D.state = 'DATA LINK LOST · retrying'; D.phase = 'error';
-    setTimeout(loadRecorded, 60000);      // the ground keeps running; no substitute events are made
-  }
-}
-function prepareReplayGround() {
-  freshState((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
-  ef.fill(0);
-  for (let i = 0; i < 160; i++) { slowStep(0.1); camStep(0.1); S.t += 0.1; }
-  S.imps = []; S.events = 0;
-}
-function beginDataCycle(resetGround) {
-  if (resetGround) prepareReplayGround();
-  D.index = 0; D.playheadMs = D.startMs; D.playStart = performance.now();
-  D.phase = 'play'; D.paused = false; D.focus = null; D.cycle++;
-}
-function pauseData() {
-  if (D.phase !== 'play') return;
-  D.paused = !D.paused;
-  if (D.paused) D.pauseAt = performance.now(); else D.playStart += performance.now() - D.pauseAt;
-}
-function dataTarget() {
-  if (D.focus && S.real < D.focus.until) return D.focus;
-  if (D.phase === 'play' && D.index < D.events.length) return D.events[D.index];
-  return null;
-}
-// one recorded event: same force every time. disturbance (h / waves) settles; scar (e) fades slowly
-// toward a permanent residue (ef); memory (m) feeds SOUNDING's rule pressure and uplift.
-function injectRecorded(ev) {
-  const x = ev.x, z = ev.z, str = EVENT_FORCE;
-  if (S.caps.waves && S.G.waves > 0.05) stamp(wv, x, z, 2.2, -str * 6 * (0.4 + S.G.waves), false);
-  else { stamp(h, x, z, 2.4, -str * 0.9, false); ring(h, x, z, 4.5, 1.2, 0); }
-  ring(e, x, z, 4 + str * 2, 1.1, str * 0.7);
-  ring(ef, x, z, 4 + str * 2, 1.1, 0.16);
-  stamp(m, x, z, 3.8, 0.05, true);
-  S.imps.push({ x, z, age: 0, s: str }); if (S.imps.length > 4) S.imps.shift();
-  S.events++; S.P = clamp(S.P + 0.011 * RATE, 0, 1.15);   // ~3 eras of pressure across a year
-  D.focus = { x, z, until: S.real + 7 };
-  const c = S.cam, dx = torusDelta(c.x, x), dz = torusDelta(c.z, z);
-  audioPing(Math.hypot(dx, dz), str, wrapA(Math.atan2(dz, dx) - c.yaw - (c.gaze || 0)), samp(h, x, z), samp(e, x, z));
-}
-function updateRecordedTimeline(nowMs) {
-  if (D.phase === 'play') {
-    if (D.paused) return;
-    const prog = clamp(((nowMs - D.playStart) / 1000) / (PLAY_MIN * 60), 0, 1);
-    D.playheadMs = lerp(D.startMs, D.endMs, prog);
-    let n = 0;
-    while (D.index < D.events.length && D.events[D.index].t <= D.playheadMs && n++ < 6) injectRecorded(D.events[D.index++]);
-    if (prog >= 1 && D.index >= D.events.length) { D.phase = 'hold'; D.holdStart = nowMs; D.playheadMs = D.endMs; }
-  } else if (D.phase === 'hold' && AUTO_LOOP && (nowMs - D.holdStart) / 1000 >= HOLD_SEC) beginDataCycle(true);
-}
-
 /* ---------------- events ---------------- */
 function spawnEvent(str) {
   const c = S.cam; let best = null, bs = -1;
@@ -536,8 +517,12 @@ function camStep(dt) {
   const mL = samp(m, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la) + 0.5 * samp(e, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la);
   const mR = samp(m, c.x + Math.cos(aR) * la, c.z + Math.sin(aR) * la) + 0.5 * samp(e, c.x + Math.cos(aR) * la, c.z + Math.sin(aR) * la);
   let turn = G.seek * (mR - mL) * 1.35 + 0.18 * fbm(S.t * 0.013, 3);
-  const target = dataTarget();                 // FIELD ENGINE 002: bend (never jump) toward the next/recent disturbance
-  if (target) turn += clamp(wrapA(Math.atan2(torusDelta(c.z, target.z), torusDelta(c.x, target.x)) - c.yaw), -1, 1) * 0.34;
+  const target=dataTarget();
+  if(target){
+    const dx=torusDelta(c.x,target.x), dz=torusDelta(c.z,target.z);
+    const desired=Math.atan2(dz,dx);
+    turn += clamp(wrapA(desired-c.yaw),-1.0,1.0)*0.34;
+  }
   c.yawV = lerp(c.yawV, clamp(turn, -0.45, 0.45), 1 - Math.exp(-dt * 0.5));
   c.yaw = wrapA(c.yaw + c.yawV * dt);
   const fx = Math.cos(c.yaw), fz = Math.sin(c.yaw);
@@ -626,8 +611,7 @@ function evoStep(dt) {
   skyStep(dt);
   S.flowPh += dt * 0.004;
   const G = S.G;
-  S.evT -= dt * (1 + S.instab * 3 + S.rain * 1.2) * G.evRate;
-  // FIELD ENGINE 002: recorded events are the only impact source; SOUNDING's random impacts are off
+  // Recorded events are the only impact source in this piece.
   if (S.caps.waves && (G.waves > 0.2 || (S.rain > 0.2 && G.waves > 0.03))) { S.dripT -= dt * Math.max(G.waves, 0.3) * (1 + 3 * S.rain); if (S.dripT <= 0) { S.dripT = 0.7 + rnd() * 2.6; drip(); } }
   for (const im of S.imps) im.age += dt;
   while (S.imps.length && S.imps[0].age > 4) S.imps.shift();
@@ -644,6 +628,10 @@ function oklch(L, C, hh) {
 
 /* ---------------- WebGL ---------------- */
 const cv = document.getElementById('c');
+const fb = document.getElementById('fallback');
+const fctx = fb.getContext('2d',{alpha:false});
+let fallbackOn = Q.get('fallback') === '1';
+let renderProbe = 0, deadProbe = 0;
 let gl = null, glOK = false, P1, P2, P3, texF, fieldFmt = null, scene = null, echo = [null, null], eIdx = 0, lowW = 0, lowH = 0, scale = 4, vao = null;
 let pack32 = new Float32Array(NN * 4), pack16 = null;
 const VS = `#version 300 es
@@ -967,6 +955,101 @@ function render() {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   eIdx = 1 - eIdx; frameNo++;
 }
+
+function fallbackResize(){
+  const ar=Math.max(0.5,innerWidth/Math.max(1,innerHeight));
+  const hh=270, ww=Math.max(360,Math.round(hh*ar));
+  if(fb.width!==ww||fb.height!==hh){fb.width=ww;fb.height=hh;}
+}
+function rgb8(c){return [Math.round(c[0]*255),Math.round(c[1]*255),Math.round(c[2]*255)];}
+function rgbCss(c){return `rgb(${c[0]},${c[1]},${c[2]})`;}
+function fallbackInk(wx,wz,ht,depth,pal,x,y){
+  const mem=clamp(samp(m,wx,wz),0,1), scar=clamp(samp(e,wx,wz),0,1);
+  const sx=Hg(wx+0.8,wz)-Hg(wx-0.8,wz), sz=Hg(wx,wz+0.8)-Hg(wx,wz-0.8);
+  const rough=clamp(Math.hypot(sx,sz)*0.24,0,1);
+  const contour=Math.abs((((ht*S.G.cDen)%1)+1)%1-0.5);
+  let light=clamp(0.36+0.52*(1-rough)+0.18*Math.sin(S.sunAz-Math.atan2(sz,sx)),0,1);
+  let k=light>0.64?3:light>0.37?2:1;
+  if(contour<0.055*S.G.contour)k=Math.max(1,k-1);
+  if(mem>0.10 && (((Math.floor((wx-wz)*2)+Math.floor(y/2))&3)===0))k=Math.max(1,k-1);
+  if(scar>0.13 && ((Math.floor(wx*3)+Math.floor(wz*3))%4===0))k=3;
+  if(depth>85 && ((x+y)&1))k=Math.min(k,2);
+  return pal[k];
+}
+function fallbackProjectImpact(im,W,H,horizon,focal,view){
+  const c=S.cam,dx=torusDelta(c.x,im.x),dz=torusDelta(c.z,im.z);
+  const dist=Math.max(0.1,Math.hypot(dx,dz)),rel=wrapA(Math.atan2(dz,dx)-view),fov=1.22;
+  if(Math.abs(rel)>fov*0.62||dist>165)return null;
+  return {x:W*(0.5+rel/fov),y:horizon-(Hg(im.x,im.z)-c.y)*focal/dist,dist};
+}
+function drawFallback(){
+  fallbackResize(); fb.style.display='block';
+  const W=fb.width,H=fb.height,c=S.cam,G=S.G,view=c.yaw+(c.gaze||0);
+  const pal=displayPal(G).map(v=>rgb8(oklch(v[0],v[1],v[2])));
+  const horizon=Math.round(H*(0.46+clamp(c.pitch+0.25,-0.28,0.28)*0.32));
+  fctx.fillStyle=rgbCss(pal[0]);fctx.fillRect(0,0,W,H);
+  // sparse sky banding / atmosphere
+  for(let y=0;y<horizon;y+=2){
+    const t=y/Math.max(1,horizon);
+    fctx.globalAlpha=0.07+0.12*(1-t);
+    fctx.fillStyle=rgbCss(pal[t>0.72?2:1]);
+    fctx.fillRect(0,y,W,1);
+  }
+  fctx.globalAlpha=1;
+  if(S.sunEl>-0.05){
+    const sx=W*(0.5+wrapA(S.sunAz-view)/1.22),sy=horizon-Math.sin(S.sunEl)*H*0.38;
+    if(sx>-20&&sx<W+20){fctx.fillStyle=rgbCss(pal[3]);fctx.fillRect(Math.round(sx)-2,Math.round(sy)-2,5,5);}
+  }
+  // classic voxel-space low-camera heightfield
+  const top=new Float32Array(W);top.fill(H);
+  const focal=H*0.92,fov=1.22;
+  for(let depth=1.8;depth<155;depth+=Math.max(0.45,depth*0.025)){
+    const stride=depth<20?1:depth<58?2:3;
+    for(let x=0;x<W;x+=stride){
+      const rel=(x/(W-1)-0.5)*fov,a=view+rel;
+      const wx=c.x+Math.cos(a)*depth,wz=c.z+Math.sin(a)*depth,ht=Hg(wx,wz);
+      let sy=horizon-(ht-c.y)*focal/depth;
+      if(!Number.isFinite(sy))continue;
+      sy=Math.max(-24,Math.min(H,sy));
+      const x2=Math.min(W,x+stride);
+      for(let xx=x;xx<x2;xx++){
+        if(sy<top[xx]){
+          fctx.fillStyle=rgbCss(fallbackInk(wx,wz,ht,depth,pal,xx,sy|0));
+          fctx.fillRect(xx,Math.floor(sy),1,Math.max(1,Math.ceil(top[xx]-sy)));
+          top[xx]=sy;
+        }
+      }
+    }
+  }
+  // recent impacts retain SOUNDING's plumb-line + expanding ground-ring vocabulary
+  for(const im of S.imps){
+    if(im.age>2.2)continue;
+    const pr=fallbackProjectImpact(im,W,H,horizon,focal,view);if(!pr)continue;
+    const fade=clamp(1-im.age/2.2);
+    fctx.globalAlpha=fade*0.92;fctx.strokeStyle=rgbCss(pal[3]);fctx.lineWidth=1;
+    const ty=Math.max(0,pr.y-(24+60/pr.dist)*(1-im.age/2.2));
+    fctx.beginPath();fctx.moveTo(pr.x,ty);fctx.lineTo(pr.x,pr.y);fctx.stroke();
+    fctx.beginPath();fctx.ellipse(pr.x,pr.y,3+im.age*8,1.5+im.age*3,0,0,TAU);fctx.stroke();
+  }
+  fctx.globalAlpha=1;
+}
+function probeRender(){
+  if(fallbackOn){drawFallback();return;}
+  if(!glOK||!gl){fallbackOn=true;drawFallback();return;}
+  renderProbe++;
+  if(renderProbe<80||renderProbe%45!==0)return;
+  try{
+    const pts=[[.5,.5],[.25,.5],[.75,.5],[.5,.25],[.5,.75]],px=new Uint8Array(4);
+    let lit=0;
+    for(const q of pts){
+      gl.readPixels(Math.max(0,Math.floor(cv.width*q[0])),Math.max(0,Math.floor(cv.height*q[1])),1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
+      if(px[0]+px[1]+px[2]>8)lit++;
+    }
+    deadProbe=lit===0?deadProbe+1:0;
+    if(deadProbe>=2){fallbackOn=true;drawFallback();}
+  }catch(err){fallbackOn=true;drawFallback();}
+}
+
 cv.addEventListener('webglcontextlost', ev => { ev.preventDefault(); glOK = false; }, false);
 cv.addEventListener('webglcontextrestored', () => { const FF = parseFloat(Q.get('ff') || '0');
 if (FF > 0) { const steps = Math.round(FF * 36000); for (let i = 0; i < steps; i++) { evoStep(0.1); camStep(0.1); slowStep(0.1); waveStep(0.1); } S.imps = []; }
@@ -1392,7 +1475,7 @@ function ctlMsg(m) {
     case 'autopilot': CTL_GROUPS.forEach(gr => ctlSetMode(gr, 'auto')); CTL.mute = {}; CTL.solo = {}; ctlSave(); break;
     case 'release': CTL.release = Math.max(0, +m.v || 0); ctlSave(); break;
     case 'transition': if (S.phase === 'era') { if (m.op && OPS.includes(m.op)) S.forceDom = m.op; S.P = 1; } break;
-    case 'impact': break;   // no synthetic impacts in FIELD ENGINE 002
+    case 'impact': spawnEvent(0.6 + Math.random() * 0.4); break;
     case 'info': SHOW_INFO = m.v === undefined ? !SHOW_INFO : !!m.v; updateInfo(); break;
   }
 }
@@ -1432,80 +1515,45 @@ function ctlAudioApply() {
 // in-piece mixer overlay (M), for OBS "Interact" or a plain browser window
 let mixerFrame = null;
 addEventListener('keydown', ev => {
-  if (!LINKED || (ev.key !== 'm' && ev.key !== 'M')) return;
-  if (mixerFrame) { mixerFrame.remove(); mixerFrame = null; document.body.style.cursor = 'none'; return; }
-  mixerFrame = document.createElement('iframe'); mixerFrame.src = 'mixer.html?embed=1';
-  mixerFrame.style.cssText = 'position:fixed;top:0;right:0;width:min(760px,100vw);height:100vh;border:0;z-index:10;background:transparent';
-  document.body.appendChild(mixerFrame); document.body.style.cursor = 'default';
-});
-
-/* ---------------- persistence ---------------- */
-function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
-function unb64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
-function save() {
-  try {
-    const hi = new Int16Array(NN), mi = new Uint8Array(NN), ei = new Uint8Array(NN);
-    for (let i = 0; i < NN; i++) { hi[i] = Math.round(clamp(h[i], -4, 4) * 8000); mi[i] = Math.round(m[i] * 255); ei[i] = Math.round(e[i] * 255); }
-    const st = Object.assign({}, S, { imps: [], rs: R.s });
-    localStorage.setItem(KEY, JSON.stringify({ st, h: b64(new Uint8Array(hi.buffer)), m: b64(mi), e: b64(ei), savedAt: Date.now() }));
-  } catch (err) { }
-}
-function load() {
-  try {
-    const raw = localStorage.getItem(KEY); if (!raw) return false;
-    const d = JSON.parse(raw); if (!d.st || d.st.v !== 1) return false;
-    const hi = new Int16Array(unb64(d.h).buffer), mi = unb64(d.m), ei = unb64(d.e);
-    if (hi.length !== NN) return false;
-    for (let i = 0; i < NN; i++) { h[i] = hi[i] / 8000; m[i] = mi[i] / 255; e[i] = ei[i] / 255; w[i] = wv[i] = 0; }
-    S = d.st; R.s = d.st.rs | 0; NSEED = S.seed | 0; delete S.rs;
-    S.G = S.phase === 'trans' && S.from && S.to ? mixG(S.from, S.to, sstep(0.18, 0.85, S.trS)) : S.base;
-    return true;
-  } catch (err) { return false; }
-}
-
-/* ---------------- disclosure box ---------------- */
-const info = document.getElementById('info');
-const pad = (s, n) => (s + ' '.repeat(n)).slice(0, n);
-function fmtT(s) { s = Math.floor(s); const hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ss = s % 60; return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`; }
-function updateInfo() {
-  const [bg, i1, i2, i3] = palRGB.map(c => c.map(v => Math.round(v * 255)));
-  document.body.style.background = `rgb(${bg})`;
-  if (!SHOW_INFO) { info.style.display = 'none'; return; }
-  info.style.display = 'block';
-  info.style.background = `rgba(${bg},0.84)`; info.style.borderColor = `rgb(${i1})`; info.style.color = `rgb(${i3})`;
-  const G = S.G, st = S.stats, has = D.events.length > 0;
-  const prog = has ? clamp((D.playheadMs - D.startMs) / (D.endMs - D.startMs), 0, 1) : 0;
-  const day = has ? Math.floor((D.playheadMs - D.startMs) / 86400000) + 1 : 0, days = has ? Math.ceil((D.endMs - D.startMs) / 86400000) : 0;
-  const phase = D.phase === 'hold' ? 'after the last record · no new events' : D.paused ? 'paused' : D.phase === 'play' ? 'replaying' : D.state.toLowerCase();
-  const bar = n => { const f = Math.round(clamp(n, 0, 1) * 12); return '▮'.repeat(f) + '▯'.repeat(12 - f); };
-  const dom = G.dom === 'uplift' ? (G.uplift >= 0 ? 'upliftUp' : 'upliftDown') : G.dom;
-  const L = [];
-  L.push(`<span style="color:rgb(${i2})">MZTV / FIELD ENGINE 002</span>   THE FIELD DOES NOT RESET · running ${fmtT(S.real)}`);
-  L.push(`<span class="k">timeline </span><span style="color:rgb(${i2})">${bar(prog)}</span> day ${String(day).padStart(3, '0')} / ${days} · ${phase}`);
-  L.push(`<span class="k">events   </span>${String(Math.min(D.index, D.events.length)).padStart(3, '0')} / ${String(D.events.length).padStart(3, '0')} recorded · equal force · ${D.state.toLowerCase()}`);
-  L.push(`<span class="k">ground   </span>${Math.round(st.mMean * 100)}% worn · ${S.events} impacts retained · era ${String(S.era).padStart(2, '0')} · ${S.phase === 'trans' ? 'rules deforming' : DESC[dom]}`);
-  L.push(`<span class="k">render   </span>${glOK ? 'webgl terrain' : 'webgl2 unavailable'} · ${DITHER_NAMES[G.dither]} dither · ${MODE_NAMES[G.mode]} ${Math.round(G.bpm)} bpm`);
-  info.innerHTML = L.join('\n');
-}
-addEventListener('keydown', ev => {
   if (ev.key === 'i' || ev.key === 'I') { SHOW_INFO = !SHOW_INFO; updateInfo(); }
   if (ev.code === 'Space') { ev.preventDefault(); pauseData(); }
-  if ((ev.key === 'r' || ev.key === 'R') && D.events.length) beginDataCycle(true);
+  if (ev.key === 'r' || ev.key === 'R') beginDataCycle(true);
   if (ev.key === 't' && S.phase === 'era') S.P = 1;
 });
+
+function updateInfo(){
+  if(!S)return;
+  const pal=(palRGB&&palRGB.length===4?palRGB:displayPal(S.G).map(v=>oklch(v[0],v[1],v[2]))).map(c=>c.map(v=>Math.round(clamp(v,0,1)*255)));
+  const [bg,i1,i2,i3]=pal;
+  document.body.style.background=`rgb(${bg})`;
+  if(!SHOW_INFO){info.style.display='none';return;}
+  info.style.display='block';info.style.background=`rgba(${bg},0.84)`;info.style.borderColor=`rgb(${i1})`;info.style.color=`rgb(${i3})`;
+  const date=D.events.length?new Date(D.playheadMs||D.startMs).toLocaleDateString(undefined,{month:'short',day:'2-digit',year:'numeric'}).toUpperCase():'—';
+  const prog=D.events.length?clamp((D.playheadMs-D.startMs)/(D.endMs-D.startMs)):0;
+  const phase=D.phase==='hold'?'AFTER':D.paused?'PAUSED':D.phase==='play'?'RUNNING':D.state;
+  const bar=n=>{const z=Math.round(clamp(n,0,1)*12);return '▮'.repeat(z)+'▯'.repeat(12-z);};
+  const L=[];
+  L.push(`<span style="color:rgb(${i2})">MZTV / FIELD ENGINE 002</span>   THE FIELD DOES NOT RESET`);
+  L.push(`<span class="k">source   </span>${D.state} · event ${String(Math.min(D.index,D.events.length)).padStart(3,'0')} / ${String(D.events.length).padStart(3,'0')} · ${date}`);
+  L.push(`<span class="k">year     </span><span style="color:rgb(${i2})">${bar(prog)}</span> ${Math.round(prog*100)}% · ${phase}`);
+  L.push(`<span class="k">ground   </span>${Math.round(S.stats.mMean*100)}% worn · ${S.events} impacts retained`);
+  L.push(`<span class="k">camera   </span>low survey drift · bends toward disturbance`);
+  L.push(`<span class="k">render   </span>${fallbackOn?'CANVAS TERRAIN':'WEBGL TERRAIN'}`);
+  L.push(`<span class="k">sound    </span>distance delays each impact · the ground changes the response`);
+  info.innerHTML=L.join('\n');
+}
 
 /* ---------------- boot ---------------- */
 let seed = Q.get('seed') ? (parseInt(Q.get('seed'), 10) >>> 0) : ((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
 if (FRESH || !load()) {
   freshState(seed);
-  // pre-history: the ground has been forming, and something has already passed through
-  // pre-history forms terrain only; no impacts exist before the first record
+  // pre-history forms terrain only; no synthetic impact events are introduced.
   for (let i = 0; i < 160; i++) { slowStep(0.1); camStep(0.1); S.t += 0.1; }
   S.imps = []; S.events = 0;
 }
 const FF = parseFloat(Q.get('ff') || '0');
 if (FF > 0) { const steps = Math.round(FF * 36000); for (let i = 0; i < steps; i++) { evoStep(0.1); camStep(0.1); slowStep(0.1); waveStep(0.1); } S.imps = []; }
-try { initGL(); } catch (err) { console.error(err); glOK = false; }
+try { initGL(); } catch (err) { console.error(err); glOK = false; fallbackOn = true; }
 if (!MUTE) { createContext().catch(() => { }); }
 setInterval(audioSchedule, 40);
 setInterval(audioWatch, 1000);
@@ -1527,16 +1575,28 @@ function frame(now, fixedDt) {
     while (slowAcc >= 0.1 && n++ < 2) { slowAcc -= 0.1; slowStep(0.1); }
     if (slowAcc > 0.3) slowAcc = 0;
     waveStep(dt);
-    render();
+    if (fallbackOn) {
+      drawFallback();
+    } else {
+      try {
+        render();
+        probeRender();
+      } catch (renderErr) {
+        console.error('FIELD ENGINE 002 render fallback:', renderErr);
+        fallbackOn = true;
+        drawFallback();
+      }
+    }
+    if (!fallbackOn) fb.style.display='none';
     ctlAcc += dt; if (ctlAcc > 0.1) { ctlAcc = 0; audioControl(); }
     infoAcc += dt; if (infoAcc > 1) { infoAcc = 0; updateInfo(); }
   } catch (err) { console.error(err); }
   PERF.ms = PERF.ms * 0.95 + (performance.now() - p0) * 0.05;
 }
 const PERF = { ms: 0 };
-if (!CAPTURE) requestAnimationFrame(frame);
 loadRecorded();
-window.MZ = { D, inject: ev => injectRecorded(ev),  tick: dt => frame(performance.now(), dt), CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
+if (!CAPTURE) requestAnimationFrame(frame);
+window.MZ = { tick: dt => frame(performance.now(), dt), fallback:()=>{fallbackOn=true;drawFallback();}, CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
 })();
 </script>
 </body>
