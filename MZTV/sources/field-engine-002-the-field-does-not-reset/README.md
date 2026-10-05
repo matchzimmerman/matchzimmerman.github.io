@@ -14,6 +14,8 @@ Why v1 was black: the earlier transplant deleted SOUNDING's persistence/info blo
 
 Data fix: v1 asked for the oldest 2,000 records (ascending, capped), which returned 2022–23 rather than the last year. v2 first asks the source for its newest record, then fetches every shooting-flagged record in the `?days` window before it (paged), so the replay is the true rolling year.
 
+Update (same day): impact rings now draw only on open ground beyond 10 units from the camera, and plumb lines only beyond 8 units, because recorded events can land beside the camera. A ring crossing a wall that faced the camera had rendered as a solid slab. The replay also now runs on simulation time, so `?capture=1` renders the timeline correctly.
+
 ## Behavior
 
 - A rolling year of shooting-flagged public incident records is fetched from the official NIBRS Group A ArcGIS layer.

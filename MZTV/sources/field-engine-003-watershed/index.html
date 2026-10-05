@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MZTV · FIELD ENGINE 002 · THE FIELD DOES NOT RESET</title>
+<title>MZTV · FIELD ENGINE 003 · WATERSHED</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#120e24;cursor:none}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
@@ -21,15 +21,18 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-renderi
 <script>
 'use strict';
 /* =====================================================================
-   FIELD ENGINE 002 — THE FIELD DOES NOT RESET  (MZTV)
-   Built on the BIT FIELD 014 — SOUNDING renderer and audio (treated as the codebase).
-   A rolling year of public records flagged as shootings is replayed, in order,
-   as equal-force disturbances in SOUNDING's ground. Each disturbance settles;
-   a residue stays. The ground never returns to its prior state.
-   Recorded events are the only impact source (SOUNDING's random impacts are off).
+   FIELD ENGINE 003 — WATERSHED  (MZTV)
+   A sibling of FIELD ENGINE 002 on the same data and the same SOUNDING renderer/audio.
+   002 asks what one event leaves. 003 asks what the pattern leaves.
+   Every record lands with the same force, but force accumulates where records recur:
+   the ground subsides into basins, basins widen and merge, water collects in them.
+   Time is the data's own clock: the sun is solar time at the records' mean position,
+   so each event arrives at its real hour of day and season.
+   Gaps between records let scars heal and open rests in the rhythm.
+   The camera is pulled downhill, so over the year it is drawn into the basins.
+   After the last record the basins keep widening and the water keeps rising slowly.
 
-   FIELD ENGINE params: ?minutes=12 (length of the compressed year) · ?days=365
-     ?hold=30 · ?loop=1 (rebuild + replay after hold; default holds forever)
+   Params: ?minutes=120 (length of the compressed year) · ?days=365 · ?hold=30 · ?loop=1
    Keys: SPACE pause/continue replay · R rebuild ground + restart year · I info
    ---- inherited SOUNDING header follows ----
    The ground is a live field simulation on a torus (no edge, no centre).
@@ -52,13 +55,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;image-renderi
 const Q = new URLSearchParams(location.search);
 const RATE = Math.max(0.01, parseFloat(Q.get('rate') || '1'));
 let SHOW_INFO = Q.get('info') !== '0';
-const FRESH = Q.get('fresh') !== '0';   // FIELD ENGINE 002: each performance starts on fresh ground
+const FRESH = Q.get('fresh') !== '0';   // FIELD ENGINE 003: each performance starts on fresh ground
 const MUTE = Q.get('audio') === '0';
 const LINES = Math.max(120, parseInt(Q.get('lines') || '270', 10));
 // Two builds from one source: index.html = the autonomous stream (never listens to the mixer);
 // play.html sets window.MZTV_LINKED = true = mixer-linked, with its own separate memory.
-const LINKED = false;                       // FIELD ENGINE 002 has no mixer-linked build
-const KEY = 'mztv-field-engine-002-v3';
+const LINKED = false;                       // FIELD ENGINE 003 has no mixer-linked build
+const KEY = 'mztv-field-engine-003-v1';
 const CAPTURE = Q.get('capture') === '1';   // offline rendering: frames advance only when MZ.tick(dt) is called
 
 /* ---------------- utilities ---------------- */
@@ -73,14 +76,14 @@ const rnd = () => R.next();
 const gauss = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * rnd()); };
 let NSEED = 1;
 
-/* ---------------- FIELD ENGINE 002 · recorded events ---------------- */
+/* ---------------- FIELD ENGINE 003 · recorded events ---------------- */
 const YEAR_DAYS = Math.max(7, +(Q.get('days') || 365));
-const PLAY_MIN = Math.max(0.25, +(Q.get('minutes') || 12));
+const PLAY_MIN = Math.max(0.25, +(Q.get('minutes') || 120));   // a year ≈ 2 h: one replayed day ≈ 20 s
 const HOLD_SEC = Math.max(5, +(Q.get('hold') || 30));
 const AUTO_LOOP = Q.get('loop') === '1';
 const DATA_API = 'https://services1.arcgis.com/UWYHeuuJISiGmgXx/arcgis/rest/services/NIBRS_GroupA_Crime_Data/FeatureServer/0/query';
 const EVENT_FORCE = 0.78;                   // identical for every record — nothing scales it
-const D = { events: [], state: 'CONNECTING', startMs: 0, endMs: 1, playheadMs: 0, index: 0, phase: 'loading', playStart: 0, holdStart: 0, paused: false, pauseAt: 0, focus: null, cycle: 0 };
+const D = { lat: 0, lon: 0, lastMs: 0, events: [], state: 'CONNECTING', startMs: 0, endMs: 1, playheadMs: 0, index: 0, phase: 'loading', playStart: 0, holdStart: 0, paused: false, pauseAt: 0, focus: null, cycle: 0 };
 function hash1(i) { let x = Math.imul(i | 0, 374761393) ^ Math.imul(NSEED | 0, 668265263); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; }
 function vnoise(t, ch) { const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f); return lerp(hash1(i * 7 + ch * 1013), hash1((i + 1) * 7 + ch * 1013), u) * 2 - 1; }
 function fbm(t, ch) { return vnoise(t, ch) * 0.6 + vnoise(t * 2.13 + 5.1, ch + 1) * 0.28 + vnoise(t * 4.7 + 1.7, ch + 2) * 0.12; }
@@ -90,7 +93,21 @@ const N = 256, M = N - 1, NN = N * N;
 let h = new Float32Array(NN), hn = new Float32Array(NN);
 const w = new Float32Array(NN), wv = new Float32Array(NN);
 const m = new Float32Array(NN), e = new Float32Array(NN);
-const ef = new Float32Array(NN);   // FIELD ENGINE 002: residue each recorded event leaves; scars never fade below it
+const ef = new Float32Array(NN);   // residue each recorded event leaves; scars never fade below it
+// WATERSHED: bas = accumulated subsidence (conserved; diffuses so basins widen and merge),
+// bd = its displayed depth in ground units (soft-saturated), wetN = share of ground under water
+const bas = new Float32Array(NN), basB = new Float32Array(NN), bd = new Float32Array(NN);
+const BMAX = 0.72, BK = 1.0;   // depth and footprint kept gentle enough for SOUNDING's ray-march (no wall overshoot)
+let wetFrac = 0, basMax = 0;
+function basinRefresh() { let mx = 0; for (let i = 0; i < NN; i++) { const v = bas[i]; bd[i] = BMAX * Math.tanh(v / BK); if (v > mx) mx = v; } basMax = mx; }
+function basinDiffuse() {
+  blur(bas, basB, 2);
+  for (let i = 0; i < NN; i++) bas[i] += 0.07 * (basB[i] - bas[i]);   // volume is kept: the ground never fills back in
+  basinRefresh();
+  const wy = floodY(), hs = S.G.hS; let wet = 0;
+  for (let i = 0; i < NN; i += 5) if ((h[i] + 0.8 * w[i] - bd[i]) * hs < wy) wet++;
+  wetFrac = wet / (NN / 5);
+}
 const ta = new Float32Array(NN), tb = new Float32Array(NN), tc = new Float32Array(NN);
 
 function samp(a, x, z) {
@@ -309,11 +326,12 @@ function endTransition() {
 }
 
 /* ---------------- height helpers ---------------- */
-const Hraw = (x, z) => samp(h, x, z) + 0.8 * samp(w, x, z);
+const Hraw = (x, z) => samp(h, x, z) + 0.8 * samp(w, x, z) - samp(bd, x, z);
 const Hg = (x, z) => Hraw(x, z) * S.G.hS;
 const canY = () => S.stats.hMean * S.G.hS + lerp(46, 8.5, S.G.canopy);
 const Hc = (x, z) => canY() - Hraw(z + 71, 19 - x) * S.G.hS * 0.9;
-const floodY = () => S.stats.hMean * S.G.hS + lerp(-15, 3, S.G.flood);
+// WATERSHED: water sits just below ordinary low ground, so it gathers in basins; a flood era and long rain raise it
+const floodY = () => (S.stats.hMean - 0.9 + 0.3 * S.G.flood + (S.fill || 0)) * S.G.hS;
 
 /* ---------------- simulation ---------------- */
 let advCount = 0;
@@ -332,7 +350,7 @@ function slowStep(dt) {
   const doT = G.ridges > 0.01;
   if (doT) { blur(h, ta, r1); blur(h, tb, r2); }
   const kD = G.erosion * 1.6, kT = G.ridges * 0.5, kU = G.uplift * 0.6, kQ = G.terraces * 1.1, step = G.tStep, fault = G.faults * 2.5, tk = G.tk;
-  const mDecay = 1 - dt * RATE / 18000, eDecay = 1 - dt * RATE / 10800, mM = st.mMean;
+  const mDecay = 1 - dt * RATE / 18000, eDecay = 1 - dt * RATE / 10800 * (1 + 40 * (S.quiet || 0)), mM = st.mMean;
   let hs = 0, h2 = 0, ms = 0, es = 0;
   for (let y = 0; y < N; y++) {
     const row = y * N, yu = ((y - 1) & M) * N, yd = ((y + 1) & M) * N;
@@ -354,6 +372,8 @@ function slowStep(dt) {
   st.hMean = hs / NN; st.hStd = Math.sqrt(Math.max(0, h2 / NN - st.hMean * st.hMean)); st.mMean = ms / NN; st.eMean = es / NN;
   if (!Number.isFinite(st.hStd) || !Number.isFinite(st.mMean)) heal();
   if (++advCount % 3 === 0) advect(dt * 3);
+  if (advCount % 10 === 0) basinDiffuse();
+  S.fill = Math.min(0.45, (S.fill || 0) + dt * S.rain * (D.phase === 'hold' ? 0.0012 : 0.0003));   // rain keeps falling into the shape
   // the camera writes itself into the ground
   const c = S.cam;
   stamp(m, c.x, c.z, 3.5, 0.15 * dt * RATE * (1 - 0.6 * S.dive), true);
@@ -402,7 +422,7 @@ function waveStep(dt) {
   wE = s / (NN / 7);
 }
 
-/* ---------------- FIELD ENGINE 002 · timeline ---------------- */
+/* ---------------- FIELD ENGINE 003 · timeline ---------------- */
 function torusDelta(a, b) { let d = b - a; if (d > N * 0.5) d -= N; if (d < -N * 0.5) d += N; return d; }
 function normalizeRecorded(rows) {
   const out = [];
@@ -415,7 +435,9 @@ function normalizeRecorded(rows) {
   if (!out.length) return out;
   // position only: geographic extent → a square inside the torus (not a map; never drawn as one)
   let a0 = Infinity, a1 = -Infinity, o0 = Infinity, o1 = -Infinity;
-  for (const e of out) { a0 = Math.min(a0, e.lat); a1 = Math.max(a1, e.lat); o0 = Math.min(o0, e.lon); o1 = Math.max(o1, e.lon); }
+  let sl = 0, so = 0;
+  for (const e of out) { a0 = Math.min(a0, e.lat); a1 = Math.max(a1, e.lat); o0 = Math.min(o0, e.lon); o1 = Math.max(o1, e.lon); sl += e.lat; so += e.lon; }
+  D.lat = sl / out.length; D.lon = so / out.length;   // used only for solar time; never shown
   const span = Math.max(a1 - a0, o1 - o0, 1e-3), ca = (a0 + a1) / 2, co = (o0 + o1) / 2;
   for (const e of out) {
     e.x = N * 0.5 + (e.lon - co) / span * (N - 40);
@@ -448,21 +470,21 @@ async function loadRecorded() {
     D.events = ev; D.startMs = ev[0].t; D.endMs = Math.max(ev[ev.length - 1].t, D.startMs + 1);
     D.state = 'LIVE DATA'; beginDataCycle(false);
   } catch (err) {
-    console.warn('FIELD ENGINE 002 data:', err);
+    console.warn('FIELD ENGINE 003 data:', err);
     D.state = 'DATA LINK LOST · retrying'; D.phase = 'error';
     setTimeout(loadRecorded, 60000);      // the ground keeps running; no substitute events are made
   }
 }
 function prepareReplayGround() {
   freshState((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
-  ef.fill(0);
+  ef.fill(0); bas.fill(0); bd.fill(0); S.fill = 0; S.quiet = 0;
   for (let i = 0; i < 160; i++) { slowStep(0.1); camStep(0.1); S.t += 0.1; }
   S.imps = []; S.events = 0;
 }
 function beginDataCycle(resetGround) {
   if (resetGround) prepareReplayGround();
   D.index = 0; D.playheadMs = D.startMs; D.clock = 0;
-  D.phase = 'play'; D.paused = false; D.focus = null; D.cycle++;
+  D.phase = 'play'; D.paused = false; D.focus = null; D.cycle++; D.lastMs = D.startMs;
 }
 function pauseData() {
   if (D.phase !== 'play') return;
@@ -478,15 +500,17 @@ function dataTarget() {
 function injectRecorded(ev) {
   const x = ev.x, z = ev.z, str = EVENT_FORCE;
   if (S.caps.waves && S.G.waves > 0.05) stamp(wv, x, z, 2.2, -str * 6 * (0.4 + S.G.waves), false);
-  else { stamp(h, x, z, 2.4, -str * 0.9, false); ring(h, x, z, 4.5, 1.2, 0); }
-  ring(e, x, z, 4 + str * 2, 1.1, str * 0.7);
-  ring(ef, x, z, 4 + str * 2, 1.1, 0.16);
+  else stamp(h, x, z, 2.4, -str * 0.6, false);
+  ring(e, x, z, 4 + str * 2, 1.1, str * 0.45);
+  ring(ef, x, z, 4 + str * 2, 1.1, 0.06);
+  stamp(bas, x, z, 8, 0.11 * str, false);      // same force every time; recurrence is what deepens a place
   stamp(m, x, z, 3.8, 0.05, true);
+  basinRefresh();
   S.imps.push({ x, z, age: 0, s: str }); if (S.imps.length > 4) S.imps.shift();
-  S.events++; S.P = clamp(S.P + 0.011 * RATE, 0, 1.15);   // ~3 eras of pressure across a year
-  D.focus = { x, z, until: S.real + 7 };
+  S.events++; S.P = clamp(S.P + 0.011 * RATE, 0, 1.15);
+  D.focus = { x, z, until: S.real + 7 }; D.lastMs = ev.t;
   const c = S.cam, dx = torusDelta(c.x, x), dz = torusDelta(c.z, z);
-  audioPing(Math.hypot(dx, dz), str, wrapA(Math.atan2(dz, dx) - c.yaw - (c.gaze || 0)), samp(h, x, z), samp(e, x, z));
+  audioThump(Math.hypot(dx, dz), str, wrapA(Math.atan2(dz, dx) - c.yaw - (c.gaze || 0)));
 }
 function updateRecordedTimeline(dt) {   // runs on simulation time: capture mode, pauses and background tabs stay in step
   if (D.phase === 'play') {
@@ -497,7 +521,10 @@ function updateRecordedTimeline(dt) {   // runs on simulation time: capture mode
     let n = 0;
     while (D.index < D.events.length && D.events[D.index].t <= D.playheadMs && n++ < 6) injectRecorded(D.events[D.index++]);
     if (prog >= 1 && D.index >= D.events.length) { D.phase = 'hold'; D.holdClock = 0; D.playheadMs = D.endMs; }
+    // silence is material: days without a record → healing + rests
+    S.quiet = lerp(S.quiet || 0, sstep(1.5, 7, (D.playheadMs - D.lastMs) / 86400000), 0.05);
   } else if (D.phase === 'hold' && AUTO_LOOP && (D.holdClock += dt) >= HOLD_SEC) beginDataCycle(true);
+  if (D.phase === 'hold') S.quiet = lerp(S.quiet || 0, 0.55, 0.01);
 }
 
 /* ---------------- events ---------------- */
@@ -536,8 +563,10 @@ function camStep(dt) {
   const mL = samp(m, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la) + 0.5 * samp(e, c.x + Math.cos(aL) * la, c.z + Math.sin(aL) * la);
   const mR = samp(m, c.x + Math.cos(aR) * la, c.z + Math.sin(aR) * la) + 0.5 * samp(e, c.x + Math.cos(aR) * la, c.z + Math.sin(aR) * la);
   let turn = G.seek * (mR - mL) * 1.35 + 0.18 * fbm(S.t * 0.013, 3);
-  const target = dataTarget();                 // FIELD ENGINE 002: bend (never jump) toward the next/recent disturbance
-  if (target) turn += clamp(wrapA(Math.atan2(torusDelta(c.z, target.z), torusDelta(c.x, target.x)) - c.yaw), -1, 1) * 0.34;
+  // WATERSHED: the camera is pulled downhill like water, so it is drawn into the basins over the year
+  const hL = Hraw(c.x + Math.cos(aL) * 10, c.z + Math.sin(aL) * 10), hR = Hraw(c.x + Math.cos(aR) * 10, c.z + Math.sin(aR) * 10);
+  const inBasin = sstep(0.1, 0.3, samp(bd, c.x, c.z));          // once inside a basin the pull lets go: it visits, then leaves
+  turn += clamp((hL - hR) * 0.6, -0.3, 0.3) * (1 - inBasin);
   c.yawV = lerp(c.yawV, clamp(turn, -0.45, 0.45), 1 - Math.exp(-dt * 0.5));
   c.yaw = wrapA(c.yaw + c.yawV * dt);
   const fx = Math.cos(c.yaw), fz = Math.sin(c.yaw);
@@ -552,7 +581,7 @@ function camStep(dt) {
   S.aDive = lerp(S.aDive ?? S.dive, sstep(0.52, 0.78, dv) * (1 - G.canopy), 1 - Math.exp(-dt * 0.3));
   S.dive = CTL.w.camera > 0 ? lerp(S.aDive, CTL.man.overhead * (1 - G.canopy), CTL.w.camera) : S.aDive;
   let ty = gmax + G.clear + S.dive * 30;
-  if (G.flood > 0.02) ty = Math.max(ty, floodY() + G.clear * 0.8);
+  ty = Math.max(ty, floodY() + G.clear * 0.8);
   if (G.canopy > 0.01) { ty = Math.min(ty, cmin - 1.4); if (cmin - gmax < 3) ty = (cmin + gmax) * 0.5; }
   c.vy += ((ty - c.y) * 2.0 - c.vy * 2.6) * dt;
   c.y += c.vy * dt;
@@ -572,10 +601,22 @@ function camStep(dt) {
 const DAY = 2280;            // one orbit of the sun, seconds (38 min)
 function skyStep(dt) {
   if (S.sunPh === undefined) { S.sunPh = 2.6; S.wind = [0, 0]; S.cloud = 0; S.rain = 0; S.haze = 0.3; }
-  S.sunPh = (S.sunPh + dt * TAU / DAY) % TAU;
-  const ph = CTL.w.sky > 0 ? angLerp(S.sunPh, CTL.skyPh ?? S.sunPh, CTL.w.sky) : S.sunPh;
+  // WATERSHED: while the year replays, the sun is solar time at the records' mean position (UTC + lon/15),
+  // with the real seasonal declination, so every record arrives at its own hour of day and season
+  let decl = 0, lat = 0;
+  if (D.phase === 'play' && D.events.length) {
+    const ms = D.playheadMs, sh = (((ms / 3600000 + D.lon / 15) % 24) + 24) % 24;
+    const tgt = wrapA((sh - 6) / 24 * TAU);
+    S.sunPh = angLerp(S.sunPh, tgt, 1 - Math.exp(-dt * 2));
+    const doy = (ms - Date.UTC(new Date(ms).getUTCFullYear(), 0, 1)) / 86400000;
+    decl = 0.4091 * Math.sin(TAU * (doy - 80) / 365.25); lat = D.lat * Math.PI / 180;
+  } else S.sunPh = (S.sunPh + dt * TAU / DAY) % TAU;
+  S.sunDecl = lerp(S.sunDecl || 0, decl, 1 - Math.exp(-dt * 0.5));
+  const ph = S.sunPh;
   S.sunPhE = ph;
-  S.sunEl = Math.asin(clamp(Math.sin(ph) * 0.82 - 0.06, -1, 1));
+  S.sunEl = D.phase === 'play' && D.events.length
+    ? Math.asin(clamp(Math.sin(lat) * Math.sin(S.sunDecl) + Math.cos(lat) * Math.cos(S.sunDecl) * Math.cos(ph - Math.PI / 2), -1, 1))
+    : Math.asin(clamp(Math.sin(ph) * 0.82 - 0.06, -1, 1));
   S.sunAz = ph + S.G.light;
   const w1 = fbm(S.t * 0.0011, 51), w2 = fbm(S.t * 0.0017, 61), w3 = fbm(S.t * 0.0009, 71);
   // weather fronts gather when the rules are deforming
@@ -627,7 +668,7 @@ function evoStep(dt) {
   S.flowPh += dt * 0.004;
   const G = S.G;
   S.evT -= dt * (1 + S.instab * 3 + S.rain * 1.2) * G.evRate;
-  // FIELD ENGINE 002: recorded events are the only impact source; SOUNDING's random impacts are off
+  // FIELD ENGINE 003: recorded events are the only impact source; SOUNDING's random impacts are off
   if (S.caps.waves && (G.waves > 0.2 || (S.rain > 0.2 && G.waves > 0.03))) { S.dripT -= dt * Math.max(G.waves, 0.3) * (1 + 3 * S.rain); if (S.dripT <= 0) { S.dripT = 0.7 + rnd() * 2.6; drip(); } }
   for (const im of S.imps) im.age += dt;
   while (S.imps.length && S.imps[0].age > 4) S.imps.shift();
@@ -761,7 +802,7 @@ void main(){
     float streak=hash(vec2(floor(gl_FragCoord.x/len+uTime*0.15), floor(gl_FragCoord.y/cs)));
     v=0.04+ref*0.9+0.28*step(0.86,streak)*fogF;
     float dep=uFloodY-Hg(p.xz);
-    if(dep<0.35) ink=uInk.z;
+    if(dep<0.14) ink=uInk.z;   // WATERSHED: gentle basin shores, so only a thin shoreline is inked
   } else {
     v=sky(rd);
   }
@@ -773,7 +814,7 @@ void main(){
   for(int k=0;k<4;k++){
     vec4 im=uImp[k]; if(im.w<=0.0) continue;
     float age=im.z;
-    if(kind>0 && kind<3 && age<1.0 && t>10.0){ vec2 dd=p.xz-im.xy; float r=age*38.0; if(abs(length(dd)-r)<0.8+age*2.5){ float h0=Hg(p.xz); if(abs(Hg(p.xz+vec2(1.0,0.0))-h0)+abs(Hg(p.xz+vec2(0.0,1.0))-h0)<1.4) ink=3.0; } }   // ring only on open ground away from the camera: on a facing wall it reads as a solid slab
+    if(kind>0 && kind<3 && age<1.0 && t>10.0){ vec2 dd=p.xz-im.xy; float r=age*38.0; if(abs(length(dd)-r)<0.8+age*2.5){ float h0=Hg(p.xz); if(abs(Hg(p.xz+vec2(1.0,0.0))-h0)+abs(Hg(p.xz+vec2(0.0,1.0))-h0)<1.4) ink=3.0; } }   // ring only on open ground: on a wall facing the camera it would read as a solid slab
     if(age<1.6){
       vec2 rel=im.xy-ro.xz; vec2 rh=rd.xz; float rr=dot(rh,rh);
       if(rr>1e-4){
@@ -889,7 +930,7 @@ function toHalf(v) {
   if (ex <= 0) return s; if (ex >= 31) return s | 0x7bff; return s | (ex << 10) | ((x >>> 13) & 0x3ff);
 }
 function uploadField() {
-  for (let i = 0, j = 0; i < NN; i++, j += 4) { pack32[j] = h[i] + 0.8 * w[i]; pack32[j + 1] = m[i]; pack32[j + 2] = w[i]; pack32[j + 3] = e[i]; }
+  for (let i = 0, j = 0; i < NN; i++, j += 4) { pack32[j] = h[i] + 0.8 * w[i] - bd[i]; pack32[j + 1] = m[i]; pack32[j + 2] = w[i]; pack32[j + 3] = e[i]; }
   gl.bindTexture(gl.TEXTURE_2D, texF);
   if (fieldFmt === 'f32') gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RGBA, gl.FLOAT, pack32);
   else { for (let i = 0; i < pack32.length; i++) pack16[i] = toHalf(pack32[i]); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RGBA, gl.HALF_FLOAT, pack16); }
@@ -936,7 +977,7 @@ function render() {
   gl.uniform1f(U.uTanF, G.fov + 0.06 * clamp((c.spd - 2) / 3, 0, 1));
   gl.uniform1f(U.uHS, G.hS); gl.uniform1f(U.uFar, 170); gl.uniform1f(U.uFog, G.fog * (1 + 0.5 * S.instab) * ctlV('fog'));
   gl.uniform1f(U.uCanOn, G.canopy > 0.01 ? 1 : 0); gl.uniform1f(U.uCanY, canY());
-  gl.uniform1f(U.uFloodOn, G.flood > 0.02 ? 1 : 0); gl.uniform1f(U.uFloodY, floodY());
+  gl.uniform1f(U.uFloodOn, 1); gl.uniform1f(U.uFloodY, floodY());
   gl.uniform1f(U.uCDen, G.cDen); gl.uniform1f(U.uContour, Math.min(1.2, G.contour * ctlV('contours'))); gl.uniform1f(U.uTime, S.t % 2000);
   gl.uniform1f(U.uComp, Math.floor(S.instab * 2.2 + (S.phase === 'era' ? S.P * 0.6 * ctlV('c_pressure') : 0)));
   gl.uniform1f(U.uDither, ctlV('dither')); gl.uniform1f(U.uSkyGlow, 0.35 + 0.25 * S.instab + 0.1 * S.dive + 0.1 * S.haze);
@@ -1151,6 +1192,21 @@ function vBass(t, f, dur, amp) {
   g.subG.gain.setTargetAtTime(amp, t, 0.012); g.subG.gain.setTargetAtTime(0, t + dur, 0.06);
   g.sub.frequency._v = g.sub2.frequency._v = g.subG.gain._v = undefined;
 }
+// WATERSHED impact: a low thump on the root, seen first and heard later; no pitch is derived from the records
+function audioThump(dist, str, bearing) {
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
+  const t = ctx.currentTime + 0.03 + dist / 42;
+  const f = degFreq(0, 1);
+  const o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), v = ctx.createGain(), pan = ctx.createStereoPanner(), s = ctx.createGain(), rv = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.18);
+  lp.type = 'lowpass'; lp.frequency.value = clamp(700 * Math.exp(-dist / 60), 160, 700); lp.Q.value = 0.9;
+  const amp = 0.34 * str * (0.5 + 0.5 * Math.exp(-dist / 70));
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(amp, t + 0.012); v.gain.exponentialRampToValueAtTime(0.0004, t + 2.4); v.gain.linearRampToValueAtTime(0, t + 2.5);
+  pan.pan.value = clamp(Math.sin(bearing) * 0.9, -0.9, 0.9); s.gain.value = 0.55; rv.gain.value = 0.35 + dist / 110;
+  o.connect(lp); lp.connect(v); v.connect(pan); pan.connect(g.B.pings.dry); pan.connect(s); s.connect(g.B.pings.send); pan.connect(rv); rv.connect(g.B.pings.verb);
+  o.start(t); o.stop(t + 2.55); done(o, [o, lp, v, pan, s, rv]);
+  vTom(t, degFreq(0, 1) * 1.5, 0.24 * str, 'pings');
+}
 function audioPing(dist, str, bearing, hLocal, scar) {
   const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running') return;
   const t = ctx.currentTime + 0.03 + dist / 42 * ctlV('c_distance');        // light first, sound later
@@ -1189,7 +1245,8 @@ function evolvePattern() {
 }
 function playStep(k, t, spb) {
   const G = S.G, br = S.instab > 0.45, P = AU.pat, c = S.cam;
-  if (P.kick[k] && !br) vKick(t, 0.62 * (0.6 + 0.4 * S.near));
+  const rest = Math.random() < (S.quiet || 0) * 0.8;   // WATERSHED: long gaps between records open rests
+  if (P.kick[k] && !br && !rest) vKick(t, 0.62 * (0.6 + 0.4 * S.near));
   if (P.bass[k] && (!br || k === 0)) {
     const lead = Math.max(0, t - AU.ctx.currentTime), d = 6 + c.spd * lead;
     const hh = Hraw(c.x + Math.cos(c.yaw) * d, c.z + Math.sin(c.yaw) * d);   // the ground ahead is the score
@@ -1202,8 +1259,8 @@ function playStep(k, t, spb) {
     const fs = [degFreq(r, 2), degFreq(r + 2, 2), degFreq(r + 4, 2)]; if (S.P > 0.6 && S.phase === 'era') fs.push(degFreq(r + 6, 2));
     vChord(t, fs, br ? 0.09 : 0.12, br ? 500 : 800 + 1800 * S.open);
   }
-  if (P.tom[k] && !br) vTom(t, degFreq(k % 5, 1) * 1.2, 0.3);
-  if (P.rim[k] && !br) vRim(t, 0.05 + 0.02 * S.open);
+  if (P.tom[k] && !br && !rest) vTom(t, degFreq(k % 5, 1) * 1.2, 0.3);
+  if (P.rim[k] && !br && !rest) vRim(t, 0.05 + 0.02 * S.open);
 }
 // fallback wind source when AudioWorklet is unavailable: never loops, each segment is a fresh
 // stretch of noise, equal-power crossfaded into the next, so there is no seam to hear
@@ -1255,7 +1312,7 @@ function audioControl() {
   setP(g.dr1.frequency, bf * 2, 4); setP(g.dr2.frequency, bf * 3 * Math.pow(2, detune / 1200), 4);
   const close = G.canopy > 0.01 ? clamp(1 - (canY() - c.y) / 10, 0, 1) : 0;
   const nightA = sstep(0.02, -0.22, S.sunEl) * Math.min(1.5, kW);
-  setP(g.drG.gain, 0.012 + G.drone * 0.035 * (0.5 + 0.5 * close + 0.5 * br + 0.6 * nightA), 2);
+  setP(g.drG.gain, 0.012 + G.drone * 0.035 * (0.5 + 0.5 * close + 0.5 * br + 0.6 * nightA + 0.6 * (S.quiet || 0)), 2);
   setP(g.drLP.frequency, 300 + 500 * close + 400 * S.open, 1.5);
 }
 function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
@@ -1392,7 +1449,7 @@ function ctlMsg(m) {
     case 'autopilot': CTL_GROUPS.forEach(gr => ctlSetMode(gr, 'auto')); CTL.mute = {}; CTL.solo = {}; ctlSave(); break;
     case 'release': CTL.release = Math.max(0, +m.v || 0); ctlSave(); break;
     case 'transition': if (S.phase === 'era') { if (m.op && OPS.includes(m.op)) S.forceDom = m.op; S.P = 1; } break;
-    case 'impact': break;   // no synthetic impacts in FIELD ENGINE 002
+    case 'impact': break;   // no synthetic impacts in FIELD ENGINE 003
     case 'info': SHOW_INFO = m.v === undefined ? !SHOW_INFO : !!m.v; updateInfo(); break;
   }
 }
@@ -1479,11 +1536,13 @@ function updateInfo() {
   const phase = D.phase === 'hold' ? 'after the last record · no new events' : D.paused ? 'paused' : D.phase === 'play' ? 'replaying' : D.state.toLowerCase();
   const bar = n => { const f = Math.round(clamp(n, 0, 1) * 12); return '▮'.repeat(f) + '▯'.repeat(12 - f); };
   const dom = G.dom === 'uplift' ? (G.uplift >= 0 ? 'upliftUp' : 'upliftDown') : G.dom;
+  const sh = has ? ((((D.playheadMs / 3600000 + D.lon / 15) % 24) + 24) % 24) : 0;
+  const clock = has && D.phase === 'play' ? ` · solar ${String(Math.floor(sh)).padStart(2, '0')}:${String(Math.floor(sh % 1 * 60)).padStart(2, '0')}` : '';
   const L = [];
-  L.push(`<span style="color:rgb(${i2})">MZTV / FIELD ENGINE 002</span>   THE FIELD DOES NOT RESET · running ${fmtT(S.real)}`);
-  L.push(`<span class="k">timeline </span><span style="color:rgb(${i2})">${bar(prog)}</span> day ${String(day).padStart(3, '0')} / ${days} · ${phase}`);
+  L.push(`<span style="color:rgb(${i2})">MZTV / FIELD ENGINE 003</span>   WATERSHED · running ${fmtT(S.real)}`);
+  L.push(`<span class="k">timeline </span><span style="color:rgb(${i2})">${bar(prog)}</span> day ${String(day).padStart(3, '0')} / ${days}${clock} · ${phase}`);
   L.push(`<span class="k">events   </span>${String(Math.min(D.index, D.events.length)).padStart(3, '0')} / ${String(D.events.length).padStart(3, '0')} recorded · equal force · ${D.state.toLowerCase()}`);
-  L.push(`<span class="k">ground   </span>${Math.round(st.mMean * 100)}% worn · ${S.events} impacts retained · era ${String(S.era).padStart(2, '0')} · ${S.phase === 'trans' ? 'rules deforming' : DESC[dom]}`);
+  L.push(`<span class="k">ground   </span>water holds ${Math.round(wetFrac * 100)}% · deepest basin ${basMax.toFixed(1)} · ${(S.quiet || 0) > 0.5 ? 'quiet: healing' : 'pressure'} · era ${String(S.era).padStart(2, '0')} ${S.phase === 'trans' ? '· rules deforming' : ''}`);
   L.push(`<span class="k">render   </span>${glOK ? 'webgl terrain' : 'webgl2 unavailable'} · ${DITHER_NAMES[G.dither]} dither · ${MODE_NAMES[G.mode]} ${Math.round(G.bpm)} bpm`);
   info.innerHTML = L.join('\n');
 }
@@ -1536,7 +1595,7 @@ function frame(now, fixedDt) {
 const PERF = { ms: 0 };
 if (!CAPTURE) requestAnimationFrame(frame);
 loadRecorded();
-window.MZ = { D, inject: ev => injectRecorded(ev),  tick: dt => frame(performance.now(), dt), CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
+window.MZ = { D, inject: ev => injectRecorded(ev), basin: () => { let sl = 0; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const i = y * N + x; sl = Math.max(sl, Math.abs(bd[i] - bd[y * N + ((x + 1) & M)]), Math.abs(bd[i] - bd[((y + 1) & M) * N + x])); } return { wetFrac: +wetFrac.toFixed(3), basMax: +basMax.toFixed(2), slope: +(sl * S.G.hS).toFixed(2), quiet: +(S.quiet||0).toFixed(2) }; },  tick: dt => frame(performance.now(), dt), CTL, ctlMsg, ctlV, rebuildGraph, sky: (ph, cl, rn) => { if (ph !== undefined) S.sunPh = ph; S._wx = [cl, rn]; }, get S() { return S; }, F: { get h() { return h; }, w, m, e }, AU, PERF, save, force: (op) => { if (op) S.forceDom = op; S.P = 1; }, set: (o) => Object.assign(S.base, o) };
 })();
 </script>
 </body>
