@@ -172,6 +172,24 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/field-engine-002-the-field-does-not-reset/`
 
+### FIELD ENGINE 003 — WATERSHED
+A sibling of FIELD ENGINE 002 on the same records and SOUNDING renderer. Every record lands with the same force, but where records recur the force accumulates: the ground subsides into conserved basins that slowly widen and merge into channels, and water collects in them. The sun runs on solar time at the records' mean position with real seasons, so each event arrives at its own hour; gaps between records heal scars and open rests in the rhythm. The camera is pulled downhill into the basins and released once inside. Impacts are low root thumps; no pitch is derived from the records. A year takes ~2 hours, then rain keeps falling into the shape it made. Params: ?minutes=120 ?days=365 ?hold=30 ?loop=1 ?audio=0 ?info=0 ?capture=1
+
+Path:
+`sources/field-engine-003-watershed/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/field-engine-003-watershed/`
+
+### BIT FIELD 025 — PLAYED GROUND
+SOUNDING's ground played by a library of improvised guitar takes. Each take is cut at its attacks and laid across the land as a winding path; the camera reads the recordings as it travels (continuous phrases, chops on the dub grid, grains, impacts striking the nearest attack), and bass and drone sit in the takes' key. Over ~48 hours the recordings erode with the ground: played order gives way to reordering by likeness, reversals, octave/fifth shifts, delay throws and grain clouds; worn ground wears its fragments faster. Awaiting the takes; runs as SOUNDING until library/manifest.json exists. Params: SOUNDING's plus ?lib=URL ?hours=N
+
+Path:
+`sources/bit-field-025-played-ground/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-025-played-ground/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
