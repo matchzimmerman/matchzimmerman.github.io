@@ -1,61 +1,98 @@
 # MZTV · FIELD ENGINE 004 · TAUT
 
-A second interpretation of the brief behind FIELD ENGINE 002 (*the field does not reset*). FE002 drops the records into SOUNDING's terrain. TAUT starts from a different material: a membrane held under tension by a small chord.
+A second interpretation of the brief behind FIELD ENGINE 002 (*the field does not reset*). FE002 drops the records into SOUNDING's terrain. TAUT starts from a different material: a membrane held under tension by a small band.
+
+- `index.html` is **v2** (current): tethered players, an interlocking funk groove, flash-safe rendering.
+- `v1.html` is v1, kept for the record: fixed exciters and a drone chord.
 
 ## Concept
-Five voices keep a membrane ringing. Their waves cross and interfere into a standing pattern, and that pattern is the picture. Their pitches are the low chord you hear. Public incident records strike the membrane in chronological order. The records carry time and position only, and every incident gives one impulse of equal force. Each impulse rings out and fades, but the ground it struck stays changed. Damaged membrane carries waves more slowly, so they bend around scars, and it absorbs them, so dead ground goes dark and still. Past a threshold it tears. A voice standing on dead ground falls silent and then tries to take hold on intact ground. When no intact ground is left, that voice is gone for good, and the chord has lost a note.
+Five players hold a membrane at tension: bass, kick, snare, clav and stab. Each is a node tethered to the spot where it emerged. It moves within its tether, shoved by its own hits, and its waves spread across the membrane and interfere with the others'. Together the five lock into one groove.
 
-The question it puts to the system is what repeated real-world violence does to a membrane that keeps trying to hold its note.
+Public incident records strike the membrane in order. They carry time and position only, and each incident gives one impulse of equal force. Each strike does three things:
+- It rings out across the membrane.
+- The band answers with a stop-time hit on the next downbeat.
+- It knocks the nearest player's part out of place. Most of that displacement heals back over the following bars, but some never does.
+
+The struck ground stays changed. Waves slow and bend around scars, damaged ground goes dark and still, and past a threshold the membrane tears.
+
+When a player's ground is spent, the player falls silent, and its frequency drops out of the band. It then re-emerges on intact ground near the most recent wounds, which brings it close to the others. When two players collide, the change is permanent: they trade a beat, settle into each other's timing, tighten their tethers, and each carries one more ring.
+
+The question it puts to the system is what repeated real-world violence does to a band that keeps trying to hold its groove.
 
 ## System
-- **Membrane:** a 480×270 wave equation on the GPU (WebGL2, float textures, 4 substeps per frame). Edges are fixed. A small viscosity term suppresses grid noise.
-- **Voices:** five exciters driven at circular-membrane mode ratios (1 : 1.594 : 2.136 : 2.653 : 3.156). Their interference makes the standing pattern.
-- **Damage:** two layers. *T* is fresh damage. It heals on a half-life of a few minutes, and heals more slowly on scarred ground and under pressure. *P* is permanent residue and only ever grows. Health is `h = 1 − P − 0.6·T`. Wave speed is `c² ∝ mix(0.28, 1, h)` and damping is `0.004 + 0.03·(1−h)`. Where `P > 0.5` the membrane is torn and held at zero.
-- **Equal force:** each record adds the same wave bump and the same damage stamp. No attribute of a record scales its effect. Rows within the same minute and about 100 m of each other are merged into one event, so the number of people involved never scales an impulse either.
-- **Pressure:** a leaky count of recent records, with a 6 record-day half-life. Clusters raise it and gaps let it drain. Pressure slows healing, lengthens the dub echo and makes the voices waver.
-- **Tending:** each impulse draws singing voices within 170 px a few pixels toward it, and fresh damage heals up to 3.5× faster near a singing voice. The repair response moves the chord into harm’s way.
-- **Homeostasis:** a voice whose ground health stays below 0.55 for 90 s falls silent. After 1–3 minutes it searches the readback map for ground with health above 0.78, at least 60 px from the other voices. If it finds some, it regrows there. If not, it is gone.
-- **Slackening:** as residue accumulates, the whole membrane loses up to 18% of its tension. Wavelengths shorten and the pattern loses symmetry.
+- **Membrane:** a 480×270 wave equation on the GPU (WebGL2, float textures, 2 substeps per frame). Waves are slow: about 24 px/s at simulation resolution, under 0.6 Hz. A viscosity term suppresses grid noise.
+- **Damage:** fresh damage *T* heals over a few minutes. It heals more slowly on scarred ground and under pressure, and faster near a singing player. Permanent residue *P* only grows. Health is `h = 1 − P − 0.6·T`. Lower health means slower waves, more damping and a darker image. Ground with `P > 0.5` is torn.
+- **Players (nodes):** each player has an anchor where it emerged and a tether radius, starting at 46 px. It wanders slowly inside the tether, and each of its hits shoves it, the kick and bass hardest. It leans toward a nearby wound for a minute after an impulse. Its exciter drives the membrane at its mode ratio (1 : 1.594 : 2.136 : 2.653 : 3.156).
+- **Emergence:** bass, kick and snare start. The clav emerges after the 3rd impulse and the stab after the 8th. A silenced player re-emerges on intact ground (`h > 0.72`) nearest the centroid of the last 12 wounds, at least 22 px from other anchors. If no intact ground remains, the player is gone from the band for good.
+- **Collisions:** two singing players closer than 14 px bounce elastically, and the change is permanent. They swap a 4-step window of their base patterns, though never the kick's or bass's "one". Their timing offsets move 60% toward each other. Their tethers shrink to 0.85×, and each gains a ring. Each pair has a 4-minute cooldown.
+- **Silence:** a player whose ground health stays below 0.55 for 90 s falls silent.
+- **Equal force:** no record attribute scales any effect. Rows from the same minute within about 100 m are merged into one incident.
+- **Pressure:** a leaky count of recent records, with a 6 record-day half-life. High pressure (above 0.6) does four things:
+  - healing slows;
+  - the band drops to a breakdown (bass, kick and snare only, held on Gm7);
+  - the tempo drags from 98 toward 93 bpm;
+  - swing deepens and the echoes lengthen.
 
-## Data
-- Source: the same public ArcGIS layer FE002 uses (NIBRS Group A, `Shooting='Y'`). The query fetches `CrimeDateTime, Latitude, Longitude` only, paged from the earliest record onward.
-- Geography is obscured. Coordinates are bounded by percentiles, rotated, stretched to fill the frame and smoothly warped. Neighbours stay neighbours, but the outline no longer reads as a map. The mapping is frozen on first load and kept in memory, so later records land in the same frame of reference.
-- **Replay:** the full archive plays in order at `?pace` real minutes per record day (default 4, so a year takes about 24 h). Real intervals between records are preserved, which makes clusters and silences part of the rhythm. Once the archive is caught up, the piece checks for new records every 20 min and applies each new one as it appears, at least 20 s apart.
-- Records are cached in localStorage, so the membrane keeps receiving through a source outage. If there is no cache and no source, the membrane simply holds its note and retries every minute. Nothing synthetic ever stands in for records. `?testdata=1` (synthetic records, labelled TEST DATA on screen) exists for testing only.
-- On screen: no place names, addresses, dates, victims or severity. The info box shows a record-day counter, the impulse count and how the field is responding.
+## Groove (audio)
+- **Grid:** 16 steps at 98 bpm. Odd 16ths are swung. Each player has its own pocket offset: the snare lays back, the clav pushes.
+- **Harmony:** a G dorian vamp, Gm7 for 8 bars then C7 for 4.
+- **Bass:** saw and square through a resonant lowpass, with octave "pops" on the high root.
+- **Kick:** sine dropping from 150 to 46 Hz.
+- **Snare:** body plus filtered noise, with ghost notes.
+- **Clav:** muted square-wave chord chanks.
+- **Stab:** detuned saw chord.
+- **Base patterns:** these are the funk grammar. Step 1 is "the one". Every hit's velocity follows the player's life and the ground health under its node.
+- **Pitch:** detuned by tension under the node, by accumulated residue, and by each re-emergence.
+- **Impulse:** a felt low knock (118→46 Hz), panned by position. On the next downbeat, every player except the clav plays a unison hit, then the bar stops and only the echoes carry.
+- **Residue bed:** brown noise lowpassed at 240 Hz, growing with residue and tears. Echo feedback grows with pressure and residue. Delay times are dotted and plain 8ths of the current tempo.
+- **Mix:** high shelf at −11 dB from 1.5 kHz and a lowpass at 3.2 kHz. In test recordings, 2–5 kHz sits about 42 dB down and everything above 5 kHz about 79 dB down. The low end (60–120 Hz) is the loudest band. No clicks.
+- **Hardening:**
+  - one-shot voices are enveloped and disconnect themselves;
+  - the feedback loop is bounded;
+  - the 40 ms scheduler looks 0.6 s ahead and skips forward after a stall;
+  - a watchdog resumes or recreates the context, and rebuilds the graph on NaN, silence, or every 3 h;
+  - the sequencer keeps running on a wall clock when sound is off, so the nodes still move.
 
-## Audio
-- **Voices:** each voice is two sines and a lowpassed triangle at its mode frequency over a G1 (49 Hz) fundamental. Voice level follows wave energy under the exciter, and pitch follows the tension there. Damage detunes a voice locally, and accumulated residue plus each relocation flattens it globally. A voice's pan follows its position.
-- **Impulse:** a felt low knock (118→46 Hz) plus a noise burst rung through bandpasses tuned to the *surviving* voices, at their current damaged pitches, so the membrane rings in whatever tuning it has left. It is panned by position and sent to the dub echo and the room. Every impulse has the same level.
-- **Knock:** the membrane's own pulse, Euclidean E(5,13) at 68 BPM, struck at a slowly wandering point. Its level and probability follow ground health there.
-- **Absence:** peaking notches sit at each voice's second harmonic. When a voice dies, its notch deepens to −16 dB in the residue bed and the echoes, so its frequency is carved out of everything.
-- **Residue bed:** brown noise lowpassed at 260 Hz. Its level grows with permanent damage and tearing, and room send grows too.
-- **Mix:** a high shelf at −9 dB from 1.8 kHz and a lowpass at 3.8 kHz. In test recordings everything above 2 kHz sits more than 80 dB down.
-- Hardened per the MZTV protocol: continuous oscillators, AudioWorklet noise from a `data:` URL (blob fallback, then crossfaded one-shot segments), enveloped one-shots that disconnect themselves, a bounded tanh feedback loop, a 40 ms/0.4 s lookahead scheduler that skips forward after stalls, and a watchdog that resumes, recreates the context and rebuilds the graph on NaN, 20 s of silence or every 3 h.
+## Flash safety
+- Wave frequencies stay under about 0.6 Hz.
+- Every display cell's brightness passes through a slew limiter: at most 2.25% change per frame, so a full swing takes at least about 0.75 s.
+- Impulse rings are low-contrast and travel slowly.
+- **Measured** (headless, with an impulse every 0.67 s, far denser than the real data): no pixel changed more than 2.25% per frame. At most 9.6% of the screen shifted by more than 10% in any quarter second. No region can oscillate faster than the waves, under 0.6 cycles per second, well below the 3 flashes/s threshold.
+- **v1 for comparison:** waves ran up to about 6 Hz with crest contrast unrestricted. Do not stream v1.
 
 ## Visual
-Four inks: deep ink navy, cobalt, pale lilac-white and a lime residue. Wave crests and the energy envelope are ordered-dithered (Bayer 4×4) on an integer pixel grid. Dead ground darkens. Fresh damage shows as a fine line screen that fades as it heals. Permanent residue is a rotated halftone printed slightly out of register, and the misregistration grows with residue. Torn ground has a stippled rim. Voice exciters are small ticks that go hollow when a voice falls silent. The palette drains slowly toward grey-violet as residue grows, then pulls back toward home.
+- **Inks:** four, ordered-dithered on an integer grid: navy, cobalt, pale lilac-white and a lime residue ink.
+- **Waves:** slow wavefronts and their energy envelope.
+- **Damage:** still ground darkens. Fresh damage shows as a fine line screen. Residue is a rotated halftone printed slightly out of register.
+- **Torn ground:** a stippled rim.
+- **Players:** a dot with one ring per collision survived, and the tether shown as a faint dashed lime circle.
+- **Palette:** drains toward grey-violet as residue grows, then pulls back toward home.
 
-## Timescales
-- **Seconds:** crests travel, voices beat, impulses ring and bend.
-- **Minutes:** fresh damage heals, pressure rises and falls with clusters and gaps, voices breathe.
-- **Hours:** residue spreads, the membrane slackens, the standing pattern loses symmetry, voices fall silent and relocate.
-- **Days:** tears open and voices find no ground. At the default pace the archive replay runs several days before it reaches the present and switches to listening for new records.
+## Data
+- **Source:** same public ArcGIS layer as FE002 (NIBRS Group A, `Shooting='Y'`). Only `CrimeDateTime, Latitude, Longitude` are fetched.
+- **Geography:** rotated, stretched and warped, and frozen on first load.
+- **Replay:** at the default `?pace=4` a year takes about 24 h, and the full archive (Jan 2022 – Sep 2026) about 4.8 days. Real intervals are preserved. After that the piece goes live, polling every 20 min and spacing new records at least 20 s apart.
+- **Outages:** records are cached locally.
+- **Test data:** `?testdata=1` (synthetic, labelled on screen) is for tests only.
+- **On screen:** no place names, addresses, dates, victims or severity.
 
-## Memory / persistence
-Every 60 s and on unload, the piece saves to localStorage (`mztv-fe004-v1`): the damage map (240×135, 16-bit residue), the voices, the playhead, pressure, palette, log and geo frame. An OBS reload resumes where it left off. `?fresh=1` restarts from a taut membrane.
+## Memory
+Every 60 s and on unload, the piece saves to localStorage (`mztv-fe004-v2`):
+- the damage map;
+- players (anchors, tethers, rings, base and current patterns, pocket offsets);
+- playhead, pressure, palette, log and geo frame.
+
+v2 starts fresh rather than inheriting v1's state.
 
 ## Params / keys
-`?info=0` · `?fresh=1` · `?audio=0` · `?pace=MIN` (real minutes per record day) · `?ff=H` (fast-forward H hours of replay at boot) · `?capture=1` · `?testdata=1` (tests only)
-Keys: **I** toggles info · **M** mutes. Click or any key starts sound in a normal browser. OBS autoplays.
+- **Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?pace=MIN` · `?ff=H` · `?capture=1` · `?testdata=1`
+- **Keys:** **I** toggles info · **M** mutes. Click to start sound in a normal browser. OBS autoplays.
+- **OBS:** Browser Source → `https://matchzimmerman.com/MZTV/sources/field-engine-004-taut/` · 1920×1080 · enable "Control audio via OBS".
 
-**OBS:** Browser Source → `https://matchzimmerman.com/MZTV/sources/field-engine-004-taut/` · 1920×1080 · enable "Control audio via OBS".
-
-## Tested (v1, 2026-10-05, headless Chromium/swiftshader)
-- Boot is legible within a second, with the membrane pre-warmed. No console errors.
-- Fast-forward to 6, 24, 72 and 120 h on synthetic records: residue spreads, the membrane slackens, threshold log lines fire, and nothing goes non-finite.
-- Reload resumes the identical damage map and playhead. NaN poisoning of the wave field self-heals within a frame. WebGL context loss restores from saved memory.
-- Audio is recorded from the master bus. The low end carries the weight (60–120 Hz loudest band). There are no transients above 5 kHz and no clicks. Each impulse lifts the level 3–5 dB above the drone. The AudioContext recovers from both suspend and close.
-- Not yet verified: the live record source from inside this build environment (the network blocks it). FE002 uses the identical query live. Check the info box shows `source: receiving` on first load.
-
-No mixer-linked play version yet. This is the autonomous stream build only.
+## Tested (v2, 2026-10-05, headless Chromium/swiftshader)
+- Boot legible within a second; no console errors.
+- Flash metrics as above.
+- Players emerge near wounds and collide, with beats traded, rings added and tethers tightened.
+- Reload resumes exactly. NaN poisoning self-heals. WebGL context loss restores. AudioContext suspend and close both recover.
+- The groove is steady at −18 to −20 dB RMS per second.
+- Headless note: software rendering can starve the scheduler and cause audible gaps. This was verified to be a test artefact by recording with rendering paused.
