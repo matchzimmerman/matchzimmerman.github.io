@@ -1553,7 +1553,7 @@ if (FRESH || !load()) {
 }
 const FF = parseFloat(Q.get('ff') || '0');
 if (FF > 0) { const steps = Math.round(FF * 36000); for (let i = 0; i < steps; i++) { evoStep(0.1); camStep(0.1); slowStep(0.1); waveStep(0.1); } S.imps = []; }
-try { initGL(); } catch (err) { console.error(err); glOK = false; }
+try { initGL(); } catch (err) { console.error(err); glOK = false; fallbackOn = true; }
 if (!MUTE) { createContext().catch(() => { }); }
 setInterval(audioSchedule, 40);
 setInterval(audioWatch, 1000);
@@ -1575,9 +1575,19 @@ function frame(now, fixedDt) {
     while (slowAcc >= 0.1 && n++ < 2) { slowAcc -= 0.1; slowStep(0.1); }
     if (slowAcc > 0.3) slowAcc = 0;
     waveStep(dt);
-    render();
-    probeRender();
-    if(fallbackOn) drawFallback(); else fb.style.display='none';
+    if (fallbackOn) {
+      drawFallback();
+    } else {
+      try {
+        render();
+        probeRender();
+      } catch (renderErr) {
+        console.error('FIELD ENGINE 002 render fallback:', renderErr);
+        fallbackOn = true;
+        drawFallback();
+      }
+    }
+    if (!fallbackOn) fb.style.display='none';
     ctlAcc += dt; if (ctlAcc > 0.1) { ctlAcc = 0; audioControl(); }
     infoAcc += dt; if (infoAcc > 1) { infoAcc = 0; updateInfo(); }
   } catch (err) { console.error(err); }
