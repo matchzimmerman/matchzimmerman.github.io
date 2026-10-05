@@ -164,7 +164,7 @@ Live:
 `https://matchzimmerman.github.io/MZTV/sources/field-engine-001-residue/`
 
 ### FIELD ENGINE 002 — THE FIELD DOES NOT RESET
-A rolling year of public incident records flagged as shootings is replayed chronologically through one material field. Every event enters with the same initial force at its recorded position. The visible disturbance settles, but a smaller residue and absence remain, altering how later pressure propagates. The piece withholds map labels, victim demographics, weapon imagery, dramatic severity scaling and explanatory statistics; the accumulation is the argument. Low resonant impulses and a changing drone/noise bed read the same field state as the image.
+A rolling year of public shooting-flagged incident records is replayed into a SOUNDING-derived terrain rather than a flat visualization. Recorded coordinates become positions in the material world; equal-force impacts scar the ground, increase memory pressure and alter later propagation. A low autonomous camera drifts through the terrain and bends gradually toward upcoming disturbances. SOUNDING's ray-marched ground, atmospheric depth, contours, hatching, four-ink dither, registration drift and distance-aware sound carry the piece; street maps, place labels, weapon imagery, victim demographics and severity scaling are withheld.
 
 Path:
 `sources/field-engine-002-the-field-does-not-reset/index.html`
