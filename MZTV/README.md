@@ -208,6 +208,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/score-engine-001-slo-funk-dub/`
 
+### SCORE ENGINE 002 — COMPOSER
+The second branch of the OBAS slo-funk-dub engine: it composes to a clip's exact length. The clip is scanned faster than real time, the tempo is fitted so the last bar lands on the final frame, and a six-section form (Arrival, Procession, Groove, Space, Climax, Resolution) carries composed energy, with a per-section routing table deciding what the arbitrary footage controls there. Renders deterministically to a 24-bit mix, seven stems with effects, a MIDI file and a score sheet.
+
+Path:
+`sources/score-engine-002-composer/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/score-engine-002-composer/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
