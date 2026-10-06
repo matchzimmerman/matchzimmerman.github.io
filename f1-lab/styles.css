@@ -1,0 +1,48 @@
+:root {
+  --bg:#080808;
+  --panel:#111;
+  --panel2:#171717;
+  --ink:#f2f2eb;
+  --muted:#9a9a92;
+  --accent:#ff6a00;
+  --accent2:#ffb000;
+  --line:#2a2a26;
+  --good:#a8ff60;
+  --bad:#ff4d4d;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+body{min-height:100vh}
+a{color:inherit}
+.shell{max-width:1280px;margin:0 auto;padding:28px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.dot{width:10px;height:10px;background:var(--accent);border-radius:50%;box-shadow:0 0 16px rgba(255,106,0,.7)}
+.nav{display:flex;gap:10px;flex-wrap:wrap}
+.btn,.nav a{border:1px solid var(--line);background:#0d0d0d;color:var(--ink);padding:10px 14px;text-decoration:none;cursor:pointer;font:inherit;text-transform:uppercase;letter-spacing:.06em}
+.btn:hover,.nav a:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);color:#080808;border-color:var(--accent);font-weight:900}
+.btn.ghost{background:transparent}
+.hero{padding:44px 0 28px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:28px}
+.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:800}
+h1{font-size:clamp(36px,7vw,88px);line-height:.95;margin:10px 0 18px;letter-spacing:-.04em}
+.lede{max-width:820px;color:#c5c5bd;font-size:18px;line-height:1.55}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);padding:18px}
+.card h2,.card h3{margin-top:0}.span6{grid-column:span 6}.span8{grid-column:span 8}.span4{grid-column:span 4}.span12{grid-column:span 12}
+@media(max-width:900px){.span4,.span6,.span8{grid-column:span 12}.shell{padding:16px}}
+.kpi{font-size:38px;font-weight:900;letter-spacing:-.04em}.label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.muted{color:var(--muted)}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}
+input[type=range]{accent-color:var(--accent);width:100%}
+input[type=number],input[type=text]{background:#090909;border:1px solid var(--line);color:var(--ink);padding:10px;font:inherit;width:100%}
+.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{border-bottom:1px solid var(--line);padding:9px;text-align:right}.table th:first-child,.table td:first-child{text-align:left}.table th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.badge{display:inline-block;border:1px solid var(--line);padding:5px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.badge.orange{border-color:var(--accent);color:var(--accent)}
+.note{border-left:3px solid var(--accent);padding-left:14px;color:#c8c8c0;line-height:1.5}
+canvas{width:100%;height:560px;background:radial-gradient(circle at 20% 10%,#18120d 0,#0b0b0b 42%,#050505 100%);border:1px solid var(--line);display:block}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:10px}.sw{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}.sw.o{background:var(--accent)}.sw.g{background:var(--good)}.sw.r{background:var(--bad)}
+.decision-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.decision{min-height:88px;text-align:left}.decision strong{display:block;font-size:18px;margin-bottom:4px}.decision small{color:var(--muted)}
+.result{margin-top:14px;padding:14px;border:1px solid var(--line);background:#0d0d0d;line-height:1.5}.result.good{border-color:#456d2a}.result.bad{border-color:#7d3030}
+.progress{height:7px;background:#222;overflow:hidden}.progress>div{height:100%;background:var(--accent);width:0%}
+code{color:var(--accent2)}
+footer{color:var(--muted);font-size:11px;margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
