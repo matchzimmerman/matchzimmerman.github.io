@@ -1,4 +1,6 @@
-# MZTV · FIELD ENGINE 004 · TAUT
+# MZTV · FIELD ENGINE 004 · RESIDUE GROOVE
+
+*Working title: TAUT, renamed 2026-10-06. The URL folder keeps the old slug so existing OBS sources keep working.*
 
 A second interpretation of the brief behind FIELD ENGINE 002 (*the field does not reset*). FE002 drops the records into SOUNDING's terrain. TAUT starts from a different material: a membrane held under tension by a small band.
 
