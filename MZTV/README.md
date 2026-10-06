@@ -199,6 +199,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/field-engine-004-taut/`
 
+### SCORE ENGINE 001 — SLO-FUNK-DUB
+A branch of RESIDUE GROOVE that inverts the visualiser relationship: the image scores the sound. Drop a video clip in (read locally, never uploaded) and an ingestion layer watches it frame by frame — motion energy and centroid, camera flow, cuts, impacts, flashes, light, warmth, detail, stillness — and that interpretation plays the OBAS slo-funk-dub engine. Cuts become dub-outs that move the downbeat onto the edit, impacts land as quantised hits, stillness empties the band, darkness and warmth choose the vamp, camera moves drag the echo across the stereo field. R renders the scored clip to a file.
+
+Path:
+`sources/score-engine-001-slo-funk-dub/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/score-engine-001-slo-funk-dub/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
