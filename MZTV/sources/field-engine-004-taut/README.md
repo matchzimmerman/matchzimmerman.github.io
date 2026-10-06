@@ -4,9 +4,47 @@
 
 A second interpretation of the brief behind FIELD ENGINE 002 (*the field does not reset*). FE002 drops the records into SOUNDING's terrain. TAUT starts from a different material: a membrane held under tension by a small band.
 
-- `index.html` is **v3** (current): ultra-slow funk in dub space. Parts drop out and echo back, phrases mutate, and sections change over hours.
+- `index.html` is **v4** (current): slow funk-rooted ambient orchestration in D phrygian with dub space. String sections sit on the sides, and a rotating lead ducks everything else through a sidechain.
+- `v3.html` is v3: ultra-slow funk in dub space, with no strings and no lead/sidechain. It is darker, with a 3 kHz ceiling.
 - `v2.html` is v2: the same players and membrane with a busier 98 bpm funk groove (it repeats too much over long runs).
 - `v1.html` is v1, kept for the record: fixed exciters and a drone chord.
+
+## v4 — funk-rooted ambient orchestration (2026-10-06)
+v4 is slower and more composed, with a crafted stereo and frequency field.
+- **Tempo / key:** about 52 bpm, half-time, drifting ±2 over 90 minutes and dragged slower by pressure and residue. Tonal center D phrygian. The sections are vamps inside the mode:
+  - D one-drop
+  - D – E♭ (i – ♭II)
+  - B♭ – C minor
+  - G minor – E♭
+  - D low ♭9
+
+  The bass line is chosen from chord tones, so every note stays in key.
+- **Stereo field (fixed):** bass and kick dead center; rim slightly right; skank right; horn left; low strings hard left; high strings and the lead string line hard right. Node position nudges each part by ±0.15. Measured side/mid: −19.5 dB below 150 Hz (near-mono low end), −4 to −5.5 dB above (wide), L/R balanced within 0.3 dB.
+- **Strings:** two continuous string sections, each with three voices of two detuned saws, vibrato, a lowpass and a room send.
+  - They glide legato between voicings, using nearest-note voice leading.
+  - They swell on 32-bar arcs.
+  - **They are the membrane:** each side's level and brightness follow wave energy on that half of the field. More space means more strings.
+- **Lead + sidechain:** the lead rotates on 16-bar phrases between horn, strings, bass and skank.
+  - **Horn lead:** a short stepwise D-phrygian phrase played call, call, answer, rest.
+  - **String lead:** long notes moving by step at the top of the right side.
+  - **Bass lead:** opens up and adds fills.
+  - **Skank lead:** pushed forward.
+
+  Lead notes go to a lead bus. Everything else, including echoes, spring and rooms, sits on a bed bus whose gain dips under each lead note (about 0.3–0.42 depth, 100 ms hold, 0.3 s release). The kick separately pumps the strings.
+- **Master:** highpass 26 Hz → light saturation → −5 dB presence dip at 3 kHz → high shelf −7 dB from 5.5 kHz → lowpass 9.5 kHz → glue compressor (2.2:1, soft knee). Measured band energy relative to the loudest band:
+
+  | Band | Level |
+  |---|---|
+  | 20–60 Hz | −9 dB |
+  | 60–120 Hz | −2 dB |
+  | 120–250 Hz | −7.5 dB |
+  | 250–1k | −16 dB |
+  | 1–2k | −23 dB |
+  | 2–5k | −37 dB |
+  | >5k | −60 dB |
+
+  That is full range with a soft top.
+- Everything from v3 carries over: dub drop-outs, throws, tape echo with swept return, dub-outs on impulses, phrase mutation, section changes, nodes, collisions and flash safety. State key `mztv-fe004-v4` (starts fresh).
 
 ## v3 — ultra-slow funk, dub space (2026-10-06)
 v2's groove was effectively the same for hours. v3 slows it to a half-time one-drop and opens it up with dub negative space. It also makes the groove itself evolve.
