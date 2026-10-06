@@ -4,8 +4,21 @@
 
 A second interpretation of the brief behind FIELD ENGINE 002 (*the field does not reset*). FE002 drops the records into SOUNDING's terrain. TAUT starts from a different material: a membrane held under tension by a small band.
 
-- `index.html` is **v2** (current): tethered players, an interlocking funk groove, flash-safe rendering.
+- `index.html` is **v3** (current): ultra-slow funk in dub space. Parts drop out and echo back, phrases mutate, and sections change over hours.
+- `v2.html` is v2: the same players and membrane with a busier 98 bpm funk groove (it repeats too much over long runs).
 - `v1.html` is v1, kept for the record: fixed exciters and a drone chord.
+
+## v3 — ultra-slow funk, dub space (2026-10-06)
+v2's groove was effectively the same for hours. v3 slows it to a half-time one-drop and opens it up with dub negative space. It also makes the groove itself evolve.
+- **Tempo:** about 66 bpm, drifting ±3 over a 90-minute cycle. Pressure and accumulated residue drag it slower. Swing is deeper, and every player sits behind the beat; the horn lays back furthest.
+- **Parts:** sub bass (long, round notes from a mutating bass line), kick on the one and three, one-drop rim/snare into a spring reverb, an offbeat skank chop, and a soft horn/melodica swell. Nothing bright: everything above 2 kHz sits about 60 dB down.
+- **Space:** a slow *space* value (17-minute and 4-minute cycles, plus pressure and residue) decides how much the mix leaves out. Each bar, each part may drop out. Bass or kick always holds the floor. On screen, dropped parts show dimmed and marked `out`.
+- **Throws:** skank, snare and horn hits are randomly thrown into the echo. There are more throws when there's more space.
+- **Echo:** a tape-style ping-pong delay (dotted 8th and quarter, with slight wow) whose return passes through a resonant lowpass that sweeps slowly. Feedback is bounded by tanh, a lowpass and a highpass.
+- **Impulse → dub-out:** on the next one, a single unison hit is flung into the echo, feedback spikes and the return filter opens and closes, then the bar is empty apart from tails.
+- **Phrase mutation:** every 16 bars, one player gains or loses a hit inside its role's grammar (allowed steps, minimum and maximum density), so the parts drift over hours. Impulses and collisions still displace and trade beats on top of that.
+- **Sections:** five modal vamps (G minor one-drop, G–C dorian, Bb–A drift, F up to G, C minor sink). The section changes every 20–45 minutes on an 8-bar boundary. As residue grows, the choice leans toward the darker vamps, and each change rewrites part of the bass line.
+- **Memory:** state is saved under `mztv-fe004-v3`, so v3 starts fresh.
 
 ## Concept
 Five players hold a membrane at tension: bass, kick, snare, clav and stab. Each is a node tethered to the spot where it emerged. It moves within its tether, shoved by its own hits, and its waves spread across the membrane and interfere with the others'. Together the five lock into one groove.
