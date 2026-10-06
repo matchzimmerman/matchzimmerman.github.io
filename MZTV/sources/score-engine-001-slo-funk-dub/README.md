@@ -4,6 +4,10 @@ A branch of **FIELD ENGINE 004 · RESIDUE GROOVE**. It uses the same OBAS sonic 
 
 Drop in a scene, and the engine reads its motion, camera movement, editing, light and texture. That reading plays the band. The data is still arbitrary, and the film is never sonified literally. But because it all derives from the image, the score's pacing and mood tend to fall into sync with the picture: sometimes obviously (a cut lands a dub-out on the edit), mostly not.
 
+## Public materials
+- `explainer.html`: plain-language explainer for sharing ("The Film Plays the Band"). Live: `https://matchzimmerman.com/MZTV/sources/score-engine-001-slo-funk-dub/explainer.html`
+- `post.md`: short paste-ready post text.
+
 ## Use
 1. Open `https://matchzimmerman.com/MZTV/sources/score-engine-001-slo-funk-dub/` in Chrome.
 2. Drop a video file on the page, or click **choose a clip**. The file is read locally and nothing is uploaded.

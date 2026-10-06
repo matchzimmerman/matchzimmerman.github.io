@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>The Film Plays the Band</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one reading column on the MZTV ink ground, broken by three working diagrams (pipeline, trigger table, stereo field). Single dark world by choice. */
+:root {
+  --ink: #0d1230;        /* ground */
+  --panel: #151c46;      /* raised surfaces */
+  --cobalt: #3a54de;     /* fills, strokes */
+  --lilac: #ece9ff;      /* text */
+  --dim: #a5a9d6;        /* secondary text */
+  --lime: #b0de5c;       /* the one accent: events, residue */
+  --line: rgba(236,233,255,.14);
+  --display: 'Silkscreen', 'JetBrains Mono', ui-monospace, monospace;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ink); color: var(--lilac); font-family: var(--body); font-size: 17px; line-height: 1.6; padding-inline: 20px; padding-block: 0 64px; }
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+.col { max-width: 66ch; }
+h1, h2 { font-family: var(--display); font-weight: 400; text-wrap: balance; letter-spacing: .01em; margin: 0; }
+h1 { font-size: clamp(34px, 7vw, 68px); line-height: 1.02; }
+h2 { font-size: clamp(22px, 3.4vw, 30px); line-height: 1.15; }
+p { margin: 0; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.label { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.lime { color: var(--lime); }
+a { color: var(--lime); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+
+/* hero */
+header { padding-block: 56px 0; display: flex; flex-direction: column; gap: 22px; }
+.dither { height: 10px; background-image: radial-gradient(var(--cobalt) 1.4px, transparent 1.6px); background-size: 6px 6px; opacity: .9; }
+.lede { font-size: clamp(18px, 2.2vw, 21px); color: var(--lilac); max-width: 60ch; }
+
+/* the flip */
+.flip { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.flip > div { padding: 20px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.flip .now { border-color: var(--lime); }
+.flow { font-family: var(--mono); font-size: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.flow span.n { padding: 3px 8px; background: var(--panel); }
+.flip .now .flow span.n { background: transparent; border: 1px solid var(--lime); color: var(--lime); }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); }
+.stage { padding: 20px 18px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--line); position: relative; min-width: 0; }
+.stage:last-child { border-right: 0; }
+.stage .step { font-family: var(--mono); font-size: 12px; color: var(--lime); letter-spacing: .1em; }
+.stage h3 { font-family: var(--body); font-size: 18px; font-weight: 600; margin: 0; }
+.stage p { font-size: 15px; color: var(--dim); }
+.stage:not(:last-child)::after { content: '→'; position: absolute; right: -9px; top: 22px; font-family: var(--mono); color: var(--lime); background: var(--ink); width: 18px; text-align: center; }
+@media (max-width: 760px) {
+  .pipe { grid-template-columns: 1fr; }
+  .stage { border-right: 0; border-bottom: 1px solid var(--line); }
+  .stage:last-child { border-bottom: 0; }
+  .stage:not(:last-child)::after { content: '↓'; right: auto; left: 18px; top: auto; bottom: -13px; }
+}
+
+/* senses */
+.senses { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.sense { background: var(--ink); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sense b { font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+.sense span { font-size: 15px; color: var(--dim); }
+
+/* trigger table */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); }
+table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--mono); font-weight: 400; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); background: var(--panel); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td:nth-child(2) { color: var(--lilac); }
+td:nth-child(3) { color: var(--dim); }
+tr.key td:first-child { color: var(--lime); }
+
+/* stereo field */
+.field { border: 1px solid var(--line); padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 6px; overflow-x: auto; }
+.lane { display: grid; grid-template-columns: 112px minmax(260px, 1fr); align-items: center; gap: 12px; min-height: 26px; }
+.lane .who { font-family: var(--mono); font-size: 13px; color: var(--dim); white-space: nowrap; }
+.track { position: relative; height: 18px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.track::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px dashed var(--line); }
+.mark { position: absolute; top: 3px; height: 12px; background: var(--lime); border-radius: 6px; min-width: 12px; transform: translateX(-6px); }
+.mark.wide { transform: none; background: var(--cobalt); }
+.axis { display: grid; grid-template-columns: 112px minmax(260px, 1fr); gap: 12px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.axis div:last-child { display: flex; justify-content: space-between; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px 26px; font-family: var(--mono); font-size: 13px; color: var(--dim); }
+.facts b { color: var(--lilac); font-weight: 600; }
+
+/* why it syncs */
+.why { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; }
+.why > div { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.why h3 { font-family: var(--body); font-size: 18px; font-weight: 600; margin: 0; }
+.why p { color: var(--dim); font-size: 16px; }
+
+footer { border-top: 1px solid var(--line); padding-top: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-family: var(--mono); font-size: 13px; color: var(--dim); }
+@media (prefers-reduced-motion: no-preference) { .mark { transition: left .3s; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="label">MZTV · SCORE ENGINE 001 · SLO-FUNK-DUB</div>
+    <h1>The film plays the band.</h1>
+    <p class="lede">A music visualizer listens to sound and makes pictures. This does the opposite. It watches a piece of film, measures what is happening on screen frame by frame, and uses those measurements to play a slow dub-funk band in real time. You never hear the film. You hear the band reading it.</p>
+    <div class="dither" aria-hidden="true"></div>
+  </header>
+
+  <section class="stack">
+    <div class="label">The flip</div>
+    <div class="flip">
+      <div>
+        <div class="label">Usual</div>
+        <div class="flow"><span class="n">sound</span>→<span class="n">analysis</span>→<span class="n">pictures</span></div>
+        <p style="color:var(--dim);font-size:15px">The bass hits, the screen pulses. The image decorates the music.</p>
+      </div>
+      <div class="now">
+        <div class="label lime">Here</div>
+        <div class="flow"><span class="n">pictures</span>→<span class="n">analysis</span>→<span class="n">sound</span></div>
+        <p style="color:var(--dim);font-size:15px">The edit cuts, the band drops out. The music answers the image.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>What happens, in four steps</h2>
+    <div class="pipe">
+      <div class="stage"><div class="step">IN</div><h3>A clip plays</h3><p>Any video file, dropped into the page. It is read on your own computer and never uploaded.</p></div>
+      <div class="stage"><div class="step">LOOK</div><h3>The engine watches</h3><p>Every frame is shrunk to a 160 × 90 grid of pixels and compared to the one before. Twelve measurements come out.</p></div>
+      <div class="stage"><div class="step">DECIDE</div><h3>Rules interpret</h3><p>A set of plain rules turns those measurements into musical decisions: tempo, who plays, which chords, where things sit in the stereo field.</p></div>
+      <div class="stage"><div class="step">OUT</div><h3>The band plays</h3><p>Bass, kick, rim, skank guitar, horn and strings, synthesised live in the browser, always in time and in key.</p></div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>What it actually measures</h2>
+    <p class="col" style="color:var(--dim)">None of this is "understanding" the film. The engine doesn't know a face from a car. It only measures change, light and colour in a tiny grid of pixels, which turns out to be enough to follow how a scene moves.</p>
+    <div class="senses">
+      <div class="sense"><b>Motion</b><span>How many pixels changed since the last frame, and how much.</span></div>
+      <div class="sense"><b>Where the motion is</b><span>The centre point of all that change: left, right, up, down.</span></div>
+      <div class="sense"><b>Camera movement</b><span>Whether the whole picture is sliding one way, the way it does when a camera pans.</span></div>
+      <div class="sense"><b>Cuts</b><span>A sudden jump in the overall mix of light and dark tones, far beyond normal motion. That is what an edit looks like to a machine.</span></div>
+      <div class="sense"><b>Impacts</b><span>A burst of motion well above what the scene was just doing: a punch, a door, a fall.</span></div>
+      <div class="sense"><b>Flashes</b><span>A sudden jump in brightness.</span></div>
+      <div class="sense"><b>Stillness</b><span>Almost nothing changing for a second and a half.</span></div>
+      <div class="sense"><b>Light and dark</b><span>Average brightness of the frame, and its contrast.</span></div>
+      <div class="sense"><b>Warmth</b><span>Whether the colours lean red and orange or blue.</span></div>
+      <div class="sense"><b>Detail</b><span>How much fine texture there is: grass, crowds and rain score high, sky scores low.</span></div>
+      <div class="sense"><b>Pace</b><span>Long-run motion plus how often the film cuts.</span></div>
+      <div class="sense"><b>Tension</b><span>Motion, contrast and cutting rate combined into one number.</span></div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>When the film does this, the band does that</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>On screen</th><th>In the music</th><th>Why that pairing</th></tr></thead>
+        <tbody>
+          <tr class="key"><td>A cut</td><td>Dub-out: one hit from the whole band, flung into a long echo, then near silence. If the cut lands late in a bar, the downbeat moves onto the cut.</td><td>An edit is a break in time. Dub's version of a break is dropping the band and letting the echo carry. Moving the "one" onto the cut makes the music reorganise around the editing.</td></tr>
+          <tr class="key"><td>An impact</td><td>A kick (big hits) or rim shot (light hits), snapped to the next sixteenth note.</td><td>Physical hits on screen become percussion. Snapping to the grid keeps it a groove, not a sound effect.</td></tr>
+          <tr><td>Stillness</td><td>The rhythm section steps out. Strings and echoes hold.</td><td>A still frame is negative space. The music leaves room instead of filling it. Movement brings the band back.</td></tr>
+          <tr><td>A busy scene</td><td>Fewer parts drop out, and the parts slowly grow more notes.</td><td>More happening on screen means a fuller, denser arrangement. Quiet scenes thin it out.</td></tr>
+          <tr><td>Overall pace</td><td>Tempo, between 46 and 60 beats per minute.</td><td>Fast-cut, high-motion footage pushes the tempo up. Slow footage lets it sink. It changes gradually, over about eight seconds.</td></tr>
+          <tr><td>Darkness</td><td>Darker chords, longer echoes, a bigger room.</td><td>Dark scenes move the band to its lowest, most dissonant vamp and let the reverb open up.</td></tr>
+          <tr><td>Warmth</td><td>Brighter, more open strings.</td><td>Warm, saturated images open the filter on the strings. Cold ones keep them muffled.</td></tr>
+          <tr><td>Camera movement</td><td>The echoes slide across the stereo field in the same direction.</td><td>When the camera pans left, the sound drifts left with it.</td></tr>
+          <tr><td>Where the motion is</td><td>Horn and guitar pan toward that side.</td><td>Action on the right of frame pulls those parts right.</td></tr>
+          <tr><td>Detail</td><td>A low hiss bed under the band.</td><td>Visual texture becomes audible texture, kept low and dark.</td></tr>
+          <tr><td>A flash</td><td>A single horn note thrown into the echo.</td><td>A burst of light becomes a burst of sound that hangs in the air.</td></tr>
+          <tr><td>Whatever dominates</td><td>Takes the lead. Everything else ducks under it.</td><td>A moving camera gives the lead to the guitar, heavy motion to the bass, stillness or darkness to the strings, otherwise the horn. The rest dips in volume each time the lead plays, so the lead always reads clearly.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>The band, and where it sits</h2>
+    <p class="col" style="color:var(--dim)">The band is fixed so that it can be recognised from clip to clip. Only its behaviour changes. Each part has a home position in the stereo field, left to right.</p>
+    <div class="field" role="img" aria-label="Stereo positions: horn at left 42, low strings left 20 to 30, bass and kick centre, rim right 14, high strings right 20 to 30, lead strings right 36, skank guitar right 50.">
+      <div class="lane"><div class="who">horn</div><div class="track"><div class="mark" style="left:29%"></div></div></div>
+      <div class="lane"><div class="who">low strings</div><div class="track"><div class="mark wide" style="left:35%;width:5%"></div></div></div>
+      <div class="lane"><div class="who">bass · kick</div><div class="track"><div class="mark" style="left:50%"></div></div></div>
+      <div class="lane"><div class="who">rim</div><div class="track"><div class="mark" style="left:57%"></div></div></div>
+      <div class="lane"><div class="who">high strings</div><div class="track"><div class="mark wide" style="left:60%;width:5%"></div></div></div>
+      <div class="lane"><div class="who">lead strings</div><div class="track"><div class="mark" style="left:68%"></div></div></div>
+      <div class="lane"><div class="who">skank guitar</div><div class="track"><div class="mark" style="left:75%"></div></div></div>
+      <div class="axis"><div></div><div><span>L 100</span><span>centre</span><span>R 100</span></div></div>
+    </div>
+    <div class="facts">
+      <span>key <b>D phrygian</b></span><span>tempo <b>46–60 bpm</b>, half-time one-drop</span><span>effects <b>tape echo · spring · reversed room</b></span><span>low end <b>centred, near mono</b></span><span>top end <b>soft, rolled off</b></span>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Why it sometimes lines up perfectly</h2>
+    <div class="why">
+      <div><h3>Films are already rhythmic</h3><p>Editors cut to a pulse, and action has its own timing. Because every musical decision comes from the same pixels, the band inherits that structure. Its pacing and mood tend to follow the scene without anyone scoring it.</p></div>
+      <div><h3>The data is arbitrary on purpose</h3><p>Pixel counts and colour averages don't mean anything musical by themselves. The rules give them meaning. That is the experiment: treat a film as a data source, then see when an arbitrary reading starts to feel intentional.</p></div>
+      <div><h3>Always in time, always in key</h3><p>Every hit is snapped to the beat and every note is chosen from the key, so even a wrong guess sounds like part of the arrangement. When a cut or impact lands right on the grid, it feels scored.</p></div>
+    </div>
+    <p class="col" style="color:var(--dim)">The same sound engine first ran in <b style="color:var(--lilac)">RESIDUE GROOVE</b>, an MZTV broadcast piece played by an invisible external data stream. Swapping that stream for a camera's-eye reading of film is the branch.</p>
+  </section>
+
+  <footer>
+    <span>Match Zimmerman · MZCMG · <a href="https://www.twitch.tv/matchzimmerman">twitch.tv/matchzimmerman</a></span>
+    <span><a href="https://matchzimmerman.com/MZTV/sources/score-engine-001-slo-funk-dub/">try it with your own clip</a></span>
+  </footer>
+</div>
+</body>
+</html>
