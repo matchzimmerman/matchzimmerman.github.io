@@ -21,7 +21,7 @@
 <div id="info"></div>
 <script>
 /*
-  MZTV · FIELD ENGINE 004 · RESIDUE GROOVE · v5 (funk-rooted ambient orchestration, D phrygian, dub space; pads pushed back)
+  MZTV · FIELD ENGINE 004 · RESIDUE GROOVE · v4 (funk-rooted ambient orchestration, D phrygian, dub space)
   A membrane held under tension by five players. Each player is a node tethered to the spot where it
   emerged; it moves inside its tether, pushed by its own hits, and together the five lock into an
   interlocking funk groove (bass, kick, snare, clav, stab) on a shared 16th grid. Public incident
@@ -42,7 +42,7 @@
 */
 'use strict';
 const Q = new URLSearchParams(location.search);
-const KEY = 'mztv-fe004-v5', RKEY = 'mztv-fe004-records-v1';
+const KEY = 'mztv-fe004-v4', RKEY = 'mztv-fe004-records-v1';
 const SHOW_INFO = Q.get('info') !== '0';
 const AUDIO_ON = Q.get('audio') !== '0';
 const PACE = Math.max(0.05, +(Q.get('pace') || 4));
@@ -101,7 +101,7 @@ function newVoice(i, ax, ay, state) {
     state, until: 0, moves: 0, rings: 0, base: BASEPAT[role].slice(), cur: BASEPAT[role].slice(), push: PUSH0[role], lean: null };
 }
 const S = {
-  v: 5, born: Date.now(), elapsed: 0,
+  v: 4, born: Date.now(), elapsed: 0,
   play: null, idx: 0, applied: 0, pressure: 0, live: false, lastT: null, geo: null,
   voices: [], recent: [], bars: 0, marks: {}, log: [], pal: null, gain: 6, hiP: 0, pairCool: {},
   sec: 0, secAt: 0, secLen: 1800, bassLine: [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 0, 4, 0, 2, 0], out: {}, mutBars: 0,
@@ -574,28 +574,16 @@ function buildGraph(fade) {
     G.spring = ctx.createConvolver(); G.spring.buffer = bf; G.springLP = ctx.createBiquadFilter(); G.springLP.type = 'lowpass'; G.springLP.frequency.value = 2200; G.springHP = ctx.createBiquadFilter(); G.springHP.type = 'highpass'; G.springHP.frequency.value = 180;
     G.springOut = ctx.createGain(); G.springOut.gain.value = 0.55; G.spring.connect(G.springHP); G.springHP.connect(G.springLP); G.springLP.connect(G.springOut); G.springOut.connect(G.bedBus); G.springOut.connect(G.dIn); }
   G.bedLP = ctx.createBiquadFilter(); G.bedLP.type = 'lowpass'; G.bedLP.frequency.value = 240; G.bed = ctx.createGain(); G.bed.gain.value = 0; G.bedLP.connect(G.bed); G.bed.connect(G.bedBus);
-  // string sections: low strings left (voices at L30 / L25 / L20), high strings right (R20 / R25 / R30)
-  // each voice is panned on its own, the section is saturated then lowpassed, and it sits mostly in the room
+  // string sections: low strings hard left, high strings hard right — continuous, gliding, swelling with the membrane
   G.padOsc = []; G.padL = []; G.padR = [];
-  for (const [side, pans, list, lpf] of [['L', [-0.30, -0.25, -0.20], G.padL, 650], ['R', [0.20, 0.25, 0.30], G.padR, 950]]) {
-    const drive = ctx.createGain(); drive.gain.value = 0.3; const sat = shaper(ctx, 2.4); const sec = ctx.createGain(); sec.gain.value = 0;   // drive hard into the saturator, set level after it
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = lpf; lp.Q.value = 0.75; const lp2 = ctx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2400; lp2.Q.value = 0.5;
-    const dry = ctx.createGain(); dry.gain.value = 0.55; drive.connect(sat); sat.connect(lp); lp.connect(lp2); lp2.connect(sec); sec.connect(dry); dry.connect(G.padBus);
-    const vs = ctx.createGain(); vs.gain.value = 0.9; sec.connect(vs); vs.connect(G.verbIn);
+  for (const [side, pan, list, lpf] of [['L', -0.82, G.padL, 900], ['R', 0.82, G.padR, 1500]]) {
+    const sec = ctx.createGain(); sec.gain.value = 0; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = lpf; lp.Q.value = 0.6;
+    const p = ctx.createStereoPanner(); p.pan.value = pan; sec.connect(lp); lp.connect(p); p.connect(G.padBus); const vs = ctx.createGain(); vs.gain.value = 0.45; p.connect(vs); vs.connect(G.verbIn);
     const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = side === 'L' ? 4.7 : 5.3; vg.gain.value = 5; vib.connect(vg); vib.start(); G.padOsc.push(vib);
     const ms = side === 'L' ? (S.padL.length ? S.padL : [50, 53, 57]) : (S.padR.length ? S.padR : [65, 69, 72]);
-    for (let i = 0; i < 3; i++) {
-      const vp = ctx.createStereoPanner(); vp.pan.value = pans[i]; vp.connect(drive);
-      const det = [0.9965, 1.0035], oscs = det.map(d => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(ms[i]) * d; vg.connect(o.detune); o.connect(vp); o.start(); G.padOsc.push(o); return o; });
-      list.push({ oscs, det });
-    }
+    for (let i = 0; i < 3; i++) { const det = [0.9965, 1.0035], oscs = det.map(d => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(ms[i]) * d; vg.connect(o.detune); o.connect(sec); o.start(); G.padOsc.push(o); return o; }); list.push({ oscs, det }); }
     G['pad' + side + 'Gain'] = sec; G['pad' + side + 'LP'] = lp;
   }
-  // pre-verb: a reversed room the strings swell up through into each chord change
-  { const n = Math.floor(ctx.sampleRate * 2.2), bf = ctx.createBuffer(2, n, ctx.sampleRate), rr = mulberry(77);
-    for (let c = 0; c < 2; c++) { const d = bf.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { lp += 0.15 * ((rr() * 2 - 1) - lp); const k = n - 1 - i; d[i] = lp * Math.pow(1 - k / n, 2.2) * (i > n - 600 ? (n - i) / 600 : 1); } }
-    G.pre = ctx.createConvolver(); G.pre.buffer = bf; G.preIn = ctx.createGain(); G.preLP = ctx.createBiquadFilter(); G.preLP.type = 'lowpass'; G.preLP.frequency.value = 1300;
-    G.preOut = ctx.createGain(); G.preOut.gain.value = 0.6; G.preIn.connect(G.pre); G.pre.connect(G.preLP); G.preLP.connect(G.preOut); G.preOut.connect(G.padBus); G.preLen = 2.2; }
   startNoise(G);
   // one-shot noise material (never looped)
   const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0), r = mulberry(5); for (let i = 0; i < nd.length; i++) nd[i] = r() * 2 - 1; G.nbuf = nb;
@@ -628,13 +616,6 @@ function outFor(v, t, sendD = 0.2, sendV = 0.15, toLead) {
 // sidechain: the bed (everything that isn't the lead) dips under each lead note; the kick pumps the strings
 function duckBed(t, depth) { const g = A.G.bedDuck.gain; g.setTargetAtTime(1 - depth, t, 0.012); g.setTargetAtTime(1, t + 0.1, 0.32); }
 function duckPads(t, depth) { const g = A.G.padDuck.gain; g.setTargetAtTime(1 - depth, t, 0.015); g.setTargetAtTime(1, t + 0.08, 0.38); }
-function preSwell(tChange, ch) {
-  // feed a soft chord pluck into the reversed room so its swell peaks right on the change
-  const ctx = A.ctx, G = A.G, t0 = tChange - G.preLen; if (t0 < ctx.currentTime + 0.01) return;
-  const g = ctx.createGain(), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.connect(g); g.connect(G.preIn); const all = [];
-  for (const tn of ch.tones.slice(0, 4)) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(ch.root + 36 + tn); o.connect(lp); o.start(t0); all.push(o); }
-  const e = env(g, t0, 0.09 * (0.7 + 0.6 * spaceNow()), 0.004, 0.3); all.forEach(o => o.stop(e)); all[0].onended = () => chain([...all, lp, g], e, 3000);
-}
 function padRetune(t) {
   const G = A.G; if (!G || !G.padL) return;
   // legato: strings glide into the new voicing rather than re-attacking
@@ -650,7 +631,7 @@ function playHorn(t, m, vel, dur) {
   duckBed(t, 0.42);
 }
 function playLeadString(t, m, dur) {
-  const ctx = A.ctx, [g, ns] = outFor({ pan: 0.36, x: W / 2 }, t, 0.25, 0.6, true), all = [];
+  const ctx = A.ctx, [g, ns] = outFor({ pan: 0.62, x: W / 2 }, t, 0.25, 0.5, true), all = [];
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1700; lp.Q.value = 0.5; lp.connect(g);
   for (const d of [0.996, 1, 1.004]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(m) * d; const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 5.1 + d; vg.gain.value = 7; vib.connect(vg); vg.connect(o.detune); o.connect(lp); o.start(t); vib.start(t); all.push(o, vib, vg); }
   g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.6); g.gain.setTargetAtTime(0, t + dur, 0.6); const e = t + dur + 3;
@@ -721,7 +702,6 @@ function barStart(bar, t) {
   const sc = scaleMidi(62, 79), top = S.padR.length ? S.padR[S.padR.length - 1] : 69; let ti = sc.findIndex(m => m >= top); if (ti < 0) ti = 6;
   S.strLine = [{ st: 0, m: sc[clamp(ti + [-1, 0, 1, 2][Math.floor(rnd() * 4)], 0, sc.length - 1)] }]; if (rnd() < .5) S.strLine.push({ st: 8, m: sc[clamp(ti + [-2, -1, 1][Math.floor(rnd() * 3)], 0, sc.length - 1)] });
   voicePads(ch); if (t != null && A.G) padRetune(t);
-  if (t != null && A.G) { const nx = chordAt(bar + 1); if (nx.root !== ch.root || nx.tones.join() !== ch.tones.join()) preSwell(t + 16 * 60 / bpmNow() / 4, nx); }
   if (++S.mutBars >= 16) { S.mutBars = 0; mutatePhrase(); }
   // dub drop-outs: each part may leave for the bar; the more space, the more leaves. bass or kick always holds the floor
   const sp = spaceNow(); S.out = {};
@@ -838,9 +818,9 @@ function audioTick() {
   setP(G.verbIn.gain, clamp(0.25 + meanP * 1.5 + 0.2 * sp, 0, 0.8), 3, 'vb');
   // strings = the membrane: each side's swell follows wave energy on that half of the field; more space, more strings
   const swell = 0.75 + 0.25 * Math.sin(S.elapsed / (32 * 60 / bpmNow()) * 6.283), lead = S.lead === 'strings' ? 1.35 : 1;
-  setP(G.padLGain.gain, 0.034 * (0.3 + 0.7 * clamp(eL * 2.2, 0, 1)) * (0.6 + 0.6 * sp) * swell * lead, 1.5, 'pl');
-  setP(G.padRGain.gain, 0.025 * (0.3 + 0.7 * clamp(eR * 2.2, 0, 1)) * (0.6 + 0.6 * sp) * swell * lead, 1.5, 'pr');
-  setP(G.padLLP.frequency, 480 + 380 * clamp(eL * 2, 0, 1), 2, 'pll'); setP(G.padRLP.frequency, 700 + 600 * clamp(eR * 2, 0, 1) * (1 - 0.4 * clamp(meanP * 4, 0, 1)), 2, 'prl');
+  setP(G.padLGain.gain, 0.024 * (0.3 + 0.7 * clamp(eL * 2.2, 0, 1)) * (0.6 + 0.6 * sp) * swell * lead, 1.5, 'pl');
+  setP(G.padRGain.gain, 0.017 * (0.3 + 0.7 * clamp(eR * 2.2, 0, 1)) * (0.6 + 0.6 * sp) * swell * lead, 1.5, 'pr');
+  setP(G.padLLP.frequency, 600 + 700 * clamp(eL * 2, 0, 1), 2, 'pll'); setP(G.padRLP.frequency, 1000 + 1100 * clamp(eR * 2, 0, 1) * (1 - 0.4 * meanP * 4), 2, 'prl');
   setP(G.out.gain, A.muted ? 0 : 0.9, 0.3, 'out');
 }
 function watchdog() {
@@ -862,7 +842,7 @@ function unb64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i 
 let savedMap = null;
 function save() { if (!glOK) return; try { savedMap = snapshotDamage(); localStorage.setItem(KEY, JSON.stringify(Object.assign({}, S, { map: b64(savedMap) }))); } catch (e) {} }
 function load() {
-  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!o || o.v !== 5) return null;
+  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!o || o.v !== 4) return null;
     for (const k of ['born', 'elapsed', 'play', 'idx', 'applied', 'pressure', 'live', 'marks', 'log', 'pal', 'gain', 'geo', 'lastT', 'hiP', 'recent', 'bars', 'pairCool', 'sec', 'secAt', 'secLen', 'bassLine', 'mutBars', 'lead', 'leadBars', 'padL', 'padR']) if (o[k] !== undefined) S[k] = o[k];
     if (Array.isArray(o.voices) && o.voices.length === 5) S.voices = o.voices.map((v, i) => Object.assign(S.voices[i], v));
     S.elapsed = fin(S.elapsed); S.pressure = fin(S.pressure); S.gain = clamp(fin(S.gain, 6), 1.5, 30); S.applied = fin(S.applied);
@@ -883,8 +863,8 @@ function renderInfo() {
   infoEl.classList.toggle('off', !infoOn); if (!infoOn) return;
   const P = S.pal; infoEl.style.background = rgb(P.bg, 0.86); infoEl.style.color = rgb(P.lit); infoEl.style.borderColor = rgb(P.res);
   const L = [];
-  L.push(`<b>FIELD ENGINE 004 · RESIDUE GROOVE</b>   <span class="d">v5 · ${fmtT(S.elapsed)} running</span>`);
-  L.push(`<span class="d">slow funk-rooted ambient orchestration in D phrygian, dub space. five players hold a membrane at tension; the strings (low left, high right, inside L/R 20–30) are the membrane itself and swell with its waves on each side. a rotating lead — everything else ducks under it. parts drop out and echo back, phrases mutate every 16 bars, sections change over the hours. each is tethered to where it emerged and is pushed by its own hits. impulses arrive from a public record stream (time + position only), one equal impulse per record, in order${S.live ? ', as records appear' : ` · ${PACE} min per record day`}</span>`);
+  L.push(`<b>FIELD ENGINE 004 · RESIDUE GROOVE</b>   <span class="d">v4 · ${fmtT(S.elapsed)} running</span>`);
+  L.push(`<span class="d">slow funk-rooted ambient orchestration in D phrygian, dub space. five players hold a membrane at tension; the strings (low left, high right) are the membrane itself and swell with its waves on each side. a rotating lead — everything else ducks under it. parts drop out and echo back, phrases mutate every 16 bars, sections change over the hours. each is tethered to where it emerged and is pushed by its own hits. impulses arrive from a public record stream (time + position only), one equal impulse per record, in order${S.live ? ', as records appear' : ` · ${PACE} min per record day`}</span>`);
   L.push(`<span class="d">impulse → wave + damage + a dub-out (one hit thrown into the echo, then only tails) · it knocks the nearest player's part out of place (most heals, some never does) · damaged ground carries waves slower and goes still · past 0.5 it tears · players on spent ground fall silent, then re-emerge near the latest wounds · collisions trade beats for good</span>`);
   for (const v of S.voices) L.push(`${({ bass: 'bass', kick: 'kick', snare: 'rim', clav: 'skank', stab: 'horn' })[v.role].padEnd(5)} ${v.state === 'sing' ? (S.out[v.role] ? '<span class="d">' + patStr(v) + '</span> out' : patStr(v)) : v.state === 'gone' ? 'gone            ' : v.state === 'wait' ? 'not yet emerged ' : 'silent          '}  ${'◦'.repeat(v.rings)}`);
   L.push(`record day <b>${String(recordDay()).padStart(4, '0')}</b> / ${recordDays() || '—'} · impulses ${S.applied} · source: ${recStatus}${S.live ? ' · live' : ''}`);

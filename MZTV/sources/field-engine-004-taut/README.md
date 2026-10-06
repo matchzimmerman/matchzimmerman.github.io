@@ -4,10 +4,22 @@
 
 A second interpretation of the brief behind FIELD ENGINE 002 (*the field does not reset*). FE002 drops the records into SOUNDING's terrain. TAUT starts from a different material: a membrane held under tension by a small band.
 
-- `index.html` is **v4** (current): slow funk-rooted ambient orchestration in D phrygian with dub space. String sections sit on the sides, and a rotating lead ducks everything else through a sidechain.
+- `index.html` is **v5** (current): v4 with the string pads pushed back, saturated, darker, given pre-verb and placed at L/R 20–30.
+- `v4.html` is v4: slow funk-rooted ambient orchestration in D phrygian with dub space. Its strings are clean and hard-panned, and they sit too far forward.
 - `v3.html` is v3: ultra-slow funk in dub space, with no strings and no lead/sidechain. It is darker, with a 3 kHz ceiling.
 - `v2.html` is v2: the same players and membrane with a busier 98 bpm funk groove (it repeats too much over long runs).
 - `v1.html` is v1, kept for the record: fixed exciters and a drone chord.
+
+## v5 — pads pushed back (2026-10-06)
+- **Placement:** each string voice is panned on its own. Low strings sit at L30 / L25 / L20 and high strings at R20 / R25 / R30, instead of hard ±0.82. The lead string line sits just outside them, at R36.
+- **Tone:** each section is driven hard into a tanh saturator (drive 0.3, curve 2.4), then lowpassed. Base cutoff is 480–860 Hz for the low strings and 700–1300 Hz for the high strings, following membrane energy, with a second lowpass at 2.4 kHz. Level is set after the saturator, so the saturation adds grit without adding level.
+- **Pre-verb:** a reversed-room convolver (2.2 s). A bar ahead of every chord change, a soft pluck of the next chord is fed into it, so the strings swell up into the change and peak right on it.
+- **Mix:** the pads are mostly wet, with dry at 0.55 and the room send at 0.9.
+- **Measured against v4:**
+  - pad bus is −28.7 dB relative to master (v4: −23.6), about 5 dB further back;
+  - energy above 1 kHz versus below is −15.6 dB (v4: −11.4), so darker;
+  - L/R imbalance is 1.0 dB (v4: 3.2), so narrower.
+- State key `mztv-fe004-v5` (starts fresh).
 
 ## v4 — funk-rooted ambient orchestration (2026-10-06)
 v4 is slower and more composed, with a crafted stereo and frequency field.
