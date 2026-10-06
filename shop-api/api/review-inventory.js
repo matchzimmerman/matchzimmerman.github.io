@@ -1,12 +1,4 @@
-var crypto = require("crypto");
 var printful = require("../lib/printful");
-
-function safeEqual(a, b) {
-  var aa = Buffer.from(String(a || ""), "utf8");
-  var bb = Buffer.from(String(b || ""), "utf8");
-  if (aa.length !== bb.length) return false;
-  return crypto.timingSafeEqual(aa, bb);
-}
 
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -16,7 +8,7 @@ module.exports = async function handler(req, res) {
   var auth = req.headers.authorization || "";
   var supplied = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
 
-  if (!expected || !safeEqual(supplied, expected)) {
+  if (!expected || supplied !== expected) {
     res.statusCode = 404;
     res.end("Not found.");
     return;
