@@ -217,6 +217,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/score-engine-002-composer/`
 
+### SCORE ENGINE 003 — ORCHESTRATOR
+SCORE ENGINE 002 plus an orchestration layer: one theme per piece (generated from the clip's name, D phrygian) developed through the form by standard orchestral technique — foreshadowing, call and response, sequence, countermelody, colour and octave doubling, inversion, crescendo by adding families, broadening and liquidation — with overtone-series voicing, phrygian cadences and pedal points. Every decision is logged with its reason in the score sheet. First piece: NASA Bus Tours (footage NARA 255-PV-12, 1967), score sheet included.
+
+Path:
+`sources/score-engine-003-orchestrator/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/score-engine-003-orchestrator/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 

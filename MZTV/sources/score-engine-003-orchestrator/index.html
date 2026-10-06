@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · SCORE ENGINE 003 · ORCHESTRATOR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0d1230; --panel:#151c46; --cobalt:#3a54de; --lilac:#ece9ff; --dim:#a5a9d6; --lime:#b0de5c; --line:rgba(236,233,255,.14); color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--lilac); font: 400 13px/1.5 'JetBrains Mono', ui-monospace, monospace; }
+  body { padding: 18px 20px 40px; }
+  .wrap { max-width: 1500px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 22px; }
+  header b { font-weight: 600; font-size: 15px; letter-spacing: .03em; }
+  .dim { color: var(--dim); }
+  .lime { color: var(--lime); }
+  #drop { border: 1px dashed var(--lime); padding: 34px 20px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  #drop.hide { display: none; }
+  body.over #drop { background: rgba(176,222,92,.07); }
+  label.btn, button { font: inherit; color: var(--lime); background: transparent; border: 1px solid var(--lime); padding: 7px 14px; cursor: pointer; }
+  button:disabled { opacity: .35; cursor: default; }
+  button.on { background: var(--lime); color: var(--ink); }
+  input[type=file] { display: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  #timeline { width: 100%; height: 170px; display: block; border: 1px solid var(--line); cursor: pointer; }
+  .grid { display: grid; grid-template-columns: minmax(280px, 520px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  video { width: 100%; aspect-ratio: 16/9; background: #000; display: block; }
+  .card { border: 1px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .card h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: 3px 8px 3px 0; vertical-align: top; }
+  th { font-weight: 400; color: var(--dim); }
+  .parts span { display: inline-block; margin: 0 6px 4px 0; padding: 1px 6px; border: 1px solid var(--line); }
+  .parts span.on { border-color: var(--lime); color: var(--lime); }
+  #progress { height: 4px; background: var(--panel); }
+  #progress div { height: 100%; width: 0; background: var(--lime); transition: width .2s; }
+  #log { white-space: pre-wrap; color: var(--dim); max-height: 160px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <b>MZTV · SCORE ENGINE 003 · ORCHESTRATOR</b>
+    <span class="dim">slo-funk-dub · one theme developed across an orchestrated form · every decision annotated in the score sheet</span>
+  </header>
+  <div id="drop">
+    <div>drop a clip here (B-roll is ideal). it stays on this computer.</div>
+    <div class="dim">the clip is scanned faster than real time, a form is planned to its exact length, and each section decides what the footage controls.</div>
+    <label class="btn">choose a clip<input id="file" type="file" accept="video/*"></label>
+  </div>
+  <div id="ui" hidden>
+    <div class="wrap">
+      <div class="bar">
+        <span id="meta"></span>
+      </div>
+      <canvas id="timeline"></canvas>
+      <div class="dim">white line: composed energy (the form) · grey line: footage motion (arbitrary) · lime ticks: cuts · faint ticks: impacts · click a section to see what the footage controls there</div>
+      <div id="progress"><div></div></div>
+      <div class="bar">
+        <button id="bPrev" disabled>▶ preview</button>
+        <button id="bMix" disabled>render mix · MIDI · score sheet</button>
+        <button id="bAll" disabled>render everything (+ 8 stems)</button>
+        <label class="btn">new clip<input id="file2" type="file" accept="video/*"></label>
+        <span id="status" class="dim"></span>
+      </div>
+      <div class="grid">
+        <div class="card"><video id="vid" playsinline muted></video><div id="now" class="dim"></div></div>
+        <div class="card" id="secCard"></div>
+      </div>
+      <div class="card"><h3>LOG</h3><div id="log"></div></div>
+    </div>
+  </div>
+</div>
+<script>
+/*
+  MZTV · SCORE ENGINE 003 · ORCHESTRATOR (built on 002 · COMPOSER)
+  Adds an orchestration layer: one theme per piece, developed by section (foreshadowing, statement, call and response,
+  sequence, countermelody, inversion, octave tutti, liquidation), overtone-series chord spacing, phrygian cadences,
+  pedal points, staggered family entries, phrase swells, and an annotated orchestration log in the score sheet.
+  Same OBAS slo-funk-dub sound world as SCORE ENGINE 001 / RESIDUE GROOVE v5, but composed to the exact length of
+  a clip: a six-section form whose energy is fixed by the composition, with a per-section routing table deciding
+  what the (arbitrary) footage controls. Renders deterministically: mix, stems with effects, MIDI, score sheet.
+*/
+'use strict';
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v, lerp = (a, b, t) => a + (b - a) * t;
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const MIDI = m => 440 * Math.pow(2, (m - 69) / 12);
+const $ = id => document.getElementById(id);
+function log(s) { const el = $('log'); el.textContent += s + '\n'; el.scrollTop = 1e9; }
+
+// =====================================================================================
+// STYLE + FORM — the composition. Energy lives here, not in the footage.
+// =====================================================================================
+const STYLE = { name: 'slo-funk-dub', key: 'D phrygian', bpm: 52, seed: 7 };
+const Q7 = { m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], m9: [0, 3, 7, 10, 14], m7b9: [0, 3, 7, 10, 13], m: [0, 3, 7, 12] };
+const SCALE = [2, 3, 5, 7, 9, 10, 0];
+const ROLES = ['bass', 'kick', 'rim', 'skank', 'horn', 'clarinet', 'strings', 'choir', 'texture'];
+const STEMS = [['bass', ['bass']], ['drums', ['kick', 'rim']], ['skank', ['skank']], ['horn', ['horn']], ['woodwind', ['clarinet']], ['strings', ['strings']], ['choir', ['choir']], ['texture', ['texture']]];
+const PAN = { bass: 0, kick: 0, rim: 0.14, skank: 0.5, horn: -0.42, clarinet: -0.16 };
+const BASEPAT = {
+  bass:  [1, 0, 0, 0, 0, 0, .6, 0, 0, 0, 0, 0, .75, 0, 0, 0],
+  kick:  [.8, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+  rim:   [0, 0, 0, 0, 0, 0, 0, .14, 1, 0, 0, 0, 0, 0, .18, 0],
+  skank: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+};
+const GRAMMAR = { bass: { allow: [0, 3, 6, 7, 10, 11, 12, 14], min: 2, max: 6 }, kick: { allow: [0, 6, 8, 10, 14], min: 1, max: 4 }, rim: { allow: [3, 7, 8, 11, 14, 15], min: 1, max: 5 }, skank: { allow: [2, 4, 6, 10, 12, 14], min: 1, max: 5 } };
+const PUSH = { bass: 0.016, kick: 0, rim: 0.04, skank: 0.024 };
+// each section: fixed energy (parts, space, density, drive, echo, room, lead) + what the footage controls there
+const FORM = [
+  { id: 'arrival', name: 'I · ARRIVAL', frac: .12, prog: [[26, 'm7', 8]], lead: 'strings',
+    pedal: true, parts: { strings: 1, texture: .8, horn: .35 }, space: .9, density: 0, drive: 0, fb: .5, verb: .6,
+    events: { cut: 'preswell', impact: 'hornThrow', flash: 'echoThrow' },
+    signals: { motion: ['stringSwell', 1], flow: ['echoPan', 1], detail: ['texture', 1], warmth: ['stringTone', .6] } },
+  { id: 'procession', name: 'II · PROCESSION', frac: .22, prog: [[26, 'm7', 4], [27, 'M7', 4]], lead: 'bass',
+    parts: { strings: .6, texture: .4, bass: 1, rim: .8, horn: .9, clarinet: .8 }, space: .55, density: .3, drive: .1, fb: .45, verb: .45,
+    events: { cut: 'bassFill', impact: 'rim', flash: 'hornThrow' },
+    signals: { motion: ['stringSwell', .7], flow: ['echoPan', 1], centroid: ['pan', 1], warmth: ['stringTone', .6] } },
+  { id: 'groove', name: 'III · GROOVE', frac: .22, prog: [[34, 'M7', 4], [36, 'm9', 4]], lead: 'horn',
+    parts: { strings: .6, texture: .3, bass: .85, kick: .8, rim: .85, skank: .85, horn: .9, clarinet: .8 }, space: .4, density: .55, drive: .15, fb: .42, verb: .4,
+    events: { cut: 'dubOut', impact: 'kickRim', flash: 'hornThrow' },
+    signals: { motion: ['fills', 1], flow: ['echoPan', 1], centroid: ['pan', 1], darkness: ['echoFb', .5] } },
+  { id: 'space', name: 'IV · SPACE', frac: .10, prog: [[26, 'm7b9', 8]], lead: 'strings',
+    pedal: true, parts: { strings: 1, texture: .6, bass: .6, horn: .3, clarinet: .7 }, space: .8, density: .1, drive: .05, fb: .6, verb: .7,
+    events: { cut: 'preswell', impact: 'springSplash', flash: 'stringNote' },
+    signals: { motion: ['stringSwell', 1], flow: ['echoPan', 1], detail: ['texture', 1] } },
+  { id: 'climax', name: 'V · CLIMAX', frac: .20, prog: [[31, 'm9', 4], [27, 'M7', 4]], lead: 'horn', stagger: { skank: .3, clarinet: .3, choir: .6 },
+    parts: { strings: 1, texture: .45, bass: 1, kick: 1, rim: 1, skank: 1.2, horn: 1.15, clarinet: .9, choir: 1.3 }, space: .15, density: .85, drive: .7, fb: .5, verb: .5,
+    events: { cut: 'dubOut', impact: 'kickRim', flash: 'octaveStab' },
+    signals: { motion: ['drive', 1], flow: ['echoPan', 1], centroid: ['pan', 1], warmth: ['stringTone', .8], detail: ['choirSwell', 1] } },
+  { id: 'resolution', name: 'VI · RESOLUTION', frac: .14, prog: [[27, 'M7', 4], [26, 'm7', 4]], lead: 'strings', peel: true,
+    parts: { strings: .9, texture: .5, bass: .8, kick: .6, rim: .6, skank: .5, horn: .7, clarinet: .7 }, space: .6, density: .2, drive: .1, fb: .55, verb: .65,
+    events: { cut: 'preswell', impact: 'rim', flash: 'echoThrow' },
+    signals: { motion: ['stringSwell', .8], darkness: ['echoFb', .6] } },
+];
+const PEEL = { kick: .25, skank: .4, rim: .55, clarinet: .62, horn: .8, bass: .9 };   // fraction of the resolution after which each part leaves
+const ACTION_TEXT = { preswell: 'reverse swell into the next chord', hornThrow: 'horn note thrown into the echo', echoThrow: 'echo throw', bassFill: 'bass fill', rim: 'rim hit', kickRim: 'kick (strong) / rim (light)', dubOut: 'dub-out: unison hit into the echo, rest of the bar empty', springSplash: 'rim into the spring only', stringNote: 'lead string note', octaveStab: 'octave horn stab' };
+const SIGNAL_TEXT = { stringSwell: 'string swell', stringTone: 'string tone (cutoff)', echoPan: 'echo drift L/R', texture: 'texture bed level', pan: 'horn / skank pan', fills: 'fill probability (ghost notes)', echoFb: 'echo feedback', drive: 'master saturation drive', choirSwell: 'choir swell' };
+
+// =====================================================================================
+// SCAN — read the clip faster than real time into a timeline
+// =====================================================================================
+const AW = 160, AH = 90, N = AW * AH, CW = 40, CH = 22;
+const vid = $('vid');
+const acv = document.createElement('canvas'); acv.width = AW; acv.height = AH; const actx = acv.getContext('2d', { willReadFrequently: true });
+let TL = null, PLAN = null, CLIP = null, ANNOT = [];
+function scanClip(rate = 6) {
+  return new Promise((resolve, reject) => {
+    const gray = new Float32Array(N), prev = new Float32Array(N), cg = new Float32Array(CW * CH), cgp = new Float32Array(CW * CH), hist = new Float32Array(32), hp = new Float32Array(32);
+    const T = [], S = { motion: [], flow: [], centroid: [], warmth: [], darkness: [], detail: [] }, EV = [];
+    let have = false, lastT = -1, motionS = 0, hdAvg = 0.02, lastCut = -9, lastImp = -9, lastFlash = -9, lumP = 0.5, cx = 0.5, flowS = 0, frames = 0;
+    const ema = (c, x, dt, tau) => c + (x - c) * (1 - Math.exp(-dt / tau));
+    const step = () => {
+      const t = vid.currentTime; if (t === lastT) return; const dt = clamp(lastT < 0 ? 1 / 30 : t - lastT, 1 / 120, 1); lastT = t;
+      actx.drawImage(vid, 0, 0, AW, AH); let px; try { px = actx.getImageData(0, 0, AW, AH).data; } catch (e) { reject(new Error('this clip blocks pixel reading')); return; }
+      let sl = 0, warm = 0; hist.fill(0);
+      for (let i = 0; i < N; i++) { const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2], y = (0.299 * r + 0.587 * g + 0.114 * b) / 255; gray[i] = y; sl += y; warm += (r - b) / 255; hist[Math.min(31, y * 32 | 0)]++; }
+      let m = 0, mx = 0, det = 0;
+      for (let y = 1; y < AH - 1; y++) for (let x = 1; x < AW - 1; x++) { const i = y * AW + x, d = have ? Math.abs(gray[i] - prev[i]) : 0; m += d; mx += d * x; det += Math.hypot(gray[i + 1] - gray[i - 1], gray[i + AW] - gray[i - AW]) * .5; }
+      const inner = (AW - 2) * (AH - 2); m /= inner; det /= inner;
+      cg.fill(0); for (let y = 0; y < CH * 4; y++) for (let x = 0; x < AW; x++) cg[(y >> 2) * CW + (x >> 2)] += gray[y * AW + x] / 16;
+      let c11 = 0, c12 = 0, c22 = 0, d1 = 0, d2 = 0;
+      for (let y = 1; y < CH - 1; y++) for (let x = 1; x < CW - 1; x++) { const i = y * CW + x, d = have ? cg[i] - cgp[i] : 0, ix = (cg[i + 1] - cg[i - 1]) * .5, iy = (cg[i + CW] - cg[i - CW]) * .5; c11 += ix * ix; c12 += ix * iy; c22 += iy * iy; d1 += ix * d; d2 += iy * d; }
+      const D = c11 * c22 - c12 * c12, u = D > 1e-8 ? -(c22 * d1 - c12 * d2) / D : 0;
+      let hd = 0; if (have) for (let k = 0; k < 32; k++) { const s = hist[k] + hp[k]; if (s > 0) hd += (hist[k] - hp[k]) ** 2 / s; } hd /= N;
+      const lum = sl / N;
+      const cut = have && frames > 6 && t - lastCut > 0.45 && ((hd > Math.max(0.15, hdAvg * 3.5)) || (m > 0.09 && m > motionS * 2.2 + 0.05 && hd > Math.max(0.05, hdAvg * 1.8)));
+      const flash = have && !cut && lum - lumP > 0.14 && t - lastFlash > 0.6;
+      const impact = have && !cut && !flash && m > motionS * 1.7 + 0.015 && t - lastImp > 0.35;
+      if (cut) { EV.push({ t, kind: 'cut', s: 1 }); lastCut = t; } else { hdAvg = ema(hdAvg, hd, dt, 2); motionS = ema(motionS, m, dt, 1.2); flowS = ema(flowS, clamp(u / dt / CW, -1, 1), dt, .6); }
+      if (flash) { EV.push({ t, kind: 'flash', s: 1 }); lastFlash = t; }
+      if (impact) { EV.push({ t, kind: 'impact', s: clamp((m - motionS) / (motionS + 0.03) * .5, .2, 1) }); lastImp = t; }
+      if (m > 0.004) cx = ema(cx, mx / (m * inner) / AW, dt, .5);
+      T.push(t); S.motion.push(motionS); S.flow.push(flowS); S.centroid.push(cx * 2 - 1); S.warmth.push(warm / N); S.darkness.push(1 - lum); S.detail.push(det);
+      lumP = lum; prev.set(gray); cgp.set(cg); hp.set(hist); have = true; frames++;
+      setProgress(t / (vid.duration || 1)); $('status').textContent = `scanning ${t.toFixed(1)} / ${vid.duration.toFixed(1)} s · ${EV.length} events`;
+    };
+    let done = false; const cb = () => { if (done) return; step(); if (!vid.ended) vid.requestVideoFrameCallback(cb); };
+    vid.muted = true; vid.currentTime = 0; vid.playbackRate = rate;
+    vid.onended = () => {
+      step(); done = true; vid.onended = null; vid.playbackRate = 1;
+      // normalise every signal to its own range (5th–95th percentile) so any footage drives the full range
+      const norm = {};
+      for (const k in S) { const a = S[k].slice().sort((x, y) => x - y), lo = a[Math.floor(a.length * .05)] ?? 0, hi = a[Math.floor(a.length * .95)] ?? 1, bip = k === 'flow' || k === 'centroid';
+        if (bip) { const mag = Math.max(Math.abs(lo), Math.abs(hi), 1e-6); norm[k] = Float32Array.from(S[k], v => clamp(v / mag, -1, 1)); }
+        else norm[k] = Float32Array.from(S[k], v => clamp((v - lo) / Math.max(1e-6, hi - lo), 0, 1)); }
+      resolve({ T: Float32Array.from(T), S: norm, EV, duration: vid.duration, frames });
+    };
+    vid.requestVideoFrameCallback(cb);
+    vid.play().catch(reject);
+  });
+}
+function sig(name, t) {
+  const T = TL.T, a = TL.S[name]; if (!a || !T.length) return 0.5;
+  let lo = 0, hi = T.length - 1; if (t <= T[0]) return a[0]; if (t >= T[hi]) return a[hi];
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (T[mid] <= t) lo = mid; else hi = mid; }
+  return lerp(a[lo], a[hi], (t - T[lo]) / Math.max(1e-6, T[hi] - T[lo]));
+}
+
+// =====================================================================================
+// PLAN — fit tempo to the exact length, place the sections on bar lines
+// =====================================================================================
+function planForm(D) {
+  let bars = Math.max(8, Math.round(D * STYLE.bpm / 240)), bpm = bars * 240 / D;
+  if (bpm < 40 || bpm > 70) { bpm = clamp(bpm, 40, 70); bars = Math.max(6, Math.round(D * bpm / 240)); bpm = bars * 240 / D; }
+  const unit = bars >= 48 ? 4 : bars >= 24 ? 2 : 1;
+  let form = FORM; if (bars < 18) form = [FORM[0], FORM[2], FORM[5]].map((f, i) => ({ ...f, frac: [.25, .5, .25][i] }));
+  const secs = []; let acc = 0, start = 0;
+  form.forEach((f, i) => { acc += f.frac; let end = i === form.length - 1 ? bars : Math.round(bars * acc / unit) * unit; end = clamp(end, start + unit, bars - (form.length - 1 - i) * unit); secs.push({ ...f, startBar: start, endBar: end }); start = end; });
+  const s16 = 60 / bpm / 4;
+  return { D, bars, bpm, s16, barDur: s16 * 16, totalSteps: bars * 16, secs };
+}
+function secAtBar(bar) { for (const s of PLAN.secs) if (bar >= s.startBar && bar < s.endBar) return s; return PLAN.secs[PLAN.secs.length - 1]; }
+function chordAt(bar) {
+  if (bar === PLAN.bars - 1) return { root: 26, tones: Q7.m };                       // final: open D minor (i)
+  if (bar === PLAN.bars - 2) return { root: 27, tones: Q7.M7 };                      // ♭II: the phrygian half-step above home
+  if (bar === PLAN.bars - 3) return { root: 31, tones: Q7.m9 };                      // iv: the subdominant, leaning away before the close
+  const sec0 = secAtBar(bar); if (bar === sec0.endBar - 1 && sec0 !== PLAN.secs[PLAN.secs.length - 1] && sec0.endBar - sec0.startBar >= 4) return { root: 27, tones: Q7.M7, cad: true };   // phrygian cadence into the next section
+  const sec = secAtBar(bar), tot = sec.prog.reduce((a, c) => a + c[2], 0); let b = (bar - sec.startBar) % tot;
+  for (const c of sec.prog) { if (b < c[2]) return { root: c[0], tones: Q7[c[1]] }; b -= c[2]; }
+  return { root: 26, tones: Q7.m7 };
+}
+function partLevel(role, bar) {
+  const sec = secAtBar(bar); let l = sec.parts[role] || 0;
+  const rel = (bar - sec.startBar) / Math.max(1, sec.endBar - sec.startBar);
+  if (sec.peel && PEEL[role] != null && rel >= PEEL[role]) l = 0;
+  if (sec.stagger && sec.stagger[role] != null && rel < sec.stagger[role]) l = 0;          // crescendo by adding families
+  if (bar >= PLAN.bars - 1 && !['strings', 'choir', 'texture', 'bass'].includes(role)) l = 0;
+  return l;
+}
+
+// =====================================================================================
+// ENGINE — builds the same graph in a live or offline context; stems mute everything but their roles
+// =====================================================================================
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(o){super();this.b=0;let a=(o.processorOptions&&o.processorOptions.seed)|0;this.r=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}process(i,o){const c=o[0];for(let k=0;k<c[0].length;k++){const w=this.r()*2-1;this.b=(this.b+0.02*w)/1.02;const v=this.b*3.5;for(let j=0;j<c.length;j++)c[j][k]=v}return true}}registerProcessor('se2-noise',N);`;
+function shaper(ctx, k) { const ws = ctx.createWaveShaper(), n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / Math.tanh(k); } ws.curve = c; ws.oversample = '2x'; return ws; }
+function softClip(ctx) { const ws = ctx.createWaveShaper(), n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) c[i] = Math.tanh(i / (n - 1) * 2 - 1); ws.curve = c; ws.oversample = '2x'; return ws; }
+function room(ctx, sec, seed, reverse) { const n = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, n, ctx.sampleRate), r = mulberry(seed);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { lp += 0.13 * ((r() * 2 - 1) - lp); const k = reverse ? n - 1 - i : i; d[i] = lp * Math.pow(1 - k / n, 2.3) * (reverse ? (i > n - 600 ? (n - i) / 600 : 1) : (i < 400 ? i / 400 : 1)); } }
+  const cv = ctx.createConvolver(); cv.buffer = b; return cv; }
+async function buildGraph(ctx, opt = {}) {
+  const G = { ctx, opt, notes: opt.recordNotes ? [] : null, annot: opt.recordNotes ? [] : null };
+  try { await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET)); } catch (e) { try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' }))); } catch (e2) {} }
+  // master: full range, soft top. stems skip saturation and compression so they sum cleanly
+  G.bus = ctx.createGain(); G.bus.gain.value = 0.72; G.hp = ctx.createBiquadFilter(); G.hp.type = 'highpass'; G.hp.frequency.value = 26;
+  G.drive = ctx.createGain(); G.drive.gain.value = 1; G.sat = shaper(ctx, 1.15); G.driveComp = ctx.createGain(); G.driveComp.gain.value = 1;
+  G.pres = ctx.createBiquadFilter(); G.pres.type = 'peaking'; G.pres.frequency.value = 3000; G.pres.Q.value = .8; G.pres.gain.value = -5;
+  G.hs = ctx.createBiquadFilter(); G.hs.type = 'highshelf'; G.hs.frequency.value = 5500; G.hs.gain.value = -7;
+  G.lp = ctx.createBiquadFilter(); G.lp.type = 'lowpass'; G.lp.frequency.value = 9500; G.lp.Q.value = .5;
+  G.comp = ctx.createDynamicsCompressor(); G.comp.threshold.value = -18; G.comp.ratio.value = 2.2; G.comp.attack.value = .02; G.comp.release.value = .3; G.comp.knee.value = 10;
+  G.fade = ctx.createGain(); G.out = ctx.createGain(); G.out.gain.value = opt.live ? 0.9 : opt.stem ? 0.5 : 1;   // stems: fixed headroom, no compressor
+  if (opt.stem) { G.bus.connect(G.hp); G.hp.connect(G.pres); } else { G.bus.connect(G.hp); G.hp.connect(G.drive); G.drive.connect(G.sat); G.sat.connect(G.driveComp); G.driveComp.connect(G.pres); }
+  G.pres.connect(G.hs); G.hs.connect(G.lp); if (opt.stem) G.lp.connect(G.fade); else { G.lp.connect(G.comp); G.comp.connect(G.fade); } G.fade.connect(G.out); G.out.connect(ctx.destination);
+  // per-role buses: level (form + stem mute) → sidechain duck → master; sends taken after the level
+  G.fx = ctx.createGain(); G.fxDuck = ctx.createGain(); G.fx.connect(G.fxDuck); G.fxDuck.connect(G.bus);
+  G.dIn = ctx.createGain(); G.verbIn = ctx.createGain(); G.verbIn.gain.value = .35; G.preIn = ctx.createGain();
+  G.role = {};
+  for (const r of ROLES) {
+    const audible = !opt.stem || opt.stem.includes(r);
+    const R = { in: ctx.createGain(), throwIn: ctx.createGain(), level: ctx.createGain(), throwLevel: ctx.createGain(), duck: ctx.createGain(), sendD: ctx.createGain(), sendV: ctx.createGain(), mute: audible ? 1 : 0 };
+    R.level.gain.value = 0; R.throwLevel.gain.value = 0; R.sendD.gain.value = { clarinet: .25, skank: .55, horn: .42, rim: .3, strings: .1, choir: .2, texture: .1, bass: .05, kick: .05 }[r]; R.sendV.gain.value = { clarinet: .45, strings: .9, choir: .8, horn: .3, rim: .15, skank: .12, texture: .3, bass: .03, kick: .04 }[r];
+    R.in.connect(R.level); R.level.connect(R.duck); R.duck.connect(G.bus); R.level.connect(R.sendD); R.sendD.connect(G.dIn); R.level.connect(R.sendV); R.sendV.connect(G.verbIn);
+    R.throwIn.connect(R.throwLevel); R.throwLevel.connect(G.dIn);
+    G.role[r] = R;
+  }
+  // effects: room, tape echo (bounded, unity-gain clip), spring, pre-verb → fx bus (ducked with the bed)
+  G.verb = room(ctx, 4.5, 99); const vlp = ctx.createBiquadFilter(); vlp.type = 'lowpass'; vlp.frequency.value = 1500; G.verbIn.connect(vlp); vlp.connect(G.verb); G.verb.connect(G.fx);
+  G.dL = ctx.createDelay(4); G.dR = ctx.createDelay(4); G.fb = ctx.createGain(); G.fb.gain.value = .45; const fLP = ctx.createBiquadFilter(); fLP.type = 'lowpass'; fLP.frequency.value = 1100; const fHP = ctx.createBiquadFilter(); fHP.type = 'highpass'; fHP.frequency.value = 110; const fSat = softClip(ctx);
+  G.mL = ctx.createStereoPanner(); G.mL.pan.value = -.7; G.mR = ctx.createStereoPanner(); G.mR.pan.value = .7;
+  G.dL.delayTime.value = PLAN.s16 * 3; G.dR.delayTime.value = PLAN.s16 * 4;   // dotted 8th / quarter at the fitted tempo
+  G.dIn.connect(G.dL); G.dL.connect(G.dR); G.dR.connect(fLP); fLP.connect(fHP); fHP.connect(fSat); fSat.connect(G.fb); G.fb.connect(G.dL);
+  G.dSweep = ctx.createBiquadFilter(); G.dSweep.type = 'lowpass'; G.dSweep.frequency.value = 900; G.dSweep.Q.value = 2.5; G.dRet = ctx.createGain(); G.dRet.gain.value = .7;
+  G.dL.connect(G.mL); G.dR.connect(G.mR); G.mL.connect(G.dSweep); G.mR.connect(G.dSweep); G.dSweep.connect(G.dRet); G.dRet.connect(G.fx); G.dRet.connect(G.verbIn);
+  G.wow = ctx.createOscillator(); G.wow.frequency.value = .21; const wg = ctx.createGain(); wg.gain.value = .0035; G.wow.connect(wg); wg.connect(G.dL.delayTime); wg.connect(G.dR.delayTime); G.wow.start();
+  { const n = Math.floor(ctx.sampleRate * 2.6), bf = ctx.createBuffer(2, n, ctx.sampleRate), rr = mulberry(31);
+    for (let c = 0; c < 2; c++) { const d = bf.getChannelData(c), p1 = Math.floor(ctx.sampleRate * (c ? .0331 : .0293)), p2 = Math.floor(ctx.sampleRate * (c ? .0467 : .0419));
+      for (let i = 0; i < n; i++) { let x = (rr() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * .5)) * (i < 200 ? i / 200 : 1); if (i >= p1) x += .55 * d[i - p1]; if (i >= p2) x -= .3 * d[i - p2]; d[i] = x * .25; } }
+    G.spring = ctx.createConvolver(); G.spring.buffer = bf; const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 180; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200; const o = ctx.createGain(); o.gain.value = .55;
+    G.spring.connect(hp); hp.connect(lp); lp.connect(o); o.connect(G.fx); o.connect(G.dIn); }
+  G.pre = room(ctx, 2.2, 77, true); const plp = ctx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 1300; G.preIn.connect(G.pre); G.pre.connect(plp); plp.connect(G.role.texture.in); G.preLen = 2.2;
+  // texture: seeded brown noise, lowpassed
+  G.bedLP = ctx.createBiquadFilter(); G.bedLP.type = 'lowpass'; G.bedLP.frequency.value = 280; G.bed = ctx.createGain(); G.bed.gain.value = 0; G.bedLP.connect(G.bed); G.bed.connect(G.role.texture.in);
+  try { const n = new AudioWorkletNode(ctx, 'se2-noise', { outputChannelCount: [1], processorOptions: { seed: 4242 } }); n.connect(G.bedLP); G.noise = n; } catch (e) {}
+  // strings: continuous sections at L30/25/20 and R20/25/30, driven into a saturator, mostly wet
+  G.padOsc = []; G.pads = {};
+  for (const [side, pans, lpf] of [['L', [-.3, -.25, -.2], 650], ['R', [.2, .25, .3], 950]]) {
+    const drive = ctx.createGain(); drive.gain.value = .3; const sat = shaper(ctx, 2.4), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = lpf; lp.Q.value = .75; const lp2 = ctx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2400;
+    const sec = ctx.createGain(); sec.gain.value = 0; drive.connect(sat); sat.connect(lp); lp.connect(lp2); lp2.connect(sec); sec.connect(G.role.strings.in);
+    const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = side === 'L' ? 4.7 : 5.3; vg.gain.value = 5; vib.connect(vg); vib.start(); G.padOsc.push(vib);
+    const voices = [];
+    for (let i = 0; i < 3; i++) { const vp = ctx.createStereoPanner(); vp.pan.value = pans[i]; vp.connect(drive); const det = [.9965, 1.0035];
+      const oscs = det.map(d => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(side === 'L' ? 50 + i * 3 : 65 + i * 4) * d; vg.connect(o.detune); o.connect(vp); o.start(); G.padOsc.push(o); return o; }); voices.push({ oscs, det }); }
+    G.pads[side] = { voices, gain: sec, lp };
+  }
+  // choir: climax-only layer, octave-up formant-filtered voices near the centre
+  { const sec = ctx.createGain(); sec.gain.value = 0; const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 2.2; const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1150; f2.Q.value = 3;
+    const mix = ctx.createGain(); mix.gain.value = 1.6; f1.connect(mix); f2.connect(mix); mix.connect(sec); sec.connect(G.role.choir.in); const voices = [];
+    const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 5.6; vg.gain.value = 7; vib.connect(vg); vib.start(); G.padOsc.push(vib);
+    for (let i = 0; i < 3; i++) { const p = ctx.createStereoPanner(); p.pan.value = [-.12, 0, .12][i]; p.connect(f1); p.connect(f2); const det = [.997, 1.003];
+      const oscs = det.map(d => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(62 + i * 4) * d; vg.connect(o.detune); o.connect(p); o.start(); G.padOsc.push(o); return o; }); voices.push({ oscs, det }); }
+    G.choir = { voices, gain: sec }; }
+  const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0), r = mulberry(5); for (let i = 0; i < nd.length; i++) nd[i] = r() * 2 - 1; G.nbuf = nb;
+  return G;
+}
+function stopGraph(G) { try { G.padOsc.forEach(o => o.stop()); G.wow.stop(); if (G.noise) G.noise.disconnect(); G.out.disconnect(); } catch (e) {} }
+
+// =====================================================================================
+// PERFORMANCE — deterministic: same plan + timeline + seed → same piece, every pass
+// =====================================================================================
+function newState() {
+  const X = { pan: 0, fills: 0, rnd: mulberry(STYLE.seed * 7919 + 13), pat: {}, cur: {}, bassLine: [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 0, 4, 0, 2, 0], out: {}, dubBar: -1, motif: [], motifOn: true, padL: [], padR: [], choirV: [], strLine: [], evIdx: 0, barEvents: 0, lastStep: -1 };
+  for (const r in BASEPAT) { X.pat[r] = BASEPAT[r].slice(); X.cur[r] = BASEPAT[r].slice(); }
+  return X;
+}
+function env(g, t, peak, a, d) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setTargetAtTime(0, t + a, d / 4); return t + a + d * 1.6; }
+function free(G, nodes, end) { if (G.opt.live) setTimeout(() => nodes.forEach(n => { try { n.disconnect(); } catch (e) {} }), Math.max(0, (end - G.ctx.currentTime) * 1000) + 300); }
+function voiceOut(G, role, t, pan, throwIt) {
+  const ctx = G.ctx, g = ctx.createGain(), p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -.9, .9); g.connect(p); p.connect(G.role[role].in);
+  const nodes = [g, p]; if (throwIt) { const tg = ctx.createGain(); tg.gain.value = .95; p.connect(tg); tg.connect(G.role[role].throwIn); nodes.push(tg); }
+  return [g, nodes];
+}
+function note(G, role, midi, t, dur, vel) { if (G.notes) G.notes.push({ role, midi, t, dur, vel }); }
+function playRole(G, X, role, step, t, vel, bar, stop, throwIt) {
+  const ctx = G.ctx, ch = chordAt(bar), panOff = role === 'bass' || role === 'kick' ? 0 : .15 * X.pan;
+  if (role === 'kick') {
+    const [g, ns] = voiceOut(G, role, t, 0, throwIt); const o = ctx.createOscillator(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(41, t + .16);
+    o.connect(g); const e = env(g, t, vel, .005, .55); o.start(t); o.stop(e); free(G, [o, ...ns], e); note(G, 'drums', 36, t, .2, vel);
+  } else if (role === 'rim') {
+    const [g, ns] = voiceOut(G, role, t, PAN.rim + panOff, throwIt); const sp = ctx.createGain(); sp.gain.value = vel > .5 ? .9 : .3; g.connect(sp); sp.connect(G.spring);
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(330, t); o.frequency.exponentialRampToValueAtTime(220, t + .05); const og = ctx.createGain(); env(og, t, .4, .001, .07); o.connect(og); og.connect(g);
+    const s2 = ctx.createBufferSource(); s2.buffer = G.nbuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.2; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+    const sg = ctx.createGain(); const e = env(sg, t, .5, .001, vel > .5 ? .14 : .05); s2.connect(bp); bp.connect(lp); lp.connect(sg); sg.connect(g); g.gain.value = vel;
+    o.start(t); o.stop(e); s2.start(t, X.rnd()); s2.stop(e); free(G, [o, og, s2, bp, lp, sg, sp, ...ns], e + .2); note(G, 'drums', 37, t, .1, vel);
+  } else if (role === 'bass') {
+    const idx = stop ? 0 : (X.bassLine[step] || 0), deg = [0, ch.tones[2] - 12, ch.tones[2], ch.tones[3] - 12, 12][clamp(idx, 0, 4)], pedal = secAtBar(bar).pedal || bar >= PLAN.bars - 1, m = pedal ? 38 : ch.root + 12 + deg, f = MIDI(m);
+    const [g, ns] = voiceOut(G, role, t, 0, throwIt); const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = 'sine'; o2.type = 'triangle'; o1.frequency.value = f; o2.frequency.value = f * 2.002;
+    const lead = secAtBar(bar).lead === 'bass', lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = lead ? 620 : 380; lp.Q.value = .9; const o2g = ctx.createGain(); o2g.gain.value = lead ? .4 : .24;
+    o1.connect(lp); o2.connect(o2g); o2g.connect(lp); lp.connect(g); const len = step % 8 === 0 ? 1.7 : .9; const e = env(g, t, .6 * vel, .014, len);
+    o1.start(t); o2.start(t); o1.stop(e); o2.stop(e); free(G, [o1, o2, o2g, lp, ...ns], e); note(G, 'bass', m, t, len * .8, vel);
+  } else if (role === 'skank') {
+    const [g, ns] = voiceOut(G, role, t, PAN.skank + panOff, throwIt), all = []; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 880; bp.Q.value = 1.1; bp.connect(g);
+    for (const tn of ch.tones.slice(1, 4)) { const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = MIDI(ch.root + 24 + tn); o.connect(bp); o.start(t); all.push(o); note(G, 'skank', ch.root + 24 + tn, t, .1, vel); }
+    const e = env(g, t, .06 * vel, .003, .09); all.forEach(o => o.stop(e)); free(G, [...all, bp, ...ns], e);
+  }
+}
+function playHorn(G, X, t, m, vel, dur, throwIt) {
+  const ctx = G.ctx, [g, ns] = voiceOut(G, 'horn', t, PAN.horn + .3 * X.pan, throwIt);
+  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = 'sawtooth'; o2.type = 'triangle'; o1.frequency.value = MIDI(m); o2.frequency.value = MIDI(m) * 1.003;
+  const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 4.6; vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(9, t + .35); vib.connect(vg); vg.connect(o1.detune); vg.connect(o2.detune);
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = .7; lp.frequency.setValueAtTime(500, t); lp.frequency.linearRampToValueAtTime(1500 + 500 * vel, t + .12); lp.frequency.setTargetAtTime(1000, t + .15, .4);
+  const mix = ctx.createGain(); mix.gain.value = .5; o1.connect(lp); o2.connect(mix); mix.connect(lp); lp.connect(g);
+  const e = env(g, t, .075 * vel, .045, dur); [o1, o2, vib].forEach(o => { o.start(t); o.stop(e); }); free(G, [o1, o2, vib, vg, lp, mix, ...ns], e); note(G, 'horn', m, t, dur, vel);
+}
+function playLeadString(G, t, m, dur) {
+  const ctx = G.ctx, [g, ns] = voiceOut(G, 'strings', t, .36, false), all = []; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = .5; lp.connect(g);
+  for (const d of [.996, 1, 1.004]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(m) * d; const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 5.1 + d; vg.gain.value = 7; vib.connect(vg); vg.connect(o.detune); o.connect(lp); o.start(t); vib.start(t); all.push(o, vib, vg); }
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.045, t + .6); g.gain.setTargetAtTime(0, t + dur, .6); const e = t + dur + 3; all.forEach(o => o.stop && o.stop(e)); free(G, [...all, lp, ...ns], e); note(G, 'strings', m, t, dur, .7);
+}
+function preSwell(G, tChange, ch) {
+  const ctx = G.ctx, t0 = tChange - G.preLen; if (t0 < (G.opt.live ? ctx.currentTime + .01 : 0)) return;
+  const g = ctx.createGain(), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100; lp.connect(g); g.connect(G.preIn); const all = [];
+  for (const tn of ch.tones.slice(0, 4)) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(ch.root + 36 + tn); o.connect(lp); o.start(t0); all.push(o); }
+  const e = env(g, t0, .09, .004, .3); all.forEach(o => o.stop(e)); free(G, [...all, lp, g], e + 3);
+}
+const scaleMidi = (lo, hi) => { const o = []; for (let m = lo; m <= hi; m++) if (SCALE.includes(m % 12)) o.push(m); return o; };
+const chordPcs = ch => ch.tones.map(t => (ch.root + t) % 12);
+function voice(ch, lo, hi, prev, n) { const pcs = chordPcs(ch), cand = []; for (let m = lo; m <= hi; m++) if (pcs.includes(m % 12)) cand.push(m); const out = [], used = new Set();
+  for (let i = 0; i < n; i++) { const tgt = Number.isFinite(prev[i]) ? prev[i] : lo + (hi - lo) * (i + .5) / n; let best = cand[0], bd = 1e9; for (const c of cand) { if (used.has(c)) continue; const d = Math.abs(c - tgt); if (d < bd) { bd = d; best = c; } } used.add(best); out.push(best); }
+  return out.sort((a, b) => a - b); }
+function makeMotif(X, ch, dens) {
+  const sc = scaleMidi(57, 72), pcs = chordPcs(ch), slots = [0, 2, 3, 6, 8, 10, 11, 14].filter(() => X.rnd() < dens).slice(0, 6); if (slots.length < 3) slots.splice(0, slots.length, 0, 6, 10);
+  let i = sc.findIndex(m => pcs.includes(m % 12) && m >= 62); if (i < 0) i = 4;
+  const out = slots.map((st, k) => { if (k) i = clamp(i + [-2, -1, -1, 1, 1, 2][Math.floor(X.rnd() * 6)], 0, sc.length - 1); return { st, m: sc[i], v: .55 + .35 * X.rnd() }; });
+  const last = out[out.length - 1]; let j = sc.indexOf(last.m); while (j > 0 && !pcs.includes(sc[j] % 12)) j--; last.m = sc[j]; return out;
+}
+function mutate(X, density) {
+  const roles = Object.keys(GRAMMAR), r = roles[Math.floor(X.rnd() * roles.length)], g = GRAMMAR[r], pat = X.pat[r], on = pat.map((x, k) => x > 0 ? k : -1).filter(k => k >= 0);
+  const grow = on.length <= g.min ? true : on.length >= g.max ? false : X.rnd() < .25 + .55 * density;
+  if (grow) { const free_ = g.allow.filter(k => pat[k] <= 0); if (!free_.length) return; const k = free_[Math.floor(X.rnd() * free_.length)]; pat[k] = .35 + .45 * X.rnd(); X.cur[r][k] = pat[k]; if (r === 'bass') X.bassLine[k] = Math.floor(X.rnd() * 5); }
+  else { const c = on.filter(k => !(k === 0 && (r === 'bass' || r === 'kick')) && !(k === 8 && r === 'rim')); if (!c.length) return; const k = c[Math.floor(X.rnd() * c.length)]; pat[k] = 0; X.cur[r][k] = 0; }
+}
+// what the footage is currently doing to this section's routed controls
+function signalTargets(sec, t) {
+  const v = { stringSwell: .5, stringTone: .5, echoPan: 0, texture: .4, pan: 0, fills: .3, echoFb: .5, drive: .5, choirSwell: .5 };
+  for (const [src, [dst, amt]] of Object.entries(sec.signals)) { const s = sig(src, t); v[dst] = dst === 'echoPan' || dst === 'pan' ? s * amt : lerp(v[dst], s, amt); }
+  return v;
+}
+function scheduleBar(G, X, bar, tBar) {
+  const ctx = G.ctx, P = PLAN, s16 = P.s16, sec = secAtBar(bar), ch = chordAt(bar), rel = (bar - sec.startBar) / Math.max(1, sec.endBar - sec.startBar), lastBar = bar === P.bars - 1;
+  // form: part levels glide over a bar into the section's energy
+  for (const r of ROLES) { const R = G.role[r], l = partLevel(r, bar) * R.mute; R.level.gain.setTargetAtTime(l, tBar, s16 * 4); R.throwLevel.gain.setTargetAtTime(l, tBar, s16 * 4); }
+  // phrase evolution and per-bar choices, all from the seeded generator
+  if (bar % 8 === 7) mutate(X, sec.density);
+  { let r = ch.root + 12; while (r > 45) r -= 12; while (r < 38) r += 12; X.padL = [r, r + ch.tones[2], r + 12]; }   // low strings: root, fifth, octave — wide at the bottom, like the overtone series
+  X.padR = voice({ root: ch.root, tones: ch.tones.slice(1) }, 62, 77, X.padR, 3); X.choirV = voice(ch, 62, 74, X.choirV, 3);   // high strings: third, seventh, colour tones, close together
+  for (const [side, ms] of [['L', X.padL], ['R', X.padR]]) G.pads[side].voices.forEach((vc, i) => vc.oscs.forEach((o, j) => o.frequency.setTargetAtTime(MIDI(ms[i]) * vc.det[j], tBar, .7)));
+  G.choir.voices.forEach((vc, i) => vc.oscs.forEach((o, j) => o.frequency.setTargetAtTime(MIDI(X.choirV[i]) * vc.det[j], tBar, .9)));
+  if (G.notes) { for (const m of X.padL.concat(X.padR)) note(G, 'strings', m, tBar, P.barDur, .5); if (partLevel('choir', bar) > 0) for (const m of X.choirV) note(G, 'choir', m, tBar, P.barDur, .5); }
+  const nx = bar + 1 < P.bars ? chordAt(bar + 1) : null; if (nx && (nx.root !== ch.root || nx.tones.join() !== ch.tones.join())) preSwell(G, tBar + P.barDur, nx);
+  X.out = {}; for (const r of ['bass', 'kick', 'rim', 'skank']) if (X.rnd() < sec.space * { bass: .55, kick: .6, rim: .9, skank: 1 }[r] * .7) X.out[r] = 1; if (X.out.bass && X.out.kick) delete X.out[X.rnd() < .5 ? 'bass' : 'kick'];
+  for (const r in X.cur) for (let k = 0; k < 16; k++) if (X.cur[r][k] !== X.pat[r][k] && X.rnd() < .3) X.cur[r][k] = X.pat[r][k];
+  X.barEvents = 0;
+  if ((bar - sec.startBar) % 4 === 0 && bar < P.bars - 1) playPhrase(G, X, sec, bar, tBar);
+  if ((sec.pedal || bar >= P.bars - 1) && partLevel('strings', bar) > 0) { playCello(G, tBar, 38, P.barDur * .98, .55); if (G.annot && (bar === sec.startBar || bar === P.bars - 1)) G.annot.push({ bar, sec: sec.name, voice: 'cello', notes: 'D2 (held)', why: bar === P.bars - 1 ? 'The last bar: the low D held under an open D minor chord, ringing out to silence on the final frame.' : 'Pedal point: the cellos and bass hold a low D while the harmony moves above it. A held bass under changing chords creates tension that wants to resolve.' }); }
+  if (ch.cad && G.annot) G.annot.push({ bar, sec: sec.name, voice: 'harmony', notes: 'E♭maj7 → next section', why: 'Phrygian cadence: an E♭ chord (♭II) resolves down a half step into D at the start of the next section. This half-step fall is the signature close of the phrygian mode.' });
+  if (bar === P.bars - 3 && G.annot) G.annot.push({ bar, sec: sec.name, voice: 'harmony', notes: 'Gm9 → E♭maj7 → D minor', why: 'Final cadence: G minor (iv) leans away, E♭ (♭II) sits a half step above home, and D minor (i) arrives on the last bar.' });
+  if (sec.stagger && G.annot && bar === sec.startBar) for (const [r, f] of Object.entries(sec.stagger)) G.annot.push({ bar: sec.startBar + Math.ceil(f * (sec.endBar - sec.startBar)), sec: sec.name, voice: r, notes: 'enters', why: `Staggered entry: the ${r} joins partway through the climax. Adding families one at a time is how an orchestra builds a crescendo.` });
+  // the final bar: everything resolves on the one, then rings out to exactly the clip's end
+  if (lastBar) { playRole(G, X, 'bass', 0, tBar, 1, bar, true, true); G.fade.gain.setValueAtTime(1, tBar + P.barDur * .25); G.fade.gain.linearRampToValueAtTime(0, P.D - 0.02); }
+  for (let st = 0; st < 16; st++) scheduleStep(G, X, bar, st, tBar + st * s16, sec, lastBar);
+}
+function duck(G, sec, t, depth) { const lead = typeof sec === 'string' ? sec : sec.lead; for (const r of ROLES) if (r !== lead) { const g = G.role[r].duck.gain; g.setTargetAtTime(1 - depth, t, .012); g.setTargetAtTime(1, t + .1, .32); } const g = G.fxDuck.gain; g.setTargetAtTime(1 - depth * .7, t, .012); g.setTargetAtTime(1, t + .1, .32); }
+function scheduleStep(G, X, bar, st, tStep, sec, lastBar) {
+  const P = PLAN, swing = .07 * P.s16, gStep = bar * 16 + st, clipT = tStep - G.t0;
+  // continuous footage signals → this section's routed controls (once per beat)
+  if (st % 4 === 0) {
+    const v = signalTargets(sec, clipT), lead = sec.lead === 'strings' ? 1.35 : 1, sw = clamp((.35 + .8 * v.stringSwell) * lead, .2, 1.4);
+    X.pan = v.pan; X.fills = v.fills;
+    const hp = [.85, 1, 1.1, .8][(bar - sec.startBar) % 4]; G.pads.L.gain.gain.setTargetAtTime(.034 * sw * hp, tStep, .9); G.pads.R.gain.gain.setTargetAtTime(.025 * sw * hp, tStep, .9);   // phrase swell: rise to bar 3, breathe in bar 4
+    G.pads.L.lp.frequency.setTargetAtTime(360 + 700 * v.stringTone, tStep, .8); G.pads.R.lp.frequency.setTargetAtTime(520 + 1000 * v.stringTone, tStep, .8);
+    G.choir.gain.gain.setTargetAtTime(.028 * (.3 + .9 * v.choirSwell), tStep, .8);
+    G.bed.gain.setTargetAtTime(.003 + .07 * v.texture, tStep, 1);
+    G.mL.pan.setTargetAtTime(clamp(-.7 + .5 * v.echoPan, -.95, .4), tStep, .5); G.mR.pan.setTargetAtTime(clamp(.7 + .5 * v.echoPan, -.4, .95), tStep, .5);
+    G.fb.gain.setTargetAtTime(clamp(sec.fb + .25 * (v.echoFb - .5), 0, .76), tStep, 1); G.verbIn.gain.setTargetAtTime(sec.verb * .6, tStep, 2);
+    if (!G.opt.stem) { const dr = 1 + 3 * sec.drive * (.4 + .6 * v.drive); G.drive.gain.setTargetAtTime(dr, tStep, .5); G.driveComp.gain.setTargetAtTime(1 / Math.sqrt(dr), tStep, .5); }
+    G.dSweep.frequency.setTargetAtTime(450 + 900 * (.5 + .5 * Math.sin(clipT / 47 * 6.283)) * (.5 + sec.space), tStep, 1);
+  }
+  if (lastBar) return;
+  const dubbing = X.dubBar === bar;
+  // the composed band
+  for (const r of ['bass', 'kick', 'rim', 'skank']) {
+    if (partLevel(r, bar) <= 0 || X.out[r] || dubbing) continue;
+    let vel = X.cur[r][st];
+    if (vel <= 0 && (r === 'rim' || r === 'bass') && X.rnd() < .06 * (X.fills || 0) * sec.density) vel = .25;    // footage-driven ghost notes
+    if (vel <= 0) continue; if (r === sec.lead) vel = Math.min(1, vel * 1.2);
+    const t = tStep + (st % 2 ? swing : 0) + PUSH[r], throwIt = r !== 'kick' && r !== 'bass' && X.rnd() < .05 + .12 * sec.space;
+    playRole(G, X, r, st, t, vel, bar, false, throwIt); if (r === 'kick') { const g = G.role.strings.duck.gain; g.setTargetAtTime(.68, t, .015); g.setTargetAtTime(1, t + .08, .38); } if (r === sec.lead) duck(G, sec, t, .35);
+  }
+  // the footage: events that fell in the last step land on this one, as this section dictates
+  while (X.evIdx < TL.EV.length && TL.EV[X.evIdx].t + G.t0 < tStep) {
+    const e = TL.EV[X.evIdx++]; if (e.t + G.t0 < tStep - P.s16 || X.barEvents >= 3) continue;
+    const act = sec.events[e.kind]; if (!act) continue; X.barEvents++; doAction(G, X, act, e, bar, st, tStep, sec);
+  }
+}
+function doAction(G, X, act, e, bar, st, t, sec) {
+  const ch = chordAt(bar), s = e.s || .6;
+  if (act === 'preswell') preSwell(G, t + G.preLen, ch);
+  else if (act === 'hornThrow' || act === 'echoThrow') playHorn(G, X, t + .02, scaleMidi(60, 72)[Math.floor(X.rnd() * 7)], act === 'echoThrow' ? .5 : .7, act === 'echoThrow' ? .5 : 1.1, true);
+  else if (act === 'octaveStab') { const m = scaleMidi(62, 70)[Math.floor(X.rnd() * 4)]; playHorn(G, X, t + .02, m, .8, .8, true); playHorn(G, X, t + .025, m + 12, .5, .8, true); }
+  else if (act === 'bassFill') { if (partLevel('bass', bar) > 0) playRole(G, X, 'bass', [3, 7, 11, 14][Math.floor(X.rnd() * 4)], t, .55, bar, false, X.rnd() < .4); }
+  else if (act === 'rim') { if (partLevel('rim', bar) > 0) playRole(G, X, 'rim', st, t, .4 + .5 * s, bar, false, s > .6); }
+  else if (act === 'kickRim') { const r = s > .6 ? 'kick' : 'rim'; if (partLevel(r, bar) > 0) playRole(G, X, r, st, t, .55 + .45 * s, bar, false, s > .5); }
+  else if (act === 'springSplash') playRole(G, X, 'rim', st, t, .35, bar, false, true);   // light rim: its spring send is the point
+  else if (act === 'stringNote') playLeadString(G, t, scaleMidi(64, 76)[Math.floor(X.rnd() * 6)], PLAN.s16 * 8);
+  else if (act === 'dubOut') {
+    for (const r of ['kick', 'bass']) if (partLevel(r, bar) > 0) playRole(G, X, r, 0, t, 1, bar, true, true);
+    if (partLevel('rim', bar) > 0) playRole(G, X, 'rim', 0, t + .01, .8, bar, true, true);
+    if (partLevel('horn', bar) > 0) playHorn(G, X, t + .02, scaleMidi(62, 70)[2], .8, 1.2, true);
+    G.fb.gain.setTargetAtTime(.8, t, .05); G.fb.gain.setTargetAtTime(sec.fb, t + PLAN.barDur, .8);
+    G.dSweep.frequency.setTargetAtTime(1600, t, .3); G.dSweep.frequency.setTargetAtTime(420, t + 1.2, 1.2);
+    X.dubBar = bar;
+  }
+}
+
+// =====================================================================================
+// ORCHESTRATION — one theme, developed; every move logged with the reason for it
+// =====================================================================================
+const DEGOFF = [0, 1, 3, 5, 7, 8, 10];                         // D phrygian, in semitones above D
+const BASE = { horn: 62, violin: 74, cello: 50, clarinet: 62, choir: 62 };
+const NOTE = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B'];
+const nn = m => NOTE[m % 12] + (Math.floor(m / 12) - 1);
+function degMidi(deg, base) { const o = Math.floor(deg / 7), r = ((deg % 7) + 7) % 7; return base + 12 * o + DEGOFF[r]; }
+function hashStr(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+let THEME = null;
+function makeTheme(name) {
+  // a two-bar phrase in D phrygian: arch contour, at least one E♭ (the mode's signature), an open and a closed ending
+  const r = mulberry(hashStr(name) ^ (STYLE.seed * 131)), RHY = [[6, 2, 4, 4, 8, 6], [4, 2, 2, 8, 4, 8], [8, 4, 2, 2, 6, 8], [2, 4, 6, 4, 8, 6], [6, 2, 8, 4, 2, 8]];
+  const rhy = RHY[Math.floor(r() * RHY.length)]; let deg = r() < .5 ? 0 : 4, t = r() < .5 ? 0 : 2; const notes = [];
+  for (let i = 0; i < rhy.length; i++) { notes.push({ t, d: rhy[i], deg }); t += rhy[i]; if (i < rhy.length - 1) { const up = i < rhy.length / 2 - 1, st = up ? [1, 1, 2, 3, -1] : [-1, -1, -2, 1, -2]; deg = clamp(deg + st[Math.floor(r() * st.length)], -2, 9); } }
+  if (!notes.some(n => ((n.deg % 7) + 7) % 7 === 1)) { const k = 1 + Math.floor(r() * (notes.length - 2)); notes[k].deg = notes[k - 1].deg >= 4 ? 8 : 1; }
+  const ante = notes.map(n => ({ ...n })); ante[ante.length - 1].deg = 4;                                  // the question: ends open, on A
+  const cons = notes.map(n => ({ ...n })); cons[cons.length - 1].deg = 0; cons[cons.length - 2].deg = 1;    // the answer: E♭ → D, the phrygian close
+  return { ante, cons };
+}
+function tf(notes, o = {}) {
+  let n = notes.map(x => ({ ...x })); if (o.frag) n = n.slice(0, o.frag); if (o.last) n = n.slice(-o.last);
+  if (o.inv) { const p = n[0].deg; n.forEach(x => x.deg = p - (x.deg - p)); }
+  const t0 = n[0].t, aug = o.aug || 1; n.forEach(x => { x.t = (x.t - t0) * aug; x.d *= aug; x.deg += o.trans || 0; });
+  return n;
+}
+function counter(notes, startDeg) {
+  // two long notes against the theme, moving the opposite way (contrary motion)
+  const dir = Math.sign(notes[notes.length - 1].deg - notes[0].deg) || 1;
+  return [{ t: 0, d: 15, deg: startDeg }, { t: 16, d: 15, deg: startDeg - 2 * dir }];
+}
+function phrasePlan(sec, p, P) {
+  const T = THEME, last = p === P - 1, L = [];
+  const add = (voice, notes, at, vel, why) => L.push({ voice, notes, at, vel, why });
+  switch (sec.id) {
+    case 'arrival':
+      if (p % 2 === 0) add('cello', tf(T.ante, { frag: 3, aug: 2 }), 0, .75, 'Foreshadowing: the first three notes of the theme at double length (augmentation) in the cellos, over a held low D (pedal point). The ear learns the shape before the theme arrives.');
+      else add('violin', tf(T.ante, { frag: 3, aug: 2, inv: true }), 0, .5, 'The same fragment upside down (inversion), high in the violins: a distant echo that opens the top of the register.');
+      break;
+    case 'procession': {
+      const k = p % 4;
+      if (k === 0) { add('horn', tf(T.ante), 0, .85, p === 0 ? 'First full statement of the theme by a solo horn. One clear colour makes a melody easy to remember.' : 'The theme back in the horn at its home pitch: return after variation.'); add('clarinet', tf(T.cons), 2, .75, 'Call and response: the answering phrase in a different family. The question ends open on A; the answer closes on D through E♭, the phrygian cadence.'); }
+      if (k === 1) { add('horn', tf(T.ante, { trans: 1 }), 0, .85, 'Sequence: the question one step higher. The same shape at a rising pitch builds momentum without new material.'); add('cello', tf(T.cons), 2, .75, 'The answer drops to the cellos, at home pitch: the low register makes the close feel settled.'); }
+      if (k === 2) { add('clarinet', tf(T.ante), 0, .8, 'Roles swap: the clarinet asks the question this time.'); add('horn', tf(T.cons), 2, .8, 'And the horn answers. Trading roles keeps call and response fresh.'); }
+      if (k === 3) { add('horn', tf(T.ante, { trans: 2 }), 0, .85, 'Sequence by a third: the question higher again, leading toward the groove.'); add('clarinet', tf(T.cons, { frag: 4 }), 2, .7, 'A shortened answer (fragment): the phrase is pulling toward the next section.'); }
+      break; }
+    case 'groove': {
+      const k = p % 3, tr = k === 2 ? 2 : 0;
+      add('horn', tf(T.ante, { trans: tr }), 0, .9, k === 0 ? 'The theme over the full rhythm section.' : k === 1 ? 'Colour doubling: clarinet and horn play the theme in unison. Two timbres on one line make a new, richer colour.' : 'The theme a third higher (sequence by a third) for intensity.');
+      add('horn', tf(T.cons, { trans: tr }), 2, .85, null);
+      if (k === 1) { add('clarinet', tf(T.ante), 0, .7, null); add('clarinet', tf(T.cons), 2, .7, null); }
+      add('violin', counter(T.ante, 2), 0, .55, 'Countermelody: long violin notes moving against the theme (contrary motion), so two lines are heard as independent.');
+      add('violin', counter(T.cons, 4), 2, .55, null);
+      break; }
+    case 'space':
+      if (p % 2 === 0) add('violin', tf(T.ante, { inv: true, aug: 2 }), 0, .6, 'Texture contrast: a single violin plays the theme upside down and slowed, over a low D pedal. After the full groove, thinning to one line makes the ear lean in.');
+      else add('clarinet', tf(T.cons, { frag: 3, inv: true }), 1, .55, 'A clarinet answers with a three-note fragment. Fragments keep the theme present without restating it.');
+      break;
+    case 'climax': {
+      const broad = last && P > 2, o = broad ? { aug: 2 } : {};
+      add('horn', tf(T.ante, o), 0, 1, p === 0 ? 'Orchestral crescendo, stage one: the rhythm section and horns carry the theme while the cellos play a countermelody underneath.' : broad ? 'Broadening: the theme at double length in full orchestra. Slowing the melody at the peak makes the arrival feel larger.' : null);
+      if (!broad) add('horn', tf(T.cons, o), 2, 1, null);
+      add('cello', counter(T.ante, -1), 0, .8, null);
+      if (p >= 1) { add('violin', tf(T.ante, o), 0, .8, p === 1 ? 'Stage two: the violins double the theme an octave above the horns. Octave doubling adds weight and brightness without adding a new line.' : null); if (!broad) add('violin', tf(T.cons, o), 2, .8, null); }
+      if (p >= 2 || (P <= 2 && p === 1)) { add('choir', tf(T.ante, o), 0, .8, 'Stage three, tutti: the choir and clarinet join. Every family is on the theme at once: the loudest moment comes from instruments added, not from volume.'); add('clarinet', tf(T.ante, o), 0, .7, null); }
+      break; }
+    case 'resolution': {
+      const seq = [['violin', tf(T.ante, { aug: 2 }), 'The theme returns, slowed, high in the violins: recognition at the end of a long piece.'],
+                   ['clarinet', tf(T.cons, { frag: 4 }), 'Liquidation: the theme shortens to four notes and moves down into the woodwind.'],
+                   ['horn', tf(T.cons, { frag: 3 }), 'Three notes in the horn: fewer notes, lower, quieter.'],
+                   ['cello', tf(T.cons, { last: 2, trans: -7 }), 'Two notes in the cellos, E♭ to D: the theme reduced to the phrygian close itself.']];
+      const e = seq[Math.min(p, seq.length - 1)]; if (p < seq.length) add(e[0], e[1], 0, .7, e[2]);
+      break; }
+  }
+  return L;
+}
+function playViolin(G, t, m, dur, vel) {
+  const ctx = G.ctx, [g, ns] = voiceOut(G, 'strings', t, .34, false), all = []; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = .5; lp.connect(g);
+  for (const d of [.996, 1, 1.004]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(m) * d; const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 5.1 + d; vg.gain.value = 7; vib.connect(vg); vg.connect(o.detune); o.connect(lp); o.start(t); vib.start(t); all.push(o, vib, vg); }
+  const a = clamp(dur * .3, .06, .35); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05 * vel, t + a); g.gain.setTargetAtTime(0, t + dur, .25); const e = t + dur + 1.5;
+  all.forEach(o => o.stop && o.stop(e)); free(G, [...all, lp, ...ns], e); note(G, 'strings', m, t, dur, vel);
+}
+function playCello(G, t, m, dur, vel) {
+  const ctx = G.ctx, [g, ns] = voiceOut(G, 'strings', t, -.3, false), all = []; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = .6; lp.connect(g);
+  for (const d of [.997, 1.003]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(m) * d; const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 4.8 + d; vg.gain.value = 6; vib.connect(vg); vg.connect(o.detune); o.connect(lp); o.start(t); vib.start(t); all.push(o, vib, vg); }
+  const a = clamp(dur * .25, .08, .4); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.075 * vel, t + a); g.gain.setTargetAtTime(0, t + dur, .3); const e = t + dur + 1.8;
+  all.forEach(o => o.stop && o.stop(e)); free(G, [...all, lp, ...ns], e); note(G, 'strings', m, t, dur, vel);
+}
+function playClarinet(G, t, m, dur, vel) {
+  // odd harmonics (square), soft-filtered, with a little breath and delayed vibrato
+  const ctx = G.ctx, [g, ns] = voiceOut(G, 'clarinet', t, PAN.clarinet, false); const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = MIDI(m);
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = .4; const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 4.9; vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(5, t + .4); vib.connect(vg); vg.connect(o.detune);
+  const br = ctx.createBufferSource(); br.buffer = G.nbuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 1.5; const bg = ctx.createGain(); bg.gain.value = .015; br.connect(bp); bp.connect(bg); bg.connect(lp);
+  o.connect(lp); lp.connect(g); const e = env(g, t, .05 * vel, .06, dur); o.start(t); vib.start(t); br.start(t, (t * 7.3) % 1.5); [o, vib, br].forEach(x => x.stop(e)); free(G, [o, vib, vg, lp, br, bp, bg, ...ns], e); note(G, 'woodwind', m, t, dur, vel);
+}
+function playChoirNote(G, t, m, dur, vel) {
+  const ctx = G.ctx, [g, ns] = voiceOut(G, 'choir', t, 0, false), f1 = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter(); f1.type = f2.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 2.2; f2.frequency.value = 1150; f2.Q.value = 3; f1.connect(g); f2.connect(g); const all = [];
+  for (const d of [.996, 1.004]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = MIDI(m) * d; o.connect(f1); o.connect(f2); o.start(t); all.push(o); }
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.09 * vel, t + .2); g.gain.setTargetAtTime(0, t + dur, .3); const e = t + dur + 1.8; all.forEach(o => o.stop(e)); free(G, [...all, f1, f2, ...ns], e); note(G, 'choir', m, t, dur, vel);
+}
+const VOICE_ROLE = { horn: 'horn', violin: 'strings', cello: 'strings', clarinet: 'clarinet', choir: 'choir' };
+function playPhrase(G, X, sec, bar, tBar) {
+  const p = Math.floor((bar - sec.startBar) / 4), P = Math.ceil((sec.endBar - sec.startBar) / 4), s16 = PLAN.s16;
+  for (const e of phrasePlan(sec, p, P)) {
+    if (partLevel(VOICE_ROLE[e.voice], bar + e.at) <= 0) continue;
+    if (e.why && G.annot) { const key = sec.id + e.why, seen = G.seen || (G.seen = new Set()); G.annot.push({ bar: bar + e.at, sec: sec.name, voice: e.voice, notes: e.notes.map(n => nn(degMidi(n.deg, BASE[e.voice]))).join(' '), why: seen.has(key) ? 'Repeated, as above.' : e.why }); seen.add(key); }
+    for (const n of e.notes) {
+      const t = tBar + (e.at * 16 + n.t) * s16, dur = n.d * s16 * .95, m = degMidi(n.deg, BASE[e.voice]);
+      if (t >= PLAN.D - PLAN.barDur) continue;                                              // keep the final bar for the cadence
+      if (e.voice === 'horn') playHorn(G, X, t, m, e.vel, dur, false); else if (e.voice === 'violin') playViolin(G, t, m, dur, e.vel);
+      else if (e.voice === 'cello') playCello(G, t, m, dur, e.vel); else if (e.voice === 'clarinet') playClarinet(G, t, m, dur, e.vel); else if (e.voice === 'choir') playChoirNote(G, t, m, dur, e.vel);
+      if (e.vel >= .7) duck(G, VOICE_ROLE[e.voice], t, .32);
+    }
+  }
+}
+
+// =====================================================================================
+// PREVIEW (live) and RENDER (offline, faster than real time)
+// =====================================================================================
+let live = null;
+async function preview() {
+  if (live) { stopPreview(); return; }
+  const ctx = new AudioContext({ latencyHint: 'playback' }), G = await buildGraph(ctx, { live: true }), X = newState();
+  await ctx.resume(); G.t0 = ctx.currentTime + .3; vid.currentTime = 0; vid.muted = true; vid.playbackRate = 1; await new Promise(r => setTimeout(r, 60));
+  const startAt = G.t0; let bar = 0;
+  live = { ctx, G, X, timer: setInterval(() => {
+    while (bar < PLAN.bars && G.t0 + bar * PLAN.barDur < ctx.currentTime + 1.2) { scheduleBar(G, X, bar, G.t0 + bar * PLAN.barDur); bar++; }
+    const t = ctx.currentTime - G.t0; drawTimeline(t); showSection(secAtBar(clamp(Math.floor(t / PLAN.barDur), 0, PLAN.bars - 1)), t);
+    if (Math.abs(vid.currentTime - t) > .25 && t >= 0 && t < PLAN.D) vid.currentTime = t;
+    if (t > PLAN.D + .5) stopPreview();
+  }, 50) };
+  setTimeout(() => vid.play(), Math.max(0, (startAt - ctx.currentTime) * 1000));
+  $('bPrev').textContent = '■ stop'; $('bPrev').classList.add('on'); log('preview started');
+}
+function stopPreview() { if (!live) return; clearInterval(live.timer); stopGraph(live.G); live.ctx.close(); live = null; vid.pause(); $('bPrev').textContent = '▶ preview'; $('bPrev').classList.remove('on'); drawTimeline(-1); }
+async function renderPass(stem, recordNotes, label) {
+  const sr = 48000, len = Math.ceil(PLAN.D * sr), ctx = new OfflineAudioContext(2, len, sr), G = await buildGraph(ctx, { stem, recordNotes }), X = newState(); G.t0 = 0;
+  const chunk = 8; let next = 0; const sched = () => { const end = Math.min(PLAN.bars, next + chunk); for (; next < end; next++) scheduleBar(G, X, next, next * PLAN.barDur); };
+  sched(); sched();
+  for (let b = chunk; b < PLAN.bars; b += chunk) { const at = b * PLAN.barDur; if (at < PLAN.D - .1) ctx.suspend(Math.floor(at * sr / 128) * 128 / sr).then(() => { sched(); setProgress(b / PLAN.bars); $('status').textContent = `rendering ${label} · bar ${b} / ${PLAN.bars}`; ctx.resume(); }); }
+  const buf = await ctx.startRendering(); return { buf, notes: G.notes, annot: G.annot };
+}
+function wav24(buf, normalize) {
+  const ch = buf.numberOfChannels, n = buf.length, data = []; let peak = 0; for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); data.push(d); for (let i = 0; i < n; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; } }
+  const g = normalize && peak > 0 ? Math.min(4, 0.891 / peak) : (peak > 0.999 ? 0.999 / peak : 1);
+  const ab = new ArrayBuffer(44 + n * ch * 3), v = new DataView(ab), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 3, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, buf.sampleRate, true); v.setUint32(28, buf.sampleRate * ch * 3, true); v.setUint16(32, ch * 3, true); v.setUint16(34, 24, true); w(36, 'data'); v.setUint32(40, n * ch * 3, true);
+  let o = 44; for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { let s = Math.round(clamp(data[c][i] * g, -1, 1) * 8388607); v.setUint8(o, s & 255); v.setUint8(o + 1, (s >> 8) & 255); v.setUint8(o + 2, (s >> 16) & 255); o += 3; }
+  return { blob: new Blob([ab], { type: 'audio/wav' }), peak, gain: g };
+}
+function midiFile(notes) {
+  // type-1 SMF, 480 ppq, exact tempo; one track per part
+  const ppq = 480, tick = t => Math.max(0, Math.round(t / (60 / PLAN.bpm) * ppq)), parts = ['bass', 'drums', 'skank', 'horn', 'woodwind', 'strings', 'choir'];
+  const vlq = n => { const b = [n & 127]; while ((n >>= 7)) b.unshift((n & 127) | 128); return b; };
+  const str = s => Array.from(s).map(c => c.charCodeAt(0) & 255);
+  const tracks = [];
+  const tempo = Math.round(6e7 / PLAN.bpm); tracks.push([0, 255, 81, 3, (tempo >> 16) & 255, (tempo >> 8) & 255, tempo & 255, 0, 255, 88, 4, 4, 2, 24, 8, 0, 255, 3, ...vlq(CLIP.title.length), ...str(CLIP.title), 0, 255, 47, 0]);
+  parts.forEach((p, ci) => {
+    const chn = p === 'drums' ? 9 : ci, ev = [];
+    for (const n of notes) if (n.role === p) { const v = clamp(Math.round(n.vel * 110) + 10, 1, 127); ev.push([tick(n.t), 0x90 | chn, n.midi, v]); ev.push([tick(n.t + Math.max(.05, n.dur)), 0x80 | chn, n.midi, 0]); }
+    ev.sort((a, b) => a[0] - b[0] || (a[1] & 0xf0) - (b[1] & 0xf0));
+    const out = [0, 255, 3, ...vlq(p.length), ...str(p)]; let last = 0; for (const e of ev) { out.push(...vlq(e[0] - last), e[1], e[2], e[3]); last = e[0]; } out.push(0, 255, 47, 0); tracks.push(out);
+  });
+  const bytes = [...str('MThd'), 0, 0, 0, 6, 0, 1, 0, tracks.length, ppq >> 8, ppq & 255];
+  for (const t of tracks) bytes.push(...str('MTrk'), (t.length >>> 24) & 255, (t.length >>> 16) & 255, (t.length >>> 8) & 255, t.length & 255, ...t);
+  return new Blob([new Uint8Array(bytes)], { type: 'audio/midi' });
+}
+function scoreSheet() {
+  const f = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+  const L = [`# ${CLIP.title} — score sheet`, '', `- Source clip: \`${CLIP.name}\` (${f(PLAN.D)}, ${(CLIP.size / 1e6).toFixed(1)} MB)`, `- Rendered: ${new Date().toISOString()}`, `- Engine: MZTV SCORE ENGINE 003 · ORCHESTRATOR · ${STYLE.name} · ${STYLE.key} · seed ${STYLE.seed}`,
+    `- Tempo: ${PLAN.bpm.toFixed(4)} bpm (fitted so ${PLAN.bars} bars end exactly at ${f(PLAN.D)})`, `- Footage reading: ${TL.frames} frames analysed · ${TL.EV.filter(e => e.kind === 'cut').length} cuts · ${TL.EV.filter(e => e.kind === 'impact').length} impacts · ${TL.EV.filter(e => e.kind === 'flash').length} flashes`, '', '## Form', '', '| Section | Bars | Time | Lead | Parts | Footage controls |', '|---|---|---|---|---|---|'];
+  for (const s of PLAN.secs) L.push(`| ${s.name} | ${s.startBar + 1}–${s.endBar} | ${f(s.startBar * PLAN.barDur)}–${f(s.endBar * PLAN.barDur)} | ${s.lead} | ${Object.keys(s.parts).filter(k => s.parts[k] > 0).join(', ')} | ${Object.entries(s.events).map(([k, a]) => `${k} → ${ACTION_TEXT[a]}`).concat(Object.entries(s.signals).map(([k, [d]]) => `${k} → ${SIGNAL_TEXT[d]}`)).join('; ')} |`);
+  L.push('', 'The footage is an arbitrary trigger source. The form, parts and energy of each section are composed; the footage only decides when routed actions fire and how routed controls move.');
+  const tn = ns => ns.map(n => `${nn(degMidi(n.deg, 62))} (${n.d / 4} beat${n.d === 4 ? '' : 's'})`).join(' · ');
+  L.push('', '## Theme', '', `Generated from the clip's name. Two bars in D phrygian, with E♭ (the note that gives the mode its colour).`, '', `- **Question (antecedent):** ${tn(THEME.ante)}. It ends open, on A.`, `- **Answer (consequent):** ${tn(THEME.cons)}. It closes E♭ → D, the phrygian cadence.`);
+  L.push('', '## Orchestration log', '', 'Each line is a decision the orchestrator made, and why.', '', '| Bar | Time | Section | Voice | Notes | Why |', '|---|---|---|---|---|---|');
+  for (const a of ANNOT.slice().sort((x, y) => x.bar - y.bar)) L.push(`| ${a.bar + 1} | ${f(a.bar * PLAN.barDur)} | ${a.sec} | ${a.voice} | ${a.notes} | ${a.why} |`);
+  L.push('', '## Principles used', '',
+    '- **Theme and development.** One short melody carries the whole piece. Long pieces feel unified because the listener keeps recognising it as it changes.',
+    '- **Augmentation / diminution.** Playing a melody slower or faster. Slower reads as weightier or more distant.',
+    '- **Inversion.** Turning the melody upside down: every step up becomes a step down. Still recognisable by its rhythm.',
+    '- **Sequence.** Repeating a phrase at a higher or lower pitch. Builds momentum without new material.',
+    '- **Fragmentation and liquidation.** Using only part of the theme, then fewer and fewer notes, until it dissolves. A natural way to end.',
+    '- **Call and response (antecedent / consequent).** A phrase that ends open, answered by one that closes. Passing the answer to another family adds contrast.',
+    '- **Countermelody and contrary motion.** A second line that moves against the first, so both stay audible.',
+    '- **Colour doubling and octave doubling.** Two instruments on one line make a new timbre; an octave apart they add weight and brightness.',
+    '- **Crescendo by orchestration.** Building intensity by adding families one at a time, rather than just turning up.',
+    '- **Texture contrast.** Thinning to a single line after a full section makes both feel stronger.',
+    '- **Pedal point.** A held bass note under moving harmony: tension that wants release.',
+    '- **Cadence.** A chord progression that closes a phrase or section. In phrygian, the defining close is the half step from E♭ down to D.',
+    '- **Spacing by the overtone series.** Wide intervals low (root, fifth, octave), close intervals high, so chords sound open rather than muddy.',
+    '- **Phrase swell.** Each four-bar phrase rises toward its third bar and breathes in the fourth.');
+  return new Blob([L.join('\n')], { type: 'text/markdown' });
+}
+function save(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000); }
+async function render(all) {
+  stopPreview(); setButtons(false); const base = CLIP.slug, t0 = performance.now();
+  try {
+    const mix = await renderPass(null, true, 'mix'); ANNOT = mix.annot; const w = wav24(mix.buf, true); save(w.blob, `${base} - mix.wav`); log(`mix rendered · peak ${(20 * Math.log10(w.peak)).toFixed(1)} dBFS → normalised to −1 dBFS`);
+    window.__last = { notes: mix.notes.length, peak: w.peak, rms: rmsOf(mix.buf) };
+    save(midiFile(mix.notes), `${base}.mid`); log(`MIDI · ${mix.notes.length} notes on 7 tracks`); save(scoreSheet(), `${base} - score sheet.md`); log(`score sheet saved · ${ANNOT.length} orchestration decisions`);
+    if (all) {
+      for (const [name, roles] of STEMS) { const r = await renderPass(roles, false, name); const sw = wav24(r.buf, false); save(sw.blob, `${base} - stem ${name}.wav`); log(`stem ${name} · peak ${(20 * Math.log10(Math.max(1e-9, sw.peak))).toFixed(1)} dBFS`); await new Promise(r => setTimeout(r, 400)); }
+    }
+    $('status').textContent = `done in ${((performance.now() - t0) / 1000).toFixed(0)} s`; setProgress(1);
+  } catch (e) { log('render failed: ' + e.message); $('status').textContent = 'render failed'; }
+  setButtons(true);
+}
+function rmsOf(buf) { const d = buf.getChannelData(0); let s = 0; for (let i = 0; i < d.length; i += 7) s += d[i] * d[i]; return Math.sqrt(s / (d.length / 7)); }
+
+// =====================================================================================
+// UI
+// =====================================================================================
+function setProgress(f) { $('progress').firstElementChild.style.width = (clamp(f, 0, 1) * 100).toFixed(1) + '%'; }
+function setButtons(on) { for (const id of ['bPrev', 'bMix', 'bAll']) $(id).disabled = !on; }
+const tl = $('timeline'), tg = tl.getContext('2d');
+function drawTimeline(playT) {
+  if (!PLAN) return; const k = devicePixelRatio, W = tl.width = tl.clientWidth * k, H = tl.height = tl.clientHeight * k, x = t => t / PLAN.D * W;
+  tg.fillStyle = '#0d1230'; tg.fillRect(0, 0, W, H);
+  PLAN.secs.forEach((s, i) => { const a = x(s.startBar * PLAN.barDur), b = x(s.endBar * PLAN.barDur); tg.fillStyle = i % 2 ? 'rgba(58,84,222,.22)' : 'rgba(58,84,222,.12)'; tg.fillRect(a, 0, b - a, H);
+    tg.fillStyle = '#ece9ff'; tg.font = `${11 * k}px 'JetBrains Mono', monospace`; tg.fillText(s.name, a + 6 * k, 15 * k);
+    const parts = Object.keys(s.parts).filter(p => s.parts[p] > 0); tg.fillStyle = '#a5a9d6'; tg.font = `${9 * k}px 'JetBrains Mono', monospace`; tg.fillText(parts.join(' · '), a + 6 * k, 29 * k, b - a - 10 * k); });
+  // energy of the composition (fixed) vs motion of the footage (arbitrary)
+  tg.strokeStyle = '#ece9ff'; tg.lineWidth = 1.5 * k; tg.beginPath();
+  for (let b = 0; b < PLAN.bars; b++) { const lv = ROLES.reduce((a, r) => a + partLevel(r, b), 0) / 6, yy = H - 14 * k - lv * (H * .45); b ? tg.lineTo(x(b * PLAN.barDur), yy) : tg.moveTo(0, yy); tg.lineTo(x((b + 1) * PLAN.barDur), yy); } tg.stroke();
+  tg.strokeStyle = 'rgba(165,169,214,.7)'; tg.lineWidth = 1 * k; tg.beginPath(); for (let i = 0; i < TL.T.length; i++) { const yy = H - 8 * k - TL.S.motion[i] * H * .3; i ? tg.lineTo(x(TL.T[i]), yy) : tg.moveTo(x(TL.T[i]), yy); } tg.stroke();
+  for (const e of TL.EV) { tg.fillStyle = e.kind === 'cut' ? '#b0de5c' : e.kind === 'flash' ? '#ece9ff' : 'rgba(236,233,255,.45)'; const h = e.kind === 'cut' ? 18 : 9; tg.fillRect(x(e.t), H - h * k, 1.5 * k, h * k); }
+  tg.fillStyle = 'rgba(236,233,255,.35)'; for (let b = 0; b <= PLAN.bars; b += 4) tg.fillRect(x(b * PLAN.barDur), 36 * k, 1, 4 * k);
+  if (playT >= 0) { tg.fillStyle = '#b0de5c'; tg.fillRect(x(playT), 0, 2 * k, H); }
+}
+let shown = null;
+function showSection(s, t) {
+  $('now').textContent = t != null && t >= 0 ? `${t.toFixed(1)} s · bar ${Math.floor(t / PLAN.barDur) + 1} / ${PLAN.bars}` : '';
+  if (shown === s) return; shown = s;
+  const parts = ROLES.map(r => `<span class="${s.parts[r] > 0 ? 'on' : ''}">${r}</span>`).join('');
+  const ev = Object.entries(s.events).map(([k, a]) => `<tr><th>${k}</th><td>→ ${ACTION_TEXT[a]}</td></tr>`).join('');
+  const sg = Object.entries(s.signals).map(([k, [d, amt]]) => `<tr><th>${k}</th><td>→ ${SIGNAL_TEXT[d]}${amt < 1 ? ` (${Math.round(amt * 100)}%)` : ''}</td></tr>`).join('');
+  $('secCard').innerHTML = `<h3>${s.name} <span class="dim">· bars ${s.startBar + 1}–${s.endBar} · lead ${s.lead}</span></h3>
+    <div class="parts">${parts}</div>
+    <div class="dim">composed energy: space ${s.space} · density ${s.density} · drive ${s.drive} · echo ${s.fb} · room ${s.verb}${s.peel ? ' · parts peel away, ending on open D minor' : ''}${s.hornOctave ? ' · horns doubled at the octave' : ''}</div>
+    ${THEME ? `<div><span class="lime">orchestration</span> · ${phrasePlan(s, 0, Math.ceil((s.endBar - s.startBar) / 4)).filter(e => e.why).map(e => e.why.split(':')[0].split('.')[0]).join(' · ')}</div>` : ''}
+    <table><tr><th colspan="2" class="lime">footage events</th></tr>${ev}<tr><th colspan="2" class="lime">footage signals</th></tr>${sg}</table>`;
+}
+tl.addEventListener('click', e => { if (!PLAN) return; const t = e.offsetX / tl.clientWidth * PLAN.D; showSection(secAtBar(Math.floor(t / PLAN.barDur)), t); if (!live) vid.currentTime = t; });
+async function load(f) {
+  if (!f) return; stopPreview(); $('drop').classList.add('hide'); $('ui').hidden = false; $('log').textContent = '';
+  const title = f.name.replace(/\.[^.]+$/, ''); CLIP = { name: f.name, size: f.size, title, slug: title.replace(/[^\w\- ]+/g, '').trim() || 'score' };
+  vid.src = URL.createObjectURL(f); await new Promise((res, rej) => { vid.onloadedmetadata = res; vid.onerror = () => rej(new Error('could not open this clip')); });
+  setButtons(false); log(`clip: ${f.name} · ${vid.duration.toFixed(2)} s`);
+  try { TL = await scanClip(6); } catch (e) { log('scan failed: ' + e.message); return; }
+  PLAN = planForm(TL.duration); THEME = makeTheme(CLIP.title);
+  $('meta').innerHTML = `<b>${CLIP.title}</b> <span class="dim">· ${TL.duration.toFixed(2)} s · ${PLAN.bars} bars at ${PLAN.bpm.toFixed(3)} bpm · ${STYLE.key} · ${TL.EV.filter(e => e.kind === 'cut').length} cuts · ${TL.EV.filter(e => e.kind === 'impact').length} impacts</span>`;
+  log(`scanned ${TL.frames} frames · form: ${PLAN.secs.map(s => `${s.name} (${s.endBar - s.startBar} bars)`).join(' · ')}`);
+  $('status').textContent = 'ready'; setProgress(0); setButtons(true); drawTimeline(-1); showSection(PLAN.secs[0]); vid.currentTime = 0;
+}
+$('file').onchange = e => load(e.target.files[0]); $('file2').onchange = e => load(e.target.files[0]);
+addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('over'); });
+addEventListener('dragleave', () => document.body.classList.remove('over'));
+addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('over'); load(e.dataTransfer.files[0]); });
+$('bPrev').onclick = preview; $('bMix').onclick = () => render(false); $('bAll').onclick = () => render(true);
+addEventListener('resize', () => drawTimeline(-1));
+window.SE3 = window.SE2 = { get ANNOT() { return ANNOT; }, get THEME() { return THEME; }, load, render, renderPass, preview, get PLAN() { return PLAN; }, get TL() { return TL; }, FORM, wav24, midiFile, scoreSheet,
+  async loadUrl(u, name) { const b = await (await fetch(u)).blob(); return load(new File([b], name || 'test.webm', { type: b.type })); } };
+</script>
+</body>
+</html>
