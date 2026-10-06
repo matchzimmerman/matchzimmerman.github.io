@@ -560,7 +560,7 @@ function buildGraph(fade) {
   G.verb = makeVerb(ctx, 4.5); G.verbIn = ctx.createGain(); G.verbIn.gain.value = 0.3; G.verbLP = ctx.createBiquadFilter(); G.verbLP.type = 'lowpass'; G.verbLP.frequency.value = 1500;
   G.verbIn.connect(G.verbLP); G.verbLP.connect(G.verb); G.verb.connect(G.bedBus);
   G.dIn = ctx.createGain(); G.dL = ctx.createDelay(4); G.dR = ctx.createDelay(4);
-  G.fb = ctx.createGain(); G.fb.gain.value = 0.3; G.fLP = ctx.createBiquadFilter(); G.fLP.type = 'lowpass'; G.fLP.frequency.value = 1100; G.fHP = ctx.createBiquadFilter(); G.fHP.type = 'highpass'; G.fHP.frequency.value = 110; G.fSat = shaper(ctx, 1.8);
+  G.fb = ctx.createGain(); G.fb.gain.value = 0.3; G.fLP = ctx.createBiquadFilter(); G.fLP.type = 'lowpass'; G.fLP.frequency.value = 1100; G.fHP = ctx.createBiquadFilter(); G.fHP.type = 'highpass'; G.fHP.frequency.value = 110; G.fSat = ctx.createWaveShaper(); { const n = 2048, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(x); } G.fSat.curve = c; G.fSat.oversample = '2x'; }   // unity-gain soft clip: the echo loop can never exceed its feedback value
   G.mL = ctx.createStereoPanner(); G.mL.pan.value = -0.7; G.mR = ctx.createStereoPanner(); G.mR.pan.value = 0.7;
   G.dIn.connect(G.dL); G.dL.connect(G.dR); G.dR.connect(G.fLP); G.fLP.connect(G.fHP); G.fHP.connect(G.fSat); G.fSat.connect(G.fb); G.fb.connect(G.dL);
   G.dL.connect(G.mL); G.dR.connect(G.mR); G.dRet = ctx.createGain(); G.dRet.gain.value = 0.7; G.dSweep = ctx.createBiquadFilter(); G.dSweep.type = 'lowpass'; G.dSweep.frequency.value = 900; G.dSweep.Q.value = 2.5;

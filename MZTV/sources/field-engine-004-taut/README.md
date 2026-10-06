@@ -10,6 +10,9 @@ A second interpretation of the brief behind FIELD ENGINE 002 (*the field does no
 - `v2.html` is v2: the same players and membrane with a busier 98 bpm funk groove (it repeats too much over long runs).
 - `v1.html` is v1, kept for the record: fixed exciters and a drone chord.
 
+## Fix — echo feedback stability (2026-10-06, all versions)
+The dub echo's feedback loop had a saturator with about 1.9× small-signal gain. Once feedback passed about 0.53, which dub-outs and high pressure reached, the loop gain exceeded 1 and the echo self-oscillated into a sustained 150–250 Hz roar. It was bounded but did not decay. The loop now uses a unity-gain tanh soft clip, so loop gain equals the feedback value (≤ 0.8) and every echo decays. Patched in v1–v5. Verified with 30 impulses at 0.7 s intervals: the level held around −14 dB and then decayed. No clicks.
+
 ## v5 — pads pushed back (2026-10-06)
 - **Placement:** each string voice is panned on its own. Low strings sit at L30 / L25 / L20 and high strings at R20 / R25 / R30, instead of hard ±0.82. The lead string line sits just outside them, at R36.
 - **Tone:** each section is driven hard into a tanh saturator (drive 0.3, curve 2.4), then lowpassed. Base cutoff is 480–860 Hz for the low strings and 700–1300 Hz for the high strings, following membrane energy, with a second lowpass at 2.4 kHz. Level is set after the saturator, so the saturation adds grit without adding level.
