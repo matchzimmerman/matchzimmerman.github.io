@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f1efe8">
+  <title>MZBRDZ Shop — Match Zimmerman</title>
+  <meta name="description" content="MZBRDZ objects, apparel, editions, and experiments by Match Zimmerman Creative Media Group.">
+  <link rel="stylesheet" href="/site-v1.css">
+  <link rel="stylesheet" href="/shop/shop.css">
+</head>
+<body>
+  <div class="shop-shell">
+    <header class="shop-header">
+      <a class="shop-brand" href="/"><span>MATCH ZIMMERMAN</span><small>CREATIVE MEDIA GROUP</small></a>
+      <div class="shop-nav"><a href="/">SITE</a><button id="bag-button" type="button">BAG <span id="bag-count">0</span></button></div>
+    </header>
+
+    <main>
+      <section class="shop-intro">
+        <p class="shop-kicker">MZBRDZ / SHOP / LIVE PRINTFUL CATALOG</p>
+        <h1>OBJECTS FOR<br>THE FIELD.</h1>
+        <p>Apparel, headwear, bags, editions, and other physical artifacts. The catalog is live from Printful; unavailable and unsynced items are held back automatically.</p>
+      </section>
+
+      <section class="shop-controls" aria-label="Shop filters">
+        <div class="control-head"><span>BROWSE</span><button id="clear-filters" type="button">CLEAR FILTERS</button></div>
+        <div class="category-pills" id="category-pills"><button class="active" data-category="all">ALL</button></div>
+        <div class="select-row">
+          <label>SIZE<select id="size-filter"><option value="">ALL SIZES</option></select></label>
+          <label>COLOR<select id="color-filter"><option value="">ALL COLORS</option></select></label>
+          <label id="material-wrap" hidden>MATERIAL<select id="material-filter"><option value="">ALL MATERIALS</option></select></label>
+          <div class="filter-status" id="filter-status">LOADING FIT DATA…</div>
+        </div>
+      </section>
+
+      <section id="catalog" class="catalog" aria-live="polite">
+        <div class="loading-block">LOADING LIVE CATALOG…</div>
+      </section>
+    </main>
+
+    <footer class="shop-footer"><span>© 2026 MATCH ZIMMERMAN CREATIVE MEDIA GROUP</span><span>MZBRDZ / LIVE CATALOG</span><a href="/">BACK TO SITE ↑</a></footer>
+  </div>
+
+  <dialog id="product-dialog" class="product-dialog">
+    <button class="dialog-x" id="dialog-close" type="button" aria-label="Close">CLOSE ×</button>
+    <div id="product-dialog-content"></div>
+  </dialog>
+
+  <aside id="bag-drawer" class="bag-drawer" aria-hidden="true">
+    <div class="bag-head"><strong>BAG</strong><button id="bag-close" type="button">CLOSE ×</button></div>
+    <div id="bag-items" class="bag-items"></div>
+    <div class="bag-total"><span>SUBTOTAL</span><strong id="bag-subtotal">$0.00</strong></div>
+    <button class="checkout-button" id="checkout-button" type="button">CHECKOUT / PAYMENT BRIDGE NEXT</button>
+    <p class="checkout-note">Browse, options, and cart are live. Stripe payment + Printful fulfillment are being connected as a separate module.</p>
+  </aside>
+  <div id="bag-scrim" class="bag-scrim" hidden></div>
+
+  <script src="/shop/shop.js"></script>
+</body>
+</html>
