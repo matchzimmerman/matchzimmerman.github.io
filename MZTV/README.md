@@ -244,6 +244,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-027-desire-lines/`
 
+### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
+One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour.
+
+Path:
+`sources/48-plant-001-mz-claude/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/48-plant-001-mz-claude/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
