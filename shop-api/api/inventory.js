@@ -32,6 +32,7 @@ function publicProduct(product) {
     synced: Number(product.synced || 0),
     thumbnail_url: product.thumbnail_url || null,
     category: categoryFor(product.name),
+    tags: ["MZBRDZ"],
     available: !product.is_ignored && Number(product.synced || 0) > 0
   };
 }

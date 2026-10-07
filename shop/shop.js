@@ -1,6 +1,6 @@
 const API="https://mzcmg-shop-api.vercel.app/api";
 let products=[],details=new Map(),cart=JSON.parse(localStorage.getItem("mzbrdz-cart")||"[]");
-const filters={category:"all",size:"",color:"",material:""};
+const filters={brand:"all",category:"all",size:"",color:"",material:""};
 const $=s=>document.querySelector(s);
 
 function money(v,c="USD"){const n=Number(v);return Number.isFinite(n)?new Intl.NumberFormat("en-US",{style:"currency",currency:c}).format(n):"—"}
@@ -13,9 +13,18 @@ async function loadCatalog(){
   const r=await fetch(API+"/inventory?storefront=1");
   const j=await r.json(); if(!j.ok) throw new Error(j.error||"Catalog unavailable");
   products=j.products||[];
+  renderBrandButtons();
   renderCategoryButtons(j.categories||[]);
   render();
   preloadDetails();
+}
+function renderBrandButtons(){
+  const el=$("#brand-pills");
+  el.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    filters.brand=b.dataset.brand;
+    el.querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));
+    render();
+  });
 }
 function renderCategoryButtons(categories){
   const el=$("#category-pills");
@@ -23,6 +32,7 @@ function renderCategoryButtons(categories){
   el.querySelectorAll("button").forEach(b=>b.onclick=()=>{filters.category=b.dataset.category;el.querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));render()});
 }
 function passes(p){
+  if(filters.brand!=="all"&&!(p.tags||[]).includes(filters.brand))return false;
   if(filters.category!=="all"&&p.category!==filters.category)return false;
   const d=details.get(String(p.id));
   if(filters.size && (!d||!d.sizes.includes(filters.size)))return false;
@@ -42,7 +52,7 @@ function section(cat,items){
 }
 function card(p,i){
   const d=details.get(String(p.id)); const price=d&&d.prices.length?"FROM "+money(Math.min(...d.prices),d.currency):(p.synced>0?"VIEW OPTIONS":"AVAILABILITY TO CONFIRM");
-  return '<article class="product-card" data-id="'+p.id+'"><div class="product-image">'+(p.thumbnail_url?'<img src="'+escapeAttr(p.thumbnail_url)+'" alt="">':'')+'</div><div class="product-copy"><div class="card-number">'+String(p.id).slice(-3)+'</div><div class="card-category">'+escapeHtml(p.category)+'</div><h3>'+escapeHtml(p.name)+'</h3><div class="product-meta"><span>'+p.synced+' OPTION'+(p.synced===1?'':'S')+'</span><span class="product-price">'+price+'</span></div></div></article>';
+  return '<article class="product-card" data-id="'+p.id+'"><div class="product-image">'+(p.thumbnail_url?'<img src="'+escapeAttr(p.thumbnail_url)+'" alt="">':'')+'</div><div class="product-copy"><div class="card-number">'+String(p.id).slice(-3)+'</div><div class="card-category">'+escapeHtml(((p.tags||[]).join(" · ")||"SHOP")+" · "+p.category)+'</div><h3>'+escapeHtml(p.name)+'</h3><div class="product-meta"><span>'+p.synced+' OPTION'+(p.synced===1?'':'S')+'</span><span class="product-price">'+price+'</span></div></div></article>';
 }
 async function loadDetail(id){
   id=String(id); if(details.has(id))return details.get(id);
@@ -68,7 +78,7 @@ function updateSelect(sel,items,current){
   const el=$(sel),label=el.options[0].textContent; el.innerHTML='<option value="">'+label+'</option>'+items.map(x=>'<option value="'+escapeAttr(x)+'">'+escapeHtml(x.toUpperCase())+'</option>').join(""); el.value=current;
 }
 ["size","color","material"].forEach(k=>{const el=$("#"+k+"-filter");el.onchange=()=>{filters[k]=el.value;render()}});
-$("#clear-filters").onclick=()=>{filters.category="all";filters.size=filters.color=filters.material="";document.querySelectorAll("#category-pills button").forEach((b,i)=>b.classList.toggle("active",i===0));["size","color","material"].forEach(k=>$("#"+k+"-filter").value="");render()};
+$("#clear-filters").onclick=()=>{filters.brand="all";filters.category="all";filters.size=filters.color=filters.material="";document.querySelectorAll("#brand-pills button").forEach((b,i)=>b.classList.toggle("active",i===0));document.querySelectorAll("#category-pills button").forEach((b,i)=>b.classList.toggle("active",i===0));["size","color","material"].forEach(k=>$("#"+k+"-filter").value="");render()};
 
 async function openProduct(id){
   const dialog=$("#product-dialog"),content=$("#product-dialog-content"); content.innerHTML='<div class="loading-block">LOADING OPTIONS…</div>'; dialog.showModal();
