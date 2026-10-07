@@ -80,64 +80,7 @@ module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
 
-  var reviewToken = process.env.MZ_SHOP_REVIEW_TOKEN || "";
-  var suppliedReviewToken = (req.query && req.query.token) || "";
-  var printAuthorized = reviewToken && suppliedReviewToken === reviewToken && req.query && req.query.print === "1";
-  var publicPacket = req.query && req.query.export === "1" && req.query.pdf === "1";
-
-  if (!printAuthorized && !publicPacket && !requireAdmin(req, res)) return;
-
-  if ((printAuthorized || publicPacket) && req.query && req.query.pdf === "1") {
-    try {
-      var PDFDocument = require("pdfkit");
-      var screenshotUrl = process.env.MZ_SHOP_PACKET_SCREENSHOT || "";
-      if (!screenshotUrl) {
-        res.statusCode = 503;
-        res.end("Packet screenshot is not configured.");
-        return;
-      }
-
-      var imageResponse = await fetch(screenshotUrl);
-      if (!imageResponse.ok) {
-        res.statusCode = 502;
-        res.end("Unable to retrieve packet screenshot.");
-        return;
-      }
-
-      var imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-      var doc = new PDFDocument({ autoFirstPage: false, size: "LETTER", margin: 0, compress: true });
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", 'attachment; filename="MZBRDZ_Printful_Markup_Index.pdf"');
-      doc.pipe(res);
-
-      var pageWidth = 612;
-      var pageHeight = 792;
-      var captureWidth = imageBuffer.readUInt32BE(16);
-      var captureHeight = imageBuffer.readUInt32BE(20);
-      var sheetHeight = 1550;
-      var sheetGap = 24;
-      var scale = pageWidth / captureWidth;
-      var pageCount = Math.ceil(captureHeight / (sheetHeight + sheetGap));
-      var image = doc.openImage(imageBuffer);
-
-      for (var page = 0; page < pageCount; page += 1) {
-        doc.addPage({ size: "LETTER", margin: 0 });
-        doc.save();
-        doc.rect(0, 0, pageWidth, pageHeight).clip();
-        doc.image(image, 0, -(page * (sheetHeight + sheetGap) * scale), { width: pageWidth });
-        doc.restore();
-      }
-
-      doc.end();
-      return;
-    } catch (error) {
-      res.statusCode = 500;
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.end("PDF packet error: " + error.message);
-      return;
-    }
-  }
+  if (!requireAdmin(req, res)) return;
 
   try {
     var stores = await printful.listStores();
@@ -154,77 +97,6 @@ module.exports = async function handler(req, res) {
       } catch (error) {
         inventories.push({ store: store, products: [], error: error.message });
       }
-    }
-
-    if (printAuthorized) {
-      var primaryEntry = inventories.filter(function (entry) {
-        return entry.store && entry.store.name === "Match Zimmerman" && entry.store.type === "squarespace";
-      })[0] || inventories[0] || { store: {}, products: [] };
-
-      var products = primaryEntry.products || [];
-      var sheets = [];
-      for (var s = 0; s < products.length; s += 4) {
-        var group = products.slice(s, s + 4);
-        var cards = group.map(function (product, index) {
-          var number = s + index + 1;
-          var image = product.thumbnail_url
-            ? '<img src="' + esc(product.thumbnail_url) + '" alt="' + esc(product.name || "Product") + '">'
-            : '<div class="no-image">NO IMAGE</div>';
-          var syncState = product.is_ignored ? "IGNORED" : ((Number(product.synced) || 0) + " / " + (Number(product.variants) || 0) + " SYNCED");
-          return [
-            '<article class="print-card">',
-              '<div class="image-wrap">' + image + '</div>',
-              '<div class="info">',
-                '<div class="num">#' + String(number).padStart(2, "0") + '</div>',
-                '<h2>' + esc(product.name || "Untitled product") + '</h2>',
-                '<div class="meta">PRINTFUL PRODUCT ID ' + esc(product.id) + ' · ' + esc(syncState) + '</div>',
-                '<div class="fields">',
-                  '<div><b>GROUP / COLLECTION</b><span></span></div>',
-                  '<div><b>KEEP / ARCHIVE / REMOVE</b><span></span></div>',
-                  '<div><b>RENAME / CONSOLIDATE WITH</b><span></span></div>',
-                  '<div class="notes"><b>NOTES</b><span></span><span></span></div>',
-                '</div>',
-              '</div>',
-            '</article>'
-          ].join("");
-        }).join("");
-
-        sheets.push([
-          '<section class="sheet">',
-            '<header><div><div class="eyebrow">MZBRDZ · PRINTFUL PRODUCT INDEX</div><h1>PHYSICAL MARKUP SHEET</h1></div>',
-            '<div class="pagecount">' + (Math.floor(s / 4) + 1) + ' / ' + Math.ceil(products.length / 4) + '</div></header>',
-            '<div class="instructions">Mark relationships, collections, duplicates, archive/remove decisions, and naming changes directly on the page.</div>',
-            '<div class="print-grid">' + cards + '</div>',
-            '<footer>LIVE SNAPSHOT · MATCH ZIMMERMAN SQUARESPACE STORE · ' + products.length + ' PRODUCTS</footer>',
-          '</section>'
-        ].join(""));
-      }
-
-      var printHtml = [
-        '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow">',
-        '<title>MZBRDZ Printful Markup Index</title><style>',
-        '*{box-sizing:border-box}html,body{margin:0;background:#ddd;color:#111;font-family:Arial,Helvetica,sans-serif}',
-        '.sheet{width:1200px;height:1550px;margin:0 auto 24px;background:#f5f2e9;padding:46px;overflow:hidden;display:flex;flex-direction:column}',
-        'header{border-top:10px solid #111;border-bottom:2px solid #111;padding:18px 0 22px;display:flex;justify-content:space-between;align-items:end}',
-        '.eyebrow,.meta,.fields b,footer,.pagecount{font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}',
-        'h1{font-size:50px;letter-spacing:-.045em;margin:5px 0 0;line-height:.9}.pagecount{font-size:16px}',
-        '.instructions{font-size:17px;padding:13px 0 16px;border-bottom:1px solid #888}',
-        '.print-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px;padding-top:14px;flex:1}',
-        '.print-card{border:2px solid #222;display:grid;grid-template-columns:44% 56%;min-height:0;background:#fff}',
-        '.image-wrap{background:#e5e1d7;border-right:1px solid #888;display:flex;align-items:center;justify-content:center;overflow:hidden}',
-        '.image-wrap img{width:100%;height:100%;object-fit:contain}.no-image{font-size:14px;letter-spacing:.08em}',
-        '.info{padding:18px;min-width:0;display:flex;flex-direction:column}.num{font-size:28px;font-weight:800}.info h2{font-size:25px;line-height:1.02;letter-spacing:-.025em;margin:8px 0 10px}',
-        '.meta{font-size:10px;color:#555;border-bottom:1px solid #999;padding-bottom:11px;margin-bottom:8px}',
-        '.fields{margin-top:auto}.fields>div{padding:9px 0 4px;border-bottom:1px solid #777}.fields b{display:block;font-size:9px;color:#555;margin-bottom:9px}',
-        '.fields span{display:block;height:18px;border-bottom:1px dotted #999}.fields .notes span{height:21px}',
-        'footer{border-top:1px solid #111;margin-top:14px;padding-top:10px;font-size:10px;display:flex;justify-content:space-between}',
-        '</style></head><body>' + sheets.join("") + '</body></html>'
-      ].join("");
-
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(printHtml);
-      return;
     }
 
     var storeSections = inventories.map(function (entry) {
