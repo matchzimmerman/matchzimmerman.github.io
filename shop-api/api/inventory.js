@@ -5,11 +5,7 @@ module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
 
-  var reviewToken = process.env.MZ_SHOP_REVIEW_TOKEN || "";
-  var suppliedReviewToken = (req.query && req.query.token) || "";
-  var reviewAuthorized = reviewToken && suppliedReviewToken === reviewToken;
-
-  if (!reviewAuthorized && !requireAdmin(req, res)) return;
+  if (!requireAdmin(req, res)) return;
 
   try {
     var stores = await printful.listStores();
