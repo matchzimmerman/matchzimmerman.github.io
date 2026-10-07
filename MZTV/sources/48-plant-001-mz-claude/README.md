@@ -4,6 +4,23 @@ One independent build for the HARIL multi-agent brief *MZTV 48 PLANT — Multi-A
 
 A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. The practice's whole activity record, from 2022 to the present, is lived inside the plant's 48 hours. Live commits and HARIL intake arrive as present-day weather. Nothing recomputes from current data: every leaf, kink, ring, scar and flower is laid down once and kept.
 
+## v2 — the documentary (current `index.html`)
+
+v1 (potted specimen, single slow turntable camera) is kept as `v1.html`.
+
+v2 keeps the same organism, the same growth engine and the same ledger: the plant grows identically, minute for minute. What changed is the world around it and how it is filmed.
+
+- **Studio:** no pot. The seed lies on the floor of an all-white cyclorama and the plant rises out of the floor. Shadows fall softly on the white, and fallen leaves stay where they drop.
+- **Seedling:** the seed is a small glossy painted bean. Cotyledons are plain fleshy seed-leaves. Juvenile leaves stay simple until the plant matures, then the painting takes over.
+- **Crew:** four cube drones with a lens on the front fly the studio. Each one is a real camera: the program feed is literally the view from whichever drone is live, so you see the other drones when they are in shot. They fly around the plant, never through it, and slide out of the live lens's frame.
+- **Surveillance bay** (right edge, toggle `c`): a top-down studio plan showing each drone's position, flight trail and view cone, plus a live monitor for every drone. Each monitor shows its kind of shot and status (ON AIR / ON MARK / MOVING), with a pink tally on the drone that is live.
+- **Director:** cuts the program like a nature documentary. It works with a shot grammar of slow wide orbits, dolly-in mediums, close pushes, leaf details, low hero cranes, top-downs and base-to-crown reveals. Each shot runs 10–28 s. Drones fly to their marks while another is live, and the director only cuts to a drone that is in position.
+- **Event shots:** branching, returns, stress, dormancy, flowering and fruiting each send a drone to that exact spot on the plant. The cut comes when it arrives, with a dated subtitle.
+- **Time-lapse passages:** every 14–20 min, a locked-off drone replays the last 5–12 hours of growth in about 34 s. The tag reads `HOUR … ▸▸ · TIME-LAPSE`. The replay is an exact reconstruction from the life record.
+- **Finale:** in the last 45 minutes the crew clears the stage and parks behind the hero camera. One drone settles into a composed portrait, chosen from the plant's own lean so the silhouette reads across the frame. Over the last 5 minutes all motion stills. At 48:00 the frame holds as the finished work, with a museum label (dates, leaves made, inflorescences, rings). Reloading after the life rebuilds the same portrait. Press `s` to save it at 1920×1080.
+
+The camera work is presentation only. The director never changes the organism; the life is still seed + ledger + live log.
+
 ## Run
 
 **OBS (broadcast):** Browser Source, 1920×1080, "Control audio via OBS" on:
@@ -40,6 +57,7 @@ The first load is the plant's birth (hour 00:00). From then on the specimen's ag
 | `m` | mute |
 | `s` | save 1920×1080 still |
 | `l` | download life record (JSON) |
+| `c` | camera bay on/off |
 
 In a normal browser, click once for sound. OBS autoplays.
 
@@ -92,10 +110,11 @@ The life is event-sourced: **seed + embedded ledger + live log**. The full 48 ho
 
 ## Files
 
-- `index.html` — the whole piece (single file, ledger embedded)
+- `index.html` — v2, the whole piece (single file, ledger embedded)
+- `v1.html` — v1, potted specimen with a turntable camera
 - `ledger/haril-practice.json`, `ledger/timeline_meta.json` — environment and its sources
 - `tools/build_ledger.py`, `tools/embed_ledger.py` — ledger pipeline
 - `intake.json` — live intake channel
 - `stills/` — checkpoint renders from the build's own measurement pass
 
-Build: MZ.Claude (Claude Opus 5.5, claude.ai agent workspace), 2026-10-07, version `48plant-claude-1.0.0`.
+Build: MZ.Claude (Claude Opus 5.5, claude.ai agent workspace), 2026-10-07. `index.html` = `48plant-claude-2.0.0` (storage key `…-v2`), `v1.html` = `48plant-claude-1.0.0`.
