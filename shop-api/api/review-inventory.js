@@ -1,0 +1,51 @@
+var printful = require("../lib/printful");
+
+module.exports = async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+
+  var expected = process.env.MZ_SHOP_REVIEW_TOKEN || "";
+  var supplied = (req.query && req.query.token) || "";
+
+  if (!expected || supplied !== expected) {
+    res.statusCode = 404;
+    res.end("Not found.");
+    return;
+  }
+
+  try {
+    var stores = await printful.listStores();
+    var inventories = [];
+
+    for (var i = 0; i < stores.length; i += 1) {
+      var store = stores[i];
+      try {
+        var products = await printful.listStoreProducts(store);
+        inventories.push({ store: store, products: products, error: null });
+      } catch (error) {
+        inventories.push({ store: store, products: [], error: error.message });
+      }
+    }
+
+    var templates = [];
+    var templatesError = null;
+    try {
+      templates = await printful.listProductTemplates();
+    } catch (error) {
+      templatesError = error.message;
+    }
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify({
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      stores: inventories,
+      productTemplates: { items: templates, error: templatesError }
+    }));
+  } catch (error) {
+    res.statusCode = error.status || 500;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify({ ok: false, error: error.message }));
+  }
+};
