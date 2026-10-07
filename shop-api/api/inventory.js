@@ -6,7 +6,7 @@ var STOREFRONT_EXCLUDED = {
   "387424842": true, // BABY | Onesie
   "387424828": true, // Artificial Botanical 001
   "387424827": true, // MZBRDZ x MAGPIE skateboard
-  "387424856": true  // redundant standalone blue knit sweater
+  "387424864": true  // redundant Blue/Blue copy knit sweater
 };
 
 function categoryFor(name) {

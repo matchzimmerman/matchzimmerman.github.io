@@ -6,7 +6,7 @@ var STOREFRONT_EXCLUDED = {
   "387424842": true,
   "387424828": true,
   "387424827": true,
-  "387424856": true
+  "387424864": true
 };
 
 function optionValue(options, needle) {
