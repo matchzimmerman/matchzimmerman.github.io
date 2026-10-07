@@ -113,13 +113,15 @@ module.exports = async function handler(req, res) {
 
       var pageWidth = 612;
       var pageHeight = 792;
-      var captureWidth = 1200;
+      var captureWidth = imageBuffer.readUInt32BE(16);
+      var captureHeight = imageBuffer.readUInt32BE(20);
       var sheetHeight = 1550;
       var sheetGap = 24;
       var scale = pageWidth / captureWidth;
+      var pageCount = Math.ceil(captureHeight / (sheetHeight + sheetGap));
       var image = doc.openImage(imageBuffer);
 
-      for (var page = 0; page < 11; page += 1) {
+      for (var page = 0; page < pageCount; page += 1) {
         doc.addPage({ size: "LETTER", margin: 0 });
         doc.save();
         doc.rect(0, 0, pageWidth, pageHeight).clip();
