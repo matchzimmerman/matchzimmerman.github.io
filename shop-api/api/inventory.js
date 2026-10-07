@@ -5,7 +5,8 @@ var STOREFRONT_EXCLUDED = {
   "387424863": true, // Knitted crew neck sweater
   "387424842": true, // BABY | Onesie
   "387424828": true, // Artificial Botanical 001
-  "387424827": true  // MZBRDZ x MAGPIE skateboard
+  "387424827": true, // MZBRDZ x MAGPIE skateboard
+  "387424856": true  // redundant standalone blue knit sweater
 };
 
 function categoryFor(name) {
@@ -60,8 +61,7 @@ module.exports = async function handler(req, res) {
         .filter(function (product) {
           return product &&
             !STOREFRONT_EXCLUDED[String(product.id)] &&
-            !product.is_ignored &&
-            Number(product.synced || 0) > 0;
+            !product.is_ignored;
         })
         .map(publicProduct);
 
