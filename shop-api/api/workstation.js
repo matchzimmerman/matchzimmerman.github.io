@@ -86,6 +86,56 @@ module.exports = async function handler(req, res) {
 
   if (!printAuthorized && !requireAdmin(req, res)) return;
 
+  if (printAuthorized && req.query && req.query.pdf === "1") {
+    try {
+      var PDFDocument = require("pdfkit");
+      var screenshotUrl = process.env.MZ_SHOP_PACKET_SCREENSHOT || "";
+      if (!screenshotUrl) {
+        res.statusCode = 503;
+        res.end("Packet screenshot is not configured.");
+        return;
+      }
+
+      var imageResponse = await fetch(screenshotUrl);
+      if (!imageResponse.ok) {
+        res.statusCode = 502;
+        res.end("Unable to retrieve packet screenshot.");
+        return;
+      }
+
+      var imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+      var doc = new PDFDocument({ autoFirstPage: false, size: "LETTER", margin: 0, compress: true });
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", 'attachment; filename="MZBRDZ_Printful_Markup_Index.pdf"');
+      doc.pipe(res);
+
+      var pageWidth = 612;
+      var pageHeight = 792;
+      var captureWidth = 1200;
+      var sheetHeight = 1550;
+      var sheetGap = 24;
+      var scale = pageWidth / captureWidth;
+      var image = doc.openImage(imageBuffer);
+
+      for (var page = 0; page < 11; page += 1) {
+        doc.addPage({ size: "LETTER", margin: 0 });
+        doc.save();
+        doc.rect(0, 0, pageWidth, pageHeight).clip();
+        doc.image(image, 0, -(page * (sheetHeight + sheetGap) * scale), { width: pageWidth });
+        doc.restore();
+      }
+
+      doc.end();
+      return;
+    } catch (error) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end("PDF packet error: " + error.message);
+      return;
+    }
+  }
+
   try {
     var stores = await printful.listStores();
     var templates = await printful.listProductTemplates();
