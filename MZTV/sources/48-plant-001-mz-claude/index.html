@@ -69,7 +69,7 @@
    the creative practice that made it. Development, not visualization:
    environment → physiology → irreversible morphology.
    ===================================================================== */
-const VERSION = '48plant-claude-3.0.0';
+const VERSION = '48plant-claude-3.0.1';
 const Q = new URLSearchParams(location.search);
 const qn = (k, d) => (Q.has(k) && Q.get(k) !== '' && isFinite(+Q.get(k))) ? +Q.get(k) : d;
 const CFG = {
@@ -824,6 +824,7 @@ function drawShadows(frames) {
     const a = projV(shadowOf(p)), b = projV(shadowOf(n)); if (!a || !b) continue;
     cx.lineWidth = Math.max(1, 2 * n.r * pxPerCm((a[2] + b[2]) / 2)); cx.beginPath(); cx.moveTo(a[0], a[1]); cx.lineTo(b[0], b[1]); cx.stroke();
   }
+  for (const d of DRONES) { if (!d.cam || d.id === VIEWER) continue; const rad = Math.max(1.3, plantBounds(SIM).Hp * 0.025); const s = shadowOf(d.cam.pos); const fall = clamp(1 - d.cam.pos.y / 160, 0.15, 1); cx.fillStyle = `rgba(58,54,66,${(0.1 * fall).toFixed(3)})`; const P = floorPoly(s.x, s.z, rad * (1.1 + d.cam.pos.y / 120), 12); if (P) fillPoly(P); }
   cx.fillStyle = 'rgba(58,54,66,0.05)';
   for (const fr of frames) { const s = shadowOf(add(fr.base, mul(fr.M, fr.L * 0.5))); const P = floorPoly(s.x, s.z, Math.max(0.5, fr.L * 0.3), 8); if (P) fillPoly(P); }
 }
@@ -1124,10 +1125,27 @@ function drawDrone(d) {
     cx.fillStyle = '#2b2a33'; cx.beginPath(); cx.moveTo(pt[0], pt[1]); cx.lineTo(pt[0] - ux * hs - uy * hs * 0.55, pt[1] - uy * hs + ux * hs * 0.55); cx.lineTo(pt[0] - ux * hs + uy * hs * 0.55, pt[1] - uy * hs - ux * hs * 0.55); cx.closePath(); cx.fill(); };
   const arrowBehind = pt && pt[2] > pc[2];
   if (arrowBehind) drawArrow();
+  // lit by the studio key light (the same light that shades the leaves and casts the floor shadows)
+  const pl = projV(add(P, mul(KEY, rad))); let lx = -0.6, ly = -0.8;
+  if (pl) { const dx = pl[0] - pc[0], dy = pl[1] - pc[1], L = Math.hypot(dx, dy); if (L > 1e-3) { lx = dx / L; ly = dy / L; } }
+  const facing = clamp(dot(KEY, norm(sub(CAM.pos, P))), -1, 1); // how much of the lit side faces this lens
+  const term = R * (0.12 + 0.16 * (1 - facing) * 0.5);
   cx.fillStyle = d.col; cx.beginPath(); cx.arc(pc[0], pc[1], R, 0, 6.283); cx.fill();
-  cx.fillStyle = 'rgba(30,26,40,0.28)'; cx.beginPath(); cx.arc(pc[0] + R * 0.18, pc[1] + R * 0.2, R * 0.82, 0, 6.283); cx.fill();
-  cx.fillStyle = d.col; cx.beginPath(); cx.arc(pc[0] - R * 0.1, pc[1] - R * 0.12, R * 0.78, 0, 6.283); cx.fill();
-  cx.fillStyle = 'rgba(251,250,247,0.8)'; cx.beginPath(); cx.arc(pc[0] - R * 0.35, pc[1] - R * 0.38, Math.max(0.8, R * 0.2), 0, 6.283); cx.fill();
+  cx.save(); cx.beginPath(); cx.arc(pc[0], pc[1], R, 0, 6.283); cx.clip();
+  cx.fillStyle = 'rgba(30,26,40,0.26)'; cx.beginPath(); cx.arc(pc[0] - lx * term, pc[1] - ly * term, R, 0, 6.283); cx.fill();
+  cx.fillStyle = d.col; cx.beginPath(); cx.arc(pc[0] + lx * term * 1.3, pc[1] + ly * term * 1.3, R * 0.9, 0, 6.283); cx.fill();
+  // bounce from the white floor along the underside
+  const pf = projV(add(P, V(0, -rad, 0)));
+  if (pf && !THUMB) { const g2 = cx.createRadialGradient(pf[0], pf[1], 0, pf[0], pf[1], R * 0.9); g2.addColorStop(0, 'rgba(251,250,247,0.22)'); g2.addColorStop(1, 'rgba(251,250,247,0)'); cx.fillStyle = g2; cx.fillRect(pc[0] - R, pc[1] - R, R * 2, R * 2); }
+  // specular: where the key light reflects toward this lens (half-vector), soft and partly transparent
+  const Hh = norm(add(KEY, norm(sub(CAM.pos, P)))); const ps = projV(add(P, mul(Hh, rad)));
+  if (ps && facing > -0.6) {
+    const k = clamp(0.5 + 0.5 * facing, 0.15, 1);
+    const g3 = cx.createRadialGradient(ps[0], ps[1], 0, ps[0], ps[1], R * 0.42);
+    g3.addColorStop(0, `rgba(251,250,247,${(0.5 * k).toFixed(3)})`); g3.addColorStop(0.45, `rgba(251,250,247,${(0.2 * k).toFixed(3)})`); g3.addColorStop(1, 'rgba(251,250,247,0)');
+    cx.fillStyle = g3; cx.fillRect(pc[0] - R, pc[1] - R, R * 2, R * 2);
+  }
+  cx.restore();
   if (live && !THUMB) { cx.strokeStyle = '#2b2a33'; cx.lineWidth = 1; cx.beginPath(); cx.arc(pc[0], pc[1], R + 3, 0, 6.283); cx.stroke(); }
   if (!arrowBehind) drawArrow();
   if (!THUMB && R > 3) { cx.fillStyle = '#2b2a33'; cx.font = `${Math.max(9, Math.round(R * 0.9))}px JetBrains Mono, monospace`; cx.textAlign = 'left'; cx.fillText(String(d.id + 1), pc[0] + R + 3, pc[1] - R * 0.6); }
