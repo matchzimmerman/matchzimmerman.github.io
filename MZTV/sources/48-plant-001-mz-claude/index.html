@@ -82,12 +82,16 @@ const CFG = {
   timelapse: Q.has('timelapse') ? Math.max(0.2, qn('timelapse', 12)) : null,
   capture: Q.get('capture') === '1',
   fresh: Q.get('fresh') === '1',
+  portrait: Q.get('ar') === '9:16',           // capture: vertical frame for Reels
+  cam: Q.has('cam') ? qn('cam', -1) : -1,
+  subject: Q.get('subject') || null,           // capture: close-camera subject (stem | flower)      // capture: lock the program to one orb
+  tlspan: Q.has('tlspan') ? Q.get('tlspan').split(':').map(Number) : null, // capture: h0:h1:secs scripted growth
   key: 'mztv-48plant-001-claude-v3' + (Q.has('seed') ? '-s' + qn('seed', 0) : ''),
   intakeURL: Q.get('intake') || 'intake.json',
   repoAPI: 'https://api.github.com/repos/matchzimmerman/matchzimmerman.github.io/commits',
 };
 const LIFE_H = 48, STEPS = LIFE_H * 60, DTH = 1 / 60; // one sim step = one minute of life
-const EPHEMERAL = CFG.at !== null || CFG.timelapse !== null; // replay views never touch the broadcast state
+const EPHEMERAL = CFG.at !== null || CFG.timelapse !== null || CFG.tlspan !== null; // replay views never touch the broadcast state
 
 /* ---------------- deterministic randomness ---------------- */
 function sfc32(a, b, c, d) {
@@ -589,6 +593,7 @@ function boot() {
 }
 function lifeHour() {
   if (CFG.at !== null) return clamp(CFG.at, 0, LIFE_H);
+  if (CFG.tlspan) { const [h0, h1, secs] = CFG.tlspan; const t = (window.MZ && MZ._t) || 0; return clamp(h0 + (h1 - h0) * clamp(t / secs, 0, 1), 0, LIFE_H); }
   if (CFG.timelapse !== null) return clamp((performance.now() - T0) / (CFG.timelapse * 60e3) * LIFE_H, 0, LIFE_H);
   return clamp((Date.now() - LIFE.birth) / 3600e3, 0, LIFE_H + 1e6);
 }
@@ -664,8 +669,9 @@ async function pollIntake() {
 /* =====================================================================
    RENDER — studio specimen, painted surfaces, OBAS print pass
    ===================================================================== */
-const W = 960, H = 540;
-const out = document.getElementById('out');
+const W = CFG.portrait ? 540 : 960, H = CFG.portrait ? 960 : 540;
+const out = document.getElementById('out'); out.width = W; out.height = H;
+if (CFG.portrait) { out.style.width = 'auto'; out.style.height = '100vh'; out.style.maxWidth = 'none'; }
 const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
 const mainCtx = cv.getContext('2d');
 let cx = mainCtx, RW = W, RH = H;   // current render target
@@ -982,7 +988,7 @@ const ROLES = [
   { role: 'close', label: 'CLOSE · STATIC', col: '#ff3d8b' },
   { role: 'orbit', label: 'ORBIT', col: '#f4dc2a' },
   { role: 'wide', label: 'WIDE · SET', col: '#18c2bb' },
-  { role: 'close', label: 'CLOSE · STATIC', col: '#ff7a1a' },
+  { role: 'low', label: 'LOW · CRANE', col: '#ff7a1a' },
 ];
 const DRONES = ROLES.map((R, i) => ({
   id: i, name: 'CAM ' + (i + 1), role: R.role, label: R.label, col: R.col,
@@ -993,7 +999,7 @@ const CUT_EVERY = 30; // seconds
 const DIR = { live: 2, now: 0, lastCut: 0, lastSeq: 0, finale: false, cuts: 0, events: [] };
 const ez = k => 0.5 - 0.5 * Math.cos(Math.PI * clamp(k, 0, 1));
 function plantBounds(sim) { const s = sim.w.stats; const Hp = Math.max(3, s.maxH, s.maxTop || 0); return { Hp, Rp: Math.max(4, Math.min(s.maxR, Hp * 1.1 + 6)) }; }
-const fitD = (S, fov) => (S / 2) / Math.tan(fov * Math.PI / 360);
+const fitD = (S, fov) => (S * (CFG.portrait ? 1.25 : 1) / 2) / Math.tan(fov * Math.PI / 360);
 function droneCam(d, t) {
   const b = MOT * 0.5, bob = V(Math.sin(t * 1.1 + d.id * 2) * 0.4 * b, Math.sin(t * 1.7 + d.id) * 0.6 * b, Math.cos(t * 0.9 + d.id * 3) * 0.4 * b);
   return camFrom(add(d.pos, bob), d.look, d.fov);
@@ -1016,6 +1022,8 @@ function widePose(t) { // the whole set: plant, floor and every orb in view
 // a close camera chooses a subject, flies to it off air, and holds perfectly still on air
 function pickSubject(d) {
   const w = SIM.w, { Hp } = plantBounds(SIM);
+  if (CFG.subject === 'stem') return { P: V(0, Math.max(2, Hp * 0.16), 0), S: Math.max(14, Hp * 0.38), tag: 'STEM' };
+  if (CFG.subject === 'flower' && w.flowers.length) { const f = w.flowers[w.flowers.length - 1], n = w.nodes[f.node]; return { P: V(n.x, n.y + f.len * 0.3, n.z), S: 30, tag: 'INFLORESCENCE' }; }
   const ev = DIR.events.find(e => !e.taken && SIM.w.step - e.step < 240);
   if (ev) { ev.taken = true; return { P: V(ev.x, ev.y + (ev.code === 'FLOWERING' ? 10 : 0), ev.z), S: ev.code === 'FLOWERING' || ev.code === 'FRUIT' ? 28 : 18, tag: ev.code }; }
   const L = w.leaves.filter(l => l.kind !== 'coty' && l.sen < 0.5);
@@ -1026,6 +1034,13 @@ function pickSubject(d) {
     return { P: add(b, mul(best.M, best.g.len * 0.5)), S: Math.max(12, best.g.len * 1.6, Hp * 0.3), tag: 'LEAF' };
   }
   return { P: V(0, Math.max(2, Hp * 0.6), 0), S: Math.max(12, Hp * 0.7), tag: 'SHOOT' };
+}
+// CAM 4: starts near the floor looking up through the stems and slowly cranes up while on air
+function lowPose(d, k) {
+  const { Hp, Rp } = plantBounds(SIM), fov = 46;
+  const dist = Math.max(Rp * 0.85 + 10, fitD(Math.max(26, Hp * 0.95), fov) * 0.75);
+  const e = ez(k), az = d.az || 0;
+  return { pos: V(Math.cos(az) * dist, lerp(3.5, Math.max(7, Hp * 0.32), e), Math.sin(az) * dist), look: V(0, Math.max(4, Hp * lerp(0.62, 0.5, e)), 0), fov };
 }
 function closeGoal(d) {
   const s = pickSubject(d), fov = 30, { Hp } = plantBounds(SIM);
@@ -1076,9 +1091,12 @@ function direct(dt) {
     return;
   }
   // close cameras relocate as soon as they come off air
-  for (const d of DRONES) if (d.role === 'close' && d.id !== DIR.live && !d.goal) { d.goal = closeGoal(d); d.moving = true; }
+  if (CFG.cam >= 0) DIR.live = clamp(CFG.cam, 0, DRONES.length - 1);
+  for (const d of DRONES) if (d.role === 'low' && (d.id !== DIR.live || CFG.capture) && !d.goal) { d.az = Math.random() * 6.283; d.goal = lowPose(d, 0); d.moving = true; if (CFG.capture) { d.pos = d.goal.pos; d.look = d.goal.look; d.fov = d.goal.fov; d.moving = false; } }
+  for (const d of DRONES) if (d.role === 'close' && (d.id !== DIR.live || CFG.capture) && !d.goal) { d.goal = closeGoal(d); d.moving = true; if (CFG.capture) { d.pos = d.goal.pos; d.look = d.goal.look; d.fov = d.goal.fov; d.moving = false; } }
+  if (CFG.cam >= 0) return;
   if (DIR.now - DIR.lastCut >= CUT_EVERY) {
-    const n = nextCam(); if (n) { const prev = liveDrone(); cutTo(n); if (prev.role === 'close') prev.goal = null; }
+    const n = nextCam(); if (n) { const prev = liveDrone(); cutTo(n); if (prev.role === 'close' || prev.role === 'low') prev.goal = null; }
   }
 }
 function updateDrones(dt, t) {
@@ -1089,6 +1107,7 @@ function updateDrones(dt, t) {
     else if (DIR.finale && d.park) tgt = { pos: d.park, look: heroPose(finaleProgress()).look, fov: 36 };
     else if (d.role === 'orbit') { tgt = orbitPose(t); follow = true; }
     else if (d.role === 'wide') { tgt = widePose(t); follow = true; }
+    else if (d.role === 'low' && d.id === DIR.live && d.goal) { tgt = lowPose(d, (DIR.now - DIR.lastCut) / CUT_EVERY); follow = true; }
     else if (d.goal) tgt = d.goal;
     if (!tgt) continue;
     if (follow) { d.pos = tgt.pos; d.look = tgt.look; d.fov = tgt.fov; d.moving = false; }
