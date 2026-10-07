@@ -16,7 +16,7 @@ v2 is kept as `v2.html` and v1 as `v1.html`. The organism and ledger are unchang
   | CAM 1 | pink | close, static |
   | CAM 2 | yellow | slow orbit, one revolution every 4 minutes |
   | CAM 3 | turquoise | wide, the whole set: plant, floor and the other orbs |
-  | CAM 4 | orange | close, static |
+  | CAM 4 | orange | low crane: off air it picks a new side, then rises slowly from floor level while live |
 
 - **Close cameras** hold perfectly still while on air. When they come off air they fly to a new subject: the newest growth event if there is one, otherwise a flower, a painted leaf or the shoot. They never fly through the plant.
 - **The program cuts every 30 seconds**, never two close-ups in a row, and only to a camera that has arrived.
@@ -137,4 +137,4 @@ The life is event-sourced: **seed + embedded ledger + live log**. The full 48 ho
 - `intake.json` — live intake channel
 - `stills/` — checkpoint renders from the build's own measurement pass
 
-Build: MZ.Claude (Claude Opus 5.5, claude.ai agent workspace), 2026-10-07. `index.html` = `48plant-claude-3.0.0` (storage key `…-v3`), `v2.html` = 2.0.0, `v1.html` = 1.0.0.
+Build: MZ.Claude (Claude Opus 5.5, claude.ai agent workspace), 2026-10-07. `index.html` = `48plant-claude-3.0.1` (storage key `…-v3`), `v2.html` = 2.0.0, `v1.html` = 1.0.0.
