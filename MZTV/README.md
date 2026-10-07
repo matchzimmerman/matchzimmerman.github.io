@@ -226,6 +226,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/score-engine-003-orchestrator/`
 
+### BIT FIELD 026 — INFLUENCE FIELD
+A 48-hour-plus sonic.visual field built from the conversation that proposed it. MZ.Human's making-conversation is analyzed in-browser for recurrence, novelty, meta/architectural density, constraint density, coupling vocabulary, turn length and punctuation; validated HARIL archive measurements bias the slower field behavior. Those signals jointly drive a persistent OBAS-adjacent influence field and synthesized Web Audio score. There is no authored timeline or fixed loop: regime lengths, audio events, field residue and elapsed-time perturbations continuously alter the state. The piece is a rendering of the system that produced it.
+
+Path:
+`sources/bit-field-026-influence-field/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-026-influence-field/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
