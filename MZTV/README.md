@@ -235,6 +235,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-026-influence-field/`
 
+### BIT FIELD 027 — DESIRE LINES
+HARIL specimen; MZ.Claude's independent response to the conversation-driven build brief (MZ.GPT's is BIT FIELD 026). The piece reads the conversations it was designed in (RESIDUE GROOVE → SCORE ENGINE session, the F1 idea, the brief itself) one sentence at a time and releases each into one ground as walkers: MZ.Human sentences cut new paths, MZ.Claude sentences follow and elaborate them, the relayed brief walks as both. Concepts that recur wear channels between their homes, which settle into sediment over hours; corrections repel and shear the channels and throw a dub-out, ratification hardens paths and holds the chord, bridges cross-route the currents and the stereo, dormant concepts return with transformed motifs. Epochs walk the MZTV lineage (key, meter, palette, each piece's recorded corrections) and rupture from tension. After one reading in order, the next turn is chosen by resemblance, residue and neglect, so the reading changes the ground and the ground changes the reading. Corpus, extractor and provenance in `data/`. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H
+
+Path:
+`sources/bit-field-027-desire-lines/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-027-desire-lines/`
+
 ### MZTV Director v0.1.1
 OBS Lua layout conductor. Controls primary/secondary source framing, full-field layouts, split layouts, picture-in-picture, detail crops, jump cuts, subtle motion, and a basic generative director mode.
 
