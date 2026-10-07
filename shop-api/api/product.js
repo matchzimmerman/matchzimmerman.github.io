@@ -42,6 +42,19 @@ function cleanVariant(variant) {
     optionValue(product.options, "size") ||
     "";
 
+  var nameParts = String(variant.name || variant.variant || "").split("/").map(function (part) {
+    return part.trim();
+  }).filter(Boolean);
+
+  if ((!color || String(color).toLowerCase() === "custom") && nameParts.length >= 2) {
+    var colorCandidate = nameParts[nameParts.length - 1];
+    if (colorCandidate && colorCandidate !== size) color = colorCandidate;
+  }
+
+  if (!size && nameParts.length >= 3) {
+    size = nameParts[nameParts.length - 2];
+  }
+
   var material =
     variant.material ||
     product.material ||
@@ -81,16 +94,7 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-      var stores = await printful.listStores();
-      var store = stores.filter(function (candidate) {
-        return candidate && candidate.name === "Match Zimmerman" && candidate.type === "squarespace";
-      })[0];
-
-      if (!store) {
-        res.statusCode = 404;
-        return res.end(JSON.stringify({ ok: false, error: "Storefront store not found." }));
-      }
-
+      var store = { id: 16437938, name: "Match Zimmerman", type: "squarespace" };
       var payload = await printful.getStoreProduct(store, id);
       var result = payload.result || {};
       var syncProduct = result.sync_product || result.product || {};
