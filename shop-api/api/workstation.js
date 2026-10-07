@@ -83,10 +83,11 @@ module.exports = async function handler(req, res) {
   var reviewToken = process.env.MZ_SHOP_REVIEW_TOKEN || "";
   var suppliedReviewToken = (req.query && req.query.token) || "";
   var printAuthorized = reviewToken && suppliedReviewToken === reviewToken && req.query && req.query.print === "1";
+  var publicPacket = req.query && req.query.export === "1" && req.query.pdf === "1";
 
-  if (!printAuthorized && !requireAdmin(req, res)) return;
+  if (!printAuthorized && !publicPacket && !requireAdmin(req, res)) return;
 
-  if (printAuthorized && req.query && req.query.pdf === "1") {
+  if ((printAuthorized || publicPacket) && req.query && req.query.pdf === "1") {
     try {
       var PDFDocument = require("pdfkit");
       var screenshotUrl = process.env.MZ_SHOP_PACKET_SCREENSHOT || "";
