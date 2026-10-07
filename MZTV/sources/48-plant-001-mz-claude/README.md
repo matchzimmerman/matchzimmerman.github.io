@@ -4,7 +4,26 @@ One independent build for the HARIL multi-agent brief *MZTV 48 PLANT — Multi-A
 
 A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. The practice's whole activity record, from 2022 to the present, is lived inside the plant's 48 hours. Live commits and HARIL intake arrive as present-day weather. Nothing recomputes from current data: every leaf, kink, ring, scar and flower is laid down once and kept.
 
-## v2 — the documentary (current `index.html`)
+## v3 — orb cameras, 30-second cuts (current `index.html`)
+
+v2 is kept as `v2.html` and v1 as `v1.html`. The organism and ledger are unchanged.
+
+- **The life starts as a sprout.** At hour 00:00 a short stem already stands on the white floor with its seed-leaves open. There is no seed or germination phase.
+- **Cameras are simple coloured orbs**, each with an arrow pointing where its lens looks. Every monitor in the bay, and the program itself, is the true view from that orb's position and direction.
+
+  | Camera | Colour | Behaviour |
+  |---|---|---|
+  | CAM 1 | pink | close, static |
+  | CAM 2 | yellow | slow orbit, one revolution every 4 minutes |
+  | CAM 3 | turquoise | wide, the whole set: plant, floor and the other orbs |
+  | CAM 4 | orange | close, static |
+
+- **Close cameras** hold perfectly still while on air. When they come off air they fly to a new subject: the newest growth event if there is one, otherwise a flower, a painted leaf or the shoot. They never fly through the plant.
+- **The program cuts every 30 seconds**, never two close-ups in a row, and only to a camera that has arrived.
+- **Finale (unchanged):** in the last 45 minutes the wide orb becomes the portrait camera and the others park out of shot. The frame holds at 48:00.
+- **No time-lapse passages or event-chasing cuts.** The 30-second rhythm is strict. Event subtitles still appear when something happens.
+
+## v2 — the documentary (`v2.html`)
 
 v1 (potted specimen, single slow turntable camera) is kept as `v1.html`.
 
@@ -110,11 +129,12 @@ The life is event-sourced: **seed + embedded ledger + live log**. The full 48 ho
 
 ## Files
 
-- `index.html` — v2, the whole piece (single file, ledger embedded)
+- `index.html` — v3, the whole piece (single file, ledger embedded)
+- `v2.html` — v2, cube drones and documentary director
 - `v1.html` — v1, potted specimen with a turntable camera
 - `ledger/haril-practice.json`, `ledger/timeline_meta.json` — environment and its sources
 - `tools/build_ledger.py`, `tools/embed_ledger.py` — ledger pipeline
 - `intake.json` — live intake channel
 - `stills/` — checkpoint renders from the build's own measurement pass
 
-Build: MZ.Claude (Claude Opus 5.5, claude.ai agent workspace), 2026-10-07. `index.html` = `48plant-claude-2.0.0` (storage key `…-v2`), `v1.html` = `48plant-claude-1.0.0`.
+Build: MZ.Claude (Claude Opus 5.5, claude.ai agent workspace), 2026-10-07. `index.html` = `48plant-claude-3.0.0` (storage key `…-v3`), `v2.html` = 2.0.0, `v1.html` = 1.0.0.

@@ -69,7 +69,7 @@
    the creative practice that made it. Development, not visualization:
    environment → physiology → irreversible morphology.
    ===================================================================== */
-const VERSION = '48plant-claude-3.0.0';
+const VERSION = '48plant-claude-2.0.0';
 const Q = new URLSearchParams(location.search);
 const qn = (k, d) => (Q.has(k) && Q.get(k) !== '' && isFinite(+Q.get(k))) ? +Q.get(k) : d;
 const CFG = {
@@ -82,7 +82,7 @@ const CFG = {
   timelapse: Q.has('timelapse') ? Math.max(0.2, qn('timelapse', 12)) : null,
   capture: Q.get('capture') === '1',
   fresh: Q.get('fresh') === '1',
-  key: 'mztv-48plant-001-claude-v3' + (Q.has('seed') ? '-s' + qn('seed', 0) : ''),
+  key: 'mztv-48plant-001-claude-v2' + (Q.has('seed') ? '-s' + qn('seed', 0) : ''),
   intakeURL: Q.get('intake') || 'intake.json',
   repoAPI: 'https://api.github.com/repos/matchzimmerman/matchzimmerman.github.io/commits',
 };
@@ -201,8 +201,6 @@ class Sim {
     this.sectors = BR.map((_, b) => sectorDir(b, seed));
     this.live = []; // [{step, ev:[...] , id}]
     this.quiet = false;
-    this.fw = 0.5; this.fn = 0.3; // first light before the first minute
-    this.w.germinated = true; this.germinate();
   }
   logEv(code, text, extra) {
     const w = this.w; w.log.push([w.step, code, text]); if (w.log.length > 4000) w.log.splice(0, 1000);
@@ -249,6 +247,7 @@ class Sim {
     this.fw = (E.water + E.reserve * 0.55 + 0.04) / (E.water + E.reserve * 0.55 + 0.04 + 0.55); // turgor 0..1
     this.fn = E.nutrient / (E.nutrient + 0.35);
     // germination
+    if (!w.germinated && (this.fw > 0.3 || h > 0.6)) { w.germinated = true; this.germinate(); }
     // drought → dormancy; return of water → reactivation flush
     if (w.germinated && h > 1.5) {
       if (this.fw < 0.32) w.env.dryMin++; else w.env.dryMin = Math.max(0, w.env.dryMin - 3);
@@ -289,13 +288,7 @@ class Sim {
     w.nodes[n0].r = 0.18;
     const dir = norm(V((r() - 0.5) * 0.3, 1, (r() - 0.5) * 0.3));
     w.apices.push({ node: n0, dir, len: 0, target: 1.6, vigor: 1, order: 0, axis: 0, state: 0, phyl: r() * 6.283, nodesOnAxis: 0, flush: 0, home: -1, mem: null, coty: true });
-    // the life begins as a sprout: hypocotyl up, seed-leaves open, first true leaf on its way
-    const a = w.apices[0]; const top = add(V(0, -0.6, 0), mul(a.dir, 3.6));
-    const n1 = this.addNode(n0, top, 0, 0); w.nodes[n1].r = 0.16; a.node = n1; a.nodesOnAxis = 1; a.coty = false;
-    this.spawnLeaf(a, n1, 0, { coty: true }); this.spawnLeaf(a, n1, 1, { coty: true });
-    for (const lf of w.leaves) lf.born = -lf.expand; a.phyl += 1.5708; a.len = 0.6; a.target = 1.2;
-    w.sound.length = 0;
-    this.logEv('SPROUT', 'a sprout on the studio floor · seed-leaves open · first true leaf forming');
+    this.logEv('GERMINATION', 'seed coat splits · radicle down · hypocotyl hooks toward light', { t: 'bud', y: 0 });
   }
   leafGenome(apex, node, opts = {}) {
     const w = this.w, r = this.rng, E = w.env, M = this.maturity();
@@ -853,6 +846,7 @@ function drawWorld(t) {
   for (const fr of frames) { const c = projV(add(fr.base, mul(fr.M, fr.L * 0.5))); if (c) items.push({ d: c[2], k: 1, fr }); }
   for (const rt of w.roots) { const n = N[rt.node]; if (!n || rt.len < 0.3) continue; const p = proj(n.x, n.y, n.z); if (p) items.push({ d: p[2] + 0.1, k: 2, rt, n }); }
   for (const f of w.flowers) { const n = N[f.node]; if (!n) continue; const p = proj(n.x, n.y, n.z); if (p) items.push({ d: p[2] - 0.3, k: 4, f, n }); }
+  seedItems(items);
   for (const d of DRONES) if (d.id !== VIEWER && d.cam) { const p = projV(d.cam.pos); if (p) items.push({ d: p[2], k: 6, dr: d }); }
   items.sort((A, B) => B.d - A.d); // far first
   for (const it of items) {
@@ -973,79 +967,127 @@ function drawFallen(f) {
 }
 
 /* =====================================================================
-   THE CREW — four coloured orbs. Each orb is a camera: its arrow is
-   where its lens points, and its monitor is literally the view from
-   that orb. The program cuts between them every 30 seconds.
+   THE CREW — cube drones with a lens on the front. Each one is a real
+   camera in the studio: the program is literally one drone's view.
    ===================================================================== */
-const ROLES = [
-  { role: 'close', label: 'CLOSE · STATIC', col: '#ff3d8b' },
-  { role: 'orbit', label: 'ORBIT', col: '#f4dc2a' },
-  { role: 'wide', label: 'WIDE · SET', col: '#18c2bb' },
-  { role: 'close', label: 'CLOSE · STATIC', col: '#ff7a1a' },
-];
-const DRONES = ROLES.map((R, i) => ({
-  id: i, name: 'CAM ' + (i + 1), role: R.role, label: R.label, col: R.col,
-  pos: V(Math.cos(i * 1.57 + 0.6) * 90, 30 + i * 10, Math.sin(i * 1.57 + 0.6) * 90), look: V(0, 4, 0), fov: 34,
-  goal: null, moving: false, subject: null, trail: [], cam: null, lastTrail: 0,
+const DRONES = [0, 1, 2, 3].map(i => ({
+  id: i, name: 'CAM ' + (i + 1), state: 'idle', shot: null, shotStart: 0,
+  pos: V(Math.cos(i * 1.57 + 0.6) * 170, 45 + i * 18, Math.sin(i * 1.57 + 0.6) * 170), look: V(0, 8, 0), fov: 36,
+  trail: [], cam: null, waitSince: 0,
 }));
-const CUT_EVERY = 30; // seconds
-const DIR = { live: 2, now: 0, lastCut: 0, lastSeq: 0, finale: false, cuts: 0, events: [] };
+function droneCam(d, t) {
+  const b = MOT * (THUMB ? 1 : 1);
+  const bob = V(Math.sin(t * 1.1 + d.id * 2) * 0.5 * b, Math.sin(t * 1.7 + d.id) * 0.7 * b, Math.cos(t * 0.9 + d.id * 3) * 0.5 * b);
+  return camFrom(add(d.pos, bob), d.look, d.fov);
+}
+function drawDrone(d) {
+  const c = d.cam, h = 2.6, P = c.pos, f = c.f, r = c.r, u = c.u;
+  const pc = projV(P); if (!pc) return; const s = pxPerCm(pc[2]); if (h * s < 0.8) { cx.fillStyle = '#2b2a33'; cx.fillRect(pc[0], pc[1], 1, 1); return; }
+  const C = (x, y, z) => add(P, add(add(mul(r, x * h), mul(u, y * h)), mul(f, z * h)));
+  const faces = [
+    { n: f, q: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], front: 1 }, { n: mul(f, -1), q: [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]] },
+    { n: r, q: [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]] }, { n: mul(r, -1), q: [[-1, -1, -1], [-1, 1, -1], [-1, 1, 1], [-1, -1, 1]] },
+    { n: u, q: [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]], top: 1 }, { n: mul(u, -1), q: [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]] }];
+  const vis = [];
+  for (const F of faces) { const ctr = add(P, mul(F.n, h)); if (dot(F.n, sub(CAM.pos, ctr)) <= 0) continue; const pts = F.q.map(q => projV(C(...q))); if (pts.some(p => !p)) continue; vis.push({ F, pts, d: pts.reduce((a, p) => a + p[2], 0) }); }
+  vis.sort((A, B) => B.d - A.d);
+  const live = DIR.live === d.id;
+  // rotors under the top plane
+  if (!THUMB) for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const hub = add(C(sx * 1.55, 1.05, sz * 1.55), V(0, 0, 0)); const ph = projV(hub); const pa = projV(C(sx, 1, sz)); if (!ph || !pa) continue;
+    cx.strokeStyle = '#2b2a33'; cx.lineWidth = Math.max(1, s * 0.5); cx.beginPath(); cx.moveTo(pa[0], pa[1]); cx.lineTo(ph[0], ph[1]); cx.stroke();
+    const ring = []; for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283; const q = projV(add(hub, add(mul(r, Math.cos(a) * h * 1.15), mul(f, Math.sin(a) * h * 1.15)))); if (q) ring.push(q); }
+    if (ring.length === 10) { cx.fillStyle = 'rgba(143,140,132,0.28)'; fillPoly(ring); }
+  }
+  for (const { F, pts } of vis) {
+    const lit = clamp(0.5 + 0.5 * dot(F.n, KEY), 0, 1);
+    cx.fillStyle = F.top ? '#9e9b95' : lit > 0.55 ? '#4a4752' : '#2b2a33'; fillPoly(pts);
+    cx.strokeStyle = 'rgba(248,245,236,0.25)'; cx.lineWidth = 1; cx.stroke();
+    if (F.front) { // the lens
+      const ctr = add(P, mul(f, h * 1.02));
+      const ring = (rad, col) => { const R = []; for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283; const q = projV(add(ctr, add(mul(r, Math.cos(a) * rad), mul(u, Math.sin(a) * rad)))); if (!q) return; R.push(q); } cx.fillStyle = col; fillPoly(R); };
+      ring(h * 0.7, '#14131a'); ring(h * 0.48, '#1e8fb3'); ring(h * 0.2, '#0e7f7a');
+      const gl = projV(add(ctr, add(mul(r, -h * 0.22), mul(u, h * 0.22)))); if (gl) { cx.fillStyle = '#f8f5ec'; cx.beginPath(); cx.arc(gl[0], gl[1], Math.max(0.8, s * h * 0.09), 0, 6.283); cx.fill(); }
+    }
+    if (F.top) { const tl = projV(C(0.6, 1.02, 0.7)); if (tl) { cx.fillStyle = live ? '#ff3d8b' : '#4fbf3f'; cx.beginPath(); cx.arc(tl[0], tl[1], Math.max(1, s * 0.55), 0, 6.283); cx.fill(); } }
+  }
+}
+
+/* =====================================================================
+   THE DIRECTOR — cut like a nature documentary.
+   Presentation only: nothing here touches the organism's life.
+   ===================================================================== */
+const DIR = { live: 0, now: 0, lastSeq: 0, eventQ: [], nextTL: 600, tl: null, finale: false, recent: [], sub: null, cuts: 0 };
 const ez = k => 0.5 - 0.5 * Math.cos(Math.PI * clamp(k, 0, 1));
 function plantBounds(sim) { const s = sim.w.stats; const Hp = Math.max(3, s.maxH, s.maxTop || 0); return { Hp, Rp: Math.max(4, Math.min(s.maxR, Hp * 1.1 + 6)) }; }
 const fitD = (S, fov) => (S / 2) / Math.tan(fov * Math.PI / 360);
-function droneCam(d, t) {
-  const b = MOT * 0.5, bob = V(Math.sin(t * 1.1 + d.id * 2) * 0.4 * b, Math.sin(t * 1.7 + d.id) * 0.6 * b, Math.cos(t * 0.9 + d.id * 3) * 0.4 * b);
-  return camFrom(add(d.pos, bob), d.look, d.fov);
+function outwardAt(P, az) { const h = V(P.x, 0, P.z); return len(h) > 2 ? norm(h) : V(Math.cos(az), 0, Math.sin(az)); }
+function pickLeaf(sim, pref) {
+  const L = sim.w.leaves.filter(l => l.kind !== 'coty'); if (!L.length) return null;
+  if (pref === 'recent') return L[Math.max(0, L.length - 1 - Math.floor(Math.random() * Math.min(12, L.length)))];
+  let best = null, bs = -1; for (let i = 0; i < 24; i++) { const l = L[Math.floor(Math.random() * L.length)]; const sc = l.g.len * (l.g.full ? 1.8 : 1) * (l.sen > 0.3 ? 0.4 : 1); if (sc > bs) { bs = sc; best = l; } } return best;
 }
-function liveDrone() { return DRONES[DIR.live]; }
-
-// --- role poses ---
-function orbitPose(t) {
-  const { Hp, Rp } = plantBounds(SIM), fov = 34;
-  const d = Math.max(fitD(Math.max(24, Hp * 0.85, Rp * 1.2), fov) + Rp * 0.5, Rp + 16);
-  const a = t * (6.283 / 240) + 1.1; // one slow revolution every 4 minutes
-  return { pos: V(Math.cos(a) * d, Math.max(6, Hp * (0.45 + 0.12 * Math.sin(t / 41))), Math.sin(a) * d), look: V(0, Math.max(3, Hp * 0.45), 0), fov };
-}
-function widePose(t) { // the whole set: plant, floor and every orb in view
-  const { Hp, Rp } = plantBounds(SIM), fov = 42, orbR = len(V(orbitPose(t).pos.x, 0, orbitPose(t).pos.z));
-  const S = Math.max(55, Hp * 1.7, orbR * 1.3), d = fitD(S, fov) + orbR * 0.3;
-  const a = hrand(CFG.seed, 7) * 6.283 + 0.12 * Math.sin(t / 97);
-  return { pos: V(Math.cos(a) * d, Math.max(30, Hp * 1.05 + 25), Math.sin(a) * d), look: V(0, Math.max(2, Hp * 0.3), 0), fov };
-}
-// a close camera chooses a subject, flies to it off air, and holds perfectly still on air
-function pickSubject(d) {
-  const w = SIM.w, { Hp } = plantBounds(SIM);
-  const ev = DIR.events.find(e => !e.taken && SIM.w.step - e.step < 240);
-  if (ev) { ev.taken = true; return { P: V(ev.x, ev.y + (ev.code === 'FLOWERING' ? 10 : 0), ev.z), S: ev.code === 'FLOWERING' || ev.code === 'FRUIT' ? 28 : 18, tag: ev.code }; }
-  const L = w.leaves.filter(l => l.kind !== 'coty' && l.sen < 0.5);
-  if (w.flowers.length && Math.random() < 0.3) { const f = w.flowers[Math.floor(Math.random() * w.flowers.length)], n = w.nodes[f.node]; return { P: V(n.x, n.y + f.len * 0.3, n.z), S: 26, tag: 'INFLORESCENCE' }; }
-  if (L.length && Math.random() < 0.75) {
-    let best = null, bs = -1; for (let i = 0; i < 20; i++) { const l = L[Math.floor(Math.random() * L.length)]; const sc = l.g.len * (l.g.full ? 1.8 : 1) * (1 + (l.born / Math.max(1, w.step))); if (sc > bs) { bs = sc; best = l; } }
-    const n = w.nodes[best.node]; const b = V(n.x + best.pet.x * best.petLen, n.y + best.pet.y * best.petLen, n.z + best.pet.z * best.petLen);
-    return { P: add(b, mul(best.M, best.g.len * 0.5)), S: Math.max(12, best.g.len * 1.6, Hp * 0.3), tag: 'LEAF' };
+function leafPos(sim, l) { const n = sim.w.nodes[l.node]; const base = V(n.x + l.pet.x * l.petLen, n.y + l.pet.y * l.petLen, n.z + l.pet.z * l.petLen); return { base, c: add(base, mul(l.M, l.g.len * 0.5)) }; }
+function genShot(kind, sim, opt = {}) {
+  const R = Math.random, { Hp, Rp } = plantBounds(sim);
+  const fov = opt.fov || lerp(26, 40, R());
+  const az = opt.az ?? R() * 6.283, daz = (R() < 0.5 ? -1 : 1) * lerp(0.1, 0.32, R());
+  const shot = { kind, fov0: fov, fov1: fov, dur: lerp(14, 24, R()), event: opt.event || null, label: opt.label || null };
+  const keepOut = (p, m = 10) => { const hd = Math.hypot(p.x, p.z), need = Rp + m; if (hd < need && p.y < Hp + 15) { const k = need / Math.max(1, hd); p = V(p.x * k, p.y, p.z * k); } return V(p.x, Math.max(3, p.y), p.z); };
+  if (kind === 'wide' || kind === 'timelapse') {
+    const S = Math.max(24, Hp * 1.35, Rp * 1.3), d = Math.max(fitD(S, fov) + Rp * 0.6, Rp + 22);
+    const h0 = lerp(0.25, 0.75, R()) * Math.max(Hp, 22), h1 = h0 + lerp(-0.1, 0.15, R()) * Math.max(Hp, 20), ty = Math.max(Hp * 0.45, 5);
+    const sp = kind === 'timelapse' ? 0.25 : 1;
+    shot.pose = e => { const a = az + daz * sp * e; return { pos: keepOut(V(Math.cos(a) * d, lerp(h0, h1, e), Math.sin(a) * d)), look: V(0, ty, 0) }; };
+    shot.dur = kind === 'timelapse' ? 34 : lerp(18, 28, R());
+  } else if (kind === 'medium') {
+    const S = Math.max(18, Hp * 0.62), ty = Math.max(3, lerp(0.35, 0.85, R()) * Hp);
+    const d0 = Math.max(fitD(S, fov) * 1.18, Rp * 0.9 + 18), d1 = Math.max(fitD(S, fov) * 0.92, Rp * 0.8 + 14);
+    shot.pose = e => { const d = lerp(d0, d1, e), a = az + daz * 0.4 * e; return { pos: keepOut(V(Math.cos(a) * d, ty + lerp(-3, 5, e), Math.sin(a) * d), 6), look: V(0, ty, 0) }; };
+  } else if (kind === 'close') {
+    let P = opt.at; if (!P) { const l = pickLeaf(sim, 'recent'); P = l ? leafPos(sim, l).c : V(0, Hp * 0.8, 0); }
+    const S = Math.max(14, opt.size || 16), out = outwardAt(P, az), d = fitD(S, fov);
+    shot.pose = e => { const o = norm(add(rotAxis(out, UP, daz * 0.35 * e), V(0, 0.28, 0))); return { pos: keepOut(add(P, mul(o, d * lerp(1.25, 0.95, e))), -Rp * 0.4), look: add(P, V(0, lerp(-1, 1, e), 0)) }; };
+    shot.dur = lerp(12, 18, R());
+  } else if (kind === 'detail') {
+    const l = pickLeaf(sim, 'big'); if (!l) return genShot('medium', sim, opt);
+    const { base, c } = leafPos(sim, l); const Nn = norm(cross(l.W, l.M)); const out = dot(Nn, outwardAt(c, az)) > 0 ? Nn : mul(Nn, -1);
+    const S = Math.max(14, l.g.len * 1.15), d = fitD(S, fov), M = l.M;
+    shot.pose = e => { const P = add(c, mul(M, lerp(-0.18, 0.18, e) * l.g.len)); return { pos: V((P.x + out.x * d), Math.max(3, P.y + out.y * d + 2), (P.z + out.z * d)), look: P }; };
+    shot.dur = lerp(10, 15, R()); shot.leaf = l.id;
+  } else if (kind === 'low') {
+    const S = Math.max(22, Hp * 1.1), d = Math.max(fitD(S, fov), Rp + 18);
+    shot.pose = e => { const a = az + daz * 0.3 * e; return { pos: keepOut(V(Math.cos(a) * d, lerp(4, 11, e), Math.sin(a) * d)), look: V(0, Math.max(5, Hp * 0.55), 0) }; };
+  } else if (kind === 'top') {
+    const hgt = Math.max(Hp * 1.25 + 30, 50), rr = Rp * 0.45 + 12;
+    shot.pose = e => { const a = az + daz * 0.6 * e; return { pos: V(Math.cos(a) * rr, hgt, Math.sin(a) * rr), look: V(0, Hp * 0.35, 0) }; };
+  } else if (kind === 'reveal') {
+    const S = Math.max(26, Hp * 0.75), d = Math.max(fitD(S, fov), Rp + 16), p = keepOut(V(Math.cos(az) * d, Math.max(6, Hp * 0.3), Math.sin(az) * d));
+    shot.pose = e => ({ pos: p, look: V(0, lerp(1, Math.max(6, Hp * 0.78), e), 0) }); shot.dur = lerp(16, 22, R());
   }
-  return { P: V(0, Math.max(2, Hp * 0.6), 0), S: Math.max(12, Hp * 0.7), tag: 'SHOOT' };
+  return shot;
 }
-function closeGoal(d) {
-  const s = pickSubject(d), fov = 30, { Hp } = plantBounds(SIM);
-  const h = V(s.P.x, 0, s.P.z); const az = len(h) > 2 ? Math.atan2(h.z, h.x) : Math.random() * 6.283;
-  const a = az + (Math.random() - 0.5) * 1.4;
-  const dist = fitD(Math.max(10, s.S), fov);
-  const dir = norm(V(Math.cos(a), lerp(-0.05, 0.45, Math.random()), Math.sin(a)));
-  let pos = add(s.P, mul(dir, dist));
-  const { Rp } = plantBounds(SIM); for (let i = 0; i < 40 && Math.hypot(pos.x, pos.z) < Rp * 1.05 && Hp > 12; i++) pos = add(pos, mul(dir, 2)); // stay outside the canopy
-  pos.y = Math.max(2.5, pos.y);
-  d.subject = s.tag; return { pos, look: s.P, fov };
+function shotWeights(Hp) {
+  return Hp < 10 ? { wide: 4, medium: 2.5, low: 2, top: 1, close: 0.7 }
+    : { wide: 3, medium: 3, close: 2, detail: 1.6, low: 1.6, top: 1, reveal: 1.2 };
 }
-function cutTo(d) { DIR.live = d.id; DIR.lastCut = DIR.now; DIR.cuts++; }
-function nextCam() {
-  const order = DRONES.filter(d => d.id !== DIR.live && !d.moving && !(DIR.finale && d.parked));
-  if (!order.length) return null;
-  // never two close-ups in a row; otherwise vary
-  const cur = liveDrone(); const pool = order.filter(d => !(cur.role === 'close' && d.role === 'close'));
-  const P = pool.length ? pool : order; return P[Math.floor(Math.random() * P.length)];
+function nextKind() {
+  const { Hp } = plantBounds(SIM); const wts = shotWeights(Hp); let tot = 0; const held = DRONES.map(d => d.shot && d.shot.kind); let ent = Object.entries(wts).filter(([k]) => !DIR.recent.slice(-2).includes(k) && !held.includes(k)); if (!ent.length) ent = Object.entries(wts);
+  for (const [, v] of ent) tot += v; let x = Math.random() * tot; for (const [k, v] of ent) { x -= v; if (x <= 0) return k; } return 'wide';
 }
-const IMPORTANT = new Set(['BRANCH EVENT', 'REACTIVATION', 'FLOWERING', 'FLAG LEAF', 'STRESS', 'DORMANCY', 'FRUIT', 'AERIAL ROOT', 'LIVE']);
+function assign(d, shot) { d.shot = shot; d.state = 'transit'; d.waitSince = DIR.now; }
+function liveDrone() { return DRONES[DIR.live]; }
+function cutTo(d) {
+  const prev = liveDrone();
+  if (prev === d) { d.state = 'live'; d.shotStart = DIR.now; return; }
+  if (prev.shot && prev.shot.timelapse) { DIR.tl = null; DIR.tlLive = false; DIR.nextTL = DIR.now + lerp(840, 1200, Math.random()); }
+  if (prev.pendingPark) { assign(prev, prev.pendingPark); prev.pendingPark = null; } else { prev.state = 'idle'; prev.shot = null; }
+  d.state = 'live'; d.shotStart = DIR.now; DIR.live = d.id; DIR.cuts++;
+  DIR.recent.push(d.shot.kind); if (DIR.recent.length > 6) DIR.recent.shift();
+  if (d.shot.timelapse) { DIR.tlLive = true; showSub(`TIME-LAPSE · HOUR ${fmtH(d.shot.timelapse.from / 60)} → ${fmtH(d.shot.timelapse.to / 60)}`, d.shot.dur * 1000); }
+  else if (d.shot.label) showSub(d.shot.label, 9000);
+}
+const IMPORTANT = new Set(['GERMINATION', 'BRANCH EVENT', 'REACTIVATION', 'FLOWERING', 'FLAG LEAF', 'STRESS', 'DORMANCY', 'FRUIT', 'AERIAL ROOT', 'LIVE']);
 function heroPose(p) { // the closing portrait: composed from the plant's own lean
   const w = SIM.w; const { Hp, Rp } = plantBounds(SIM);
   let cxm = 0, czm = 0; for (const l of w.leaves) { const n = w.nodes[l.node]; cxm += n.x; czm += n.z; } const nL = Math.max(1, w.leaves.length); cxm /= nL; czm /= nL;
@@ -1058,79 +1100,93 @@ const FINALE_STEPS = 45;
 function finaleProgress() { return clamp((lifeHour() * 60 - (STEPS - FINALE_STEPS)) / FINALE_STEPS, 0, 1); }
 function direct(dt) {
   DIR.now += dt;
+  const live = liveDrone();
+  // events from the organism become event shots
   const ev = SIM.w.lastEvent;
-  if (ev && ev.seq !== DIR.lastSeq) { DIR.lastSeq = ev.seq; if (IMPORTANT.has(ev.code) && SIM.w.step - ev.step < 30) { DIR.events.unshift({ ...ev }); DIR.events.length = Math.min(DIR.events.length, 6); showSub(`${fmtH(ev.step / 60)} — ${ev.code} · ${ev.text}`, 10000); } }
+  if (ev && ev.seq !== DIR.lastSeq) { DIR.lastSeq = ev.seq; if (IMPORTANT.has(ev.code) && SIM.w.step - ev.step < 30) { DIR.eventQ.push(ev); if (DIR.eventQ.length > 3) DIR.eventQ.shift(); } }
+  // finale: the crew clears the stage; one drone settles into the portrait
   if (!DIR.finale && SIM.w.step >= STEPS - FINALE_STEPS) {
-    DIR.finale = true; showSub('LAST LIGHT · THE SPECIMEN IS COMPOSED', 12000);
-    const hp = heroPose(finaleProgress()); const back = norm(sub(hp.pos, hp.look)); const lat = norm(cross(back, UP));
+    DIR.finale = true; DIR.eventQ = []; DIR.tl = null; RS = SIM;
+    const hp = heroPose(finaleProgress()); let best = DRONES[0], bd = 1e9; for (const d of DRONES) { const dd = len(sub(d.pos, hp.pos)); if (dd < bd) { bd = dd; best = d; } }
+    const liveShot = live.shot;
     for (const d of DRONES) {
-      if (d.role === 'wide') { d.hero = true; continue; }
-      const k = d.id - 1.5; d.park = add(add(hp.pos, mul(back, 70 + 15 * Math.abs(k))), add(mul(lat, k * 40), V(0, 25 + 10 * (d.id % 2), 0)));
-      if (SIM.w.step >= STEPS) { d.pos = d.park; d.look = hp.look; }
+      if (d === best) { d.shot = { kind: 'hero', dur: 1e9, fov0: hp.fov, fov1: hp.fov, pose: () => heroPose(finaleProgress()) }; if (bd > 30 && SIM.w.step < STEPS) d.state = 'transit'; else { d.pos = hp.pos; d.look = hp.look; d.fov = hp.fov; d.state = 'standby'; } }
+      else { DIR.park = dd => { const back = norm(sub(hp.pos, hp.look)); const lat = norm(cross(back, UP)); const k = dd.id - 1.5; const park = add(add(hp.pos, mul(back, 70 + 15 * Math.abs(k))), add(mul(lat, k * 40), V(0, 25 + 10 * (dd.id % 2), 0))); return { kind: 'park', dur: 1e9, fov0: 36, fov1: 36, pose: () => ({ pos: park, look: hp.look }) }; };
+        d.shot = DIR.park(d); const park = d.shot.pose().pos; if (SIM.w.step >= STEPS) { d.pos = park; d.look = hp.look; d.state = 'standby'; } else if (d !== live) d.state = 'transit'; else { d.pendingPark = d.shot; d.shot = liveShot; } }
     }
+    if (best.state === 'standby') cutTo(best); else DIR.heroWait = best.id;
+    showSub('LAST LIGHT · THE SPECIMEN IS COMPOSED', 12000);
   }
   if (DIR.finale) {
-    const hero = DRONES.find(d => d.hero);
-    if (DIR.live !== hero.id && (SIM.w.step >= STEPS || len(sub(hero.pos, heroPose(finaleProgress()).pos)) < 3)) cutTo(hero);
+    if (DIR.park) for (const d of DRONES) if (!d.shot) assign(d, DIR.park(d));
+    if (DIR.heroWait !== undefined && DRONES[DIR.heroWait].state === 'standby') { cutTo(DRONES[DIR.heroWait]); DIR.heroWait = undefined; }
     return;
   }
-  // close cameras relocate as soon as they come off air
-  for (const d of DRONES) if (d.role === 'close' && d.id !== DIR.live && !d.goal) { d.goal = closeGoal(d); d.moving = true; }
-  if (DIR.now - DIR.lastCut >= CUT_EVERY) {
-    const n = nextCam(); if (n) { const prev = liveDrone(); cutTo(n); if (prev.role === 'close') prev.goal = null; }
+  // time-lapse passage: replay the last hours in seconds from a locked-off drone
+  if (!DIR.tl && DIR.now > DIR.nextTL && SIM.w.step > 200) {
+    const to = SIM.w.step, span = Math.min(to - 30, Math.round(lerp(300, 720, Math.random())));
+    const s = new Sim(CFG.seed); s.live = LIFE.live; s.quiet = true; DIR.tl = { sim: s, from: to - span, to, ready: false };
+  }
+  if (DIR.tl && !DIR.tl.ready) {
+    const s = DIR.tl.sim; let n = 0; while (s.w.step < DIR.tl.from && n < 350) { s.step(); n++; } s.w.sound.length = 0;
+    if (s.w.step >= DIR.tl.from) {
+      DIR.tl.ready = true;
+      const cand = DRONES.filter(d => d !== live && !(d.shot && d.shot.event));
+      const d = cand[0]; if (d) { const sh = genShot('timelapse', SIM); sh.timelapse = { from: DIR.tl.from, to: DIR.tl.to }; assign(d, sh); } else DIR.tl = null;
+    }
+  }
+  // every idle drone gets its next mark
+  for (const d of DRONES) if (d !== live && (!d.shot || d.state === 'idle')) assign(d, genShot(nextKind(), SIM));
+  // an event takes the next free drone
+  if (DIR.eventQ.length && !DRONES.some(d => d.shot && d.shot.event && d !== live)) {
+    const ev = DIR.eventQ.shift();
+    const cand = DRONES.filter(d => d !== live && !(d.shot && d.shot.timelapse));
+    if (cand.length) {
+      let best = cand[0], bd = 1e9; const P = V(ev.x, ev.y + (ev.code === 'FLOWERING' ? 12 : 0), ev.z); for (const d of cand) { const dd = len(sub(d.pos, P)); if (dd < bd) { bd = dd; best = d; } }
+      const size = ev.code === 'FLOWERING' || ev.code === 'FRUIT' ? 30 : ev.code === 'DORMANCY' || ev.code === 'REACTIVATION' ? 34 : 20;
+      assign(best, genShot(ev.code === 'GERMINATION' ? 'medium' : 'close', SIM, { at: P, size, event: ev, label: `${fmtH(ev.step / 60)} — ${ev.code} · ${ev.text}` }));
+    }
+  }
+  // cut
+  const el = DIR.now - live.shotStart;
+  const ready = DRONES.filter(d => d !== live && d.state === 'standby');
+  const evReady = ready.find(d => d.shot.event);
+  const tlReady = ready.find(d => d.shot.timelapse);
+  if (evReady && el > 5 && !live.shot.timelapse) return cutTo(evReady);
+  if (el >= live.shot.dur) {
+    if (live.shot.timelapse) { DIR.tl = null; DIR.tlLive = false; RS = SIM; DIR.nextTL = DIR.now + lerp(840, 1200, Math.random()); }
+    const pick = tlReady || ready[Math.floor(Math.random() * ready.length)];
+    if (pick) cutTo(pick);
+    else live.shot.dur += 2; // nobody on their mark yet: hold the shot
   }
 }
 function updateDrones(dt, t) {
-  const { Hp, Rp } = plantBounds(SIM);
+  const live = liveDrone(); const { Hp, Rp } = plantBounds(SIM);
   for (const d of DRONES) {
-    let tgt = null, follow = false;
-    if (DIR.finale && d.hero) { tgt = heroPose(finaleProgress()); follow = len(sub(d.pos, tgt.pos)) < 3; }
-    else if (DIR.finale && d.park) tgt = { pos: d.park, look: heroPose(finaleProgress()).look, fov: 36 };
-    else if (d.role === 'orbit') { tgt = orbitPose(t); follow = true; }
-    else if (d.role === 'wide') { tgt = widePose(t); follow = true; }
-    else if (d.goal) tgt = d.goal;
-    if (!tgt) continue;
-    if (follow) { d.pos = tgt.pos; d.look = tgt.look; d.fov = tgt.fov; d.moving = false; }
-    else {
-      const to = sub(tgt.pos, d.pos), dist = len(to);
-      if (d.id === DIR.live && !DIR.finale) { /* on air: hold still */ }
-      else {
-        const sp = Math.min(dist, (10 + Math.min(80, dist * 0.8)) * dt);
-        if (dist > 0.01) d.pos = add(d.pos, mul(to, sp / dist));
-        d.look = add(d.look, mul(sub(tgt.look, d.look), clamp(dt * 1.5, 0, 1)));
-        d.fov = lerp(d.fov, tgt.fov || d.fov, clamp(dt, 0, 1));
-        // fly around the plant, never through it
-        const hd = Math.hypot(d.pos.x, d.pos.z); if (dist > 4 && hd < Rp * 0.8 && d.pos.y < Hp + 8) { const k = Rp * 0.8 / Math.max(1, hd); d.pos = V(d.pos.x * k, d.pos.y + dt * 12, d.pos.z * k); }
-        const lv = liveDrone(); if (lv !== d && lv.cam) { const v = sub(d.pos, lv.cam.pos), z = dot(v, lv.cam.f), x = dot(v, lv.cam.r), y = dot(v, lv.cam.u), tn = Math.tan(lv.fov * Math.PI / 360) * 1.2; if (z > 0 && z < 45 && Math.abs(y) < z * tn && Math.abs(x) < z * tn * 1.9) d.pos = add(d.pos, add(mul(lv.cam.r, (x >= 0 ? 1 : -1) * 60 * dt), V(0, 8 * dt, 0))); }
-        d.moving = dist > 1.5;
-        if (!d.moving) { d.pos = tgt.pos; d.look = tgt.look; }
+    if (d.state === 'live') {
+      if (d.shot.kind === 'hero' || d.shot.kind === 'park') { const p = d.shot.pose(); d.pos = p.pos; d.look = p.look; d.fov = p.fov || d.fov; }
+      else { const k = (DIR.now - d.shotStart) / d.shot.dur; const e = ez(k); const p = d.shot.pose(e); d.pos = p.pos; d.look = p.look; d.fov = lerp(d.shot.fov0, d.shot.fov1, e); }
+      if (d.shot.timelapse && DIR.tl && DIR.tl.ready) {
+        const k = clamp((DIR.now - d.shotStart) / d.shot.dur, 0, 1); const tgt = lerp(DIR.tl.from, DIR.tl.to, ez(k));
+        const s = DIR.tl.sim; let n = 0; while (s.w.step < Math.floor(tgt) && n < 80) { s.step(); n++; } s.w.sound.length = 0;
+        RS = s; DIR.tlFrac = tgt - Math.floor(tgt);
       }
+    } else if (d.shot) {
+      const p0 = d.shot.pose(d.shot.kind === 'hero' || d.shot.kind === 'park' ? 0 : 0);
+      const to = sub(p0.pos, d.pos), dist = len(to);
+      const sp = Math.min(dist, (12 + Math.min(70, dist * 0.6)) * dt);
+      if (dist > 0.01) d.pos = add(d.pos, mul(to, sp / dist));
+      d.look = add(d.look, mul(sub(p0.look, d.look), clamp(dt * 1.2, 0, 1)));
+      d.fov = lerp(d.fov, d.shot.fov0, clamp(dt, 0, 1));
+      // fly around the plant, never through it, and out of the live lens's face
+      const hd = Math.hypot(d.pos.x, d.pos.z); if (hd < Rp + 8 && d.pos.y < Hp + 10 && dist > 6) { const k = (Rp + 8) / Math.max(1, hd); d.pos = V(d.pos.x * k, d.pos.y + dt * 10, d.pos.z * k); }
+      if (live.cam) { const v = sub(d.pos, live.cam.pos); const z = dot(v, live.cam.f); const x = dot(v, live.cam.r), y = dot(v, live.cam.u); const tn = Math.tan(live.fov * Math.PI / 360) * 1.25; if (z > 0 && z < 80 && Math.abs(y) < z * tn && Math.abs(x) < z * tn * 1.9) { const side = x >= 0 ? 1 : -1; d.pos = add(d.pos, add(mul(live.cam.r, side * 80 * dt), V(0, 10 * dt, 0))); } }
+      if (d.state === 'transit' && (dist < 2 || DIR.now - d.waitSince > 22)) d.state = 'standby';
     }
     d.pos = V(fin(d.pos.x), Math.max(2.5, fin(d.pos.y, 20)), fin(d.pos.z));
     d.cam = droneCam(d, t);
     if (!d.lastTrail || DIR.now - d.lastTrail > 0.6) { d.lastTrail = DIR.now; d.trail.push([d.pos.x, d.pos.z]); if (d.trail.length > 40) d.trail.shift(); }
   }
-}
-// an orb: a painted ball and an arrow showing where its lens points
-function drawDrone(d) {
-  const c = d.cam, P = c.pos, rad = Math.max(1.3, plantBounds(SIM).Hp * 0.025);
-  const pc = projV(P); if (!pc) return; const s = pxPerCm(pc[2]), R = Math.max(1.5, rad * s);
-  const live = DIR.live === d.id;
-  // arrow along the lens direction
-  const tipW = add(P, mul(c.f, rad * 3.2)), baseW = add(P, mul(c.f, rad * 0.9));
-  const pt = projV(tipW), pb = projV(baseW);
-  const drawArrow = () => { if (!pt || !pb) return; const dx = pt[0] - pb[0], dy = pt[1] - pb[1], L = Math.hypot(dx, dy); if (L < 1) return; const ux = dx / L, uy = dy / L, hs = Math.max(3, R * 0.75);
-    cx.strokeStyle = '#2b2a33'; cx.lineWidth = Math.max(1, R * 0.22); cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(pb[0], pb[1]); cx.lineTo(pt[0] - ux * hs * 0.6, pt[1] - uy * hs * 0.6); cx.stroke();
-    cx.fillStyle = '#2b2a33'; cx.beginPath(); cx.moveTo(pt[0], pt[1]); cx.lineTo(pt[0] - ux * hs - uy * hs * 0.55, pt[1] - uy * hs + ux * hs * 0.55); cx.lineTo(pt[0] - ux * hs + uy * hs * 0.55, pt[1] - uy * hs - ux * hs * 0.55); cx.closePath(); cx.fill(); };
-  const arrowBehind = pt && pt[2] > pc[2];
-  if (arrowBehind) drawArrow();
-  cx.fillStyle = d.col; cx.beginPath(); cx.arc(pc[0], pc[1], R, 0, 6.283); cx.fill();
-  cx.fillStyle = 'rgba(30,26,40,0.28)'; cx.beginPath(); cx.arc(pc[0] + R * 0.18, pc[1] + R * 0.2, R * 0.82, 0, 6.283); cx.fill();
-  cx.fillStyle = d.col; cx.beginPath(); cx.arc(pc[0] - R * 0.1, pc[1] - R * 0.12, R * 0.78, 0, 6.283); cx.fill();
-  cx.fillStyle = 'rgba(251,250,247,0.8)'; cx.beginPath(); cx.arc(pc[0] - R * 0.35, pc[1] - R * 0.38, Math.max(0.8, R * 0.2), 0, 6.283); cx.fill();
-  if (live && !THUMB) { cx.strokeStyle = '#2b2a33'; cx.lineWidth = 1; cx.beginPath(); cx.arc(pc[0], pc[1], R + 3, 0, 6.283); cx.stroke(); }
-  if (!arrowBehind) drawArrow();
-  if (!THUMB && R > 3) { cx.fillStyle = '#2b2a33'; cx.font = `${Math.max(9, Math.round(R * 0.9))}px JetBrains Mono, monospace`; cx.textAlign = 'left'; cx.fillText(String(d.id + 1), pc[0] + R + 3, pc[1] - R * 0.6); }
 }
 
 /* ---------------- the surveillance bay: every lens, live, and a plan of the floor ---------------- */
@@ -1162,22 +1218,20 @@ function drawPlan() {
   for (let i = 0; i < w.leaves.length; i += Math.max(1, Math.floor(w.leaves.length / 160))) { const l = w.leaves[i], n = w.nodes[l.node]; const c = add(V(n.x, 0, n.z), mul(V(l.M.x, 0, l.M.z), l.g.len * 0.5 + l.petLen)); const p = P(c.x, c.z); g.fillRect(p[0] - 1, p[1] - 1, 2, 2); }
   g.fillStyle = '#2a2018'; g.beginPath(); g.arc(ox, oy, 2.5, 0, 6.283); g.fill();
   for (const d of DRONES) {
-    const live = DIR.live === d.id, col = d.col;
-    g.strokeStyle = 'rgba(43,42,51,0.18)'; g.beginPath(); d.trail.forEach((q, i) => { const p = P(q[0], q[1]); i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }); g.stroke();
+    const live = DIR.live === d.id, col = live ? '#ff3d8b' : '#2b2a33';
+    g.strokeStyle = live ? 'rgba(255,61,139,0.35)' : 'rgba(43,42,51,0.18)'; g.beginPath(); d.trail.forEach((q, i) => { const p = P(q[0], q[1]); i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }); g.stroke();
     const p = P(d.pos.x, d.pos.z); const f = d.cam ? d.cam.f : V(1, 0, 0); const a = Math.atan2(f.z, f.x), half = d.fov * Math.PI / 360 * 1.6;
-    g.fillStyle = live ? 'rgba(43,42,51,0.16)' : 'rgba(43,42,51,0.05)'; g.beginPath(); g.moveTo(p[0], p[1]); g.arc(p[0], p[1], 60, a - half, a + half); g.closePath(); g.fill();
-    g.fillStyle = col; g.beginPath(); g.arc(p[0], p[1], live ? 6 : 4.5, 0, 6.283); g.fill(); if (live) { g.strokeStyle = '#2b2a33'; g.lineWidth = 1.5; g.stroke(); g.lineWidth = 1; }
-    g.strokeStyle = '#2b2a33'; g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(p[0] + Math.cos(a) * 14, p[1] + Math.sin(a) * 14); g.stroke();
-    g.fillStyle = '#2b2a33'; g.font = '10px JetBrains Mono, monospace'; g.fillText(String(d.id + 1) + (d.pos.y > 0 ? ` ${Math.round(d.pos.y)}cm` : ''), p[0] + 7, p[1] - 5);
+    g.fillStyle = live ? 'rgba(255,61,139,0.16)' : 'rgba(43,42,51,0.07)'; g.beginPath(); g.moveTo(p[0], p[1]); g.arc(p[0], p[1], 60, a - half, a + half); g.closePath(); g.fill();
+    g.fillStyle = col; g.fillRect(p[0] - 4, p[1] - 4, 8, 8);
+    g.fillStyle = col; g.font = '10px JetBrains Mono, monospace'; g.fillText(String(d.id + 1) + (d.pos.y > 0 ? ` ${Math.round(d.pos.y)}cm` : ''), p[0] + 7, p[1] - 5);
   }
   g.fillStyle = '#2b2a33'; g.font = '10px JetBrains Mono, monospace'; g.fillText('STUDIO PLAN · 1 m rings', 6, 13);
 }
 function updateBayLabels() {
   BAY.thumbs.forEach((T, i) => { const d = DRONES[i], live = DIR.live === i;
     T.wrap.classList.toggle('live', live);
-    const st = live ? `ON AIR ${Math.max(0, Math.ceil(CUT_EVERY - (DIR.now - DIR.lastCut)))}s` : d.moving ? 'MOVING' : 'READY';
-    T.lab.textContent = `${d.name} · ${DIR.finale && d.hero ? 'PORTRAIT' : DIR.finale ? 'CLEAR' : d.label}${d.role === 'close' && d.subject ? ' ' + d.subject : ''} · ${st}`;
-    T.lab.style.borderLeft = `6px solid ${d.col}`; });
+    const st = live ? (d.shot && d.shot.timelapse ? 'ON AIR · TIME-LAPSE' : 'ON AIR') : d.state === 'standby' ? 'ON MARK' : d.state === 'transit' ? 'MOVING' : 'IDLE';
+    T.lab.textContent = `${d.name} · ${(d.shot ? d.shot.kind : '—').toUpperCase()} · ${st}`; });
 }
 let subTimer = 0;
 function showSub(text, ms) { const el2 = document.getElementById('sub'); if (!el2) return; el2.textContent = text; el2.classList.add('on'); clearTimeout(subTimer); subTimer = setTimeout(() => el2.classList.remove('on'), ms); }
@@ -1185,7 +1239,8 @@ function showSub(text, ms) { const el2 = document.getElementById('sub'); if (!el
 function renderProgram(t) {
   const live = liveDrone();
   cx = mainCtx; RW = W; RH = H; VIEWER = live.id; THUMB = false;
-  RS = SIM; FRAC = fracStep;
+  RS = (live.shot && live.shot.timelapse && DIR.tl && DIR.tl.ready) ? DIR.tl.sim : SIM;
+  FRAC = RS === SIM ? fracStep : (DIR.tlFrac || 0);
   spriteBudget = 12;
   useCam(live.cam || droneCam(live, t));
   drawWorld(t);
@@ -1332,10 +1387,10 @@ function bar(x) { const n = Math.round(clamp(x, 0, 1) * 6); return '▮'.repeat(
 function phaseOf() {
   const w = SIM.w, h = w.step / 60;
   if (w.step >= STEPS) return 'LIFE COMPLETE · PRESERVED SPECIMEN';
-
+  if (!w.germinated) return 'SEED · IMBIBITION';
   if (w.dormant) return 'DORMANCY';
   if (w.step - w.lastWake < 120 && w.lastWake > 0) return 'REACTIVATION FLUSH';
-  if (w.nodes.length < 6) return 'SPROUT';
+  if (w.nodes.length < 6) return 'GERMINATION';
   if (w.leaves.length < 30) return 'ESTABLISHMENT';
   const openF = w.flowers.filter(f => w.step - f.born < 600).length;
   if (openF) return 'FLOWERING';
@@ -1488,7 +1543,7 @@ if (!CFG.info) el('info').classList.add('off');
 writeKey();
 boot();
 initBay();
-for (const d of DRONES) { const p = d.role === 'orbit' ? orbitPose(0) : widePose(0); if (d.role !== 'close') { d.pos = p.pos; d.look = p.look; d.fov = p.fov; } }
+{ const d = DRONES[0]; d.shot = genShot('wide', SIM); d.state = 'live'; d.shotStart = 0; const p = d.shot.pose(0); d.pos = p.pos; d.look = p.look; d.fov = d.shot.fov0; }
 GL = initGL();
 if (CFG.audio) { el('start').textContent = 'click for sound'; startAudio(); if (AU.ctx && AU.ctx.state !== 'running') { AU.on = false; try { AU.ctx.close(); } catch (e) { } AU.ctx = null; } else el('start').textContent = ''; }
 if (CFG.live && !EPHEMERAL) { setTimeout(pollIntake, 4000); setTimeout(pollGitHub, 9000); setInterval(pollIntake, 5 * 60e3); setInterval(pollGitHub, 10 * 60e3 + Math.floor(Math.random() * 60e3)); }
