@@ -12,7 +12,7 @@ rebuilds the live log with the page's own code (headless Chromium), and writes
   archive/48plant-NNN.glb the 3D specimen (open the replay page and press g for the full .obj/.glb kit)
 
 Usage (from the repo root, served locally):
-  python3 MZTV/sources/48-plant-002-mz-claude/tools/archive_specimen.py MZTV/sources/48-plant-002-mz-claude
+  python3 MZTV/sources/48-plant-002/tools/archive_specimen.py MZTV/sources/48-plant-002
 """
 import base64, datetime as dt, functools, http.server, json, os, re, subprocess, sys, threading, time
 

@@ -1,4 +1,4 @@
-# MZTV 48 PLANT · SPECIMEN 001 · MZ.Claude candidate
+# MZTV 48 PLANT · SPECIMEN 001
 
 One independent build for the HARIL multi-agent brief *MZTV 48 PLANT — Multi-Agent Build Brief · Specimen 001*. It is one candidate among several, not the canonical version.
 
@@ -56,7 +56,7 @@ The camera work is presentation only. The director never changes the organism; t
 **OBS (broadcast):** Browser Source, 1920×1080, "Control audio via OBS" on:
 
 ```
-https://matchzimmerman.com/MZTV/sources/48-plant-001-mz-claude/
+https://matchzimmerman.com/MZTV/sources/48-plant-001/
 ```
 
 The first load is the plant's birth (hour 00:00). From then on the specimen's age is wall-clock time since birth, stored in the browser source's localStorage. Leave it running for 48 hours.
