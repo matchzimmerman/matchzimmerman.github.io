@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>48 PLANT · Specimen Archive</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#2b2a33; --paper:#f5f4f0; --line:rgba(43,42,51,0.35); --pink:#ff3d8b; }
+  html,body { margin:0; background:var(--paper); color:var(--ink); font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; font-size:14px; line-height:1.5; }
+  main { max-width:1080px; margin:0 auto; padding:48px 16px 80px; }
+  h1 { font-size:15px; letter-spacing:0.14em; margin:0 0 4px; }
+  .dim { opacity:0.62; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px; margin-top:32px; }
+  .spec { border:1px solid var(--line); background:#fbfaf7; }
+  .spec .img { aspect-ratio:16/9; background:#efede8 center/cover no-repeat; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:12px; }
+  .spec .body { padding:12px 14px 14px; }
+  .spec .t { font-weight:700; letter-spacing:0.1em; }
+  .spec .st { display:inline-block; font-size:11px; padding:0 6px; margin-left:6px; border:1px solid var(--ink); }
+  .spec .st.live { background:var(--pink); color:#fbfaf7; border-color:var(--pink); }
+  .links { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px 14px; }
+  a { color:var(--ink); }
+  footer { margin-top:48px; font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MZTV · 48 PLANT · SPECIMEN ARCHIVE</h1>
+  <div class="dim">Each specimen lives 48 hours on MZTV, then keeps turning in its studio. Its life record (seed, birth, weather) rebuilds the exact body, so any specimen can be replayed or pushed out as a 3D object.</div>
+  <div class="grid" id="grid"></div>
+  <footer class="dim">BAUN BOTANY SIM SYSTEM · Match Zimmerman Creative Media Group</footer>
+</main>
+<script>
+// one entry per specimen. "life" is the archived life record; until it exists the specimen can only be seen live.
+const SPECIMENS = [
+  { n: '001', folder: '48-plant-001-mz-claude', born: '2026-10-07 14:55 UTC', life: null, still: '../48-plant-001-mz-claude/stills/v2-final-frame.jpg', note: 'First run · weather felt on arrival' },
+  { n: '002', folder: '48-plant-002-mz-claude', born: '2026-10-09 17:00 UTC', life: '../48-plant-002-mz-claude/archive/life.json', still: '../48-plant-002-mz-claude/archive/final.png', glb: '../48-plant-002-mz-claude/archive/48plant-002.glb', note: 'Ledger to 9 Oct · seed 48002 · longer droughts · public-record weather' },
+];
+const grid = document.getElementById('grid');
+(async () => {
+  for (const s of SPECIMENS) {
+    let has = false; if (s.life) { try { has = (await fetch(s.life, { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { } }
+    const page = `../${s.folder}/`;
+    const div = document.createElement('div'); div.className = 'spec';
+    div.innerHTML = `<div class="img" style="${has || s.n === '001' ? `background-image:url('${s.still}')` : ''}">${has || s.n === '001' ? '' : 'growing'}</div>
+      <div class="body"><div class="t">SPECIMEN ${s.n}<span class="st ${has ? '' : 'live'}">${has ? 'ARCHIVED' : 'ON MZTV'}</span></div>
+      <div class="dim">born ${s.born}</div><div class="dim">${s.note}</div>
+      <div class="links">${has ? `<a href="${page}?life=${encodeURIComponent('archive/life.json')}">replay</a>
+        <a href="${page}?life=${encodeURIComponent('archive/life.json')}&export=3d">push out 3D (.glb + .obj)</a>
+        <a href="${s.glb}" download>.glb</a><a href="${s.life}" download>life record</a>` : `<a href="${page}">watch</a> <a href="${page}?timelapse=6">6-minute preview</a>`}</div></div>`;
+    grid.appendChild(div);
+  }
+})();
+</script>
+</body>
+</html>

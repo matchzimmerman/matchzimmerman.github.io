@@ -4,7 +4,18 @@ One independent build for the HARIL multi-agent brief *MZTV 48 PLANT — Multi-A
 
 A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. The practice's whole activity record, from 2022 to the present, is lived inside the plant's 48 hours. Live commits and HARIL intake arrive as present-day weather. Nothing recomputes from current data: every leaf, kink, ring, scar and flower is laid down once and kept.
 
-## v3 — orb cameras, 30-second cuts (current `index.html`)
+## v4 — afterlife, archive, 3D specimen (current `index.html`)
+
+v3 is kept as `v3.html`. The organism, ledger and storage key are unchanged, so a running life carries straight over.
+
+- **Afterlife.** After 48:00 the portrait camera keeps orbiting the specimen with exactly the final frame's lens, distance, height and museum label (one revolution every 6 minutes, `?orbit=MIN` to change). It eases in from stillness, so the first afterlife frame is the 48:00 frame. Slow gusts of wind keep the leaves and stems moving. No growth, no weather.
+- **`a` — archive.** Copies the life record (seed, birth, every live weather event, museum label) to the clipboard and downloads it. In OBS: right-click the source → Interact → press `a`, then paste.
+- **`g` — 3D specimen.** Downloads a zip: `.glb` (Godot / Blender / Quest), `.obj` + `.mtl`, the painted leaf atlas, the still and the life record. Metres, Y up, stem base at the origin. Every leaf carries its own painting; stems carry their bands, rings, galls and scars.
+- **Replay any archived life:** `?life=archive/life.json`. Add `&export=3d` to push out the 3D model straight away.
+- **Specimen config** lives in `<script id="specimen">` (number, seed, storage key, scheduled birth, weather mode, drought setting). Specimen 002 onward uses a scheduled birth and **public-record weather**: each commit or intake event is felt 15 minutes after its own timestamp, so the whole life can be rebuilt from the public record (`tools/archive_specimen.py`) even if nobody saved it.
+- Archive of all specimens: `../48-plant-archive/`.
+
+## v3 — orb cameras, 30-second cuts (`v3.html`)
 
 v2 is kept as `v2.html` and v1 as `v1.html`. The organism and ledger are unchanged.
 
