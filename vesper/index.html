@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060c16">
+<title>VESPER — A Glass Garden / MZCMG</title>
+<style>
+:root{color-scheme:dark;--ink:#e6eee9;--dim:rgba(225,240,237,.48);--edge:rgba(210,239,233,.19);--glass:rgba(9,19,29,.54)}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#060c16;color:var(--ink);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+canvas{display:block;position:fixed;inset:0;width:100%!important;height:100%!important;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}
+#shade{pointer-events:none;position:fixed;inset:0;background:radial-gradient(ellipse at 50% 43%,transparent 38%,rgba(2,6,16,.23) 100%)}
+#top{position:fixed;left:clamp(18px,3.2vw,54px);top:clamp(21px,3.4vw,51px);pointer-events:none}
+.eyebrow{font-size:10px;letter-spacing:.29em;color:#a2c2c2;font-weight:600;margin-bottom:10px}.name{font-size:clamp(30px,4.2vw,68px);line-height:.94;font-weight:200;letter-spacing:.23em;text-shadow:0 2px 25px #07121c}.sub{font-size:10px;letter-spacing:.21em;margin-top:17px;color:var(--dim)}
+#controls{position:fixed;right:clamp(14px,3.2vw,50px);top:clamp(22px,3.4vw,52px);display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;max-width:62vw}
+button{font:inherit;cursor:pointer;color:#dcebe5;background:rgba(11,24,34,.46);border:1px solid var(--edge);border-radius:100px;padding:10px 15px;font-size:10px;font-weight:600;letter-spacing:.14em;backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);transition:background .22s,border-color .22s,transform .22s}button:hover{background:rgba(39,63,73,.62);border-color:rgba(190,245,228,.42);transform:translateY(-1px)}button:active{transform:translateY(1px)}button:focus-visible{outline:2px solid #c0ffe4;outline-offset:3px}#paletteBtn{min-width:122px}#pauseBtn{min-width:72px}#captureBtn{font-size:15px;line-height:10px;padding:10px 12px}
+#bottom{position:fixed;left:clamp(18px,3.2vw,54px);right:clamp(18px,3.2vw,54px);bottom:clamp(20px,3vw,44px);display:flex;align-items:end;justify-content:space-between;pointer-events:none;gap:20px}.lab{font-size:9px;letter-spacing:.17em;color:rgba(215,231,232,.52);line-height:2.0;text-transform:uppercase}.lab strong{color:#d0eee6;font-weight:500}.mark{letter-spacing:.28em;font-size:11px;color:rgba(232,245,237,.72);text-align:right}.counter{font-variant-numeric:tabular-nums;color:#93bdb6;margin-top:8px;font-size:9px;letter-spacing:.2em}
+#hint{position:fixed;bottom:clamp(80px,10vw,125px);left:50%;transform:translateX(-50%);white-space:nowrap;pointer-events:none;font-size:10px;letter-spacing:.16em;color:rgba(228,248,239,.6);opacity:1;transition:opacity 1.1s}
+#loading{position:fixed;inset:0;display:grid;place-items:center;background:#060c16;color:#bad1ca;letter-spacing:.35em;font-size:11px;z-index:2;transition:opacity .8s}
+#loading.hidden{opacity:0;pointer-events:none}
+@media(max-width:650px){#top{top:22px;left:20px}.name{font-size:35px;letter-spacing:.16em}.sub{font-size:8px;margin-top:12px}#controls{top:auto;bottom:95px;left:18px;right:18px;max-width:none;justify-content:center}button{padding:10px 12px;font-size:9px}#hint{bottom:160px;font-size:9px}#bottom{left:20px;right:20px;bottom:21px}.lab{font-size:8px;max-width:190px}.mark{font-size:9px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div id="loading">GROWING THE GARDEN</div>
+<div id="shade"></div>
+<header id="top"><div class="eyebrow">MZCMG&nbsp; / &nbsp;GENERATIVE STUDIES</div><div class="name">VESPER</div><div class="sub">A GARDEN MADE OF LIGHT AND GLASS &nbsp;—&nbsp; 001</div></header>
+<nav id="controls" aria-label="Artwork controls">
+  <button id="paletteBtn" type="button" title="Cycle color palettes (P)">◉ &nbsp; OPAL</button>
+  <button id="reseedBtn" type="button" title="Generate a new garden (R)">↻ &nbsp; RESEED</button>
+  <button id="pauseBtn" type="button" title="Pause movement (space)">Ⅱ &nbsp; PAUSE</button>
+  <button id="captureBtn" type="button" title="Save artwork as PNG (S)" aria-label="Save image">↧</button>
+</nav>
+<div id="hint">DRAG TO ORBIT &nbsp;·&nbsp; SCROLL TO MOVE CLOSER</div>
+<footer id="bottom"><div class="lab"><strong>AN IMPOSSIBLE BOTANICAL STUDY</strong><br>PROCEDURAL GEOMETRY · REAL-TIME LIGHT · WEBGL<br>NO TWO GARDENS THE SAME</div><div class="mark">MZ / CREATIVE MEDIA GROUP<div class="counter" id="counter">GARDEN 001 &nbsp;·&nbsp; LIVE</div></div></footer>
+<script>
+/*
+  VESPER / A GLASS GARDEN — MZCMG STUDY 001
+  An original procedural WebGL garden. Runs directly in a browser, without external libraries.
+  All geometry is created in JavaScript. No models, textures, or images.
+  To run: open the GitHub Pages URL in Safari, Chrome or another WebGL-capable browser.
+  The complete application is self-contained, with no remote script dependencies.
+*/
+(()=>{
+'use strict';
+const palettes=[
+  {name:'OPAL',bg:[.025,.053,.087],fog:[.027,.065,.094],colors:[[.43,.95,.85],[.87,.65,.95],[1,.73,.49],[.47,.72,.99],[.95,.50,.66]]},
+  {name:'EMBER',bg:[.075,.035,.060],fog:[.115,.057,.077],colors:[[1,.51,.27],[1,.79,.44],[.99,.37,.53],[.76,.48,.78],[1,.64,.55]]},
+  {name:'MOON',bg:[.030,.045,.083],fog:[.042,.077,.111],colors:[[.69,.83,1],[.75,.95,.99],[.59,.68,.95],[.96,.92,.78],[.65,.97,.87]]},
+  {name:'ACID',bg:[.045,.048,.040],fog:[.078,.084,.061],colors:[[.76,1,.39],[.96,.51,.68],[.39,.98,.90],[1,.81,.35],[.76,.72,1]]}
+];
+let paletteIndex=0, gardenIndex=1, seed=81891, frozen=false, clock=0, lastFrame=0, showHintsTimer=0;
+let engine=null, gl=null, sketch=null, surface=null;
+const $=s=>document.querySelector(s);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const mix=(a,b,t)=>a+(b-a)*t;
+const smooth=(a,b,x)=>{let t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+function rngMaker(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}};
+let rand=rngMaker(seed);const R=(a=0,b=1)=>a+(b-a)*rand(),RI=n=>Math.floor(R(0,n));
+const vec3=(x,y,z)=>[x,y,z],sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],norm=a=>{const d=Math.hypot(...a)||1;return a.map(x=>x/d)};
+const matIdentity=()=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+function matPerspective(fov,aspect,near,far){let f=1/Math.tan(fov/2);let m=new Float32Array(16);m[0]=f/aspect;m[5]=f;m[10]=(far+near)/(near-far);m[11]=-1;m[14]=2*far*near/(near-far);return m}
+function matLookAt(eye,target,up){let z=norm(sub(eye,target)),x=norm(cross(up,z)),y=cross(z,x);return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]),-(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),-(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]),1])}
+function matMul(a,b){let out=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)out[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return out}
+const vShader=`precision highp float;
+attribute vec3 aPosition;attribute vec3 aNormal;attribute vec4 aColor;attribute vec2 aUV;attribute vec2 aMotion;attribute float aKind;
+uniform mat4 uVP;uniform float uTime;uniform float uStill;
+varying vec3 vNormal,vWorld;varying vec4 vColor;varying vec2 vUV;varying float vKind;
+void main(){vec3 pos=aPosition;
+float sway=(sin(uTime*.73+aMotion.x+pos.y*.28)*.55+sin(uTime*.41+aMotion.x*2.1+pos.x*.4)*.45)*aMotion.y;
+pos.x+=sway;pos.z+=cos(uTime*.61+aMotion.x+pos.y*.19)*aMotion.y*.39;
+pos.y+=sin(uTime*.55+aMotion.x+pos.x*.3)*aMotion.y*.12;
+vNormal=aNormal;vWorld=pos;vColor=aColor;vUV=aUV;vKind=aKind;gl_Position=uVP*vec4(pos,1.);}`;
+const fShader=`precision highp float;
+varying vec3 vNormal,vWorld;varying vec4 vColor;varying vec2 vUV;varying float vKind;
+uniform vec3 uCamera,uFog;uniform float uTime;
+void main(){vec3 N=normalize(vNormal);vec3 V=normalize(uCamera-vWorld);
+vec3 L1=normalize(vec3(-.55,1.0,.6));vec3 L2=normalize(vec3(.8,.4,-.7));
+float dif=max(0.,dot(N,L1))*.68+max(0.,dot(N,L2))*.28;
+float rim=pow(1.-abs(dot(N,V)),2.35);
+vec3 H=normalize(V+L1);float spec=pow(max(0.,dot(N,H)),26.);
+vec3 color=vColor.rgb;float alpha=1.;
+if(vKind<.5){
+  float rib=pow(max(0.,sin(abs(vUV.y)*36. + vUV.x*3.)),24.);
+  float veins=(1.-smoothstep(.014,.09,abs(vUV.y)))*.27+rib*.045;
+  float sheet=(.46+dif*.51);
+  float glow=rim*(.64+.32*sin(vUV.x*3.14159));
+  color=color*sheet+color*glow*.88+vec3(1.,.93,.80)*spec*.38;
+  color+=vec3(.25,.34,.27)*veins;
+  color+=color*pow(sin(vUV.x*3.14159),8.)*.19;
+}else if(vKind<1.5){color=color*(.30+dif*.72)+vec3(.95,.83,.62)*spec*.70+color*rim*.21;
+}else if(vKind<2.5){color=color*(.19+dif*.55)+color*rim*.33;
+}else{color=color*(.40+dif*.36)+color*rim*1.4+vec3(1.)*pow(max(0.,dot(N,H)),42.)*.7;}
+float fog=1.-exp(-pow(length(uCamera-vWorld)*.038,2.));
+color=mix(color,uFog,clamp(fog,0.,.8));
+gl_FragColor=vec4(color,alpha);}`;
+const lineVS=`precision highp float;attribute vec3 aPosition;attribute vec4 aColor;attribute vec2 aMotion;uniform mat4 uVP;uniform float uTime;varying vec4 vColor;varying vec3 vPos;
+void main(){vec3 p=aPosition;p.x+=sin(uTime*.74+aMotion.x+p.y*.26)*aMotion.y;p.z+=cos(uTime*.61+aMotion.x)*aMotion.y*.3;vColor=aColor;vPos=p;gl_Position=uVP*vec4(p,1.);}`;
+const lineFS=`precision mediump float;varying vec4 vColor;varying vec3 vPos;uniform vec3 uCamera,uFog;void main(){float fog=1.-exp(-pow(length(uCamera-vPos)*.029,2.));gl_FragColor=vec4(mix(vColor.rgb,uFog,clamp(fog,0.,.7)),vColor.a);}`;
+const particleVS=`precision highp float;attribute vec3 aPosition;attribute vec4 aColor;attribute vec4 aOther;uniform mat4 uVP;uniform float uTime,uHeight;varying vec4 vColor;varying float vPhase;
+void main(){vec3 p=aPosition;float t=uTime;p.y+=sin(t*aOther.x+aOther.y)*aOther.z;p.x+=cos(t*aOther.x*.65+aOther.y)*aOther.z*1.3;p.z+=sin(t*aOther.x*.4+aOther.y)*aOther.z*.8;
+vec4 clip=uVP*vec4(p,1.);gl_Position=clip;float depth=max(1.,clip.w);gl_PointSize=clamp((aOther.w*min(uHeight,1200.)/depth),1.,55.);vColor=aColor;vPhase=aOther.y+uTime*(1.+aOther.x);}`;
+const particleFS=`precision mediump float;varying vec4 vColor;varying float vPhase;void main(){vec2 q=gl_PointCoord*2.-1.;float d=length(q);float halo=pow(max(0.,1.-d),2.5);float core=exp(-d*d*65.);float twinkle=.70+.30*sin(vPhase*2.2);float a=(halo*.4+core*.8)*vColor.a*twinkle;gl_FragColor=vec4(vColor.rgb*(.7+core*.95),a);}`;
+const quadVS=`precision highp float;attribute vec2 aPosition;varying vec2 vUV;void main(){vUV=aPosition*.5+.5;gl_Position=vec4(aPosition,0.,1.);}`;
+const brightFS=`precision mediump float;varying vec2 vUV;uniform sampler2D uScene;void main(){vec3 c=texture2D(uScene,vUV).rgb;float k=smoothstep(.24,.88,max(max(c.r,c.g),c.b));gl_FragColor=vec4(c*k,1.);}`;
+const blurFS=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform vec2 uStep;void main(){vec3 c=texture2D(uTex,vUV).rgb*.227027;
+c+=texture2D(uTex,vUV+uStep*1.384615).rgb*.316216;c+=texture2D(uTex,vUV-uStep*1.384615).rgb*.316216;
+c+=texture2D(uTex,vUV+uStep*3.230769).rgb*.070270;c+=texture2D(uTex,vUV-uStep*3.230769).rgb*.070270;
+gl_FragColor=vec4(c,1.);}`;
+const compositeFS=`precision highp float;varying vec2 vUV;uniform sampler2D uScene,uBloom;uniform float uBloomPower,uTime;uniform vec2 uResolution;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void main(){vec3 base=texture2D(uScene,vUV).rgb;vec3 bloom=texture2D(uBloom,vUV).rgb;
+vec3 c=base+bloom*uBloomPower;
+c=1.-exp(-c*1.13);c=pow(c,vec3(.89));
+float vignette=1.-smoothstep(.15,.9,length((vUV-.5)*vec2(1.05,1.0)));
+c*=mix(.69,1.,vignette);
+float grain=(hash(vUV*uResolution+fract(uTime)*1000.)-.5)*.018;
+c+=grain;gl_FragColor=vec4(c,1.);}`;
+function shaderProgram(gl,vs,fs){const make=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s};let p=gl.createProgram();gl.attachShader(p,make(gl.VERTEX_SHADER,vs));gl.attachShader(p,make(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p}
+function program(gl,vs,fs,attributes,uniforms){const p=shaderProgram(gl,vs,fs);const a={},u={};attributes.forEach(k=>a[k]=gl.getAttribLocation(p,k));uniforms.forEach(k=>u[k]=gl.getUniformLocation(p,k));return{p,a,u}}
+function buffer(gl,array){const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(array),gl.STATIC_DRAW);return b}
+class World{
+ constructor(){this.solid=[];this.lines=[];this.particles=[];this.rng=rand;this.blooms=[];this.floor=[];this.build()}
+ addVertex(position,normal,color,uv=[0,0],motion=[0,0],kind=0){this.solid.push(...position,...normal,...color,...uv,...motion,kind)}
+ addTri(a,b,c,kind=0){let pa=a.p,pb=b.p,pc=c.p;let n=norm(cross(sub(pb,pa),sub(pc,pa)));for(const v of [a,b,c])this.addVertex(v.p,n,v.c,v.uv||[0,0],v.m||[0,0],kind)}
+ addLine(a,b,col1,col2=col1,m=[0,0]){this.lines.push(...a,...col1,...m,...b,...col2,...m)}
+ tube(points,rad,color,sides=6,kind=1,phase=0,amp=0){for(let i=0;i<points.length-1;i++){
+  let a=points[i],b=points[i+1],t=norm(sub(b,a)),ref=Math.abs(t[1])>.9?[1,0,0]:[0,1,0];let u=norm(cross(t,ref)),v=cross(t,u);
+  for(let j=0;j<sides;j++){let q=j*2*Math.PI/sides,qq=(j+1)*2*Math.PI/sides;
+   let make=(p,theta,k)=>{let r=rad*(.93+Math.sin(k/points.length*Math.PI)*.15);return {p:[p[0]+r*(u[0]*Math.cos(theta)+v[0]*Math.sin(theta)),p[1]+r*(u[1]*Math.cos(theta)+v[1]*Math.sin(theta)),p[2]+r*(u[2]*Math.cos(theta)+v[2]*Math.sin(theta))],c:[...color,1],m:[phase,amp*(.20+.8*k/points.length)]}};
+   let A=make(a,q,i),B=make(a,qq,i),C=make(b,q,i+1),D=make(b,qq,i+1);
+   this.addTri(A,C,B,kind);this.addTri(B,C,D,kind)
+  }
+ }}
+ petal(center,scale,ang,layer,petalIndex,color,phase,leaf=false){
+  const U=11,V=6;let verts=[];const ripple=R(-.08,.08), curl=R(.1,.7),flair=R(.78,1.16);
+  for(let i=0;i<=U;i++){
+   let u=i/U,row=[];
+   for(let j=0;j<=V;j++){
+    let v=j/V*2-1;
+    let reach=u*scale*flair;
+    let width=Math.pow(Math.max(0,Math.sin(Math.PI*u)),.8)*scale*(leaf?.26:.40)*v;
+    let theta=ang+u*(leaf?.05:curl*.26)+Math.sin(u*4+ripple)*.045;
+    let x=center[0]+Math.cos(theta)*reach-Math.sin(theta)*width;
+    let z=center[2]+Math.sin(theta)*reach+Math.cos(theta)*width;
+    let arch=leaf?(.24*Math.sin(u*Math.PI)-u*.15):(.38*Math.sin(u*Math.PI)-u*u*.37);
+    let y=center[1]+arch*scale+(v*v)*scale*.12*Math.sin(Math.PI*u)+Math.sin(u*Math.PI*2+petalIndex)*.018*scale;
+    let cc=[...color];let light=mix(.72,1.18,Math.sin(Math.PI*u)*.65+.35* Math.pow(Math.abs(v),2));
+    cc=cc.map((c,k)=>clamp(c*light+(k===1?.035:0),0,1.5));
+    row.push({p:[x,y,z],c:[...cc,1],uv:[u,v],m:[phase,scale*(leaf?.065:.028)]});
+   }verts.push(row)
+  }
+  for(let i=0;i<U;i++)for(let j=0;j<V;j++){
+   const a=verts[i][j],b=verts[i+1][j],c=verts[i][j+1],d=verts[i+1][j+1];
+   this.addTri(a,b,c,0);this.addTri(b,d,c,0)
+  }
+  // Embroidered botanical venation: a gold midrib, finer sister veins,
+  // transverse branches, and a hairline along each curved petal edge.
+  const ink=[...color.map(v=>mix(v,1,.72)),.22];
+  for(const j of [0,1,2,3,4,5,6]){
+    if(j===0||j===6||j===3||(!leaf&&j%2===0)){
+      for(let i=1;i<U-1;i++){
+        let alpha=j===3?.24:(j===0||j===6?.12:.095);
+        this.addLine(verts[i][j].p,verts[i+1][j].p,[...ink.slice(0,3),alpha],[...ink.slice(0,3),alpha],[phase,scale*.028]);
+      }
+    }
+  }
+  if(!leaf)for(let i=3;i<U-1;i+=2){
+    for(let side of [-1,1]){
+      let j=3+side*Math.min(3,Math.floor(1+i/4));
+      this.addLine(verts[i][3].p,verts[Math.min(U,i+2)][j].p,[1,.89,.69,.10],[1,.90,.73,.065],[phase,scale*.028]);
+    }
+  }
+ }
+ sphere(center,r,color,rings=7,segments=10,kind=3,phase=0,amp=0){for(let i=0;i<rings;i++)for(let j=0;j<segments;j++){
+   const pt=(ii,jj)=>{let th=Math.PI*ii/rings,ph=Math.PI*2*jj/segments;let p=[center[0]+Math.sin(th)*Math.cos(ph)*r,center[1]+Math.cos(th)*r,center[2]+Math.sin(th)*Math.sin(ph)*r];return{p,c:[...color,1],m:[phase,amp]}};
+   this.addTri(pt(i,j),pt(i+1,j),pt(i,j+1),kind);this.addTri(pt(i+1,j),pt(i+1,j+1),pt(i,j+1),kind)
+ }}
+ bloom(x,z,scale,height,colorId,master=false){
+  const pal=palettes[paletteIndex],c=pal.colors[colorId%pal.colors.length],gold=[.59,.48,.31],phase=R(0,Math.PI*2);
+  const foot=-2.35+Math.sin(x*.65+z*.35)*.12,cy=height;
+  let stem=[];for(let i=0;i<=23;i++){let t=i/23;stem.push([x+Math.sin(t*2.2+phase)*.12*t, mix(foot,cy,t),z+Math.cos(t*2.1+phase)*.12*t])}
+  this.tube(stem,scale*.044,gold,6,1,phase,scale*.035);
+  let crown=stem[stem.length-1];
+  for(let side of [0,1]){
+   let t=side?.46:.70,p=stem[Math.floor(t*23)];let angle=phase+side*2.65+.5;
+   let pos=[p[0]+Math.cos(angle)*scale*.20,p[1]+scale*.02,p[2]+Math.sin(angle)*scale*.20];
+   this.petal(pos,scale*.56,angle,0,0,c.map(v=>v*.64),phase,true);
+   let pt=[];for(let j=0;j<=12;j++){let u=j/12;pt.push([mix(p[0],pos[0]+Math.cos(angle)*scale*.30,u),mix(p[1],pos[1]+u*scale*.02,u),mix(p[2],pos[2]+Math.sin(angle)*scale*.30,u)])}this.tube(pt,scale*.016,gold,4,1,phase,.02);
+  }
+  let layers=master?3:2;
+  for(let L=0;L<layers;L++){
+   let count=(master?8:7)+L*3,ring=scale*(1.-L*.17),cy2=crown[1]+scale*(L*.04);
+   for(let k=0;k<count;k++){
+    let a=(k+.32*(L%2))/count*Math.PI*2+phase*.22;
+    let col=pal.colors[(colorId+L)%pal.colors.length].map((q,j)=>mix(q,c[j],.44));
+    this.petal([crown[0]+Math.cos(a)*scale*.025,cy2,crown[2]+Math.sin(a)*scale*.025],ring,a,L,k,col,phase)
+   }
+  }
+  this.sphere([crown[0],crown[1]+scale*.065,crown[2]],scale*.19,[.93,.73,.43],8,12,3,phase,scale*.022);
+  for(let j=0;j<(master?28:13);j++){
+   let a=(j/ (master?28:13))*Math.PI*2 + phase,r=R(.2,.47)*scale,h=R(.28,.68)*scale;
+   let at=[crown[0]+Math.cos(a)*r,crown[1]+h,crown[2]+Math.sin(a)*r];
+   let begin=[crown[0]+Math.cos(a)*scale*.09,crown[1]+scale*.10,crown[2]+Math.sin(a)*scale*.09];
+   let mid=[crown[0]+Math.cos(a)*r*.65,crown[1]+h*.82,crown[2]+Math.sin(a)*r*.65];
+   let lineColor=[1,.86,.58,.24];this.addLine(begin,mid,lineColor,lineColor,[phase,scale*.045]);this.addLine(mid,at,lineColor,[1,.94,.70,.09],[phase,scale*.05]);
+   if(j%3===0)this.sphere(at,scale*.018,[1,.92,.65],5,6,3,phase,.02)
+  }
+  this.blooms.push(crown);
+ }
+ build(){rand=rngMaker(seed);const pal=palettes[paletteIndex];this.solid=[];this.lines=[];this.particles=[];this.blooms=[];
+  // Central specimen and its surrounding, perspective-spaced glass garden.
+  this.bloom(0,.1,1.78,1.08,2,true);
+  const N=(Math.min(innerWidth,innerHeight)<650?17:28);
+  for(let i=0;i<N;i++){
+    let a=i*2.3999632297+R(-.20,.20),rad=1.70+Math.sqrt(i/N)*8.3+R(-.35,.35);
+    let x=Math.cos(a)*rad,z=Math.sin(a)*rad;
+    let s=R(.39,.94)*(1.-rad*.025);if(i<4)s*=1.1;
+    let h=mix(-.80,1.4,R()) + (rad>6?-.35:0);
+    this.bloom(x,z,s,h,RI(5),false)
+  }
+  // Sparse connective silk suspended between the flower crowns.
+  // Connections are curated by proximity, not a uniform wireframe.
+  for(let i=0;i<this.blooms.length;i++){
+   const a=this.blooms[i];let candidates=[];
+   for(let j=i+1;j<this.blooms.length;j++){
+    const b=this.blooms[j],d=Math.hypot(a[0]-b[0],a[2]-b[2]);
+    if(d<4.7&&d>1.0)candidates.push({b,d});
+   }
+   candidates.sort((a,b)=>a.d-b.d);
+   for(const item of candidates.slice(0,i===0?6:2)){
+    if(R()> .52)continue;
+    const b=item.b,segments=26,co=pal.colors[i%5].map(x=>x*.72);
+    let last=null;
+    for(let k=0;k<=segments;k++){
+     let t=k/segments,sag=Math.sin(t*Math.PI)*(.12+item.d*.075);
+     let pt=[mix(a[0],b[0],t),mix(a[1],b[1],t)-sag+.11,mix(a[2],b[2],t)];
+     if(last)this.addLine(last,pt,[...co,.125],[...co,.125],[i*.3,.028]);
+     if(k===13&&i%3===0)this.sphere(pt,.038,co,5,7,3,i,.023);
+     last=pt;
+    }
+   }
+  }
+  // Veined ground rings and fine concentric architectural traces.
+  for(let ring=0;ring<42;ring++){
+   let radius=.4+ring*.265,segments=Math.max(30,Math.floor(radius*25));
+   for(let k=0;k<segments;k++){
+    let a=k/segments*Math.PI*2,b=(k+1)/segments*Math.PI*2,yy=-2.42;
+    let col=pal.colors[ring%5].map(v=>v*.42);
+    this.addLine([Math.cos(a)*radius,yy+Math.sin(radius*3+a*4)*.027,Math.sin(a)*radius],[Math.cos(b)*radius,yy+Math.sin(radius*3+b*4)*.027,Math.sin(b)*radius],[...col,.045]);
+   }
+  }
+  // Long, asymmetrical arc filaments, like a suspended observatory.
+  for(let j=0;j<22;j++){
+    let rad=R(3.7,10),angle=R(0,6.28),start=R(-1,1),span=R(.5,2.8),tilt=R(-.3,.4);
+    for(let k=0;k<64;k++){
+      let a=start+k/64*span,aa=start+(k+1)/64*span;
+      let pt=t=>[Math.cos(t+angle)*rad, 2.3+Math.sin(t*1.4+angle)*2.5+tilt*Math.sin(t*3),Math.sin(t+angle)*rad];
+      let co=pal.colors[j%5].map(v=>v*.53);
+      this.addLine(pt(a),pt(aa),[...co,.075],[...co,.075]);
+    }
+  }
+  // Floating pearl-like seedpods close to the blooms.
+  for(let j=0;j<44;j++){
+    let owner=this.blooms[RI(this.blooms.length)],p=[owner[0]+R(-1,1),owner[1]+R(.4,2.6),owner[2]+R(-1,1)];
+    if(j%3===0)this.sphere(p,R(.022,.065),pal.colors[RI(5)].map(v=>v*.85),6,8,3,R(0,6),.035);
+  }
+  // Three particle sizes: distant dust, floating glints, near bokeh.
+  for(let i=0;i<(innerWidth<650?950:1750);i++){
+   let x=R(-16,16),y=R(-2.2,12),z=R(-18,13),depth=Math.hypot(x,z);
+   let c=pal.colors[RI(5)],alpha=R(.055,.32),size=R(3,14);
+   if(i%13===0){alpha=R(.30,.79);size=R(9,25)}
+   this.particles.push(x,y,z,...c,alpha,R(.10,.56),R(0,6.283),R(.02,.38),size)
+  }
+ }
+ upload(gl){if(this.solidBuffer)gl.deleteBuffer(this.solidBuffer);if(this.lineBuffer)gl.deleteBuffer(this.lineBuffer);if(this.particleBuffer)gl.deleteBuffer(this.particleBuffer);
+  this.solidBuffer=buffer(gl,this.solid);this.lineBuffer=buffer(gl,this.lines);this.particleBuffer=buffer(gl,this.particles);
+  this.solidCount=this.solid.length/15;this.lineCount=this.lines.length/9;this.particleCount=this.particles.length/11;
+ }
+}
+class Renderer{
+ constructor(gl){this.gl=gl;this.world=new World();this.programs={
+  surface:program(gl,vShader,fShader,['aPosition','aNormal','aColor','aUV','aMotion','aKind'],['uVP','uTime','uCamera','uFog','uStill']),
+  lines:program(gl,lineVS,lineFS,['aPosition','aColor','aMotion'],['uVP','uTime','uCamera','uFog']),
+  particles:program(gl,particleVS,particleFS,['aPosition','aColor','aOther'],['uVP','uTime','uHeight']),
+  bright:program(gl,quadVS,brightFS,['aPosition'],['uScene']),
+  blur:program(gl,quadVS,blurFS,['aPosition'],['uTex','uStep']),
+  composite:program(gl,quadVS,compositeFS,['aPosition'],['uScene','uBloom','uBloomPower','uTime','uResolution'])
+ };this.world.upload(gl);this.quad=buffer(gl,[-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]);this.resources=[];this.width=0;this.height=0;
+ }
+ attrib(buf,loc,components,strideBytes,offset){let gl=this.gl;if(loc<0)return;gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,components,gl.FLOAT,false,strideBytes,offset)}
+ bindSurface(p){let b=this.world.solidBuffer,a=p.a;this.attrib(b,a.aPosition,3,60,0);this.attrib(b,a.aNormal,3,60,12);this.attrib(b,a.aColor,4,60,24);this.attrib(b,a.aUV,2,60,40);this.attrib(b,a.aMotion,2,60,48);this.attrib(b,a.aKind,1,60,56)}
+ bindLines(p){let b=this.world.lineBuffer,a=p.a;this.attrib(b,a.aPosition,3,36,0);this.attrib(b,a.aColor,4,36,12);this.attrib(b,a.aMotion,2,36,28)}
+ bindParticles(p){let b=this.world.particleBuffer,a=p.a;this.attrib(b,a.aPosition,3,44,0);this.attrib(b,a.aColor,4,44,12);this.attrib(b,a.aOther,4,44,28)}
+ makeTarget(w,h,depth=false){let gl=this.gl,tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  let fb=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+  let rb=null;if(depth){rb=gl.createRenderbuffer();gl.bindRenderbuffer(gl.RENDERBUFFER,rb);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,w,h);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,rb)}
+  if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Framebuffer incomplete');return{tex,fb,rb,w,h};
+ }
+ resize(w,h){let gl=this.gl;if(this.width===w&&this.height===h)return;this.width=w;this.height=h;
+  for(let t of this.resources){gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fb);if(t.rb)gl.deleteRenderbuffer(t.rb)}
+  let halfw=Math.max(1,Math.floor(w/2)),halfh=Math.max(1,Math.floor(h/2));
+  this.scene=this.makeTarget(w,h,true);this.light=this.makeTarget(halfw,halfh);this.blur1=this.makeTarget(halfw,halfh);this.blur2=this.makeTarget(halfw,halfh);this.resources=[this.scene,this.light,this.blur1,this.blur2];gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+ }
+ useTexture(tex,unit){let gl=this.gl;gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,tex)}
+ fullScreen(p,target,w,h){let gl=this.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,target?target.fb:null);gl.viewport(0,0,w,h);gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);gl.useProgram(p.p);
+  this.attrib(this.quad,p.a.aPosition,2,8,0);gl.drawArrays(gl.TRIANGLES,0,6)}
+ draw(t,eye,vp){let gl=this.gl,pal=palettes[paletteIndex],p=this.programs;
+  const fog=pal.fog;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,this.scene.fb);gl.viewport(0,0,this.width,this.height);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);gl.disable(gl.BLEND);
+  gl.clearColor(...pal.bg,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(p.surface.p);gl.uniformMatrix4fv(p.surface.u.uVP,false,vp);gl.uniform1f(p.surface.u.uTime,t);gl.uniform1f(p.surface.u.uStill,frozen?1:0);gl.uniform3fv(p.surface.u.uCamera,new Float32Array(eye));gl.uniform3fv(p.surface.u.uFog,new Float32Array(fog));this.bindSurface(p.surface);gl.drawArrays(gl.TRIANGLES,0,this.world.solidCount);
+  gl.useProgram(p.lines.p);gl.uniformMatrix4fv(p.lines.u.uVP,false,vp);gl.uniform1f(p.lines.u.uTime,t);gl.uniform3fv(p.lines.u.uCamera,new Float32Array(eye));gl.uniform3fv(p.lines.u.uFog,new Float32Array(fog));this.bindLines(p.lines);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.depthMask(false);gl.drawArrays(gl.LINES,0,this.world.lineCount);
+  gl.useProgram(p.particles.p);gl.uniformMatrix4fv(p.particles.u.uVP,false,vp);gl.uniform1f(p.particles.u.uTime,t);gl.uniform1f(p.particles.u.uHeight,this.height);this.bindParticles(p.particles);gl.drawArrays(gl.POINTS,0,this.world.particleCount);gl.depthMask(true);gl.disable(gl.BLEND);
+  // Emissive post-processing, a reduced-resolution separable glow.
+  gl.useProgram(p.bright.p);this.useTexture(this.scene.tex,0);gl.uniform1i(p.bright.u.uScene,0);this.fullScreen(p.bright,this.light,this.light.w,this.light.h);
+  gl.useProgram(p.blur.p);this.useTexture(this.light.tex,0);gl.uniform1i(p.blur.u.uTex,0);gl.uniform2f(p.blur.u.uStep,1/this.light.w,0);this.fullScreen(p.blur,this.blur1,this.blur1.w,this.blur1.h);
+  gl.useProgram(p.blur.p);this.useTexture(this.blur1.tex,0);gl.uniform1i(p.blur.u.uTex,0);gl.uniform2f(p.blur.u.uStep,0,1/this.blur1.h);this.fullScreen(p.blur,this.blur2,this.blur2.w,this.blur2.h);
+  gl.useProgram(p.composite.p);this.useTexture(this.scene.tex,0);this.useTexture(this.blur2.tex,1);gl.uniform1i(p.composite.u.uScene,0);gl.uniform1i(p.composite.u.uBloom,1);gl.uniform1f(p.composite.u.uBloomPower,1.28);gl.uniform1f(p.composite.u.uTime,t);gl.uniform2f(p.composite.u.uResolution,this.width,this.height);this.fullScreen(p.composite,null,this.width,this.height);
+ }
+ regenerate(){this.world.build();this.world.upload(this.gl)}
+}
+let view={azimuth:.21,elevation:.30,distance:12.1,targetAzimuth:.21,targetElevation:.30,targetDistance:12.1,dragging:false,lastX:0,lastY:0,lastInput:0};
+function setCanvasEvents(canvas){const interact=()=>{$('#hint').style.opacity='0';view.lastInput=performance.now()};
+ canvas.addEventListener('pointerdown',e=>{view.dragging=true;view.lastX=e.clientX;view.lastY=e.clientY;canvas.setPointerCapture(e.pointerId);interact()});
+ canvas.addEventListener('pointermove',e=>{if(!view.dragging)return;const dx=e.clientX-view.lastX,dy=e.clientY-view.lastY;view.targetAzimuth-=dx*.006;view.targetElevation=clamp(view.targetElevation+dy*.005,-.11,1.20);view.lastX=e.clientX;view.lastY=e.clientY;interact()});
+ canvas.addEventListener('pointerup',()=>view.dragging=false);canvas.addEventListener('pointercancel',()=>view.dragging=false);
+ canvas.addEventListener('wheel',e=>{e.preventDefault();view.targetDistance=clamp(view.targetDistance*Math.exp(e.deltaY*.001),5.3,27);interact()},{passive:false});
+ let pinch=null;
+ canvas.addEventListener('touchmove',e=>{if(e.touches.length===2){const a=e.touches[0],b=e.touches[1],dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);if(pinch)view.targetDistance=clamp(view.targetDistance*pinch/dist,5.3,27);pinch=dist;view.dragging=false}},{passive:false});
+ canvas.addEventListener('touchend',()=>pinch=null);
+}
+function renderFrame(time){if(!engine)return;let now=time||performance.now(),dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));if(!lastFrame)dt=0;lastFrame=now;
+ if(!frozen)clock+=dt;
+ let damping=1-Math.pow(.00018,dt);view.azimuth+=(view.targetAzimuth-view.azimuth)*damping;view.elevation+=(view.targetElevation-view.elevation)*damping;view.distance+=(view.targetDistance-view.distance)*damping;
+ if(!view.dragging&&now-view.lastInput>5000&&!frozen){view.targetAzimuth+=dt*.025}
+ const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
+ engine.resize(w,h);
+ let az=view.azimuth,el=view.elevation,d=view.distance;
+ let eye=[Math.sin(az)*Math.cos(el)*d,Math.sin(el)*d+1.05,Math.cos(az)*Math.cos(el)*d],target=[0,.4,0];
+ let vp=matMul(matPerspective(.73,w/h,.1,90),matLookAt(eye,target,[0,1,0]));engine.draw(clock,eye,vp);
+}
+function init(canvas,existingGl){surface=canvas;gl=existingGl || canvas.getContext('webgl',{alpha:false,antialias:true,preserveDrawingBuffer:true,depth:true}) || canvas.getContext('experimental-webgl');if(!gl)throw Error('WebGL is unavailable in this browser.');
+ engine=new Renderer(gl);setCanvasEvents(canvas);$('#loading').classList.add('hidden');
+ setTimeout(()=>{let l=$('#loading');if(l)l.remove()},1300);
+ if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)frozen=true;
+ updateUI();
+}
+function newGarden(){gardenIndex++;seed=(seed+Math.floor(Math.random()*1000000)+23141)|0;if(engine)engine.regenerate();updateUI()}
+function updateUI(){$('#paletteBtn').textContent='◉  '+palettes[paletteIndex].name;$('#pauseBtn').textContent=frozen?'▶  PLAY':'Ⅱ  PAUSE';$('#counter').textContent='GARDEN '+String(gardenIndex).padStart(3,'0')+'   ·   '+(frozen?'STILL':'LIVE')}
+function switchPalette(){paletteIndex=(paletteIndex+1)%palettes.length; if(engine)engine.regenerate();updateUI()}
+function capture(){if(!surface)return;let a=document.createElement('a');a.download='MZCMG_VESPER_'+String(gardenIndex).padStart(3,'0')+'.png';a.href=surface.toDataURL('image/png');document.body.append(a);a.click();a.remove()}
+$('#paletteBtn').addEventListener('click',switchPalette);$('#pauseBtn').addEventListener('click',()=>{frozen=!frozen;updateUI()});$('#captureBtn').addEventListener('click',capture);$('#reseedBtn').addEventListener('click',newGarden);
+window.addEventListener('keydown',e=>{if(['Space','KeyP','KeyR','KeyS'].includes(e.code)){e.preventDefault();if(e.code==='Space'){frozen=!frozen;updateUI()}if(e.code==='KeyP')switchPalette();if(e.code==='KeyR')newGarden();if(e.code==='KeyS')capture()}});
+function sizeCanvas(c){const dpr=Math.min(window.devicePixelRatio||1,innerWidth<700?1.15:1.45);c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}
+function showError(err){
+ console.error('VESPER renderer:',err);
+ const l=$('#loading');
+ if(l){l.classList.remove('hidden');l.style.opacity='1';l.style.pointerEvents='auto';l.style.padding='26px';l.style.textAlign='center';l.style.lineHeight='1.8';l.style.letterSpacing='.08em';l.innerHTML='<div style="max-width:360px"><strong>VESPER NEEDS WEBGL</strong><div style="font-size:12px;margin-top:14px;color:#c5d4d4;font-weight:400">Open in Safari or Chrome with hardware acceleration enabled. If you opened this inside another app, use Open in Browser.</div></div>'}
+}
+function fallback(){
+ let c=document.createElement('canvas');document.body.prepend(c);sizeCanvas(c);
+ try{init(c)}catch(err){showError(err);return}
+ let running=true;
+ function loop(t){
+   if(!running)return;
+   try{renderFrame(t)}catch(err){running=false;showError(err);return}
+   requestAnimationFrame(loop)
+ }
+ requestAnimationFrame(loop);
+ window.addEventListener('resize',()=>sizeCanvas(c));
+ document.addEventListener('visibilitychange',()=>{lastFrame=performance.now()});
+ c.addEventListener('webglcontextlost',e=>{e.preventDefault();running=false;showError(new Error('WebGL context lost; refresh to restart'))});
+}
+fallback();
+})()
+</script>
+</body>
+</html>
