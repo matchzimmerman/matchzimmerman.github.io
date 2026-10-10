@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · BIT FIELD 028 · TRACKSIDE</title>
+<!--
+  MZTV · BIT FIELD 028 · TRACKSIDE
+  A full Grand Prix (Silverstone 2025, 52 laps) replayed in real time from timing telemetry.
+  Every orb is a car carrying its own data: position on the circuit, speed, rpm, gear, throttle,
+  brake, DRS. A crew of five drone cameras (MZCAM, the camera system extracted from 48 PLANT)
+  flies the circuit: trackside drones race ahead of the action to marks at key corners and
+  whip-pan with the cars as they pass; a chase drone rides behind; a high drone orbits; a low
+  drone waits on the straights. The director cuts only to a drone that is on its mark, and
+  only on the 16th note.
+  The live lens is the microphone: you hear every car from where the camera is.
+
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?t=SEC ?capture=1 ?bay=0
+  Keys:   I info · C camera bay · M mute
+-->
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #f6efd9; --dim: rgba(246,239,217,0.62); --bg: rgba(11,20,51,0.78); --pink: #ff3d8b; --lime: #c4f24a; --line: rgba(246,239,217,0.22); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1433; }
+  canvas { display: block; }
+  #v { position: fixed; inset: 0; width: 100vw; height: 100vh; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #hud { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+  #info { position: fixed; left: 1.6vh; bottom: 1.6vh; max-width: 46vw; font: 400 1.18vh/1.45 "JetBrains Mono", ui-monospace, monospace; color: var(--ink);
+          background: var(--bg); border-left: 3px solid var(--pink); padding: 1vh 1.3vh; letter-spacing: 0.02em; }
+  #info b { font-weight: 700; } #info .d { color: var(--dim); } #info .k { color: var(--lime); } #info .p { color: var(--pink); }
+  #info .log { margin-top: 0.6vh; border-top: 1px solid var(--line); padding-top: 0.5vh; color: var(--dim); white-space: pre; }
+  .mzcam-bay { position: fixed; right: 1.2vh; top: 1.2vh; width: 19vh; display: flex; flex-direction: column; gap: 0.7vh; }
+  .mzcam-plan { width: 19vh; height: 19vh; border: 1px solid var(--line); }
+  .mzcam-mon { position: relative; border: 1px solid var(--line); background: #0b1433; }
+  .mzcam-mon canvas { width: 19vh; height: 10.69vh; image-rendering: pixelated; }
+  .mzcam-mon.live { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink); }
+  .mzcam-lab { font: 400 0.95vh/1.3 "JetBrains Mono", monospace; color: var(--ink); background: var(--bg); padding: 0.25vh 0.5vh; border-left: 4px solid #f4dc2a; white-space: nowrap; overflow: hidden; }
+  #load { position: fixed; left: 1.6vh; top: 1.6vh; font: 400 1.3vh "JetBrains Mono", monospace; color: var(--dim); }
+</style>
+</head>
+<body>
+<canvas id="v"></canvas>
+<canvas id="hud"></canvas>
+<div id="info"></div>
+<div id="load">TRACKSIDE · loading telemetry</div>
+<script src="../../lib/mzcam.js"></script>
+<script>
+'use strict';
+const { V, add, sub, mul, dot, cross, len, norm, lerp, clamp, fin } = MZCam;
+
+/* ------------------------------------------------------------------ config */
+const Q = new URLSearchParams(location.search);
+const qn = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? v : d; };
+const CFG = {
+  info: Q.get('info') !== '0', fresh: Q.get('fresh') === '1', audio: Q.get('audio') !== '0',
+  seed: qn('seed', 28), rate: clamp(qn('rate', 1), 0.05, 60), lines: clamp(Math.round(qn('lines', 540)), 180, 1080),
+  t: Q.has('t') ? qn('t', 0) : null, capture: Q.get('capture') === '1', bay: Q.get('bay') !== '0',
+};
+const STORE = 'mztv-bf028-trackside-v1';
+const GAP = 90; // seconds of empty circuit between runs of the race
+
+/* ------------------------------------------------------------------ palette (inks for the print pass) */
+const INK = {
+  night: '#0b1433', ground: '#14245a', grid: '#22398a', track: '#3557c4', sky: '#2a3f94', haze: '#6f86e6',
+  cream: '#f6efd9', pink: '#ff3d8b', coral: '#ff6a3d', lime: '#c4f24a', yellow: '#f4dc2a',
+};
+const INKS = Object.values(INK);
+const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+/* ------------------------------------------------------------------ seeded random */
+let rs = (CFG.seed * 2654435761) >>> 0;
+const rnd = () => { rs ^= rs << 13; rs >>>= 0; rs ^= rs >> 17; rs ^= rs << 5; rs >>>= 0; return rs / 4294967296; };
+const hrand = (a, b) => { let h = (a * 374761393 + b * 668265263) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+/* ------------------------------------------------------------------ memory */
+let MEM = { v: 1, epoch: 0, run: 1, lastRun: -1, marks: {}, log: [] };
+try { if (!CFG.fresh) { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.v === 1) MEM = Object.assign(MEM, s); } } catch (e) {}
+function save() { if (CFG.t !== null || CFG.capture) return; try { localStorage.setItem(STORE, JSON.stringify(MEM)); } catch (e) {} }
+function logLine(s) { MEM.log.unshift(`${fmtClock()} ${s}`); MEM.log.length = Math.min(MEM.log.length, 40); }
+
+/* ------------------------------------------------------------------ race data */
+let R = null; // {meta, cars, L, step, cx, cz, tx, tz, curv, n}
+async function loadRace() {
+  const [meta, bin] = await Promise.all([fetch('data/race.json').then(r => r.json()), fetch('data/race.bin').then(r => r.arrayBuffer())]);
+  const N = meta.n, T = meta.track, n = T.c.length, L = T.len, step = T.step;
+  const cx = new Float32Array(n), cz = new Float32Array(n), tx = new Float32Array(n), tz = new Float32Array(n), curv = new Float32Array(n);
+  for (let i = 0; i < n; i++) { cx[i] = T.c[i][0]; cz[i] = T.c[i][2]; }
+  for (let i = 0; i < n; i++) { const a = (i - 2 + n) % n, b = (i + 2) % n; const dx = cx[b] - cx[a], dz = cz[b] - cz[a], l = Math.hypot(dx, dz) || 1; tx[i] = dx / l; tz[i] = dz / l; }
+  for (let i = 0; i < n; i++) { const a = (i - 8 + n) % n, b = (i + 8) % n; curv[i] = (tx[a] * tz[b] - tz[a] * tx[b]) / (16 * step); } // signed 1/radius
+  const cars = meta.cars.map((c, ci) => {
+    const o = c.off, dS = new Uint16Array(bin, o, N), lat = new Int8Array(bin, o + 2 * N, N);
+    const spd = new Uint8Array(bin, o + 3 * N, N), rpm = new Uint8Array(bin, o + 4 * N, N), thr = new Uint8Array(bin, o + 5 * N, N), flg = new Uint8Array(bin, o + 6 * N, N);
+    const S = new Float32Array(N); let acc = c.base;
+    for (let k = 0; k < N; k++) { if (c.first !== null && k >= c.first && k <= c.last) acc += (k === c.first ? 0 : dS[k]); S[k] = acc / 10; }
+    if (c.first !== null) for (let k = 0; k < c.first; k++) S[k] = S[c.first];
+    if (c.last !== null) for (let k = c.last + 1; k < N; k++) S[k] = S[c.last];
+    return { i: ci, code: c.code, num: c.num, first: c.first, last: c.last, S, lat, spd, rpm, thr, flg, pits: c.pits,
+             st: { vis: 0, S: 0, s: 0, lat: 0, v: 0, rpm: 0, thr: 0, brake: 0, drs: 0, gear: 0, pos: V(), dir: V(1, 0, 0), pit: false, live: false, lap: 0 } };
+  });
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < n; i++) { x0 = Math.min(x0, cx[i]); x1 = Math.max(x1, cx[i]); z0 = Math.min(z0, cz[i]); z1 = Math.max(z1, cz[i]); }
+  R = { meta, cars, L, step, n, cx, cz, tx, tz, curv, N, hz: meta.hz, dur: meta.dur, bounds: { x0, x1, z0, z1 } };
+}
+// centerline sample at lap distance s (metres)
+function trackAt(s) {
+  const L = R.L, u = (((s % L) + L) % L) / R.step, i = Math.floor(u) % R.n, j = (i + 1) % R.n, k = u - Math.floor(u);
+  const tx = lerp(R.tx[i], R.tx[j], k), tz = lerp(R.tz[i], R.tz[j], k), tl = Math.hypot(tx, tz) || 1;
+  return { x: lerp(R.cx[i], R.cx[j], k), z: lerp(R.cz[i], R.cz[j], k), tx: tx / tl, tz: tz / tl, i };
+}
+const worldAt = (s, lat, y = 0) => { const t = trackAt(s); return V(t.x - t.tz * lat, y, t.z + t.tx * lat); };
+
+/* ------------------------------------------------------------------ race clock */
+const CYCLE = () => R.dur + GAP;
+let CLOCK = { tau: 0, run: 1 };
+let virtualNow = Date.now() / 1000; // capture mode wall clock (s)
+const wallS = () => (CFG.capture ? virtualNow : Date.now() / 1000);
+function initClock() {
+  if (CFG.t !== null) { MEM.epoch = wallS() - CFG.t / CFG.rate; return; }
+  if (!MEM.epoch || CFG.fresh) { MEM.epoch = wallS() - (R.meta.lightsOut - 12) / CFG.rate; MEM.run = 1; }
+}
+function tickClock() {
+  const raw = (wallS() - MEM.epoch) * CFG.rate, c = CYCLE();
+  const run = Math.floor(raw / c), tau = raw - run * c;
+  CLOCK.tau = tau; CLOCK.cycleRun = run;
+  if (CFG.t === null && run !== MEM.lastRun) { if (MEM.lastRun >= 0 && run > MEM.lastRun) { MEM.run += run - MEM.lastRun; logLine(`RUN ${MEM.run} · the grid forms again`); } MEM.lastRun = run; }
+}
+const fmtClock = () => { if (!R) return '--:--'; const t = CLOCK.tau - R.meta.lightsOut, s = Math.abs(Math.floor(t)); return `${t < 0 ? '-' : ''}${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+
+/* ------------------------------------------------------------------ car state */
+function cr(a, b, c, d, k) { const k2 = k * k, k3 = k2 * k; return 0.5 * (2 * b + (-a + c) * k + (2 * a - 5 * b + 4 * c - d) * k2 + (-a + 3 * b - 3 * c + d) * k3); }
+function sampleS(car, tau) {
+  const N = R.N, u = clamp(tau * R.hz, 0, N - 1.001), i = Math.floor(u), k = u - i;
+  const g = j => car.S[clamp(j, 0, N - 1)];
+  return cr(g(i - 1), g(i), g(i + 1), g(i + 2), k);
+}
+function sampleLat(car, tau) {
+  const N = R.N, u = clamp(tau * R.hz, 0, N - 1.001), i = Math.floor(u), k = u - i;
+  const g = j => car.lat[clamp(j, car.first ?? 0, car.last ?? N - 1)] / 4;
+  return cr(g(i - 1), g(i), g(i + 1), g(i + 2), k);
+}
+const ORB = 1.7; // orb radius, metres
+function updateCars(tau) {
+  const N = R.N, idx = tau * R.hz;
+  for (const car of R.cars) {
+    const st = car.st;
+    if (car.first === null) { st.vis = 0; st.live = false; continue; }
+    const i = Math.floor(idx);
+    // on the grid before their first sample only if that is lights out; gone 8 s after their last
+    const pre = i < car.first, post = i > car.last;
+    let vis = 1;
+    if (pre) vis = car.first <= R.meta.lightsOut * R.hz + 6 && tau > 2 ? 1 : 0;
+    if (post) vis = clamp(1 - (idx - car.last) / (8 * R.hz), 0, 1);
+    if (tau > R.dur) vis = 0;
+    st.vis = vis; st.live = vis > 0 && !post; st.grid = pre;
+    if (vis <= 0) continue;
+    const k = clamp(i, 0, N - 1);
+    const S = sampleS(car, tau), S2 = sampleS(car, tau + 0.1);
+    st.S = S; st.lap = Math.max(1, Math.floor(S / R.L) + 1);
+    st.lat = sampleLat(car, tau); st.pit = Math.abs(st.lat) > 9;
+    const has = st.live && !pre;
+    st.v = has ? Math.max(0, (S2 - S) / 0.1) : 0;
+    st.rpm = has ? car.rpm[k] * 60 : pre ? 4200 : 0; st.thr = has ? car.thr[k] : 0;
+    const f = car.flg[k]; st.brake = has && (f & 1) ? 1 : 0; st.drs = has && (f & 2) ? 1 : 0; st.gear = has ? Math.min(8, f >> 4) : 0;
+    const p0 = worldAt(S, st.lat, ORB), p1 = worldAt(S + 2, sampleLat(car, tau + 0.05), ORB);
+    st.pos = p0; st.dir = norm(sub(p1, p0));
+    st.vel = mul(st.dir, st.v);
+  }
+}
+function running() { return R.cars.filter(c => c.st.live && c.st.vis > 0.5); }
+function order() { return running().slice().sort((a, b) => b.st.S - a.st.S); }
+
+/* ------------------------------------------------------------------ race control: flags, weather */
+function flagAt(tau) {
+  let f = 'GREEN', drs = false;
+  for (const e of R.meta.events) {
+    if (e[0] > tau) break;
+    const m = e[2];
+    if (m.includes('VIRTUAL SAFETY CAR DEPLOYED')) f = 'VSC';
+    else if (m.includes('SAFETY CAR DEPLOYED')) f = 'SC';
+    else if (m.includes('TRACK CLEAR') || m.includes('ENDING') || m.includes('IN THIS LAP')) f = m.includes('TRACK CLEAR') ? 'GREEN' : f + ' IN';
+    else if (m.includes('DRS ENABLED')) drs = true; else if (m.includes('DRS DISABLED')) drs = false;
+    else if (m.includes('CHEQUERED')) f = 'CHEQUERED';
+  }
+  if (tau < R.meta.lightsOut) f = 'GRID'; if (tau > R.dur) f = 'EMPTY';
+  return { f, drs };
+}
+function weatherAt(tau) { let w = R.meta.weather[0]; for (const x of R.meta.weather) { if (x[0] > tau) break; w = x; } return { air: w[1], hum: w[2], rain: w[3], wind: w[4], dir: w[5] }; }
+
+/* ------------------------------------------------------------------ key points on the circuit */
+let KP = [];
+function buildKeyPoints() {
+  const L = R.L, kps = [];
+  const clearOfTrack = (p, sOwn) => { // a mark must not sit on another part of the track
+    for (let i = 0; i < R.n; i += 2) { const s = i * R.step, ds = Math.abs((((s - sOwn) % L) + L * 1.5) % L - L / 2); if (ds < 120) continue;
+      if (Math.hypot(R.cx[i] - p.x, R.cz[i] - p.z) < 22) return false; }
+    return true;
+  };
+  const markFor = (s, side, dist, h) => { const t = trackAt(s); return V(t.x - t.tz * dist * side, h, t.z + t.tx * dist * side); };
+  for (const c of R.meta.track.corners) {
+    const s = c.d, i = Math.floor(((s % L) + L) % L / R.step) % R.n, k = R.curv[i];
+    const outside = k > 0 ? -1 : 1; // lateral side away from the centre of the turn
+    const variants = [];
+    for (const [side, dist, h, kind] of [[outside, 34, 9, 'OUTSIDE'], [-outside, 24, 4, 'APEX'], [outside, 60, 22, 'HIGH']]) {
+      for (const sOff of [-30, 0, 30]) { const p = markFor(s + sOff, side, dist, h); if (clearOfTrack(p, s)) { variants.push({ pos: p, kind, look: worldAt(s, 0, 0.5) }); break; } }
+    }
+    if (variants.length) kps.push({ id: 'T' + c.n, s, kind: 'corner', variants });
+  }
+  // straights: long runs of low curvature
+  let run = []; const straights = [];
+  for (let j = 0; j < R.n * 1.1; j++) { const i = j % R.n; if (Math.abs(R.curv[i]) < 1 / 900) run.push(j); else { if (run.length * R.step > 380) straights.push(run.slice()); run = []; } }
+  straights.forEach((rn, q) => {
+    const s = rn[Math.floor(rn.length * 0.62)] * R.step, variants = [];
+    for (const side of [1, -1]) { const p = markFor(s, side, 11, 1.4); if (clearOfTrack(p, s)) variants.push({ pos: p, kind: 'LOW', look: worldAt(s, 0, 0.5) }); }
+    if (variants.length && !kps.some(k => k.kind === 'straight' && Math.abs(k.s - s) < 300)) kps.push({ id: 'S' + (q + 1), s: s % L, kind: 'straight', variants });
+  });
+  KP = kps;
+}
+const markScore = kp => (MEM.marks[kp.id] || 0);
+
+/* ------------------------------------------------------------------ crew (MZCAM) + producer */
+let crew, bay, PROD;
+const ROLE_COL = { track: '#f4dc2a', low: '#f4dc2a', chase: '#f4dc2a', high: '#f4dc2a' };
+function initCrew() {
+  crew = new MZCam.Crew({
+    drones: [{ name: 'CAM 1', role: 'track' }, { name: 'CAM 2', role: 'track' }, { name: 'CAM 3', role: 'low' }, { name: 'CAM 4', role: 'chase' }, { name: 'CAM 5', role: 'high' }].map(d => ({ ...d, col: INK.yellow })),
+    speed: 150, accel: 90, cruise: 45, minAlt: 1, arrive: 2, size: 2.2, tallyCol: INK.pink,
+    gate: t => AU.gate(t),
+    onCut: (from, to) => { PROD.lastRole[to.role] = crew.now; AU.onCut(); },
+  });
+  PROD = { target: null, since: -1e9, lastRole: {}, overtakes: [], lastOrder: null, battle: null, story: '' };
+  if (CFG.bay) {
+    bay = new MZCam.Bay(crew, { parent: document.body, w: 192, h: 108, planW: 300, planH: 300, bounds: R.bounds, every: 2,
+      render: (ctx, w, h, P, viewer) => renderView(ctx, w, h, P, viewer, true), planBg: drawPlanBg });
+  }
+}
+const carById = i => (i == null ? null : R.cars[i]);
+function tgtCar() { const c = carById(PROD.target); return c && c.st.vis > 0.5 ? c : null; }
+const nextAbs = (S, s) => S + (((s - S) % R.L) + R.L) % R.L;
+
+function pickTarget(t, force) {
+  const ord = order().filter(c => !c.st.pit);
+  if (!ord.length) { PROD.target = null; return; }
+  const cur = tgtCar();
+  const recentOT = PROD.overtakes.find(o => t - o.t < 25 && R.cars[o.by].st.live && !R.cars[o.by].st.pit);
+  if (!force && cur && !cur.st.pit && t - PROD.since < 40 && !(recentOT && recentOT.by !== cur.i && t - recentOT.t < 3)) return;
+  let pick = null, story = '';
+  if (recentOT) { pick = R.cars[recentOT.by]; story = `#${pick.num} just went through`; }
+  if (!pick) { // closest battle near the front
+    let best = null;
+    for (let q = 1; q < Math.min(ord.length, 12); q++) { const a = ord[q - 1], b = ord[q]; const gap = (a.st.S - b.st.S) / Math.max(20, b.st.v); if (gap < 1.1 && (!best || q + gap * 4 < best.sc)) best = { sc: q + gap * 4, car: b, front: a, gap }; }
+    if (best && hrand(Math.floor(t / 40), 3) < 0.8) { pick = best.car; story = `#${best.car.num} hunting #${best.front.num} · ${best.gap.toFixed(2)}s`; }
+  }
+  if (!pick) { const r = hrand(Math.floor(t / 40), 7); pick = r < 0.55 ? ord[0] : ord[Math.floor(hrand(Math.floor(t / 40), 9) * ord.length)]; story = pick === ord[0] ? `#${pick.num} leads` : `#${pick.num} · P${ord.indexOf(pick) + 1}`; }
+  if (!cur || pick.i !== cur.i) { PROD.target = pick.i; PROD.since = t; PROD.story = story; logLine(`FOLLOW ${story}`); }
+  else PROD.story = story;
+}
+
+// --- shots ---
+function trackShot(kp, variant, carI) {
+  const car = R.cars[carI], startS = car.st.S;
+  const sAbs = nextAbs(startS + 25, kp.s);
+  const sh = {
+    kind: kp.kind === 'straight' ? 'low' : 'track', kp, car: carI, sAbs, mark: { pos: variant.pos },
+    label: `${kp.kind === 'straight' ? 'LOW · STRAIGHT ' + kp.id.slice(1) : 'TRACKSIDE ' + kp.id} · ${variant.kind}`,
+    pan: variant.kind === 'LOW' ? 11 : variant.kind === 'APEX' ? 9 : 7, minHold: 2.2, maxHold: 11, passed: false,
+    eta() { const c = car.st; return c.vis > 0.5 && c.live ? (sAbs - c.S) / Math.max(12, c.v) : 1e9; },
+    aim(t, d) {
+      const c = car.st;
+      const entry = worldAt(kp.s - 110, 0, 1);
+      const dist = c.vis > 0.5 ? len(sub(c.pos, d.pos)) : 1e9;
+      const look = dist < 420 ? add(c.pos, mul(c.vel || V(), 0.06)) : entry;
+      const D = len(sub(look, d.pos)), frame = variant.kind === 'LOW' ? 30 : variant.kind === 'APEX' ? 16 : 28;
+      return { look, fov: clamp(2 * Math.atan(frame / Math.max(1, D)) * 180 / Math.PI, variant.kind === 'LOW' ? 34 : 7, variant.kind === 'LOW' ? 62 : 48) };
+    },
+    win: variant.kind === 'LOW' ? 2.6 : 4.2,
+    ready() { const e = this.eta(); return e > 0.5 && e < this.win; },
+    want() { const e = this.eta(); return e < this.win && e > 0.5 ? 5 : 0.2; },
+    done(t, d, cr) { const c = car.st; if (c.vis < 0.5 || !c.live) return true; if (c.S > sAbs + 140) { if (!this.passed) { this.passed = true; } return true; } return this.eta() > 40; },
+    onAir() { MEM.marks[kp.id] = (MEM.marks[kp.id] || 0) + 1; },
+  };
+  return sh;
+}
+function chaseShot(carI) {
+  const car = R.cars[carI], side = hrand(carI, Math.floor(crew.now / 30)) < 0.5 ? -1 : 1;
+  return {
+    kind: 'chase', car: carI, label: `CHASE · #${car.num}`, pan: 6, minHold: 4, maxHold: 13,
+    pose(t) { const c = car.st; if (c.vis < 0.3) return null; const n = V(-c.dir.z, 0, c.dir.x); return { pos: add(c.pos, add(mul(c.dir, -26), add(mul(n, side * 6), V(0, 8, 0)))) }; },
+    aim() { const c = car.st; return { look: add(c.pos, mul(c.dir, 25)), fov: 42 }; },
+    want() { const l = PROD.lastRole.chase || -1e9; return car.st.live ? (crew.now - l < 10 ? 0.8 : 2) : 0; },
+    done() { return car.i !== PROD.target || car.st.vis < 0.5; },
+  };
+}
+function highShot(carI) {
+  const car = R.cars[carI], a0 = hrand(carI, 11) * 6.283, dir = hrand(carI, 12) < 0.5 ? -1 : 1;
+  return {
+    kind: 'high', car: carI, label: `HIGH · #${car.num}`, pan: 1.6, minHold: 6, maxHold: 16,
+    pose(t) { const c = car.st; if (c.vis < 0.3) return null; const a = a0 + dir * t * 0.05; return { pos: V(c.pos.x + Math.cos(a) * 240, 150, c.pos.z + Math.sin(a) * 240) }; },
+    aim(t, d) { const c = car.st; const D = len(sub(c.pos, d.pos)); return { look: add(c.pos, mul(c.dir, 30)), fov: clamp(2 * Math.atan(110 / D) * 180 / Math.PI, 12, 50) }; },
+    want() { const l = PROD.lastRole.high || -1e9; return car.st.live ? (crew.now - l < 25 ? 0.6 : 1.6) : 0; },
+    done() { return car.i !== PROD.target || car.st.vis < 0.5; },
+  };
+}
+function surveyShot(kp, v) { // the circuit with nobody on it
+  return {
+    kind: 'survey', label: `SURVEY ${kp.id}`, mark: { pos: v.pos }, pan: 0.8, minHold: 7, maxHold: 14, t0: crew.now,
+    aim(t) { const s = kp.s - 140 + ((t - this.t0) * 9) % 280; return { look: worldAt(s, 0, 0.5), fov: 34 }; },
+    want() { return tgtCar() ? 0.1 : 1 + hrand(kp.s | 0, Math.floor(crew.now / 13)); },
+    done(t) { return (tgtCar() && t - this.t0 > 2) || t - this.t0 > 40; },
+    start(d) { this._d = d; },
+  };
+}
+function highSurvey() {
+  const b = R.bounds, c = V((b.x0 + b.x1) / 2, 0, (b.z0 + b.z1) / 2);
+  return { kind: 'high', label: 'HIGH · CIRCUIT', pan: 0.6, minHold: 8, maxHold: 18,
+    pose(t) { const a = t * 0.02; return { pos: V(c.x + Math.cos(a) * 1300, 520, c.z + Math.sin(a) * 1300) }; },
+    aim() { return { look: c, fov: 52 }; }, want() { return tgtCar() ? 0 : 1.2; }, done() { return !!tgtCar(); } };
+}
+
+function produce(t) {
+  const tc = tgtCar();
+  for (const d of crew.drones) {
+    if (d.id === crew.live && d.shot && !crew._done(d)) continue;
+    const isDone = !d.shot || crew._done(d);
+    if (!isDone) continue;
+    if (d.id === crew.live) continue; // the live shot finishes on air; it is replaced after the cut
+    if (!tc) { // empty circuit or nothing worth following: survey
+      if (d.role === 'high') crew.assign(d, highSurvey());
+      else { const kp = KP[Math.floor(hrand(d.id + 7 * MEM.run, Math.floor(t / 20)) * KP.length)]; crew.assign(d, surveyShot(kp, kp.variants[0])); }
+      continue;
+    }
+    if (d.role === 'chase') { crew.assign(d, chaseShot(tc.i)); continue; }
+    if (d.role === 'high') { crew.assign(d, highShot(tc.i)); continue; }
+    // trackside / low: race ahead of the target to a key point it will reach after the drone can get there
+    const want = d.role === 'low' ? 'straight' : 'corner';
+    const taken = new Set(crew.drones.filter(o => o !== d && o.shot && o.shot.kp).map(o => o.shot.kp.id));
+    let best = null;
+    for (const kp of KP) {
+      if (kp.kind !== want || taken.has(kp.id)) continue;
+      const sAbs = nextAbs(tc.st.S + 25, kp.s), eta = (sAbs - tc.st.S) / Math.max(15, tc.st.v);
+      const vi = Math.floor(hrand(kp.s | 0, MEM.run * 31 + Math.floor(t / 60) + d.id) * kp.variants.length), v = kp.variants[vi];
+      const fly = len(sub(v.pos, d.pos)) / (crew.o.speed * 0.7) + 2.5;
+      if (eta < fly + 1.2 || eta > 34) continue;
+      const sc = (1 + Math.log1p(markScore(kp)) * 0.35) / (1 + eta / 12) * (0.75 + 0.5 * hrand(kp.s | 0, Math.floor(t)));
+      if (!best || sc > best.sc) best = { sc, kp, v };
+    }
+    if (best) crew.assign(d, trackShot(best.kp, best.v, tc.i));
+    else if (!d.shot) { const kp = KP.find(k => k.kind === want) || KP[0]; crew.assign(d, surveyShot(kp, kp.variants[0])); }
+  }
+}
+
+// overtakes: adjacent swaps in running order (pit lane and lap 1 chaos excluded)
+function watchOrder(t) {
+  const ord = order().filter(c => !c.st.pit);
+  const ids = ord.map(c => c.i);
+  if (PROD.lastOrder && CLOCK.tau > R.meta.lightsOut + 40) {
+    const prev = new Map(PROD.lastOrder.map((id, q) => [id, q]));
+    for (let q = 0; q < ids.length; q++) {
+      const was = prev.get(ids[q]); if (was == null || was <= q) continue;
+      // moved up: which car did it pass?
+      for (let r = q + 1; r < ids.length; r++) { const w2 = prev.get(ids[r]); if (w2 != null && w2 < was && w2 >= q) {
+        const by = R.cars[ids[q]], of = R.cars[ids[r]];
+        if (Math.abs(by.st.S - of.st.S) < 60 && !of.st.pit) {
+          PROD.overtakes.unshift({ t, by: by.i, of: of.i, at: by.st.S });
+          PROD.overtakes.length = Math.min(8, PROD.overtakes.length);
+          const near = nearestKP(by.st.S); if (near) MEM.marks[near.id] = (MEM.marks[near.id] || 0) + 3;
+          logLine(`#${by.num} PASSES #${of.num} → P${q + 1}${near ? ' near ' + near.id : ''}`);
+          AU.overtake(by);
+        }
+        break; } }
+    }
+  }
+  PROD.lastOrder = ids;
+}
+function nearestKP(S) { let b = null, bd = 1e9; for (const k of KP) { const d = Math.abs((((S - k.s) % R.L) + R.L * 1.5) % R.L - R.L / 2); if (d < bd) { bd = d; b = k; } } return bd < 250 ? b : null; }
+
+/* ------------------------------------------------------------------ rendering */
+const out = document.getElementById('v'), hud = document.getElementById('hud');
+let W = 960, H = 540;
+const work = document.createElement('canvas'); let wctx = work.getContext('2d');
+function resize() {
+  H = CFG.lines; W = Math.round(H * 16 / 9);
+  work.width = W; work.height = H; out.width = W; out.height = H;
+  hud.width = Math.round(innerWidth * devicePixelRatio); hud.height = Math.round(innerHeight * devicePixelRatio);
+  if (GL) GL.gl.viewport(0, 0, W, H);
+}
+// the whole frame: sky, ground, grid, track, orbs, drones (sorted)
+let FLAG = { f: 'GREEN' }, WX = { rain: 0 };
+function renderView(ctx, w, h, P, viewer, thumb) {
+  const cam = P.cam;
+  // sky and ground
+  const hy = clamp(P.horizon(), -10, h + 10);
+  const rain = WX.rain ? 1 : 0;
+  ctx.fillStyle = INK.ground; ctx.fillRect(0, 0, w, h);
+  if (hy > 0) {
+    const g = ctx.createLinearGradient(0, 0, 0, hy);
+    g.addColorStop(0, INK.sky); g.addColorStop(1, rain ? '#4a5a9a' : INK.haze);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, Math.ceil(hy));
+  }
+  // ground: a radar grid every 100 m near the lens
+  const gx = Math.round(cam.pos.x / 100) * 100, gz = Math.round(cam.pos.z / 100) * 100, span = thumb ? 800 : 1400, stepG = thumb ? 200 : 100;
+  ctx.strokeStyle = INK.grid; ctx.lineWidth = 1; ctx.beginPath();
+  for (let q = -span; q <= span; q += stepG) {
+    let s = P.seg(V(gx + q, 0, gz - span), V(gx + q, 0, gz + span)); if (s) { ctx.moveTo(s[0][0], s[0][1]); ctx.lineTo(s[1][0], s[1][1]); }
+    s = P.seg(V(gx - span, 0, gz + q), V(gx + span, 0, gz + q)); if (s) { ctx.moveTo(s[0][0], s[0][1]); ctx.lineTo(s[1][0], s[1][1]); }
+  }
+  ctx.stroke();
+  // track ribbon
+  const HW = 7.5;
+  ctx.fillStyle = INK.track; ctx.beginPath();
+  const n = R.n;
+  let i = 0;
+  while (i < n) {
+    const d = Math.hypot(R.cx[i] - cam.pos.x, R.cz[i] - cam.pos.z);
+    const st = thumb ? (d < 200 ? 2 : 6) : (d < 150 ? 1 : d < 600 ? 2 : 4);
+    const j = Math.min(i + st, n), jj = j % n;
+    const a = V(R.cx[i], 0, R.cz[i]), b = V(R.cx[jj], 0, R.cz[jj]);
+    const na = V(-R.tz[i] * HW, 0, R.tx[i] * HW), nb = V(-R.tz[jj] * HW, 0, R.tx[jj] * HW);
+    const q = P.poly([sub(a, na), add(a, na), add(b, nb), sub(b, nb)]);
+    if (q) { ctx.moveTo(q[0][0], q[0][1]); for (let k = 1; k < q.length; k++) ctx.lineTo(q[k][0], q[k][1]); ctx.closePath(); }
+    i = j;
+  }
+  ctx.fill();
+  if (!thumb) { // edges near the lens
+    ctx.strokeStyle = INK.haze; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i2 = 0; i2 < n; i2++) {
+      const d = Math.hypot(R.cx[i2] - cam.pos.x, R.cz[i2] - cam.pos.z); if (d > 260) continue;
+      const j2 = (i2 + 1) % n;
+      for (const sd of [-1, 1]) { const s = P.seg(V(R.cx[i2] - R.tz[i2] * HW * sd, 0, R.cz[i2] + R.tx[i2] * HW * sd), V(R.cx[j2] - R.tz[j2] * HW * sd, 0, R.cz[j2] + R.tx[j2] * HW * sd)); if (s) { ctx.moveTo(s[0][0], s[0][1]); ctx.lineTo(s[1][0], s[1][1]); } }
+    }
+    ctx.stroke();
+    // the line
+    const t0 = trackAt(0), l0 = P.poly([V(t0.x - t0.tz * HW, 0, t0.z + t0.tx * HW), V(t0.x + t0.tz * HW, 0, t0.z - t0.tx * HW), V(t0.x + t0.tz * HW + t0.tx * 2, 0, t0.z - t0.tx * HW + t0.tz * 2), V(t0.x - t0.tz * HW + t0.tx * 2, 0, t0.z + t0.tx * HW + t0.tz * 2)]);
+    if (l0) { ctx.fillStyle = INK.cream; ctx.beginPath(); l0.forEach((p, k) => (k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.fill(); }
+  }
+  // radar rings around the followed car
+  const tc = tgtCar();
+  if (tc && !thumb) {
+    ctx.strokeStyle = INK.pink; ctx.lineWidth = 1; ctx.beginPath();
+    for (const rr of [18, 40, 80]) { let first = true; for (let k = 0; k <= 32; k++) { const a = k / 32 * 6.283; const p = P.proj(V(tc.st.pos.x + Math.cos(a) * rr, 0, tc.st.pos.z + Math.sin(a) * rr)); if (!p) { first = true; continue; } if (first) { ctx.moveTo(p[0], p[1]); first = false; } else ctx.lineTo(p[0], p[1]); } }
+    ctx.stroke();
+  }
+  // drawables
+  const items = [];
+  for (const car of R.cars) { if (car.st.vis <= 0) continue; const p = P.proj(car.st.pos); if (p) items.push({ z: p[2], car, p }); }
+  for (const d of crew.drones) { if (d === viewer || !d.cam) continue; const p = P.proj(d.pos); if (p) items.push({ z: p[2], d }); }
+  items.sort((a, b) => b.z - a.z);
+  for (const it of items) {
+    if (it.d) { crew.drawDrone(ctx, P, it.d); continue; }
+    drawOrb(ctx, P, it.car, it.p, thumb, tc);
+  }
+  // rain: fine diagonal marks, low contrast, slow (flash safe)
+  if (rain && !thumb) {
+    ctx.strokeStyle = 'rgba(160,180,255,0.18)'; ctx.lineWidth = 1; ctx.beginPath();
+    const tt = (CLOCK.tau * 40) % h;
+    for (let k = 0; k < 90; k++) { const x = (hrand(k, 1) * w + tt * 0.3) % w, y = (hrand(k, 2) * h + tt) % h; ctx.moveTo(x, y); ctx.lineTo(x - 2, y + 6); }
+    ctx.stroke();
+  }
+}
+function drawOrb(ctx, P, car, p, thumb, tc) {
+  const st = car.st, Rpx = Math.max(thumb ? 1 : 1.3, P.px(p[2]) * ORB);
+  const isT = tc && tc.i === car.i;
+  const col = st.brake ? INK.coral : isT ? INK.pink : INK.cream;
+  ctx.globalAlpha = st.vis;
+  // shadow on the ground
+  if (Rpx > 2.5) { const s = P.proj(V(st.pos.x, 0, st.pos.z)); if (s) { ctx.fillStyle = INK.night; ctx.beginPath(); ctx.ellipse(s[0], s[1], Rpx * 1.1, Rpx * 0.45, 0, 0, 6.283); ctx.fill(); } }
+  // speed streak: where it was a quarter second ago
+  if (st.v > 5 && Rpx > 1.2) {
+    const back = P.proj(sub(st.pos, mul(st.dir, st.v * 0.22)));
+    if (back) { ctx.strokeStyle = col; ctx.globalAlpha = st.vis * 0.35; ctx.lineWidth = Math.max(1, Rpx * 1.1); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(back[0], back[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); ctx.globalAlpha = st.vis; }
+  }
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], Rpx, 0, 6.283); ctx.fill();
+  if (Rpx > 3) { // lit from above-left
+    ctx.save(); ctx.beginPath(); ctx.arc(p[0], p[1], Rpx, 0, 6.283); ctx.clip();
+    ctx.fillStyle = 'rgba(11,20,51,0.35)'; ctx.beginPath(); ctx.arc(p[0] + Rpx * 0.35, p[1] + Rpx * 0.4, Rpx, 0, 6.283); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0] - Rpx * 0.12, p[1] - Rpx * 0.15, Rpx * 0.82, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+  if (Rpx > 4) { // embedded data: throttle as an arc, DRS as a halo
+    ctx.strokeStyle = INK.lime; ctx.lineWidth = Math.max(1, Rpx * 0.09);
+    ctx.beginPath(); ctx.arc(p[0], p[1], Rpx * 1.32, -Math.PI / 2, -Math.PI / 2 + 6.283 * st.thr / 100); ctx.stroke();
+    if (st.drs) { ctx.strokeStyle = INK.lime; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p[0], p[1], Rpx * 1.7, 0, 6.283); ctx.stroke(); }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---------- OBAS print pass: quantise to the ink set with ordered dither (from 48 PLANT) ---------- */
+let GL = null;
+function initGL() {
+  try {
+    const gl = out.getContext('webgl', { preserveDrawingBuffer: true, antialias: false, premultipliedAlpha: false }); if (!gl) return null;
+    const vs = 'attribute vec2 p;varying vec2 v;void main(){v=p*0.5+0.5;v.y=1.0-v.y;gl_Position=vec4(p,0.,1.);}';
+    const fs = `precision mediump float;varying vec2 v;uniform sampler2D t;uniform vec3 ink[${INKS.length}];
+float bayer(vec2 q){vec2 a=mod(floor(q),4.0);int i=int(a.x+a.y*4.0);float b=0.0;
+if(i==0)b=0.;else if(i==1)b=8.;else if(i==2)b=2.;else if(i==3)b=10.;else if(i==4)b=12.;else if(i==5)b=4.;else if(i==6)b=14.;else if(i==7)b=6.;else if(i==8)b=3.;else if(i==9)b=11.;else if(i==10)b=1.;else if(i==11)b=9.;else if(i==12)b=15.;else if(i==13)b=7.;else if(i==14)b=13.;else b=5.;return (b+0.5)/16.0;}
+void main(){vec3 c=texture2D(t,v).rgb;float d1=1e9,d2=1e9;vec3 c1=c,c2=c;
+for(int i=0;i<${INKS.length};i++){vec3 e=ink[i]-c;e*=vec3(0.9,1.2,0.75);float d=dot(e,e);if(d<d1){d2=d1;c2=c1;d1=d;c1=ink[i];}else if(d<d2){d2=d;c2=ink[i];}}
+float r=sqrt(d1)/(sqrt(d1)+sqrt(d2)+1e-5);vec3 o=(r>bayer(gl_FragCoord.xy)*0.5+0.02)?c2:c1;gl_FragColor=vec4(o,1.0);}`;
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr); gl.useProgram(pr);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const flat = []; INKS.forEach(hx => { const c = hexRGB(hx); flat.push(c[0] / 255, c[1] / 255, c[2] / 255); });
+    gl.uniform3fv(gl.getUniformLocation(pr, 'ink'), new Float32Array(flat));
+    gl.viewport(0, 0, W, H);
+    return { gl, tex };
+  } catch (e) { console.warn('print pass unavailable', e); return null; }
+}
+let ctx2d = null;
+out.addEventListener('webglcontextlost', e => { e.preventDefault(); GL = null; });
+out.addEventListener('webglcontextrestored', () => { GL = initGL(); });
+function present() {
+  if (GL) { const gl = GL.gl; gl.bindTexture(gl.TEXTURE_2D, GL.tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, work); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+  else { if (!ctx2d) { try { ctx2d = out.getContext('2d'); } catch (e) {} } if (ctx2d) ctx2d.drawImage(work, 0, 0); }
+}
+
+/* ---------- HUD: crisp, undithered, on top: car data tags + camera bug ---------- */
+const hctx = hud.getContext('2d');
+function drawHUD(P) {
+  const w = hud.width, h = hud.height, sx = w / W, sy = h / H;
+  hctx.clearRect(0, 0, w, h);
+  if (!CFG.info) return;
+  const fs = Math.round(h * 0.0115);
+  hctx.font = `400 ${fs}px "JetBrains Mono", monospace`; hctx.textBaseline = 'middle';
+  const tc = tgtCar();
+  for (const car of R.cars) {
+    const st = car.st; if (st.vis < 0.6 || !st.live) continue;
+    const p = P.proj(st.pos); if (!p) continue;
+    const Rpx = P.px(p[2]) * ORB; const isT = tc && tc.i === car.i;
+    if (!(isT || Rpx > 3.2)) continue;
+    if (p[0] < -20 || p[0] > W + 20 || p[1] < -20 || p[1] > H + 20) continue;
+    const x = p[0] * sx + (Rpx * 1.8 + 4) * sx, y = p[1] * sy - Rpx * 1.8 * sy;
+    const txt = `${car.num}  ${Math.round(st.v * 3.6)} KM/H  G${st.gear}  ${String(st.thr).padStart(3, ' ')}%${st.brake ? '  BRK' : ''}${st.drs ? '  DRS' : ''}`;
+    const tw = hctx.measureText(txt).width;
+    hctx.fillStyle = 'rgba(11,20,51,0.72)'; hctx.fillRect(x - 3, y - fs * 0.7, tw + 6, fs * 1.4);
+    hctx.fillStyle = isT ? INK.pink : INK.cream; hctx.fillRect(x - 3, y - fs * 0.7, 2, fs * 1.4);
+    hctx.fillStyle = INK.cream; hctx.fillText(txt, x + 2, y);
+    hctx.strokeStyle = 'rgba(246,239,217,0.45)'; hctx.lineWidth = 1; hctx.beginPath(); hctx.moveTo(p[0] * sx + Rpx * sx * 1.1, p[1] * sy - Rpx * sy * 0.9); hctx.lineTo(x - 3, y); hctx.stroke();
+  }
+  // camera bug, top left
+  const d = crew.liveDrone, lap = leaderLap();
+  const bug = `● ${d.name} · ${d.shot ? d.shot.label : '—'}`;
+  hctx.font = `700 ${Math.round(fs * 1.15)}px "JetBrains Mono", monospace`;
+  const bw = hctx.measureText(bug).width;
+  hctx.fillStyle = 'rgba(11,20,51,0.72)'; hctx.fillRect(h * 0.016, h * 0.016, bw + fs * 1.4, fs * 2.1);
+  hctx.fillStyle = INK.pink; hctx.fillText('●', h * 0.016 + fs * 0.6, h * 0.016 + fs * 1.05);
+  hctx.fillStyle = INK.cream; hctx.fillText(bug.slice(1), h * 0.016 + fs * 0.6 + hctx.measureText('●').width, h * 0.016 + fs * 1.05);
+  const lapTxt = FLAG.f === 'EMPTY' ? 'CIRCUIT EMPTY' : FLAG.f === 'GRID' ? `GRID · LIGHTS OUT ${fmtClock()}` : `LAP ${lap}/${R.meta.laps} · ${FLAG.f}${WX.rain ? ' · RAIN' : ''}`;
+  hctx.font = `400 ${fs}px "JetBrains Mono", monospace`;
+  const lw = hctx.measureText(lapTxt).width;
+  hctx.fillStyle = 'rgba(11,20,51,0.72)'; hctx.fillRect(h * 0.016, h * 0.016 + fs * 2.3, lw + fs * 1.4, fs * 1.8);
+  hctx.fillStyle = FLAG.f.startsWith('SC') || FLAG.f.startsWith('VSC') ? INK.yellow : INK.cream; hctx.fillText(lapTxt, h * 0.016 + fs * 0.7, h * 0.016 + fs * 3.2);
+}
+function leaderLap() { const o = order(); return o.length ? Math.min(R.meta.laps, o[0].st.lap) : 0; }
+
+/* ---------- info box ---------- */
+const infoEl = document.getElementById('info');
+function updateInfo() {
+  if (!CFG.info) { infoEl.style.display = 'none'; return; }
+  infoEl.style.display = '';
+  const d = crew.liveDrone, tc = tgtCar(), best = Object.entries(MEM.marks).sort((a, b) => b[1] - a[1])[0];
+  infoEl.innerHTML =
+    `<b>BIT FIELD 028 · TRACKSIDE</b> <span class="d">· Silverstone 2025 replayed in real time · run ${MEM.run}</span><br>` +
+    `<span class="p">ON AIR</span> ${d.name} · ${d.shot ? d.shot.label : '—'}${tc ? ` · following <b>#${tc.num}</b> <span class="d">${PROD.story}</span>` : ''}<br>` +
+    `<span class="d">every orb is a car and carries its telemetry:</span> position · speed · rpm · gear · <span class="k">throttle arc</span> · <span style="color:${INK.coral}">brake</span> · <span class="k">DRS halo</span><br>` +
+    `<span class="d">five drones race ahead to marks at key corners and straights, then pan with the cars; cuts land on the 16th</span><br>` +
+    `<span class="d">the live lens is the microphone:</span> rpm → engine pitch · approach/recede → doppler · distance → level<br>` +
+    `<span class="d">brakes in front of the lens → knock · overtake → echo throw · SC/VSC → tempo drops, space opens · rain → room</span><br>` +
+    `<span class="d">crew memory:</span> ${best ? `${best[0]} favoured (${best[1]} witnessed)` : 'learning the circuit'}` +
+    `<div class="log">${MEM.log.slice(0, 4).join('\n')}</div>` +
+    `<span class="d">i info · c camera bay · m mute</span>`;
+}
+
+/* ------------------------------------------------------------------ audio */
+const AU = {
+  ac: null, N: null, on: false, muted: false, lastStep: -1, nextT: 0, step: 0, bpm: 58, cutKick: false, lastActivity: 0, builtAt: 0,
+  gate(t) { if (!this.ac || !this.on) return true; const spb = 60 / this.bpm / 4; const ph = (this.ac.currentTime % spb) / spb; return ph < 0.22; },
+  onCut() { if (this.N) this.cutKick = true; },
+  overtake(car) { if (!this.N) return; this.throwPending = { pan: 0 }; },
+};
+function noiseNode(ac) {
+  // continuously synthesised noise (AudioWorklet), never a looped buffer; ScriptProcessor fallback
+  const src = `class N extends AudioWorkletProcessor{constructor(){super();this.s=12345}process(i,o){const c=o[0][0];for(let k=0;k<c.length;k++){this.s=(this.s*1664525+1013904223)>>>0;c[k]=this.s/2147483648-1}return true}}registerProcessor('mz-noise',N)`;
+  return ac.audioWorklet.addModule('data:text/javascript,' + encodeURIComponent(src)).then(() => new AudioWorkletNode(ac, 'mz-noise'))
+    .catch(() => { const sp = ac.createScriptProcessor(2048, 0, 1); sp.onaudioprocess = e => { const c = e.outputBuffer.getChannelData(0); for (let k = 0; k < c.length; k++) c[k] = Math.random() * 2 - 1; }; return sp; });
+}
+function makeIR(ac, secs) {
+  const n = Math.floor(ac.sampleRate * secs), b = ac.createBuffer(2, n, ac.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0; for (let i = 0; i < n; i++) { lp += 0.18 * ((Math.random() * 2 - 1) - lp); d[i] = lp * Math.pow(1 - i / n, 2.6) * 1.6; } }
+  return b;
+}
+async function buildAudio() {
+  if (!CFG.audio) return;
+  try {
+    const ac = AU.ac && AU.ac.state !== 'closed' ? AU.ac : new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+    AU.ac = ac;
+    const N = {};
+    N.master = ac.createGain(); N.master.gain.value = AU.muted ? 0 : 0.62;
+    N.comp = ac.createDynamicsCompressor(); N.comp.threshold.value = -16; N.comp.ratio.value = 2.4; N.comp.knee.value = 10; N.comp.attack.value = 0.02; N.comp.release.value = 0.3;
+    N.lp = ac.createBiquadFilter(); N.lp.type = 'lowpass'; N.lp.frequency.value = 6500; N.lp.Q.value = 0.5;
+    N.shelf = ac.createBiquadFilter(); N.shelf.type = 'highshelf'; N.shelf.frequency.value = 2200; N.shelf.gain.value = -10;
+    N.hp = ac.createBiquadFilter(); N.hp.type = 'highpass'; N.hp.frequency.value = 26;
+    N.sat = ac.createWaveShaper(); const cv = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; cv[i] = Math.tanh(1.4 * x) / Math.tanh(1.4); } N.sat.curve = cv;
+    N.bus = ac.createGain(); N.bus.gain.value = 0.8;
+    N.bus.connect(N.hp); N.hp.connect(N.sat); N.sat.connect(N.shelf); N.shelf.connect(N.lp); N.lp.connect(N.comp); N.comp.connect(N.master); N.master.connect(ac.destination);
+    N.an = ac.createAnalyser(); N.an.fftSize = 2048; N.master.connect(N.an);
+    // room + echo
+    N.rev = ac.createConvolver(); N.rev.buffer = makeIR(ac, 3.2); N.revG = ac.createGain(); N.revG.gain.value = 0.35; N.rev.connect(N.revG); N.revG.connect(N.bus);
+    N.revIn = ac.createGain(); N.revIn.gain.value = 1; N.revIn.connect(N.rev);
+    N.dl = ac.createDelay(3); N.dl.delayTime.value = 60 / AU.bpm * 0.75; N.fb = ac.createGain(); N.fb.gain.value = 0.42;
+    N.dlLP = ac.createBiquadFilter(); N.dlLP.type = 'lowpass'; N.dlLP.frequency.value = 1500; N.dlHP = ac.createBiquadFilter(); N.dlHP.type = 'highpass'; N.dlHP.frequency.value = 110;
+    N.dlSat = ac.createWaveShaper(); const c2 = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; c2[i] = Math.tanh(x); } N.dlSat.curve = c2; // unity small-signal gain
+    N.dlIn = ac.createGain(); N.dlOut = ac.createGain(); N.dlOut.gain.value = 0.5; N.dlPan = ac.createStereoPanner();
+    N.dlIn.connect(N.dl); N.dl.connect(N.dlLP); N.dlLP.connect(N.dlHP); N.dlHP.connect(N.dlSat); N.dlSat.connect(N.fb); N.fb.connect(N.dl);
+    N.dlSat.connect(N.dlPan); N.dlPan.connect(N.dlOut); N.dlOut.connect(N.bus); N.dlOut.connect(N.revIn);
+    // engines: one voice per car, heard from the live lens
+    N.eng = ac.createGain(); N.eng.gain.value = 0.55; N.eng.connect(N.bus); const engSend = ac.createGain(); engSend.gain.value = 0.18; N.eng.connect(engSend); engSend.connect(N.revIn);
+    N.cars = R.cars.map((car, i) => {
+      const o1 = ac.createOscillator(); o1.type = 'sawtooth'; const o2 = ac.createOscillator(); o2.type = 'sine';
+      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 300; f.Q.value = 2.2;
+      const g1 = ac.createGain(); g1.gain.value = 0.35; const g2 = ac.createGain(); g2.gain.value = 0.9;
+      const g = ac.createGain(); g.gain.value = 0; const p = ac.createStereoPanner();
+      o1.connect(g1); g1.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(p); p.connect(N.eng);
+      o1.frequency.value = 80; o2.frequency.value = 40; o1.detune.value = (i % 5 - 2) * 6; o1.start(); o2.start();
+      return { o1, o2, f, g, p, last: {} };
+    });
+    // drones: a low hum each, when near the live lens
+    N.drones = crew.drones.map((d, i) => { const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = 73.4 * (1 + i * 0.012); const g = ac.createGain(); g.gain.value = 0; const p = ac.createStereoPanner(); o.connect(g); g.connect(p); p.connect(N.bus); o.start(); return { o, g, p, last: {} }; });
+    // pad: D phrygian, low triangles
+    N.pad = ac.createGain(); N.pad.gain.value = 0; const padF = ac.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 700; N.pad.connect(padF); padF.connect(N.bus); padF.connect(N.revIn); N.padF = padF;
+    N.padOsc = [73.42, 110, 155.56, 174.61].map((fq, i) => { const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = fq; o.detune.value = (i - 1.5) * 4; const g = ac.createGain(); g.gain.value = 0.22; o.connect(g); g.connect(N.pad); o.start(); return o; });
+    // rain bed: noise, lowpassed well under 500 Hz
+    N.rain = ac.createGain(); N.rain.gain.value = 0; const rf = ac.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 380; N.rain.connect(rf); rf.connect(N.bus); rf.connect(N.revIn);
+    noiseNode(ac).then(nn => { N.noise = nn; nn.connect(N.rain); }).catch(() => {});
+    AU.N = N; AU.on = true; AU.builtAt = ac.currentTime; AU.nextT = ac.currentTime + 0.1; AU.lastActivity = performance.now();
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
+  } catch (e) { console.warn('audio', e); AU.on = false; }
+}
+function teardown() { const N = AU.N; if (!N) return; AU.N = null; AU.on = false; try { const t = AU.ac.currentTime; N.master.gain.setTargetAtTime(0, t, 0.3); setTimeout(() => { try { N.master.disconnect(); for (const c of N.cars) { c.o1.stop(); c.o2.stop(); } for (const d of N.drones) d.o.stop(); for (const o of N.padOsc) o.stop(); if (N.noise) N.noise.disconnect(); } catch (e) {} }, 2000); } catch (e) {} }
+const setP = (node, param, v, key, tau = 0.08, eps = 1e-3) => { if (!node || !Number.isFinite(v)) return; const L = node.last || (node.last = {}); if (L[key] !== undefined && Math.abs(L[key] - v) < eps * Math.max(1, Math.abs(v))) return; L[key] = v; param.setTargetAtTime(v, AU.ac.currentTime, tau); };
+
+// voices
+function env(t, g, a, d, peak) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setTargetAtTime(0, t + a, d / 4); }
+function kick(t, lvl) { const ac = AU.ac, N = AU.N, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.18); env(t, g, 0.004, 0.6, lvl); o.connect(g); g.connect(N.bus); o.start(t); o.stop(t + 1); o.onended = () => { o.disconnect(); g.disconnect(); }; }
+function bass(t, f, dur, lvl) { const ac = AU.ac, N = AU.N, o = ac.createOscillator(), o2 = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain(); o.type = 'sawtooth'; o2.type = 'sine'; o.frequency.value = f; o2.frequency.value = f / 2; lp.type = 'lowpass'; lp.frequency.setValueAtTime(420, t); lp.frequency.setTargetAtTime(170, t, 0.25); lp.Q.value = 3; const g1 = ac.createGain(); g1.gain.value = 0.25; o.connect(g1); g1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(AU.N.bus);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(lvl, t + 0.02); g.gain.setValueAtTime(lvl, t + dur * 0.7); g.gain.linearRampToValueAtTime(0, t + dur); o.start(t); o2.start(t); o.stop(t + dur + 0.05); o2.stop(t + dur + 0.05); o.onended = () => { o.disconnect(); o2.disconnect(); lp.disconnect(); g.disconnect(); g1.disconnect(); }; }
+function knock(t, pan, lvl, f = 900, send = 0.4) { const ac = AU.ac, N = AU.N; if (!N.noise) return; const bp = ac.createBiquadFilter(), g = ac.createGain(), p = ac.createStereoPanner(), body = ac.createOscillator(), bg = ac.createGain(), s = ac.createGain();
+  bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 4; p.pan.value = clamp(pan, -0.9, 0.9); body.type = 'sine'; body.frequency.setValueAtTime(220, t); body.frequency.exponentialRampToValueAtTime(110, t + 0.08);
+  const ng = ac.createGain(); N.noise.connect(ng); ng.connect(bp); bp.connect(g); body.connect(bg); bg.connect(g); g.connect(p); p.connect(N.bus); s.gain.value = send; p.connect(s); s.connect(N.dlIn);
+  ng.gain.value = 0; ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(lvl, t + 0.003); ng.gain.setTargetAtTime(0, t + 0.003, 0.025);
+  env(t, bg, 0.003, 0.15, lvl * 0.8); g.gain.value = 1; body.start(t); body.stop(t + 0.5);
+  setTimeout(() => { try { N.noise.disconnect(ng); } catch (e) {} [ng, bp, g, p, bg, s, body].forEach(n => { try { n.disconnect(); } catch (e) {} }); }, (t - ac.currentTime + 0.7) * 1000); }
+function stab(t, pan) { const ac = AU.ac, N = AU.N; const g = ac.createGain(), lp = ac.createBiquadFilter(), p = ac.createStereoPanner(); lp.type = 'lowpass'; lp.frequency.value = 900; p.pan.value = pan; lp.connect(g); g.connect(p); p.connect(N.dlIn); p.connect(N.bus);
+  const os = [146.83, 155.56, 220].map(f => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; const og = ac.createGain(); og.gain.value = 0.12; o.connect(og); og.connect(lp); o.start(t); o.stop(t + 0.5); return [o, og]; });
+  env(t, g, 0.01, 0.28, 0.5); os[0][0].onended = () => { os.forEach(([o, og]) => { o.disconnect(); og.disconnect(); }); [lp, g, p].forEach(n => n.disconnect()); }; }
+
+const PHRY = [0, 1, 3, 5, 7, 8, 10]; const D1 = 36.71; // D1
+const noteHz = (deg, oct = 1) => D1 * Math.pow(2, oct + (PHRY[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7)) / 12);
+let brakeQueue = [];
+function scheduleAudio() {
+  if (!AU.on || !AU.N || !AU.ac) return;
+  const ac = AU.ac, N = AU.N, now = ac.currentTime;
+  if (AU.nextT < now - 0.25) AU.nextT = now + 0.05; // after a stall, skip forward
+  const flag = FLAG.f, sc = flag.startsWith('SC'), vsc = flag.startsWith('VSC'), empty = flag === 'EMPTY' || flag === 'GRID';
+  AU.bpm = sc ? 48 : vsc ? 52 : 58;
+  const spb = 60 / AU.bpm / 4;
+  const tc = tgtCar();
+  while (AU.nextT < now + 0.4) {
+    const t = AU.nextT, s = AU.step % 16;
+    if (!empty) {
+      // one-drop: kick on 3 (step 8); under green also a ghost on the "and" of 4 when the target is flat out
+      if (s === 8) kick(t, sc || vsc ? 0.5 : 0.8);
+      if (s === 14 && !sc && !vsc && tc && tc.st.thr > 95) kick(t, 0.25);
+      if (AU.cutKick && (s % 4 === 0)) { kick(t, 0.35); AU.cutKick = false; }
+      // bass from the target's gear (degree in D phrygian)
+      const pat = sc || vsc ? [0] : [0, 6, 10];
+      if (pat.includes(s)) { const g = tc ? tc.st.gear : 1; const deg = [0, 0, 4, 2, 3, 5, 4, 6, 7][clamp(g, 0, 8)]; bass(t, noteHz(deg, 1), sc || vsc ? spb * 12 : spb * (s === 0 ? 5 : 3), 0.32); }
+      // brakes in front of the lens: knocks, quantised to this 16th
+      if (brakeQueue.length) { const b = brakeQueue.shift(); knock(t, b.pan, 0.32 * b.lvl, 700 + b.lvl * 400, 0.3); brakeQueue.length = Math.min(brakeQueue.length, 3); }
+      if (AU.throwPending && s % 2 === 0) { stab(t, AU.throwPending.pan); setP(N.fb, N.fb.gain, 0.7, 'fb', 0.05); setTimeout(() => AU.N && setP(AU.N.fb, AU.N.fb.gain, sc ? 0.62 : 0.42, 'fb', 0.8), 1600); AU.throwPending = null; }
+    }
+    AU.nextT += spb; AU.step++;
+  }
+  // slow parameters
+  setP(N.dl, N.dl.delayTime, 60 / AU.bpm * 0.75, 'dt', 0.5);
+  setP(N.pad, N.pad.gain, empty ? 0.22 : sc || vsc ? 0.16 : 0.05, 'pg', 2);
+  setP(N.revG, N.revG.gain, WX.rain ? 0.55 : 0.32, 'rg', 3);
+  setP(N.rain, N.rain.gain, WX.rain ? 0.08 : 0.0, 'rn', 3);
+  if (!AU.throwPending) setP(N.fb, N.fb.gain, sc ? 0.62 : vsc ? 0.55 : 0.42, 'fb', 1.5);
+}
+// engines and drones, from the live lens (10 Hz)
+const engState = new Map();
+function updateEngines(dt) {
+  if (!AU.on || !AU.N || !AU.N.cars) return;
+  const N = AU.N, cam = crew.liveDrone.cam; if (!cam) return;
+  R.cars.forEach((car, i) => {
+    const v = N.cars[i], st = car.st;
+    if (!st.vis || !st.live) { setP(v, v.g.gain, 0, 'g', 0.2); return; }
+    const rel = sub(st.pos, cam.pos), d = len(rel), dirTo = mul(rel, 1 / Math.max(0.1, d));
+    const prev = engState.get(i), rv = dot(st.vel || V(), dirTo) - dot(crew.liveDrone.vel || V(), dirTo); // + = receding
+    engState.set(i, d);
+    const dop = clamp(343 / (343 + rv), 0.6, 1.6);
+    const base = clamp(st.rpm / 60 / 2, 30, 110); // half the firing frequency, kept low
+    const front = dot(dirTo, cam.f) > 0 ? 1 : 0.45;
+    const lvl = clamp((0.25 + 0.75 * st.thr / 100) * front / (1 + Math.pow(d / 35, 2)), 0, 0.5) * st.vis;
+    setP(v, v.o1.frequency, base * dop, 'f', 0.05, 2e-3); setP(v, v.o2.frequency, base * dop / 2, 'f2', 0.05, 2e-3);
+    setP(v, v.f.frequency, 160 + 1300 / (1 + d / 45) + 300 * st.thr / 100, 'lp', 0.08, 0.01);
+    setP(v, v.g.gain, lvl, 'g', 0.07, 1e-3);
+    const x = dot(rel, cam.r), z = Math.max(1, dot(rel, cam.f));
+    setP(v, v.p.pan, clamp(x / (Math.abs(x) + z * 0.6), -0.95, 0.95), 'p', 0.06, 0.01);
+    // brake onset in front of the lens → knock on the next 16th
+    if (st.brake && !car._wasBrake && front > 0.9 && d < 160) brakeQueue.push({ pan: clamp(x / (Math.abs(x) + z), -0.9, 0.9), lvl: clamp(1 - d / 160, 0.2, 1) });
+    car._wasBrake = st.brake;
+  });
+  crew.drones.forEach((dr, i) => { const v = N.drones[i]; if (dr === crew.liveDrone) { setP(v, v.g.gain, 0, 'g', 0.3); return; } const rel = sub(dr.pos, cam.pos), d = len(rel);
+    const lvl = clamp(0.05 / (1 + Math.pow(d / 25, 2)), 0, 0.05); setP(v, v.g.gain, lvl, 'g', 0.2, 1e-3); const x = dot(rel, cam.r), z = Math.max(1, dot(rel, cam.f)); setP(v, v.p.pan, clamp(x / (Math.abs(x) + z), -0.9, 0.9), 'p', 0.2, 0.02); });
+}
+// watchdog: resume, recreate, rebuild on NaN / silence / every 3 h
+let silentFor = 0, lastCT = 0, stallFor = 0;
+setInterval(() => {
+  if (!CFG.audio || !AU.ac || !R) return;
+  const ac = AU.ac;
+  if (ac.state === 'suspended') ac.resume().catch(() => {});
+  if (ac.state === 'closed') { AU.ac = null; AU.N = null; AU.on = false; buildAudio(); return; }
+  if (ac.state === 'running') { if (ac.currentTime === lastCT) stallFor++; else stallFor = 0; lastCT = ac.currentTime; }
+  if (stallFor > 6) { stallFor = 0; try { ac.close(); } catch (e) {} AU.ac = null; AU.N = null; AU.on = false; buildAudio(); return; }
+  const N = AU.N; if (!N) return;
+  const buf = new Float32Array(N.an.fftSize); N.an.getFloatTimeDomainData(buf);
+  let bad = false, pk = 0; for (let i = 0; i < buf.length; i++) { const x = buf[i]; if (!Number.isFinite(x)) { bad = true; break; } pk = Math.max(pk, Math.abs(x)); }
+  silentFor = pk < 1e-5 && !AU.muted ? silentFor + 1 : 0;
+  if (bad || silentFor > 20 || ac.currentTime - AU.builtAt > 3 * 3600) { silentFor = 0; teardown(); setTimeout(buildAudio, 300); }
+}, 1000);
+setInterval(() => { if (R && crew) { scheduleAudio(); } }, 40);
+
+/* ------------------------------------------------------------------ main loop */
+let frame = 0, lastWall = 0, lastOrderT = 0, lastInfo = 0, lastSave = 0, lastEng = 0, simT = 0;
+function step(dt) {
+  tickClock();
+  const tau = CLOCK.tau;
+  FLAG = flagAt(tau); WX = weatherAt(tau);
+  updateCars(tau);
+  simT += dt;
+  if (simT - lastOrderT > 0.5) { lastOrderT = simT; watchOrder(simT); pickTarget(simT, false); }
+  produce(simT);
+  crew.update(dt, simT);
+  // race-control events into the log
+  for (const e of R.meta.events) if (e[0] <= tau && e[0] > tau - dt * 1.5 - 0.6 && !e._seenRun?.[CLOCK.cycleRun]) { (e._seenRun = e._seenRun || {})[CLOCK.cycleRun] = 1; logLine(`LAP ${e[1]} · ${e[2].replace('FIA STEWARDS: ', '')}`); }
+  if (simT - lastEng > 0.1) { lastEng = simT; updateEngines(0.1); }
+}
+function draw() {
+  const d = crew.liveDrone;
+  const P = MZCam.projector(d.cam, W, H);
+  renderView(wctx, W, H, P, d, false);
+  present();
+  drawHUD(P);
+  if (bay) bay.tick(frame);
+  frame++;
+}
+function loop(ts) {
+  const now = performance.now() / 1000, dt = lastWall ? clamp(now - lastWall, 0, 0.1) : 1 / 60; lastWall = now;
+  try { step(dt); draw(); } catch (e) { console.error(e); recover(); }
+  if (now - lastInfo > 0.5) { lastInfo = now; updateInfo(); }
+  if (now - lastSave > 60) { lastSave = now; save(); }
+  requestAnimationFrame(loop);
+}
+function recover() { // sanitise state rather than freeze
+  for (const d of crew.drones) { if (!Number.isFinite(d.pos.x + d.pos.y + d.pos.z)) d.pos = V(0, 40, 0); if (!d.aim || !Number.isFinite(d.aim.p.x + d.aim.p.y + d.aim.p.z)) d.aim = null; if (!Number.isFinite(d.fov.p)) d.fov = { p: 40, v: 0 }; d.vel = V(); }
+}
+
+// bay plan background: the circuit, the cars, the key points
+function drawPlanBg(g, Wp, Hp, map) {
+  g.fillStyle = INK.night; g.fillRect(0, 0, Wp, Hp);
+  g.strokeStyle = INK.track; g.lineWidth = 3; g.beginPath();
+  for (let i = 0; i <= R.n; i += 2) { const k = i % R.n, p = map(R.cx[k], R.cz[k]); i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); } g.stroke();
+  g.fillStyle = 'rgba(246,239,217,0.55)'; g.font = '9px "JetBrains Mono", monospace';
+  for (const k of KP) { const t = trackAt(k.s), p = map(t.x, t.z); g.fillRect(p[0] - 1, p[1] - 1, 2, 2); g.fillText(k.id, p[0] + 3, p[1] + 3); }
+  const tc = tgtCar();
+  for (const car of R.cars) { if (car.st.vis < 0.5) continue; const p = map(car.st.pos.x, car.st.pos.z); g.fillStyle = tc && tc.i === car.i ? INK.pink : car.st.brake ? INK.coral : INK.cream; g.fillRect(p[0] - 1.5, p[1] - 1.5, 3, 3); }
+  g.fillStyle = INK.cream; g.font = '10px "JetBrains Mono", monospace'; g.fillText('CIRCUIT PLAN · CREW', 6, 13);
+}
+
+/* ------------------------------------------------------------------ boot */
+async function boot() {
+  await loadRace();
+  document.getElementById('load').remove();
+  buildKeyPoints();
+  initClock(); tickClock();
+  resize(); GL = initGL(); addEventListener('resize', resize);
+  initCrew();
+  // pre-warm: the crew was already at work before you arrived
+  updateCars(CLOCK.tau); FLAG = flagAt(CLOCK.tau); WX = weatherAt(CLOCK.tau);
+  pickTarget(0, true); produce(0);
+  for (const d of crew.drones) { const g = crew._goal(d, 0); if (g) { d.pos = g.pos; d.arrivedAt = 0; d.vel = V(); } }
+  for (let k = 0; k < 30; k++) { crew.update(1 / 30, k / 30); }
+  const start = crew.drones.find(d => d.role === 'chase' && crew.ready(d)) || crew.drones.find(d => crew.ready(d)); if (start) crew.cutTo(start);
+  simT = 1; logLine(MEM.log.length ? `SOURCE RELOADED · resumed at ${fmtClock()}` : `RUN ${MEM.run} · crew on the circuit · ${KP.length} key points`);
+  if (CFG.audio) await buildAudio();
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'i') { CFG.info = !CFG.info; updateInfo(); }
+    else if (k === 'c' && bay) bay.show(!bay.on);
+    else if (k === 'm') { AU.muted = !AU.muted; if (AU.N) setP(AU.N.master, AU.N.master.gain, AU.muted ? 0 : 0.62, 'mg', 0.1); }
+  });
+  addEventListener('pointerdown', () => { if (AU.ac && AU.ac.state === 'suspended') AU.ac.resume(); if (CFG.audio && !AU.ac) buildAudio(); });
+  addEventListener('beforeunload', save);
+  updateInfo();
+  if (CFG.capture) {
+    window.MZ = { tick(dt = 1 / 30) { virtualNow += dt; step(dt); draw(); updateInfo(); }, crew, R, CLOCK, AU, PROD, KP, MEM };
+  } else {
+    window.MZ = { crew, R, CLOCK, AU, PROD, KP, MEM, cut: i => crew.cutTo(crew.drones[i]) };
+    requestAnimationFrame(loop);
+  }
+}
+boot().catch(e => { console.error(e); const l = document.getElementById('load'); if (l) l.textContent = 'TRACKSIDE · telemetry failed to load · retrying'; setTimeout(() => location.reload(), 15000); });
+</script>
+</body>
+</html>

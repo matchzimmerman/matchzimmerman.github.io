@@ -6,6 +6,7 @@ Canonical source library for MZTV broadcast experiments, OBS control scripts, li
 
 - `obs/` — OBS Lua/Python control and director scripts
 - `sources/` — browser-rendered visual sources for OBS
+- `lib/` — shared modules pieces load (e.g. `mzcam.js`, the drone camera crew from 48 PLANT)
 - future directories may include `overlays/`, `idents/`, `archive/`, and `audio/`
 
 ## Working lineages
@@ -243,6 +244,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-027-desire-lines/`
+
+### BIT FIELD 028 — TRACKSIDE
+The 2025 British Grand Prix (52 laps, wet start, VSCs, safety cars) replayed in real time from timing telemetry. Every car is an orb carrying its own data: position, speed, rpm, gear, throttle arc, brake colour, DRS halo. Five drone cameras from the shared MZCAM module (`lib/mzcam.js`, extracted from 48 PLANT) film it. Trackside and low drones race ahead to marks at key corners and straights and whip-pan with the cars; a chase drone rides behind; a high drone orbits. The director cuts only to drones on their marks, on the 16th note. The live lens is the microphone: one engine voice per car, with pitch from rpm, real Doppler, and distance and pan from the lens. Brake onsets in front of the lens knock on the 16th, overtakes throw echoes, and safety cars slow the tempo and open space. The crew remembers which corners produce shots and passes, and favours them on later runs. Params: ?info=0 ?fresh=1 ?audio=0 ?bay=0 ?rate=N ?t=SEC ?lines=N ?capture=1
+
+Path:
+`sources/bit-field-028-trackside/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-028-trackside/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
