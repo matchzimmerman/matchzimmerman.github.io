@@ -14,6 +14,8 @@ v3 is kept as `v3.html`. The organism, ledger and storage key are unchanged, so 
 - **Replay any archived life:** `?life=archive/life.json`. Add `&export=3d` to push out the 3D model straight away.
 - **Specimen config** lives in `<script id="specimen">` (number, seed, storage key, scheduled birth, weather mode, drought setting). Specimen 002 onward uses a scheduled birth and **public-record weather**: each commit or intake event is felt 15 minutes after its own timestamp, so the whole life can be rebuilt from the public record (`tools/archive_specimen.py`) even if nobody saved it.
 - Archive of all specimens: `../48-plant-archive/`.
+- **`?timelapse=1`** — the whole life in one minute, filmed by the portrait camera alone: framed for the finished plant from the first frame, turning a quarter-turn and landing exactly on the 48:00 portrait, then carrying on into the afterlife. Any number of minutes works (`?timelapse=3`).
+- **Studio (3D):** `../48-plant-archive/studio.html?s=001` — the specimen as a real 3D object in a white cyclorama, lit by the piece's key light. Drag to walk around it, scroll or pinch to step in to a single leaf, double-click to look at a point, WASD/QE to walk, `P` print look (the piece's dither) on/off, `V` wind, `C` photograph. Uses the archived `.glb` when there is one, otherwise grows the specimen from its own code in the page.
 
 ## v3 — orb cameras, 30-second cuts (`v3.html`)
 

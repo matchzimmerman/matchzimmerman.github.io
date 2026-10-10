@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>48 PLANT · Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#2b2a33; --paper:#f5f4f0; }
+  html,body { margin:0; height:100%; background:var(--paper); overflow:hidden; color:var(--ink); font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; }
+  canvas#view { position:fixed; inset:0; width:100vw; height:100vh; display:block; touch-action:none; image-rendering:pixelated; }
+  .card { position:fixed; padding:0.6em 0.85em; background:rgba(251,250,247,0.78); border:1px solid rgba(43,42,51,0.4); font-size:12px; line-height:1.45; letter-spacing:0.02em; }
+  #tag { left:16px; top:16px; max-width:min(420px, calc(100vw - 32px)); }
+  #tag .t { font-weight:700; letter-spacing:0.12em; }
+  #help { right:16px; top:16px; max-width:min(320px, calc(100vw - 32px)); }
+  #help.off { display:none; }
+  .dim { opacity:0.62; }
+  #label { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); text-align:center; font-size:11px; letter-spacing:0.12em; white-space:nowrap; max-width:calc(100vw - 32px); overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
+  #label .t { font-weight:700; font-size:13px; }
+  #status { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; letter-spacing:0.14em; pointer-events:none; }
+  #status.off { display:none; }
+  button { font:inherit; color:var(--ink); background:#fbfaf7; border:1px solid rgba(43,42,51,0.55); padding:0.25em 0.6em; margin:0.35em 0.35em 0 0; cursor:pointer; }
+  button:hover { background:#efede8; }
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.5s; }
+  iframe#grow { position:fixed; left:-2000px; top:0; width:960px; height:540px; border:0; visibility:hidden; }
+  @media (max-width:640px) { #label { display:none; } #help { font-size:11px; } }
+</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div class="card" id="tag">
+  <div class="t">MZTV · 48 PLANT · STUDIO</div>
+  <div id="spec">SPECIMEN —</div>
+  <div class="dim" id="src">loading</div>
+  <div><button id="bPrint">print look: on</button><button id="bWind">wind: on</button><button id="bShot">photograph</button><button id="bHelp">?</button></div>
+</div>
+<div class="card" id="help" title="press H to hide">
+  <div><b>drag</b> walk around the plant · <b>scroll / pinch</b> step in or out</div>
+  <div><b>right-drag / two fingers</b> slide sideways · <b>double-click</b> look at that point</div>
+  <div><b>W A S D</b> walk · <b>Q E</b> lower / raise your eye · <b>F</b> back to the full view</div>
+  <div><b>P</b> print look · <b>V</b> wind · <b>C</b> photograph (PNG)</div>
+</div>
+<div id="label"></div>
+<div id="status">GROWING THE SPECIMEN …</div>
+<div id="flash"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const Q = new URLSearchParams(location.search);
+const N = (Q.get('s') || '002').replace(/\D/g, '').padStart(3, '0');
+const HOUR = Q.has('hour') ? Math.max(0, Math.min(48, +Q.get('hour') || 48)) : 48;
+const $ = id => document.getElementById(id);
+const status = t => { $('status').textContent = t; $('status').classList.toggle('off', !t); };
+$('spec').textContent = `SPECIMEN ${N}` + (HOUR < 48 ? ` · HOUR ${String(Math.floor(HOUR)).padStart(2, '0')}:${String(Math.round(HOUR % 1 * 60)).padStart(2, '0')}` : '');
+
+/* ---------- where the body comes from: the archived .glb, or grown here from the specimen's own code ---------- */
+async function archivedGLB() {
+  if (HOUR < 48) return null;
+  const url = `../48-plant-${N}/archive/48plant-${N}.glb`;
+  try { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) return null; return { buf: await r.arrayBuffer(), src: 'archived specimen · its full life record' }; } catch (e) { return null; }
+}
+async function hasLife() { try { return (await fetch(`../48-plant-${N}/archive/life.json`, { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { return false; } }
+async function grownGLB() {
+  const life = await hasLife();
+  const f = document.createElement('iframe'); f.id = 'grow';
+  f.src = `../48-plant-${N}/index.html?${life ? 'life=archive/life.json' : 'at=' + HOUR}&audio=0&live=0&info=0`;
+  document.body.appendChild(f);
+  await new Promise((res, rej) => { const t0 = performance.now(); const k = setInterval(() => { try { if (f.contentWindow.MZ && f.contentWindow.MZ.ready) { clearInterval(k); res(); } } catch (e) { } if (performance.now() - t0 > 120000) { clearInterval(k); rej(new Error('specimen did not load')); } }, 200); });
+  status('PAINTING EVERY LEAF …'); await new Promise(r => setTimeout(r, 50));
+  const r = await f.contentWindow.MZ.export3D({ download: false });
+  const glb = r.glb;
+  setTimeout(() => f.remove(), 0);
+  const local = new Uint8Array(glb.length); local.set(glb); // copy out of the iframe's realm so the loader sees a real ArrayBuffer
+  return { buf: local.buffer, src: life ? 'grown from its archived life record' : 'grown from the practice ledger · live weather is added when the specimen is archived' };
+}
+
+/* ---------- renderer, studio, light ---------- */
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#f5f4f0');
+const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 60);
+
+// white cyclorama: floor that sweeps up into a curved wall behind, open toward the viewer's side
+const studio = new THREE.Group(); scene.add(studio);
+{
+  const R = 7, curve = 1.6, H = 6, segA = 96, segR = 40, P = [], I = [];
+  const prof = []; // radial profile: flat floor, then a quarter-circle cove, then a straight wall
+  for (let i = 0; i <= segR; i++) { const u = i / segR; const r = u * (R - curve); prof.push([r, 0]); }
+  for (let i = 1; i <= 16; i++) { const a = i / 16 * Math.PI / 2; prof.push([R - curve + Math.sin(a) * curve, curve - Math.cos(a) * curve]); }
+  for (let i = 1; i <= 8; i++) prof.push([R, curve + i / 8 * (H - curve)]);
+  for (let j = 0; j <= segA; j++) { const t = j / segA * Math.PI * 2; for (const [r, y] of prof) P.push(Math.cos(t) * r, y, Math.sin(t) * r); }
+  const n = prof.length; for (let j = 0; j < segA; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + n; I.push(a, a + 1, b, b, a + 1, b + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
+  const m = new THREE.MeshStandardMaterial({ color: '#f3f1ec', roughness: 0.95, metalness: 0, side: THREE.BackSide, emissive: '#ebe9e3', emissiveIntensity: 0.62 });
+  const cyc = new THREE.Mesh(g, m); cyc.receiveShadow = true; studio.add(cyc);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(R - curve + 0.01, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#f6f5f1', roughness: 0.92, emissive: '#ebe9e3', emissiveIntensity: 0.35 }));
+  floor.position.y = 0.0005; floor.receiveShadow = true; studio.add(floor);
+}
+scene.add(new THREE.HemisphereLight('#ffffff', '#cfc9bd', 1.25));
+const key = new THREE.DirectionalLight('#fffaf0', 2.3); // the piece's studio key light: (-0.4, 0.85, 0.35)
+key.position.set(-0.4, 0.85, 0.35).normalize().multiplyScalar(6); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); key.shadow.radius = 6; key.shadow.blurSamples = 16; key.shadow.bias = -0.0004; key.shadow.normalBias = 0.01;
+Object.assign(key.shadow.camera, { left: -2, right: 2, top: 2, bottom: -2, near: 0.5, far: 14 });
+scene.add(key); scene.add(key.target);
+const fill = new THREE.DirectionalLight('#f0f4ff', 0.45); fill.position.set(0.6, 0.4, -0.7).multiplyScalar(5); scene.add(fill);
+
+/* ---------- wind: same gusts as the afterlife, bending with height, on both wood and leaves so they stay joined ---------- */
+const WIND = { t: { value: 0 }, amt: { value: 1 }, H: { value: 1.4 } };
+function addWind(mat) {
+  mat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, { wT: WIND.t, wAmt: WIND.amt, wH: WIND.H });
+    sh.vertexShader = 'uniform float wT; uniform float wAmt; uniform float wH;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      { vec4 wp = modelMatrix * vec4(transformed, 1.0); float k = pow(clamp(wp.y / max(wH, 0.2), 0.0, 1.2), 1.7);
+        float g = 0.42 + 0.22 * sin(wT * 0.0648) + 0.16 * sin(wT * 0.153 + 1.3) + 0.1 * sin(wT * 0.459 + 2.1);
+        float a = wAmt * wH * 0.006 * clamp(g, 0.12, 0.95) * k;
+        float f = 0.35 * sin(wT * 1.7 + wp.x * 9.0 + wp.z * 7.0) * smoothstep(0.05, 0.4, k);
+        transformed.x += a * (sin(wT * 0.52) + 0.4 * sin(wT * 1.31 + 1.0) + f);
+        transformed.z += a * 0.6 * (sin(wT * 0.41 + 2.0) + f * 0.7); }`);
+  };
+  mat.customProgramCacheKey = () => 'wind';
+}
+
+/* ---------- OBAS print look: the piece's own ink set + ordered dither, at the piece's 960-wide resolution ---------- */
+const INKS = ['#fbfaf7','#f5f4f0','#efede8','#e2e0da','#d3d1cb','#bdbab3','#9e9b95','#2b2a33','#4a4752','#f8f5ec','#211a15','#3a2c20','#5b4632','#33452a','#14583a','#2a8a63','#3f9e3a','#7cc443','#a9d83a','#0c3a27','#ff3d8b','#b8235f','#f4dc2a','#c9a812','#ff7a1a','#c4520e','#18c2bb','#0e7f7a','#2a1a3a','#b39ae6','#ff8a72','#1e8fb3','#c49a3a','#7a5228'];
+let PRINT = Q.get('print') !== '0';
+const rt = new THREE.WebGLRenderTarget(960, 540, { samples: 4, type: THREE.HalfFloatType }); // linear light; the pass below encodes to sRGB itself
+const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms: { t: { value: rt.texture }, ink: { value: INKS.map(h => new THREE.Color(h)) } },
+  vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader: `precision highp float; varying vec2 v; uniform sampler2D t; uniform vec3 ink[${INKS.length}];
+    float bayer(vec2 q){ vec2 a = mod(floor(q), 4.0); int i = int(a.x + a.y * 4.0); float b = 0.0;
+      if(i==0)b=0.;else if(i==1)b=8.;else if(i==2)b=2.;else if(i==3)b=10.;else if(i==4)b=12.;else if(i==5)b=4.;else if(i==6)b=14.;else if(i==7)b=6.;
+      else if(i==8)b=3.;else if(i==9)b=11.;else if(i==10)b=1.;else if(i==11)b=9.;else if(i==12)b=15.;else if(i==13)b=7.;else if(i==14)b=13.;else b=5.; return (b + 0.5) / 16.0; }
+    vec3 enc(vec3 x){ x = clamp(x, 0.0, 1.0); return mix(x * 12.92, 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, x)); }
+    void main(){ vec3 c = enc(texture2D(t, v).rgb * 1.05); float d1 = 1e9, d2 = 1e9; vec3 c1 = c, c2 = c;
+      for (int i = 0; i < ${INKS.length}; i++) { vec3 e = ink[i] - c; e *= vec3(0.9, 1.2, 0.75); float d = dot(e, e); if (d < d1) { d2 = d1; c2 = c1; d1 = d; c1 = ink[i]; } else if (d < d2) { d2 = d; c2 = ink[i]; } }
+      float r = sqrt(d1) / (sqrt(d1) + sqrt(d2) + 1e-5); gl_FragColor = vec4((r > bayer(gl_FragCoord.xy) * 0.5 + 0.02) ? c2 : c1, 1.0); }`,
+  depthTest: false, depthWrite: false,
+}));
+const postScene = new THREE.Scene(); postScene.add(post); const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+// inks as raw sRGB numbers: the pass compares and writes in sRGB, exactly like the piece's print pass
+post.material.uniforms.ink.value = INKS.map(h => { const c = new THREE.Color(); c.setStyle(h, THREE.LinearSRGBColorSpace); return c; });
+post.material.toneMapped = false;
+
+/* ---------- controls: walk around it, step in close, slide, raise your eye ---------- */
+const controls = new OrbitControls(camera, canvas);
+Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.06, maxDistance: 5.2, maxPolarAngle: Math.PI * 0.5 - 0.02, zoomSpeed: 0.9, rotateSpeed: 0.55, panSpeed: 0.7, screenSpacePanning: true, zoomToCursor: true });
+let BOX = new THREE.Box3(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1.4, 0.5));
+function frameAll(instant) {
+  const c = BOX.getCenter(new THREE.Vector3()), s = BOX.getSize(new THREE.Vector3());
+  const d = Math.max(s.y, s.x * 0.9, s.z * 0.9) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) * (camera.aspect < 1 ? 1.6 : 1.12) + Math.max(s.x, s.z) * 0.5;
+  const goalT = new THREE.Vector3(c.x * 0.4, s.y * 0.5, c.z * 0.4), az = Math.atan2(c.z, c.x) + Math.PI / 2;
+  const goalP = new THREE.Vector3(goalT.x + Math.cos(az) * d, s.y * 0.42, goalT.z + Math.sin(az) * d);
+  if (instant) { controls.target.copy(goalT); camera.position.copy(goalP); controls.update(); return; }
+  FLY = { t0: performance.now(), p0: camera.position.clone(), t0v: controls.target.clone(), p1: goalP, t1: goalT };
+}
+let FLY = null;
+const keys = new Set();
+addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; const k = e.key.toLowerCase(); keys.add(k);
+  if (k === 'f') frameAll(false); if (k === 'p') togglePrint(); if (k === 'v') toggleWind(); if (k === 'c') photograph(); if (k === 'h' || k === '?') $('help').classList.toggle('off'); });
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+const ray = new THREE.Raycaster();
+let helped = false; canvas.addEventListener('pointerdown', () => { if (!helped) { helped = true; setTimeout(() => $('help').classList.add('off'), 6000); } });
+canvas.addEventListener('dblclick', e => { if (!PLANT) return; const r = canvas.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const hit = ray.intersectObject(PLANT, true)[0]; if (!hit) return; const off = camera.position.clone().sub(controls.target);
+  const dist = Math.min(off.length(), Math.max(0.25, hit.distance * 0.6)); FLY = { t0: performance.now(), p0: camera.position.clone(), t0v: controls.target.clone(), t1: hit.point.clone(), p1: hit.point.clone().add(off.setLength(dist)) }; });
+function walk(dt) {
+  if (!keys.size) return; const v = new THREE.Vector3(); const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize(); const r = new THREE.Vector3().crossVectors(f, camera.up).normalize();
+  const sp = 0.9 * dt * (keys.has('shift') ? 2.2 : 1);
+  if (keys.has('w') || keys.has('arrowup')) v.addScaledVector(f, sp);
+  if (keys.has('s') || keys.has('arrowdown')) v.addScaledVector(f, -sp); if (keys.has('a') || keys.has('arrowleft')) v.addScaledVector(r, -sp); if (keys.has('d') || keys.has('arrowright')) v.addScaledVector(r, sp);
+  if (keys.has('q')) v.y -= sp * 0.6; if (keys.has('e')) v.y += sp * 0.6;
+  if (!v.lengthSq()) return; camera.position.add(v); controls.target.add(v);
+  if (camera.position.y < 0.03) { const d = 0.03 - camera.position.y; camera.position.y += d; controls.target.y += d; }
+}
+
+/* ---------- toggles ---------- */
+function togglePrint() { PRINT = !PRINT; $('bPrint').textContent = 'print look: ' + (PRINT ? 'on' : 'off'); canvas.style.imageRendering = PRINT ? 'pixelated' : 'auto'; resize(); }
+function toggleWind() { WIND.on = !WIND.on; $('bWind').textContent = 'wind: ' + (WIND.on ? 'on' : 'off'); }
+WIND.on = Q.get('wind') !== '0'; if (!WIND.on) $('bWind').textContent = 'wind: off';
+$('bPrint').onclick = togglePrint; $('bWind').onclick = toggleWind; $('bShot').onclick = photograph; $('bHelp').onclick = () => $('help').classList.toggle('off');
+if (!PRINT) { $('bPrint').textContent = 'print look: off'; canvas.style.imageRendering = 'auto'; }
+let LABEL = '';
+function photograph() {
+  render(); const a = document.createElement('a'); a.download = `48plant-${N}-studio-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.png`;
+  if (PRINT) { const big = document.createElement('canvas'); const k = Math.max(1, Math.round(1920 / rt.width)); big.width = rt.width * k; big.height = rt.height * k; const g = big.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(canvas, 0, 0, big.width, big.height); a.href = big.toDataURL('image/png'); }
+  else a.href = canvas.toDataURL('image/png');
+  a.click(); $('flash').style.transition = 'none'; $('flash').style.opacity = 0.7; requestAnimationFrame(() => { $('flash').style.transition = 'opacity 0.6s'; $('flash').style.opacity = 0; });
+}
+
+/* ---------- size + render ---------- */
+function resize() {
+  const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (PRINT) { const pw = Math.round(Math.min(960, w)), ph = Math.round(pw * h / w); renderer.setPixelRatio(1); renderer.setSize(pw, ph, false); rt.setSize(pw, ph); }
+  else { renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(w, h, false); }
+}
+addEventListener('resize', resize); resize();
+function render() {
+  if (PRINT) { renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); renderer.render(postScene, postCam); }
+  else renderer.render(scene, camera);
+}
+let last = performance.now(), windT = 0;
+function loop(now) {
+  requestAnimationFrame(loop); const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  windT += dt; WIND.t.value = windT; WIND.amt.value += ((WIND.on ? 1 : 0) - WIND.amt.value) * Math.min(1, dt * 0.8);
+  if (FLY) { const k = Math.min(1, (now - FLY.t0) / 1400), e = k * k * (3 - 2 * k); camera.position.lerpVectors(FLY.p0, FLY.p1, e); controls.target.lerpVectors(FLY.t0v, FLY.t1, e); if (k >= 1) FLY = null; }
+  walk(dt); controls.update(); render();
+}
+
+/* ---------- load the specimen ---------- */
+let PLANT = null;
+(async () => {
+  frameAll(true); requestAnimationFrame(loop);
+  try {
+    status('LOOKING FOR THE ARCHIVED SPECIMEN …');
+    let got = await archivedGLB();
+    if (!got) { status('GROWING THE SPECIMEN FROM ITS CODE …'); got = await grownGLB(); }
+    status('PLACING IT IN THE STUDIO …');
+    const gltf = await new GLTFLoader().parseAsync(got.buf, '');
+    PLANT = gltf.scene;
+    PLANT.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; const m = o.material; if (m.map) { m.map.anisotropy = 8; m.alphaTest = 0.5; m.side = THREE.DoubleSide; } m.envMapIntensity = 0; addWind(m); m.needsUpdate = true; } });
+    scene.add(PLANT);
+    BOX = new THREE.Box3().setFromObject(PLANT); WIND.H.value = Math.max(0.3, BOX.max.y);
+    const ex = (gltf.parser.json.nodes && gltf.parser.json.nodes[0] && gltf.parser.json.nodes[0].extras) || gltf.parser.json.asset.extras || {};
+    LABEL = ex.label || '';
+    const parts = LABEL.split(' · ');
+    $('label').innerHTML = LABEL ? `<div class="t">${parts[0]}</div><div class="dim">${parts.slice(1).join(' · ')}</div>` : '';
+    $('src').textContent = got.src + (ex.morphology ? ` · ${(ex.morphology.height_cm / 100).toFixed(2)} m tall` : '');
+    frameAll(true); status('');
+    window.STUDIO_READY = true;
+  } catch (e) { console.error(e); status('THIS SPECIMEN COULD NOT BE LOADED'); }
+})();
+</script>
+</body>
+</html>
