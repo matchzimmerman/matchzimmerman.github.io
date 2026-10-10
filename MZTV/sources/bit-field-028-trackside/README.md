@@ -4,8 +4,22 @@ A full Grand Prix replayed in real time, filmed by a crew of drone cameras.
 
 **Live:** https://matchzimmerman.com/MZTV/sources/bit-field-028-trackside/
 **OBS:** Browser Source → that URL · 1920×1080 · enable "Control audio via OBS"
-**Params:** `?info=0` · `?fresh=1` (new life, starts on the grid) · `?audio=0` · `?bay=0` (hide the camera bay) · `?rate=N` (replay speed) · `?t=SEC` (jump to a race time, testing; not saved) · `?lines=N` (internal resolution, default 540) · `?seed=N` · `?capture=1` (no rAF; drive with `MZ.tick(dt)`)
-**Keys:** **I** info · **C** camera bay · **M** mute
+**Params:** `?info=0` · `?fresh=1` (new life, starts on the grid) · `?audio=0` · `?bay=0` (hide the camera bay) · `?tower=0` (hide the timing tower) · `?rate=N` (replay speed) · `?t=SEC` (jump to a race time, testing; not saved) · `?lines=N` (internal resolution, default 540) · `?seed=N` · `?capture=1` (no rAF; drive with `MZ.tick(dt)`)
+**Keys:** **I** info · **T** timing tower · **C** camera bay · **M** mute
+
+## Versions
+- `index.html` is **v2** (current). It adds a timing tower on the left:
+  - order and position on track;
+  - gap to the leader and interval to the car ahead, in seconds (or laps down);
+  - last lap time and Δ to the car's own best (PB in lime);
+  - the race's fastest lap highlighted;
+  - PIT and OUT states;
+  - ▲/▼ for cars involved in a pass in the last 10 s;
+  - ◉ for each car that is currently in the live lens;
+  - the followed car's row in pink.
+
+  Gaps are computed from the replay itself: when the car ahead was at this car's distance, binary-searched on its distance column. At the flag the order and gaps come out as the real classification within a few hundredths (e.g. #27 +34.756 vs +34.742 official).
+- `v1.html` is v1: same piece without the tower.
 
 ## Concept
 Silverstone 2025: wet start behind the safety car, two VSCs, two safety cars, the switch to slicks, 52 laps. Every orb is a car carrying its own telemetry. Nothing is acted out; every position and every throttle trace is the race.

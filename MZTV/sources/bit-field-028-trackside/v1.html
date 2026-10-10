@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MZTV · BIT FIELD 028 · TRACKSIDE</title>
+<title>MZTV · BIT FIELD 028 · TRACKSIDE · v1</title>
 <!--
   MZTV · BIT FIELD 028 · TRACKSIDE
   A full Grand Prix (Silverstone 2025, 52 laps) replayed in real time from timing telemetry.
@@ -15,8 +15,8 @@
   only on the 16th note.
   The live lens is the microphone: you hear every car from where the camera is.
 
-  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?t=SEC ?capture=1 ?bay=0 ?tower=0
-  Keys:   I info · T timing · C camera bay · M mute
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?t=SEC ?capture=1 ?bay=0
+  Keys:   I info · C camera bay · M mute
 -->
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,19 +37,6 @@
   .mzcam-mon canvas { width: 19vh; height: 10.69vh; image-rendering: pixelated; }
   .mzcam-mon.live { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink); }
   .mzcam-lab { font: 400 0.95vh/1.3 "JetBrains Mono", monospace; color: var(--ink); background: var(--bg); padding: 0.25vh 0.5vh; border-left: 4px solid #f4dc2a; white-space: nowrap; overflow: hidden; }
-  #tower { position: fixed; left: 1.6vh; top: 8.4vh; width: 34vh; font: 400 1.12vh/1 "JetBrains Mono", ui-monospace, monospace; color: var(--ink); background: var(--bg); border-left: 3px solid var(--pink); padding: 0.6vh 0 0.5vh; }
-  #tower .hd { display: flex; justify-content: space-between; padding: 0 0.9vh 0.55vh; color: var(--dim); letter-spacing: 0.06em; border-bottom: 1px solid var(--line); margin-bottom: 0.3vh; }
-  #tower .hd b { color: var(--ink); font-weight: 700; }
-  #tower .r, #tower .ch { display: grid; grid-template-columns: 2.6vh 1.4vh 3.2vh 6.4vh 5.6vh 7vh 5.4vh; align-items: center; padding: 0 0.9vh; white-space: nowrap; }
-  #tower .r { height: 1.95vh; }
-  #tower .r > span { overflow: hidden; } #tower .r > span:nth-child(n+4), #tower .ch > span:nth-child(n+4) { text-align: right; }
-  #tower .r .n { font-weight: 700; } #tower .d { color: var(--dim); }
-  #tower .r.tgt { background: rgba(255,61,139,0.22); box-shadow: inset 3px 0 0 var(--pink); }
-  #tower .r.out { opacity: 0.38; }
-  #tower .shot { color: var(--pink); } #tower .pb { color: var(--lime); } #tower .fl { color: var(--ink); background: rgba(196,242,74,0.28); }
-  #tower .up { color: var(--lime); } #tower .dn { color: #ff6a3d; } #tower .pit { color: #f4dc2a; }
-  #tower .ch { padding-bottom: 0.35vh; color: var(--dim); font-size: 0.9vh; letter-spacing: 0.05em; }
-  #tower .ft { padding: 0.45vh 0.9vh 0; border-top: 1px solid var(--line); margin-top: 0.3vh; color: var(--dim); font-size: 0.9vh; line-height: 1.35; }
   #load { position: fixed; left: 1.6vh; top: 1.6vh; font: 400 1.3vh "JetBrains Mono", monospace; color: var(--dim); }
 </style>
 </head>
@@ -57,7 +44,6 @@
 <canvas id="v"></canvas>
 <canvas id="hud"></canvas>
 <div id="info"></div>
-<div id="tower"></div>
 <div id="load">TRACKSIDE · loading telemetry</div>
 <script src="../../lib/mzcam.js"></script>
 <script>
@@ -70,7 +56,7 @@ const qn = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v)
 const CFG = {
   info: Q.get('info') !== '0', fresh: Q.get('fresh') === '1', audio: Q.get('audio') !== '0',
   seed: qn('seed', 28), rate: clamp(qn('rate', 1), 0.05, 60), lines: clamp(Math.round(qn('lines', 540)), 180, 1080),
-  t: Q.has('t') ? qn('t', 0) : null, capture: Q.get('capture') === '1', bay: Q.get('bay') !== '0', tower: Q.get('tower') !== '0',
+  t: Q.has('t') ? qn('t', 0) : null, capture: Q.get('capture') === '1', bay: Q.get('bay') !== '0',
 };
 const STORE = 'mztv-bf028-trackside-v1';
 const GAP = 90; // seconds of empty circuit between runs of the race
@@ -110,12 +96,7 @@ async function loadRace() {
     for (let k = 0; k < N; k++) { if (c.first !== null && k >= c.first && k <= c.last) acc += (k === c.first ? 0 : dS[k]); S[k] = acc / 10; }
     if (c.first !== null) for (let k = 0; k < c.first; k++) S[k] = S[c.first];
     if (c.last !== null) for (let k = c.last + 1; k < N; k++) S[k] = S[c.last];
-    // when the car crossed the line at the end of each lap (replay seconds); lapT[0] = lights out
-    const lapT = [meta.lightsOut];
-    if (c.first !== null) for (let k = c.first + 1; k <= c.last; k++) { const n = Math.floor(S[k] / L); while (n >= 1 && lapT.length <= n) { const target = lapT.length * L, a = S[k - 1], b = S[k]; if (a >= target) { lapT.push((k - 1) / meta.hz); continue; } lapT.push((k - 1 + (b > a ? (target - a) / (b - a) : 0)) / meta.hz); } }
-    // telemetry stops a few metres short of the line on the last lap: count that lap as completed
-    if (c.first !== null && S[c.last] > lapT.length * L - 80 && lapT.length <= meta.laps) { const v = Math.max(10, (S[c.last] - S[c.last - 1]) * meta.hz); lapT.push(c.last / meta.hz + Math.max(0, lapT.length * L - S[c.last]) / v); }
-    return { i: ci, code: c.code, num: c.num, first: c.first, last: c.last, S, lat, spd, rpm, thr, flg, pits: c.pits, lapT,
+    return { i: ci, code: c.code, num: c.num, first: c.first, last: c.last, S, lat, spd, rpm, thr, flg, pits: c.pits,
              st: { vis: 0, S: 0, s: 0, lat: 0, v: 0, rpm: 0, thr: 0, brake: 0, drs: 0, gear: 0, pos: V(), dir: V(1, 0, 0), pit: false, live: false, lap: 0 } };
   });
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < n; i++) { x0 = Math.min(x0, cx[i]); x1 = Math.max(x1, cx[i]); z0 = Math.min(z0, cz[i]); z1 = Math.max(z1, cz[i]); }
@@ -573,94 +554,7 @@ function drawHUD(P) {
   hctx.fillStyle = 'rgba(11,20,51,0.72)'; hctx.fillRect(h * 0.016, h * 0.016 + fs * 2.3, lw + fs * 1.4, fs * 1.8);
   hctx.fillStyle = FLAG.f.startsWith('SC') || FLAG.f.startsWith('VSC') ? INK.yellow : INK.cream; hctx.fillText(lapTxt, h * 0.016 + fs * 0.7, h * 0.016 + fs * 3.2);
 }
-function leaderLap() { let n = 0; for (const c of R.cars) if (c.first !== null) n = Math.max(n, lapsDone(c, CLOCK.tau) + 1); return Math.max(1, Math.min(R.meta.laps, n)); }
-
-/* ---------- timing tower: places, gaps, intervals, last lap, delta to own best ---------- */
-const towerEl = document.getElementById('tower');
-const TW = { rows: [], prevPos: new Map(), moved: new Map(), built: false };
-// replay time at which a car was at race distance Sx (binary search on its monotone distance column)
-function timeAt(car, Sx) {
-  if (car.first === null) return null;
-  let lo = car.first, hi = car.last; if (car.S[hi] < Sx || car.S[lo] > Sx) return null;
-  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (car.S[m] < Sx) lo = m; else hi = m; }
-  const a = car.S[lo], b = car.S[hi]; return (lo + (b > a ? (Sx - a) / (b - a) : 0)) / R.hz;
-}
-const fmtLap = t => { if (!(t > 0) || t > 600) return '—'; const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(3).padStart(6, '0')}`; };
-const fmtGap = g => (g == null || !Number.isFinite(g) ? '—' : g >= 100 ? '+' + g.toFixed(0) : '+' + g.toFixed(3));
-function lapsDone(car, tau) { let n = 0; while (n + 1 < car.lapT.length && car.lapT[n + 1] <= tau) n++; return n; }
-// the flag falls when the winner completes the race distance; anyone crossing the line after that has finished
-let FLAG_T = null;
-const flagT = () => { if (FLAG_T === null) { FLAG_T = Infinity; for (const c of R.cars) if (c.lapT.length > R.meta.laps) FLAG_T = Math.min(FLAG_T, c.lapT[R.meta.laps]); } return FLAG_T; };
-const tookFlag = (car, tau) => { const n = lapsDone(car, tau); return n >= 1 && car.lapT[n] >= flagT() && car.lapT[n] <= tau; };
-const isOut = (car, tau) => car.st.vis <= 0 && tau > R.meta.lightsOut && !tookFlag(car, tau);
-function towerOrder(tau) {
-  return R.cars.filter(c => c.first !== null).sort((a, b) => {
-    const fa = tookFlag(a, tau), fb = tookFlag(b, tau);
-    if (fa && fb) { const na = lapsDone(a, tau), nb = lapsDone(b, tau); return na !== nb ? nb - na : a.lapT[na] - b.lapT[nb]; }
-    if (fa !== fb) return fa ? -1 : 1;
-    const oa = isOut(a, tau), ob = isOut(b, tau);
-    if (oa !== ob) return oa ? 1 : -1;
-    return b.st.S - a.st.S;
-  });
-}
-function updateTower() {
-  if (!CFG.tower || !R || !crew) { towerEl.style.display = 'none'; return; }
-  towerEl.style.display = '';
-  const tau = CLOCK.tau, ord = towerOrder(tau), lead = ord[0], tc = tgtCar(), FIN = R.meta.laps;
-  if (!TW.built) {
-    towerEl.innerHTML = `<div class="hd"><span><b>TIMING</b> · ON-TRACK ORDER</span><span id="twlap"></span></div>` +
-      `<div class="ch"><span>P</span><span></span><span>NO</span><span>GAP</span><span>INT</span><span>LAST</span><span>Δ BEST</span></div>` +
-      R.cars.map(() => '<div class="r"><span></span><span></span><span class="n"></span><span></span><span></span><span></span><span></span></div>').join('') + `<div class="ft"></div>`;
-    TW.rows = [...towerEl.querySelectorAll('.r')].map(r => ({ r, c: [...r.children] })); TW.built = true;
-  }
-  // fastest lap so far (lap 1 excluded: standing start)
-  let fl = null;
-  for (const c of R.cars) for (let k = 2; k < c.lapT.length; k++) if (c.lapT[k] <= tau) { const t = c.lapT[k] - c.lapT[k - 1]; if (t > 60 && (!fl || t < fl.t)) fl = { t, i: c.i, k }; }
-  const cam = crew.liveDrone.cam, P = cam ? MZCam.projector(cam, W, H) : null;
-  const empty = tau > R.dur || !lead;
-  ord.forEach((car, q) => {
-    const row = TW.rows[q], st = car.st, c = row.c, out = isOut(car, tau);
-    row.r.style.display = '';
-    const pos = q + 1, prev = TW.prevPos.get(car.i);
-    // arrows only for real passes on track (the overtakes the producer detected), not retirements or pit shuffles
-    const ot = PROD.overtakes.find(o => (o.by === car.i || o.of === car.i) && simT - o.t < 10 && simT >= o.t);
-    const mv = ot ? { d: ot.by === car.i ? 1 : -1 } : null, mvOn = !!mv;
-    const n = lapsDone(car, tau);
-    let gap = '', int = '';
-    if (out) gap = 'OUT';
-    else if (q === 0) gap = n >= FIN ? 'FLAG' : tau < R.meta.lightsOut ? 'GRID' : 'LEADER';
-    else if (tookFlag(car, tau)) { const down = FIN - n; if (down > 0) gap = `+${down} LAP${down > 1 ? 'S' : ''}`; else { gap = fmtGap(car.lapT[FIN] - lead.lapT[FIN]); const a = ord[q - 1]; int = a.lapT[FIN] ? fmtGap(car.lapT[FIN] - a.lapT[FIN]) : ''; } }
-    else if (tau >= R.meta.lightsOut) {
-      const down = Math.floor((lead.st.S - st.S) / R.L);
-      if (down >= 1) gap = `+${down} LAP${down > 1 ? 'S' : ''}`; else { const t = timeAt(lead, st.S); gap = t != null ? fmtGap(tau - t) : '—'; }
-      const a = ord[q - 1], ta = a && !isOut(a, tau) ? timeAt(a, st.S) : null;
-      int = a && a.st.S - st.S > R.L ? '+LAP' : ta != null ? fmtGap(tau - ta) : '';
-    }
-    let last = '', dl = '', lastCls = '', dlCls = 'd';
-    if (n >= 1) {
-      const lt = car.lapT[n] - car.lapT[n - 1];
-      let best = Infinity; for (let k = 2; k <= n; k++) best = Math.min(best, car.lapT[k] - car.lapT[k - 1]);
-      last = fmtLap(lt);
-      if (fl && fl.i === car.i && fl.k === n) lastCls = 'fl';
-      if (n >= 2 && Number.isFinite(best)) { const d = lt - best; if (d < 1e-3) { dl = 'PB'; dlCls = 'pb'; } else dl = '+' + d.toFixed(3); }
-    }
-    let inShot = false;
-    if (P && st.vis > 0.5) { const p = P.proj(st.pos); inShot = !!p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H && p[2] < 900; }
-    c[0].textContent = String(pos);
-    c[1].textContent = inShot ? '◉' : ''; c[1].className = inShot ? 'shot' : '';
-    c[2].textContent = car.num;
-    const pit = st.pit && !out && tau > R.meta.lightsOut;
-    c[3].textContent = pit ? 'PIT' : gap; c[3].className = pit ? 'pit' : '';
-    c[4].textContent = mvOn ? (mv.d > 0 ? '▲' + mv.d : '▼' + -mv.d) : int; c[4].className = mvOn ? (mv.d > 0 ? 'up' : 'dn') : 'd';
-    c[5].textContent = out ? '' : last; c[5].className = lastCls;
-    c[6].textContent = out ? '' : dl; c[6].className = dlCls;
-    row.r.classList.toggle('tgt', !!tc && tc.i === car.i);
-    row.r.classList.toggle('out', out);
-  });
-  for (let q = ord.length; q < TW.rows.length; q++) TW.rows[q].r.style.display = 'none';
-  document.getElementById('twlap').textContent = empty ? 'CIRCUIT EMPTY' : tau < R.meta.lightsOut ? 'GRID' : `LAP ${leaderLap()}/${FIN}`;
-  towerEl.querySelector('.ft').innerHTML = `${fl ? `fastest lap <span class="fl">#${R.cars[fl.i].num} ${fmtLap(fl.t)}</span> · ` : ''}<span class="shot">◉</span> in the live lens · on-track gaps, before penalties`;
-}
+function leaderLap() { const o = order(); return o.length ? Math.min(R.meta.laps, o[0].st.lap) : 0; }
 
 /* ---------- info box ---------- */
 const infoEl = document.getElementById('info');
@@ -677,7 +571,7 @@ function updateInfo() {
     `<span class="d">brakes in front of the lens → knock · overtake → echo throw · SC/VSC → tempo drops, space opens · rain → room</span><br>` +
     `<span class="d">crew memory:</span> ${best ? `${best[0]} favoured (${best[1]} witnessed)` : 'learning the circuit'}` +
     `<div class="log">${MEM.log.slice(0, 4).join('\n')}</div>` +
-    `<span class="d">i info · t timing · c camera bay · m mute</span>`;
+    `<span class="d">i info · c camera bay · m mute</span>`;
 }
 
 /* ------------------------------------------------------------------ audio */
@@ -868,7 +762,7 @@ function draw() {
 function loop(ts) {
   const now = performance.now() / 1000, dt = lastWall ? clamp(now - lastWall, 0, 0.1) : 1 / 60; lastWall = now;
   try { step(dt); draw(); } catch (e) { console.error(e); recover(); }
-  if (now - lastInfo > 0.5) { lastInfo = now; updateInfo(); updateTower(); }
+  if (now - lastInfo > 0.5) { lastInfo = now; updateInfo(); }
   if (now - lastSave > 60) { lastSave = now; save(); }
   requestAnimationFrame(loop);
 }
@@ -908,14 +802,13 @@ async function boot() {
     const k = e.key.toLowerCase();
     if (k === 'i') { CFG.info = !CFG.info; updateInfo(); }
     else if (k === 'c' && bay) bay.show(!bay.on);
-    else if (k === 't') { CFG.tower = !CFG.tower; updateTower(); }
     else if (k === 'm') { AU.muted = !AU.muted; if (AU.N) setP(AU.N.master, AU.N.master.gain, AU.muted ? 0 : 0.62, 'mg', 0.1); }
   });
   addEventListener('pointerdown', () => { if (AU.ac && AU.ac.state === 'suspended') AU.ac.resume(); if (CFG.audio && !AU.ac) buildAudio(); });
   addEventListener('beforeunload', save);
   updateInfo();
   if (CFG.capture) {
-    window.MZ = { tick(dt = 1 / 30) { virtualNow += dt; step(dt); draw(); updateInfo(); updateTower(); }, crew, R, CLOCK, AU, PROD, KP, MEM };
+    window.MZ = { tick(dt = 1 / 30) { virtualNow += dt; step(dt); draw(); updateInfo(); }, crew, R, CLOCK, AU, PROD, KP, MEM };
   } else {
     window.MZ = { crew, R, CLOCK, AU, PROD, KP, MEM, cut: i => crew.cutTo(crew.drones[i]) };
     requestAnimationFrame(loop);
