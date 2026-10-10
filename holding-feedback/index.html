@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#090909">
+<title>HOLDING FEEDBACK · MZCMG</title>
+<style>
+  :root{
+    --bg:#070707;
+    --fg:#f6efe5;
+    --muted:#b6aaa0;
+    --hot:#ff8a30;
+    --hot2:#ff4f1f;
+    --hot3:#ffd36a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:var(--bg);overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;color:var(--fg)}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hud{
+    position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;
+    padding:18px 18px 0 18px;pointer-events:none;mix-blend-mode:screen
+  }
+  .title{max-width:min(58vw,560px);line-height:1.1}
+  .title .kicker{font-size:11px;letter-spacing:.24em;color:var(--muted);margin-bottom:6px}
+  .title h1{margin:0;font-size:clamp(20px,3.4vw,42px);font-weight:700;letter-spacing:.06em}
+  .title p{margin:10px 0 0 0;font-size:11px;line-height:1.5;letter-spacing:.12em;color:#d1c4b9;max-width:42ch}
+  .meta{font-size:10px;letter-spacing:.22em;text-align:right;line-height:1.7;color:#d0c1b7;opacity:.95}
+  .bar{position:fixed;left:18px;right:18px;bottom:18px;display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none;mix-blend-mode:screen}
+  .state{font-size:10px;letter-spacing:.2em;color:#dfd1c4;white-space:pre-line}
+  .meterWrap{display:flex;align-items:flex-end;gap:10px}
+  .meter{
+    width:min(42vw,260px);height:9px;border:1px solid rgba(255,220,180,.28);padding:1px;background:rgba(255,255,255,.03);
+    box-shadow:0 0 24px rgba(255,120,40,.1), inset 0 0 14px rgba(255,255,255,.04)
+  }
+  .fill{height:100%;width:0%;background:linear-gradient(90deg,#7a1200 0%,#ff6326 45%,#ffd36a 100%);box-shadow:0 0 18px rgba(255,130,50,.45)}
+  .hint{font-size:10px;letter-spacing:.18em;color:#a7988f;text-align:right;line-height:1.7}
+  .flash{
+    position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%, rgba(255,210,120,.14), rgba(255,95,25,.08) 22%, rgba(255,70,20,0) 64%);
+    mix-blend-mode:screen
+  }
+  @media (max-width:700px){
+    .hud{padding:14px 14px 0 14px;display:block}
+    .meta{margin-top:14px;text-align:left}
+    .bar{left:14px;right:14px;bottom:14px;display:block}
+    .meterWrap{margin-top:10px;justify-content:space-between}
+    .meter{width:56vw}
+    .hint{text-align:left;margin-top:10px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="flash" id="flash"></div>
+<div class="hud">
+  <div class="title">
+    <div class="kicker">MZCMG · GENERATIVE STUDIES 002</div>
+    <h1>HOLDING FEEDBACK</h1>
+    <p>heat pressure suppression // a squeal trying to escape // held down until it tears through</p>
+  </div>
+  <div class="meta" id="meta">
+    CLICK / TAP = FORCE A BREAKOUT
+    <br>SPACE = CLAMP / RELEASE
+    <br>R = RESEED · S = SAVE PNG
+  </div>
+</div>
+<div class="bar">
+  <div class="state" id="state">STATE // CLAMPED</div>
+  <div class="meterWrap">
+    <div class="meter"><div class="fill" id="fill"></div></div>
+    <div class="hint">browser piece<br>self-contained html</div>
+  </div>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const flashEl = document.getElementById('flash');
+  const stateEl = document.getElementById('state');
+  const fillEl = document.getElementById('fill');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  let w=0,h=0,cx=0,cy=0,seed=0,last=performance.now(),t=0;
+  let noiseSeed = Math.random() * 1000;
+  let lines=[];
+  let particles=[];
+  let bursts=[];
+  let clamp = 0.92;
+  let manualClamp = true;
+  let tension = 0.4;
+  let escape = 0;
+  let nextBurst = 1.5 + Math.random()*2.4;
+  let holdBias = 0.85;
+  let masterHue = 18;
+
+  function rand(a=1,b=0){ return b + Math.random()*(a-b); }
+  function lerp(a,b,n){ return a + (b-a)*n; }
+  function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+  function easeOutCubic(x){ return 1 - Math.pow(1-x,3); }
+  function fract(x){ return x - Math.floor(x); }
+  function hash(x){ return fract(Math.sin(x*127.1 + 311.7 + seed*0.137) * 43758.5453123); }
+  function noise1(x){
+    const i = Math.floor(x), f = x - i;
+    const a = hash(i), b = hash(i+1);
+    const u = f*f*(3-2*f);
+    return a*(1-u)+b*u;
+  }
+  function fbm(x){
+    let v=0, a=.5, f=1;
+    for(let i=0;i<5;i++){ v += a*noise1(x*f + noiseSeed); f*=2.03; a*=.5; }
+    return v;
+  }
+
+  function resize(){
+    w = Math.floor(innerWidth*dpr);
+    h = Math.floor(innerHeight*dpr);
+    canvas.width = w; canvas.height = h;
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    cx = w*0.5; cy = h*0.53;
+    build();
+  }
+
+  function build(){
+    seed = Math.random()*9999;
+    noiseSeed = Math.random()*999;
+    lines.length = 0;
+    particles.length = 0;
+    bursts.length = 0;
+    const count = innerWidth < 700 ? 28 : 42;
+    for(let i=0;i<count;i++){
+      const yn = (i/(count-1)-.5);
+      lines.push({
+        offset: yn,
+        weight: rand(3.4,1.2),
+        bright: rand(1,.2),
+        phase: rand(Math.PI*2,0),
+        speed: rand(1.5,.45),
+        detail: rand(2.6,.8),
+        gate: rand(1,.35),
+        hot: rand(1,.3)
+      });
+    }
+    const pcount = innerWidth < 700 ? 60 : 110;
+    for(let i=0;i<pcount;i++) particles.push(makeParticle(true));
+    tension = .32;
+    escape = 0;
+    nextBurst = .8 + Math.random()*2.2;
+    masterHue = rand(24,12);
+  }
+
+  function makeParticle(init=false){
+    return {
+      x: rand(w),
+      y: cy + rand(h*.2,-h*.2),
+      vx: rand(.2,-.2) * dpr,
+      vy: rand(.18,-.18) * dpr,
+      life: init ? rand(1,.1) : 0,
+      decay: rand(.012,.0035),
+      size: rand(3.2,0.8) * dpr,
+      glow: rand(1,.2),
+      drift: rand(1,.3)
+    };
+  }
+
+  function triggerBurst(force=1){
+    const side = Math.random() < .5 ? -1 : 1;
+    const y = cy + rand(h*.14, -h*.12);
+    bursts.push({
+      x: cx + side*rand(w*.05,w*.22),
+      y,
+      side,
+      life: 0,
+      dur: rand(1.1,.6)/Math.max(.6, force),
+      amp: rand(1.3,.8) * force,
+      freq: rand(15,7),
+      width: rand(1.5, .6),
+      jitter: rand(1.2,.4)
+    });
+    flashEl.style.opacity = String(Math.min(.5, .14 + force*.18));
+    setTimeout(()=>{ flashEl.style.opacity='0'; }, 70);
+  }
+
+  function update(dt){
+    t += dt;
+    if(!manualClamp){
+      holdBias = 0.72 + Math.sin(t*.12)*0.11 + fbm(t*.1)*0.08;
+      clamp = clamp01(holdBias);
+    }
+
+    nextBurst -= dt;
+    tension += dt * (0.06 + (1-clamp)*0.12);
+    tension += Math.max(0, .82-clamp) * dt * 0.32;
+    tension -= escape * dt * 0.35;
+
+    if(nextBurst <= 0){
+      const pressure = clamp01((tension - 0.28) * 1.25 + (1-clamp) * 0.7 + fbm(t*0.75)*0.1);
+      if(Math.random() < pressure){
+        const force = .8 + pressure*1.3;
+        triggerBurst(force);
+        escape = Math.min(1, escape + pressure*0.65);
+        tension *= 0.64;
+      }
+      nextBurst = lerp(2.2, .35, pressure) + Math.random()*0.45;
+    }
+
+    for(let i=bursts.length-1;i>=0;i--){
+      const b = bursts[i];
+      b.life += dt;
+      if(b.life >= b.dur) bursts.splice(i,1);
+    }
+
+    escape = Math.max(0, escape - dt*0.48 + bursts.length*0.015*dt);
+    tension = clamp01(tension);
+
+    for(let p of particles){
+      p.life -= p.decay;
+      if(p.life <= 0){ Object.assign(p, makeParticle()); p.life = rand(1,.4); }
+      const burstPush = bursts.length ? 1 : 0;
+      p.x += (p.vx + Math.sin(t*p.drift + p.y*.003)*0.12*dpr + burstPush*rand(.6,-.6)) * dt*60;
+      p.y += (p.vy + Math.cos(t*p.drift*1.1 + p.x*.0025)*0.08*dpr + (escape-.5)*0.02*h/w) * dt*60;
+      if(p.x < -20) p.x = w+20; if(p.x > w+20) p.x = -20;
+      if(p.y < -20) p.y = h+20; if(p.y > h+20) p.y = -20;
+    }
+
+    stateEl.textContent = `STATE // ${bursts.length ? 'ESCAPING' : (clamp > .78 ? 'CLAMPED' : 'LOOSENING')}\nPRESSURE // ${Math.round(tension*100).toString().padStart(3,'0')}%`;
+    fillEl.style.width = `${Math.round(clamp01(tension*0.8 + escape*0.7)*100)}%`;
+  }
+
+  function lineY(base, xn, li){
+    const x = xn * 2 - 1;
+    const envelope = Math.pow(1 - Math.abs(x), 0.72);
+    const tremor = Math.sin(xn * Math.PI * 18 + t*li.speed + li.phase) * 0.18;
+    const hum = Math.sin(xn * Math.PI * (2.4 + li.detail) - t*0.7 + li.phase*0.6) * 0.42;
+    const grain = (fbm(xn*8 + li.phase*0.2 + t*0.07) - .5) * 1.4;
+    let y = base + (hum + tremor + grain*0.55) * envelope * (18 + li.hot*14) * dpr;
+    const squeeze = clamp * (1 - Math.abs(li.offset)*0.65);
+    y = lerp(y, base, squeeze * 0.78);
+    for(let b of bursts){
+      const dx = xn*w - b.x;
+      const dist = Math.abs(dx) / (w*0.34);
+      if(dist < 1){
+        const spread = Math.pow(1-dist, 2.4);
+        const phase = dx * 0.015 * b.freq;
+        const wave = Math.sin(phase - t*14*b.width + li.phase*0.6 + li.offset*8);
+        const bend = wave * spread * (34 + b.amp*38) * dpr * (1 - clamp*0.45) * (0.55 + li.bright*0.9);
+        y += bend;
+      }
+    }
+    y += Math.sin(xn*Math.PI*2 + t*0.4 + li.phase)*escape*2.5*dpr;
+    return y;
+  }
+
+  function drawBackground(){
+    const g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#040404');
+    g.addColorStop(.42,'#080708');
+    g.addColorStop(.56,'#120a09');
+    g.addColorStop(1,'#040404');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,w,h);
+
+    const grill = ctx.createLinearGradient(0,cy-h*.18,0,cy+h*.18);
+    grill.addColorStop(0,'rgba(255,110,36,0)');
+    grill.addColorStop(.22,'rgba(255,110,36,.05)');
+    grill.addColorStop(.5,'rgba(255,180,90,.08)');
+    grill.addColorStop(.78,'rgba(255,100,25,.04)');
+    grill.addColorStop(1,'rgba(255,110,36,0)');
+    ctx.fillStyle = grill;
+    ctx.fillRect(0, cy-h*.24, w, h*.48);
+
+    ctx.save();
+    ctx.globalAlpha = .12;
+    for(let i=0;i<20;i++){
+      const yy = cy - h*.16 + (i/19)*h*.32;
+      ctx.strokeStyle = `rgba(255,180,120,${i%2?0.06:0.035})`;
+      ctx.lineWidth = (i%5===0?1.5:1)*dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, yy);
+      ctx.lineTo(w, yy);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w,h)*0.42);
+    hot.addColorStop(0, `rgba(255,110,30,${0.09 + tension*0.18 + escape*0.12})`);
+    hot.addColorStop(.22, `rgba(255,85,25,${0.05 + tension*0.08})`);
+    hot.addColorStop(.6, 'rgba(255,70,20,0.015)');
+    hot.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = hot;
+    ctx.fillRect(0,0,w,h);
+  }
+
+  function drawSuppressionBands(){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for(let i=0;i<5;i++){
+      const inset = (i+1) * w*0.055;
+      const y = cy + (i-2) * h*0.025;
+      const amp = (1-clamp) * 2 + escape*3;
+      ctx.strokeStyle = `hsla(${masterHue + i*3}, 95%, ${55 + i*4}%, ${0.06 + 0.03*i})`;
+      ctx.lineWidth = (1.5 + i*1.5) * dpr;
+      ctx.beginPath();
+      for(let s=0;s<=130;s++){
+        const xn = s/130;
+        const xx = lerp(inset, w-inset, xn);
+        const yy = y + Math.sin(xn*Math.PI*(2.2+i*0.35) + t*(0.6+i*0.1))*amp*dpr + (fbm(xn*10 + t*0.1 + i*2)-.5)*4*dpr;
+        if(s===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawLines(){
+    const left = w*0.075, right = w*0.925;
+    for(let pass=0; pass<3; pass++){
+      for(let i=0;i<lines.length;i++){
+        const li = lines[i];
+        const base = cy + li.offset * h * 0.21;
+        ctx.beginPath();
+        const steps = innerWidth < 700 ? 220 : 320;
+        for(let s=0;s<=steps;s++){
+          const xn = s/steps;
+          const xx = lerp(left,right,xn);
+          const yy = lineY(base, xn, li);
+          if(s===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+        }
+        let alpha, width, stroke;
+        if(pass===0){
+          alpha = 0.028 + li.bright*0.02;
+          width = (16 + li.weight*7) * dpr;
+          stroke = `hsla(${masterHue+li.hot*6}, 100%, 58%, ${alpha})`;
+        } else if(pass===1){
+          alpha = 0.06 + li.bright*0.05 + escape*0.05;
+          width = (7 + li.weight*2.4) * dpr;
+          stroke = `hsla(${masterHue+4+li.hot*7}, 100%, ${62+li.hot*8}%, ${alpha})`;
+        } else {
+          alpha = 0.22 + li.bright*0.22 + escape*0.12;
+          width = (1 + li.weight*0.45) * dpr;
+          stroke = `hsla(${masterHue+10+li.hot*6}, 100%, ${74+li.hot*10}%, ${alpha})`;
+        }
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawBursts(){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for(let b of bursts){
+      const p = clamp01(b.life / b.dur);
+      const env = Math.sin(p*Math.PI);
+      const core = 16 * b.amp * env * dpr;
+      const length = w * lerp(.1, .4, env);
+      const x0 = b.x;
+      const y0 = b.y;
+
+      for(let pass=0;pass<3;pass++){
+        ctx.beginPath();
+        const segments = 140;
+        for(let i=0;i<=segments;i++){
+          const xn = i/segments;
+          const dir = b.side;
+          const xx = x0 + dir * xn * length;
+          const jitter = Math.sin(xn*Math.PI*b.freq - t*22 + b.jitter*i*0.04) * core * (1-xn) * (pass===0?1.8:pass===1?1:0.5);
+          const rib = Math.sin(xn*Math.PI*2 + t*7 + b.amp)*3*dpr;
+          const yy = y0 + jitter + rib;
+          if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+        }
+        ctx.strokeStyle = pass===0
+          ? `rgba(255,90,35,${0.08*env})`
+          : pass===1
+          ? `rgba(255,150,65,${0.18*env})`
+          : `rgba(255,228,180,${0.75*env})`;
+        ctx.lineWidth = (pass===0?26:pass===1?10:2.1) * dpr * (1.2 - p*0.35);
+        ctx.lineCap='round';
+        ctx.stroke();
+      }
+
+      const rg = ctx.createRadialGradient(x0,y0,0,x0,y0,90*dpr*b.amp);
+      rg.addColorStop(0,`rgba(255,214,150,${0.22*env})`);
+      rg.addColorStop(.3,`rgba(255,110,30,${0.12*env})`);
+      rg.addColorStop(1,'rgba(255,80,20,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(x0,y0,95*dpr*b.amp,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawParticles(){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for(let p of particles){
+      const a = p.life * (.18 + escape*.25);
+      ctx.fillStyle = `rgba(255,${150+Math.floor(p.glow*60)},${70+Math.floor(p.glow*45)},${a})`;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size*(.45 + p.life*.8),0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawHeat(){
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = .08 + tension*0.06;
+    const bands = 11;
+    for(let i=0;i<bands;i++){
+      const yy = cy - h*.14 + (i/(bands-1))*h*.28;
+      ctx.beginPath();
+      for(let s=0;s<=180;s++){
+        const xn = s/180;
+        const xx = xn*w;
+        const wob = Math.sin(xn*Math.PI*(3.2+i*.12) + t*(1.2+i*.03))*2.4*dpr;
+        const n = (fbm(xn*12 + i*3 + t*.18)-.5)*6.5*dpr;
+        const burst = bursts.length ? Math.sin(xn*Math.PI*18 - t*16 + i)*1.6*dpr : 0;
+        const y = yy + wob + n + burst;
+        if(s===0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y);
+      }
+      ctx.strokeStyle = `rgba(255,190,120,${0.035 + i*0.003})`;
+      ctx.lineWidth = (1 + (i%3===0?1.5:.2))*dpr;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawScan(){
+    ctx.save();
+    ctx.globalAlpha = .09;
+    for(let y=0; y<h; y+=3*dpr){
+      ctx.fillStyle = y%(6*dpr)===0 ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.14)';
+      ctx.fillRect(0,y,w,1*dpr);
+    }
+    ctx.restore();
+  }
+
+  function vignette(){
+    const vg = ctx.createRadialGradient(cx, cy, Math.min(w,h)*0.2, cx, cy, Math.max(w,h)*0.72);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(.66,'rgba(0,0,0,.12)');
+    vg.addColorStop(1,'rgba(0,0,0,.55)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0,0,w,h);
+  }
+
+  function drawFrame(){
+    drawBackground();
+    drawHeat();
+    drawSuppressionBands();
+    drawLines();
+    drawBursts();
+    drawParticles();
+    drawScan();
+    vignette();
+  }
+
+  function loop(now){
+    const dt = Math.min(0.033, (now-last)/1000); last = now;
+    update(dt);
+    drawFrame();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', resize);
+  window.addEventListener('keydown', (e) => {
+    if(e.key === ' '){ e.preventDefault(); manualClamp = true; clamp = clamp > .78 ? .56 : .92; }
+    if(e.key.toLowerCase() === 'r'){ build(); }
+    if(e.key.toLowerCase() === 's'){
+      const a=document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download='holding-feedback-mzcmg.png'; a.click();
+    }
+    if(e.key.toLowerCase() === 'b') triggerBurst(1.35);
+  });
+  window.addEventListener('pointerdown', () => triggerBurst(1.55));
+
+  resize();
+  requestAnimationFrame((ts) => { last = ts; loop(ts); });
+})();
+</script>
+</body>
+</html>
