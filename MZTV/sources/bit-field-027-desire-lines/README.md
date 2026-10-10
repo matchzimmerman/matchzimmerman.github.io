@@ -1,6 +1,6 @@
 # MZTV · BIT FIELD 027 · DESIRE LINES
 
-*HARIL specimen · MZ.Claude's response to the MZ.CLAUDE BUILD BRIEF (2026-10-06). MZ.GPT's independent response is BIT FIELD 026 · INFLUENCE FIELD; this build was made without opening it.*
+*HARIL specimen · one of two independent responses to the same conversation-driven build brief (2026-10-06); the other is BIT FIELD 026 · INFLUENCE FIELD. This build was made without opening it.*
 
 **Live:** https://matchzimmerman.com/MZTV/sources/bit-field-027-desire-lines/
 **OBS:** Browser Source → that URL · 1920×1080 · enable "Control audio via OBS"
@@ -11,9 +11,9 @@
 A desire line is a path worn across a lawn by people walking where they actually want to go. Nobody draws it; it is what repeated influence leaves behind.
 
 The piece reads the conversations in which it was designed, one sentence at a time, and releases each sentence into a single ground as walkers:
-- **MZ.Human sentences** become a few heavy walkers that cut new paths.
-- **MZ.Claude sentences** become many light walkers that follow paths already cut, and elaborate them.
-- **The relayed brief** (MZ.Human with MZ.GPT) becomes walkers of both kinds at once.
+- **Human sentences** become a few heavy walkers that cut new paths.
+- **Machine sentences** become many light walkers that follow paths already cut, and elaborate them.
+- **The relayed brief** (written by the human and a machine agent together) becomes walkers of both kinds at once.
 
 Every recurring concept has a fixed home in the field, derived from the word itself. A sentence's walkers travel from wherever the reading last stood, through every concept the sentence touches. Concepts that keep being said together wear a channel between their homes. Over hours those channels settle into sediment, which is the ground's memory.
 
@@ -24,17 +24,17 @@ No node, word or link is ever drawn. The structure of influence exists only as w
 
 | Source | Turns | What it is |
 |---|---|---|
-| claude.ai chat "BIT FIELD 014 incident system", 2026-10-05 → 06 | 19 | RESIDUE GROOVE v1–v5 and SCORE ENGINE 001–003. The session in which MZ.Human named the "Complex System of Influence". |
-| claude.ai chat "F1 telemetry music composition", 2026-10-06 | 2 | The next branch idea and its reply. |
-| MZ.CLAUDE BUILD BRIEF, 2026-10-06 | 11 | The brief, split at its own section headings. |
-| This build session | 1 | MZ.Claude's opening reading of the brief: the build's first machine turn. |
+| Archived chat "BIT FIELD 014 incident system", 2026-10-05 → 06 | 19 | RESIDUE GROOVE v1–v5 and SCORE ENGINE 001–003. The session in which the human named the "Complex System of Influence". |
+| Archived chat "F1 telemetry music composition", 2026-10-06 | 2 | The next branch idea and its reply. |
+| Build brief, 2026-10-06 | 11 | The brief, split at its own section headings. |
+| This build session | 1 | The builder's opening reading of the brief: the build's first machine turn. |
 
 Every unit is labelled by basis:
 - **verbatim:** the exact words.
 - **doc:** a program sheet the machine wrote in that turn.
 - **summary:** the archive only kept a model-written summary of that turn. This applies to 4 turns: rg01, rg02, rg03 and rg18.
 
-**Not included:** the MZ.Human ↔ MZ.GPT conversation that produced the brief. It is outside this agent's archive. The brief itself is its only trace here.
+**Not included:** the conversation that produced the brief. It is outside this archive. The brief itself is its only trace here.
 
 ## What is measured (`data/extract.py`, deterministic, no model or API)
 **Per sentence:**
@@ -53,7 +53,7 @@ Every unit is labelled by basis:
 - the 28 recurring concepts (content words in ≥3 turns, ranked by spread × frequency), with who first said each one;
 - dormant returns: a concept absent for ≥5 turns, then back (34 found);
 - TF-IDF similarity between all turns;
-- **bridges:** strongly similar turns far apart or from different sources (9 found). The strongest is MZ.Human's "Complex System of Influence" turn (rg12) and the brief's call for sound and image to share causes (br09).
+- **bridges:** strongly similar turns far apart or from different sources (9 found). The strongest is the human's "Complex System of Influence" turn (rg12) and the brief's call for sound and image to share causes (br09).
 
 `data/provenance.txt` lists every value.
 

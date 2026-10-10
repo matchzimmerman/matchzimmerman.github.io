@@ -74,6 +74,11 @@ cands = [(w, d) for w, d in df.items() if 3 <= d <= int(N * 0.6)]
 tot = collections.Counter(); [tot.update(c) for c in tf_unit]
 cands.sort(key=lambda wd: -(wd[1] * math.log(1 + tot[wd[0]])))
 CONCEPTS = [w for w, _ in cands[:28]]
+try:
+    _old = [c["w"] for c in json.load(open(os.path.join(HERE, "packet.json")))["concepts"]]
+    if set(_old) == set(CONCEPTS): CONCEPTS = _old
+except Exception:
+    pass
 cidx = {w: i for i, w in enumerate(CONCEPTS)}
 
 # ---------------------------------------------------------------- tf-idf vectors, similarity
