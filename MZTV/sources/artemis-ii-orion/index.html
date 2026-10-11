@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071022">
+<title>MZTV · ARTEMIS II · ORION FIELD / Study 001</title>
+<style>
+:root{--ink:#f3ecd9;--muted:#9cabc7;--blue:#071022;--gold:#f5c980;--cyan:#8bede0;--line:rgba(218,232,245,.19);--glass:rgba(6,14,30,.78)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071022;color:var(--ink);font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+#grain{position:fixed;inset:0;pointer-events:none;opacity:.17;background-image:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(255,255,255,.06) 4px);mix-blend-mode:screen}
+#ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;padding:clamp(12px,2.5vw,36px) clamp(12px,3.4vw,56px) max(env(safe-area-inset-bottom),16px);gap:12px}
+#ui button,#ui input,#ui a{pointer-events:auto} .top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.mast{font-size:11px;letter-spacing:.24em;color:var(--cyan);font-weight:700}
+.kicker{margin-top:8px;font-size:10px;letter-spacing:.11em;color:var(--muted)}
+.edition{font-size:10px;letter-spacing:.1em;text-align:right;color:#d7deea;line-height:1.8}
+.edition b{color:var(--gold);font-weight:700}.upper{flex:1;position:relative;min-height:0}
+.bigtitle{position:absolute;left:0;top:6%;max-width:420px;opacity:.96}
+.bigtitle h1{font-size:clamp(30px,5.3vw,82px);line-height:.91;letter-spacing:-.07em;margin:0;font-weight:500;font-family:Georgia,"Times New Roman",serif}
+.bigtitle h1 span{font-style:italic;color:var(--gold)}
+.bigtitle p{font-size:clamp(10px,.85vw,13px);color:var(--muted);line-height:1.8;letter-spacing:.06em;margin:18px 0 0;max-width:330px}
+#event{position:absolute;top:47%;left:0;max-width:260px;border-left:2px solid var(--gold);padding:10px 0 10px 14px;font-size:12px;line-height:1.5;letter-spacing:.06em;transition:opacity .35s;color:var(--ink)}
+#event small{display:block;font-size:10px;margin-top:4px;color:var(--muted)}
+#data{position:absolute;right:0;top:10%;width:clamp(190px,20vw,295px);border-top:1px solid var(--line);padding-top:12px;background:linear-gradient(90deg,transparent,var(--glass))}
+.datahead{font-size:10px;letter-spacing:.16em;color:var(--cyan);margin-bottom:14px}
+.datum{margin-bottom:15px}.datum label{display:block;font-size:9px;letter-spacing:.14em;color:var(--muted);margin-bottom:4px}
+.datum strong{font-size:clamp(16px,1.75vw,26px);letter-spacing:-.05em;font-weight:500;white-space:nowrap}
+.datum strong em{font-style:normal;font-size:10px;color:var(--muted);letter-spacing:0}
+#phase{font-size:10px;letter-spacing:.14em;color:var(--gold);padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:14px}
+#source{font-size:9px;color:var(--muted);line-height:1.7;padding-top:4px}
+#source a{color:var(--cyan);text-decoration:none}
+#map{position:absolute;right:0;bottom:6%;width:clamp(180px,19vw,282px);height:105px;border:1px solid var(--line);background:rgba(6,14,30,.52)}
+.mapcap{position:absolute;right:6px;bottom:calc(6% + 111px);font-size:9px;letter-spacing:.16em;color:var(--muted)}
+#status{align-self:flex-start;font-size:10px;letter-spacing:.15em;color:var(--gold);text-transform:uppercase;min-height:15px}
+.bottom{pointer-events:auto;max-width:1120px;margin-left:auto;margin-right:auto;width:100%;background:rgba(5,11,24,.80);border:1px solid var(--line);padding:12px 16px;backdrop-filter:blur(12px)}
+.timing{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:10px;letter-spacing:.11em}
+#date{color:var(--ink)}#progressLabel{color:var(--muted)}
+input[type=range]{width:100%;height:4px;accent-color:var(--gold);margin:14px 0 17px;cursor:pointer}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+button{border:1px solid rgba(245,201,128,.33);background:rgba(245,201,128,.05);font:inherit;letter-spacing:.08em;color:var(--ink);font-size:10px;text-transform:uppercase;min-height:37px;padding:9px 13px;cursor:pointer;transition:background .2s,border-color .2s}
+button:hover,button:focus-visible{background:rgba(245,201,128,.18);border-color:var(--gold);outline:none}
+button.primary{background:var(--gold);color:#091427;border-color:var(--gold);font-weight:800}
+.controls .tiny{color:var(--muted);font-size:9px;line-height:1.5;letter-spacing:.09em;margin-left:auto;text-align:right}
+#message{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);padding:16px 24px;color:var(--gold);font-size:12px;letter-spacing:.15em;text-align:center;pointer-events:none}
+#infoPanel{display:none;position:absolute;bottom:calc(100% + 7px);left:0;max-width:490px;padding:15px 20px;background:rgba(5,11,24,.92);border:1px solid var(--line);font-size:11px;line-height:1.8;color:#dbe6e8}
+#infoPanel b{color:var(--gold)}#infoPanel a{color:var(--cyan)}
+body.info #infoPanel{display:block}
+@media(max-width:700px){
+#ui{padding:13px 13px max(env(safe-area-inset-bottom),9px);gap:6px}
+.mast{font-size:10px;letter-spacing:.1em}.kicker{font-size:8px}.edition{font-size:8px}
+.bigtitle{top:3%;max-width:205px}.bigtitle h1{font-size:34px}.bigtitle p{font-size:9px;line-height:1.5;max-width:185px;margin-top:8px}
+#data{right:0;top:2%;width:126px;padding-top:6px}.datahead{font-size:8px;margin-bottom:8px}.datum{margin-bottom:7px}.datum label{font-size:7px}.datum strong{font-size:14px}.datum strong em{font-size:8px}
+#phase{font-size:8px;margin-bottom:6px;padding-bottom:6px}#source{font-size:7px}
+#event{top:auto;bottom:calc(17% + 28px);font-size:9px;max-width:175px;padding:6px 0 6px 8px}#event small{font-size:8px}
+#map{height:65px;width:140px;bottom:16%;right:0}.mapcap{bottom:calc(16% + 69px);font-size:7px}
+.bottom{padding:9px}.timing{font-size:9px}input[type=range]{margin:10px 0 12px}
+button{font-size:9px;padding:7px 9px;min-height:34px}.controls{gap:6px}.controls .tiny{display:none}
+#status{font-size:8px}
+}
+@media(max-height:570px){.bigtitle p,#source,#event,.mapcap,#map{display:none}#data{top:3%}.datum{margin-bottom:7px}}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Stylized animated reconstruction of the Artemis II Orion and Moon trajectories"></canvas>
+<div id="grain"></div>
+<div id="ui">
+<header class="top">
+ <div><div class="mast">MZTV &nbsp;/&nbsp; SYSTEM STUDY 001</div><div class="kicker">ARTEMIS II &nbsp;·&nbsp; ORION FIELD &nbsp;/&nbsp; 2026</div></div>
+ <div class="edition"><b>FLIGHT-DERIVED RECONSTRUCTION</b><div>NASA/JPL HORIZONS &nbsp;·&nbsp; NOT LIVE</div></div>
+</header>
+<div class="upper">
+ <div class="bigtitle"><h1>Between<br><span>two worlds.</span></h1><p>A journey made from recorded positions, relative motion, distance, time and sound.</p></div>
+ <div id="event"><span id="eventTitle">LUNAR APPROACH</span><small id="eventDesc">Earth and Moon hold the frame.</small></div>
+ <div id="data">
+  <div class="datahead">ORION / FLIGHT STATE</div>
+  <div id="phase">LUNAR TRANSIT</div>
+  <div class="datum"><label>TO EARTH CENTER</label><strong id="earthDist">—</strong></div>
+  <div class="datum"><label>TO MOON CENTER</label><strong id="moonDist">—</strong></div>
+  <div class="datum"><label>EARTH SIGNAL DELAY · ONE WAY</label><strong id="lightTime">—</strong></div>
+  <div class="datum"><label>SPEED · EARTH-RELATIVE</label><strong id="speed">—</strong></div>
+  <div id="source">3D geometry from NASA/JPL vectors.<br>Graphic spheres enlarged for legibility.<br><a href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noopener noreferrer">HORIZONS SOURCE ↗</a></div>
+ </div>
+ <div class="mapcap">FLIGHT TRACE / EARTH-CENTERED</div><canvas id="map" width="440" height="170" aria-label="Mission overview map"></canvas>
+</div>
+<div id="status">CAM 02 &nbsp;·&nbsp; LUNAR MARK</div>
+<div class="bottom">
+ <div id="infoPanel"><b>ABOUT THIS STUDY</b><br>Artemis II (April 2026) reconstructed from archived NASA/JPL Horizons geometric state vectors for Orion (-1024) and the Moon (301), sampled in an Earth-centered J2000 ecliptic frame. Recorded coordinates and velocities drive position, clock, and distance. Virtual cameras, planet textures, expanded sphere sizes, and musical sonification are artistic, not documentary footage or sound in vacuum.<br><br>Audio must be enabled by the viewer. Data timestamps are displayed as approximate UTC (TDB conversion).<br><a href="https://www.nasa.gov/missions/artemis/artemis-2/track-nasas-artemis-ii-mission-in-real-time/" target="_blank" rel="noopener noreferrer">NASA ephemeris ↗</a> &nbsp; <a href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noopener noreferrer">JPL Horizons ↗</a><br>KEYS: space pause · ←/→ ±1 hour · C camera · M sound · I info · F fullscreen</div>
+ <div class="timing"><span id="date">APR 06 2026 · --:-- UTC</span><span id="progressLabel">FLIGHT WINDOW / —</span></div>
+ <input type="range" id="scrub" min="0" max="10000" step="1" value="5100" aria-label="Scrub mission time">
+ <div class="controls">
+  <button class="primary" id="play" aria-label="Pause or play">Ⅱ PAUSE</button>
+  <button id="camera">◉ DIRECTOR</button>
+  <button id="audio">♫ SOUND OFF</button>
+  <button id="rate">× 15 MIN / SEC</button>
+  <button id="infoButton" aria-label="Show or hide information">ⓘ INFO</button>
+  <button id="full" aria-label="Toggle fullscreen">⛶</button>
+  <div class="tiny">VIRTUAL CINEMATOGRAPHY<br>GENERATIVE SONIFICATION · NOT SPACE AUDIO</div>
+ </div>
+</div>
+</div>
+<div id="message">LOADING FLIGHT VECTORS</div>
+<script>
+(function(){
+'use strict';
+var cvs=document.getElementById('scene'),ctx=cvs.getContext('2d',{alpha:false}),map=document.getElementById('map'),mc=map.getContext('2d');
+var $=function(id){return document.getElementById(id)};
+var Q=new URLSearchParams(location.search),W=1000,H=650,DPR=1,DATA=null,lo=0,hi=1,clock=0;
+var play=true,camMode='DIRECTOR',shot='LUNAR',camSince=0,rateIndex=1,rates=[300,900,3600,10800],audio=null;
+var frame=0,last=0,dragging=false,obs=-1,saved=0,nearPoint=null;
+var store='mztv-artemis2-orion-v1',capture=Q.has('capture'),hideInfo=Q.get('info')==='0';
+if(hideInfo)document.querySelector('.bigtitle').style.display='none';
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function mix(a,b,t){return a+(b-a)*t}
+function v(a,b,c){return [a,b,c]}
+function add(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]}
+function sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]}
+function mul(a,k){return [a[0]*k,a[1]*k,a[2]*k]}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function mag(a){return Math.hypot(a[0],a[1],a[2])}
+function unit(a){return mul(a,1/(mag(a)||1))}
+function nm(a,b,t){return [mix(a[0],b[0],t),mix(a[1],b[1],t),mix(a[2],b[2],t)]}
+function fmt(x){return Math.round(x).toLocaleString('en-US')}
+function random(seed){var x=seed|0;return function(){x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296}}
+var rng=random(88126),stars=[];for(var si=0;si<270;si++)stars.push([rng(),rng(),rng(),rng()]);
+function resize(){W=window.innerWidth;H=window.innerHeight;DPR=Math.min(devicePixelRatio||1,1.7);cvs.width=Math.ceil(W*DPR);cvs.height=Math.ceil(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0)}
+window.addEventListener('resize',resize);resize();
+function sample(rows,t){
+ if(t<=rows[0][0])return rows[0].slice(1);
+ if(t>=rows[rows.length-1][0])return rows[rows.length-1].slice(1);
+ var a=0,b=rows.length-1;while(b-a>1){var m=(a+b)>>1;if(rows[m][0]<=t)a=m;else b=m}
+ var p=rows[a],q=rows[b],f=(t-p[0])/(q[0]-p[0]),out=[];
+ for(var k=1;k<=6;k++)out.push(mix(p[k],q[k],f));return out;
+}
+function calc(t){var a=sample(DATA.orion,t),b=sample(DATA.moon,t);return {O:a.slice(0,3),M:b.slice(0,3),V:a.slice(3),Vm:b.slice(3),de:mag(a.slice(0,3)),dm:mag(sub(a.slice(0,3),b.slice(0,3))),spd:mag(a.slice(3)),rv:mag(sub(a.slice(3),b.slice(3)))}}
+function setText(id,s){var n=$(id);if(n.textContent!==s)n.textContent=s}
+function phase(s,t){if(t<lo+24*3600)return 'EARTH ORBIT / DEPARTURE';if(s.dm<50000)return 'LUNAR FLYBY';if(s.dm<140000)return 'LUNAR APPROACH / EXIT';if(t>nearPoint.t && s.de<220000)return 'TRANS-EARTH RETURN';if(t<nearPoint.t)return 'OUTBOUND TRANSIT';return 'INBOUND TRANSIT'}
+function updateHud(s){
+ var d=new Date(clock*1000),day=String(d.getUTCDate()).padStart(2,'0'),hour=String(d.getUTCHours()).padStart(2,'0'),minute=String(d.getUTCMinutes()).padStart(2,'0');
+ setText('date','APR '+day+' 2026  ·  '+hour+':'+minute+' UTC (≈)');
+ setText('earthDist',fmt(s.de)+' km');setText('moonDist',fmt(s.dm)+' km');setText('lightTime',(s.de/299792.458).toFixed(2)+' s');setText('speed',s.spd.toFixed(2)+' km/s');
+ setText('phase',phase(s,clock));setText('progressLabel','ARCHIVE WINDOW  ·  '+(100*(clock-lo)/(hi-lo)).toFixed(1)+'%');
+ if(!dragging)$('scrub').value=String(Math.round((clock-lo)/(hi-lo)*10000));
+ setText('eventTitle',s.dm<22000?'CLOSEST ENCOUNTER':s.dm<100000?'THE LUNAR FIELD':(clock>nearPoint.t?'EARTHBOUND':'DISTANCE / OUTBOUND'));
+ setText('eventDesc',s.dm<22000?'Orion passes the lunar far side.':s.dm<100000?'The Moon takes possession of the frame.':(clock>nearPoint.t?'The distance to Earth begins to close.':'The signal takes longer to cross the dark.'));
+ setText('status',(camMode==='DIRECTOR'?'AUTO DIRECTOR  /  ':'MANUAL LENS  /  ')+shot+'  ·  '+(audio?'SONIFICATION ON':'SILENT'));
+}
+function visualNoise(x,y){return Math.sin(x*17.42+y*9.13)*Math.sin(x*9.9-y*31.1)}
+function makeGlobe(type){
+ var c=document.createElement('canvas');c.width=c.height=256;var g=c.getContext('2d'),im=g.createImageData(256,256),arr=im.data,rr=random(type==='EARTH'?3333:4477);
+ var crater=[];for(var j=0;j<100;j++)crater.push([rr()*2-1,rr()*2-1,rr()*.12+.01]);
+ for(var y=0;y<256;y++)for(var x=0;x<256;x++){
+ var xx=(x-127.5)/126.5,yy=(y-127.5)/126.5,r2=xx*xx+yy*yy,k=(y*256+x)*4;if(r2>1){arr[k+3]=0;continue}
+ var zz=Math.sqrt(1-r2),n=visualNoise(xx,yy),n2=visualNoise(xx*.47+2,yy*.64-1),n3=visualNoise(xx*3.1,yy*3.3);
+ var shade=.29+.71*Math.max(0,zz*.78+xx*.48+yy*.12),R,G,B;
+ if(type==='EARTH'){
+   var land=(n*.35+n2*.7+n3*.18+Math.sin(xx*5+yy*2.7)*.30)>.15;
+   if(land){R=58+38*n2;G=111+34*n;B=85+22*n3}else{R=14+18*n;G=69+32*n2;B=127+48*n3}
+   var clouds=Math.max(0,n3*.35+n*.25+Math.sin(xx*16+yy*18)*.15-.32);R+=clouds*170;G+=clouds*180;B+=clouds*205;
+   if(Math.abs(yy)>.86){R+=60;G+=60;B+=58}
+ }else{var m=n*.31+n2*.18+n3*.10;R=151+m*78;G=151+m*82;B=143+m*86;
+   for(var h=0;h<crater.length;h++){var cr=crater[h],dr=Math.hypot(xx-cr[0],yy-cr[1]),rad=cr[2];if(dr<rad){var edge=clamp((dr/rad-.62)*7,0,1);R+=edge*29-16;G+=edge*29-16;B+=edge*29-16}}
+ }
+ arr[k]=clamp(R*shade,0,255);arr[k+1]=clamp(G*shade,0,255);arr[k+2]=clamp(B*shade,0,255);arr[k+3]=255;
+ }
+ g.putImageData(im,0,0);return c
+}
+var earthImg=makeGlobe('EARTH'),moonImg=makeGlobe('MOON');
+function background(time){
+ var gr=ctx.createRadialGradient(W*.57,H*.47,H*.02,W*.55,H*.45,Math.max(W,H)*.85);gr.addColorStop(0,'#12264a');gr.addColorStop(.45,'#09152e');gr.addColorStop(1,'#040812');ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
+ for(var i=0;i<stars.length;i++){var a=stars[i],x=a[0]*W,y=a[1]*H,s=(.4+a[2]*1.2),alpha=.08+a[3]*.45+Math.sin(time*.25+i)*.09;ctx.fillStyle='rgba(208,223,246,'+clamp(alpha,0,.9)+')';ctx.fillRect(x,y,s,s)}
+ ctx.strokeStyle='rgba(137,180,233,.025)';ctx.lineWidth=1;
+ for(var j=0;j<18;j++){var yy=H*(.11+j*.055);ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke()}
+ var glow=ctx.createRadialGradient(W*.57,H*.57,0,W*.57,H*.57,W*.46);glow.addColorStop(0,'rgba(70,103,205,.075)');glow.addColorStop(1,'rgba(70,103,205,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H)
+}
+var smooth={x:0,y:0,scale:0,ready:false};
+function camera(s,time){
+ var m=s.M,o=s.O,em=mag(m),target=shot,focus,scale;
+ var visibleHeight=H-(H<600?100:205);var availW=W*(W<700?.78:.74);
+ if(target==='ATLAS'){focus=mul(m,.50);scale=Math.min(availW/Math.max(em,1),visibleHeight/170000)}
+ else if(target==='LUNAR'){focus=add(m,mul(sub(o,m),.18));scale=Math.min(availW/140000,visibleHeight/110000)}
+ else if(target==='ORION'){focus=add(o,mul(sub(m,o),.27));scale=Math.min(availW/180000,visibleHeight/170000)}
+ else{focus=mul(m,.54);scale=availW/em}
+ var h=unit(m),up=unit([-h[1],h[0],0]),x=dot(focus,h),y=dot(focus,up)+focus[2]*.44;
+ if(!smooth.ready){smooth={x,y,scale,ready:true}}else{var e=1-Math.exp(-Math.min(1,time)*2.7);smooth.x=mix(smooth.x,x,e);smooth.y=mix(smooth.y,y,e);smooth.scale=mix(smooth.scale,scale,e)}
+ return {h,up,center:smooth,scale:smooth.scale};
+}
+function pos(p,c){
+ var x=dot(p,c.h),y=dot(p,c.up)+p[2]*.44;
+ var midx=W*(W<700?.49:.52),midy=H*(W<700?.55:.52);
+ return [midx+(x-c.center.x)*c.scale,midy-(y-c.center.y)*c.scale]
+}
+function ring(p,rad,color,alpha){
+ ctx.beginPath();ctx.arc(p[0],p[1],rad,0,Math.PI*2);ctx.strokeStyle=color;ctx.globalAlpha=alpha;ctx.lineWidth=1;ctx.stroke();ctx.globalAlpha=1
+}
+function globe(p,r,type,time){
+ if(p[0]<-r*2||p[0]>W+r*2||p[1]<-r*2||p[1]>H+r*2)return;
+ var col=type==='EARTH'?'rgba(76,167,255,':'rgba(242,200,137,';
+ var glow=ctx.createRadialGradient(p[0],p[1],r*.65,p[0],p[1],r*2.9);glow.addColorStop(0,col+'.18)');glow.addColorStop(1,col+'0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(p[0],p[1],r*2.9,0,Math.PI*2);ctx.fill();
+ ctx.save();ctx.shadowBlur=32;ctx.shadowColor=type==='EARTH'?'rgba(64,145,253,.3)':'rgba(255,208,144,.3)';
+ ctx.drawImage(type==='EARTH'?earthImg:moonImg,p[0]-r,p[1]-r,r*2,r*2);ctx.restore();
+ ring(p,r+8,type==='EARTH'?'#6a99d4':'#f6c580',.35);
+ ctx.fillStyle='#f4ecd7';ctx.font='10px monospace';ctx.letterSpacing='1px';ctx.fillText(type,p[0]+r+13,p[1]+2)
+}
+function trail(c){
+ if(!DATA)return;
+ ctx.save();var points=DATA.orion;
+ var past=false;for(var pass=0;pass<2;pass++){
+  ctx.beginPath();ctx.lineWidth=pass===0?1.2:2.0;ctx.strokeStyle=pass===0?'rgba(155,201,224,.17)':'rgba(247,204,133,.72)';ctx.setLineDash(pass===0?[4,8]:[]);
+  var started=false;for(var i=0;i<points.length;i++){
+   var row=points[i],t=row[0];if(pass===1&&t>clock)break;var p=pos(row.slice(1,4),c);
+   if(!started){ctx.moveTo(p[0],p[1]);started=true}else{ctx.lineTo(p[0],p[1])}
+  }ctx.stroke();
+ }ctx.setLineDash([]);ctx.restore()
+}
+function sonar(p,r,time,d){
+ var pulse=(time*.12)%1;
+ for(var k=0;k<3;k++){var rr=r+17+k*24+pulse*15;ring(p,rr,'#f5c980',.13*(1-k/3))}
+ ctx.beginPath();ctx.moveTo(p[0]-r-30,p[1]);ctx.lineTo(p[0]+r+30,p[1]);ctx.moveTo(p[0],p[1]-r-30);ctx.lineTo(p[0],p[1]+r+30);ctx.strokeStyle='rgba(242,220,171,.34)';ctx.stroke();
+ ctx.font='10px monospace';ctx.fillStyle='#f8d5a0';ctx.fillText('ORION',p[0]+19,p[1]-18);
+ ctx.fillStyle='#fff8df';ctx.shadowColor='#f6d790';ctx.shadowBlur=18;ctx.beginPath();ctx.arc(p[0],p[1],Math.max(3,r),0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+ ctx.strokeStyle='#f6c980';ctx.globalAlpha=.72;ctx.beginPath();ctx.arc(p[0],p[1],8+3*Math.sin(time*2),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+}
+function pathText(p,text,color){
+ ctx.fillStyle=color||'#dfd4bc';ctx.font='9px monospace';ctx.fillText(text,p[0],p[1])
+}
+function field(time,dt,s){
+ background(time);
+ var c=camera(s,dt),earth=pos([0,0,0],c),moon=pos(s.M,c),orion=pos(s.O,c);
+ ctx.strokeStyle='rgba(181,206,244,.12)';ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(earth[0],earth[1]);ctx.lineTo(moon[0],moon[1]);ctx.stroke();
+ trail(c);
+ var em=mag(s.M);
+ var er=(shot==='ATLAS'?45:shot==='ORION'?43:48),mr=(shot==='LUNAR'?Math.min(145,W*.18):shot==='ORION'?85:32);
+ if(shot==='LUNAR'){var rr=Math.min(260,H*.4);ring(moon,rr,'#e6c492',.17);ring(moon,rr+65,'#e6c492',.08)}
+ globe(earth,er,'EARTH',time);globe(moon,mr,'MOON',time);
+ // stylized waveform field projected along the spacecraft-Moon direction
+ var spread=Math.min(150,s.dm/800),a=clamp(1-s.dm/120000,0,1);
+ if(a>0){ctx.beginPath();for(var n=0;n<95;n++){var xx=orion[0]+(n/94-.5)*spread*4,yy=orion[1]+Math.sin(n*.18+time*1.4)*9*a+(n/94-.5)*3;if(n===0)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy)}
+ ctx.lineWidth=1;ctx.strokeStyle='rgba(111,237,221,'+(a*.38)+')';ctx.stroke()}
+ sonar(orion,4,time,s);
+ ctx.font='10px monospace';ctx.fillStyle='#9ec6df';
+ if(earth[0]>=0&&earth[0]<=W)pathText([earth[0]-44,earth[1]+er+24],'HOME · 0 KM','#8fc3ff');
+ if(moon[0]>=0&&moon[0]<=W)pathText([moon[0]-40,moon[1]+mr+28],'LUNAR FIELD','#f3d3a0');
+ ctx.fillStyle='rgba(255,255,255,.035)';
+ for(var i=0;i<12;i++){var px=(i*73.5+time*.8)%W;ctx.fillRect(px,0,1,H)}
+}
+function overview(s){
+ var w=map.width,h=map.height;mc.clearRect(0,0,w,h);mc.fillStyle='#09152c';mc.fillRect(0,0,w,h);
+ var M=s.M,hv=unit(M),uv=unit([-hv[1],hv[0],0]),d=mag(M),sc=w*.75/d;
+ function xmap(p){return [w*.13+dot(p,hv)*sc,h*.5-(dot(p,uv)+p[2]*.44)*sc]}
+ var e=xmap([0,0,0]),m=xmap(M),o=xmap(s.O);
+ mc.strokeStyle='rgba(145,187,227,.26)';mc.beginPath();mc.moveTo(e[0],e[1]);mc.lineTo(m[0],m[1]);mc.stroke();
+ mc.beginPath();for(var k=0;k<DATA.orion.length;k++){var p=DATA.orion[k],z=xmap(p.slice(1,4));if(k===0)mc.moveTo(z[0],z[1]);else mc.lineTo(z[0],z[1])}mc.strokeStyle='rgba(245,201,128,.38)';mc.stroke();
+ for(var i=0;i<2;i++){var p=i?m:e;mc.fillStyle=i?'#f5c980':'#7ac1ed';mc.beginPath();mc.arc(p[0],p[1],i?4:6,0,Math.PI*2);mc.fill()}
+ mc.fillStyle='#fff8d8';mc.beginPath();mc.arc(o[0],o[1],4,0,Math.PI*2);mc.fill();mc.strokeStyle='#fff8d8';mc.beginPath();mc.arc(o[0],o[1],9,0,Math.PI*2);mc.stroke();
+ mc.fillStyle='#91a7bd';mc.font='13px monospace';mc.fillText('EARTH',12,19);mc.textAlign='right';mc.fillText('MOON',w-13,19);mc.textAlign='left';
+}
+function chooseShot(s,time){
+ if(camMode!=='DIRECTOR'){shot=camMode;return}
+ if(time-camSince<14)return;
+ var opts=s.dm<105000?['LUNAR','ORION','LUNAR','ATLAS']:['ATLAS','ORION','ATLAS'];
+ var selected=opts[Math.floor((time/14+3)%opts.length)];
+ if(selected!==shot){shot=selected;smooth.ready=false}camSince=time;
+}
+function audioStart(){
+ var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+ var ac=new AC(),master=ac.createGain();master.gain.value=.0001;var comp=ac.createDynamicsCompressor();comp.threshold.value=-24;comp.ratio.value=3.8;master.connect(comp);comp.connect(ac.destination);
+ var voices=[];for(var i=0;i<4;i++){var osc=ac.createOscillator(),gain=ac.createGain(),pan=ac.createStereoPanner?ac.createStereoPanner():null;
+ osc.type=i===0?'sine':i===1?'triangle':i===2?'sine':'sine';gain.gain.value=[.11,.045,.03,.014][i];osc.connect(gain);if(pan){gain.connect(pan);pan.connect(master)}else gain.connect(master);osc.start();voices.push({o:osc,g:gain,p:pan})}
+ return {ac,master,voices}
+}
+function updateAudio(s){
+ if(!audio)return;
+ var now=audio.ac.currentTime,cl=clamp(1-s.dm/370000,0,1),sl=clamp(s.de/410000,0,1);
+ var freq=[48.99,73.42,146.83,220],dr=s.rv;
+ for(var i=0;i<audio.voices.length;i++){var q=audio.voices[i],f=freq[i]*(1+cl*.15+sl*.035+dr*.0018);q.o.frequency.setTargetAtTime(f,now,.35);q.g.gain.setTargetAtTime([.11,.045,.03,.014][i]*(1+.55*cl),now,.8);if(q.p)q.p.pan.setTargetAtTime(clamp(Math.sin(clock/43000+i)*.62,-.7,.7),now,.8)}
+ audio.master.gain.setTargetAtTime(.32,now,.8)
+}
+function render(dt){
+ if(!DATA)return;
+ frame+=dt;if(play&&!dragging){clock+=dt*rates[rateIndex];if(clock>hi)clock=lo+(clock-hi)}
+ var s=calc(clock);
+ chooseShot(s,frame);field(frame,dt,s);
+ if(Math.floor(frame*8)!==obs){obs=Math.floor(frame*8);updateHud(s);if(map)overview(s)}
+ if(audio)updateAudio(s);
+ if(!capture&&frame-saved>6){saved=frame;try{localStorage.setItem(store,String(clock))}catch(e){}}
+}
+function animate(now){if(capture)return;var dt=last?clamp((now-last)/1000,0,.08):.016;last=now;render(dt);requestAnimationFrame(animate)}
+function setCameraMode(){var modes=['DIRECTOR','ATLAS','LUNAR','ORION'];camMode=modes[(modes.indexOf(camMode)+1)%modes.length];if(camMode!=='DIRECTOR')shot=camMode;else camSince=-1000;smooth.ready=false;setText('camera','◉ '+camMode)}
+function togglePlay(){play=!play;setText('play',play?'Ⅱ PAUSE':'▶ PLAY')}
+function toggleAudio(){
+ if(audio){audio.master.gain.setTargetAtTime(.0001,audio.ac.currentTime,.08);audio.ac.close();audio=null;setText('audio','♫ SOUND OFF');return}
+ audio=audioStart();if(audio){audio.ac.resume();setText('audio','♫ SOUND ON')}
+}
+function setRate(){rateIndex=(rateIndex+1)%rates.length;setText('rate','× '+['5 MIN / SEC','15 MIN / SEC','1 H / SEC','3 H / SEC'][rateIndex])}
+$('play').onclick=togglePlay;$('camera').onclick=setCameraMode;$('audio').onclick=toggleAudio;$('rate').onclick=setRate;
+$('infoButton').onclick=function(){document.body.classList.toggle('info')};
+$('full').onclick=function(){if(!document.fullscreenElement&&document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();else if(document.exitFullscreen)document.exitFullscreen()};
+$('scrub').addEventListener('pointerdown',function(){dragging=true});$('scrub').addEventListener('pointerup',function(){dragging=false});
+$('scrub').addEventListener('input',function(){clock=mix(lo,hi,Number(this.value)/10000);smooth.ready=false;render(0)});
+window.addEventListener('keydown',function(e){
+ if(e.target.tagName==='INPUT')return;var k=e.key.toLowerCase();
+ if(k===' '){e.preventDefault();togglePlay()}else if(k==='arrowleft'){clock=clamp(clock-3600,lo,hi);smooth.ready=false}
+ else if(k==='arrowright'){clock=clamp(clock+3600,lo,hi);smooth.ready=false}
+ else if(k==='c')setCameraMode();else if(k==='m')toggleAudio();else if(k==='i')document.body.classList.toggle('info');
+ else if(k==='f')$('full').click();
+});
+fetch('data/trajectory.json').then(function(r){if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(function(j){
+ if(!j.orion||j.orion.length<100||!j.moon||j.moon.length<100)throw Error('Missing flight vectors');
+ DATA=j;lo=Math.max(j.orion[0][0],j.moon[0][0]);hi=Math.min(j.orion[j.orion.length-1][0],j.moon[j.moon.length-1][0]);
+ nearPoint={t:lo,d:Infinity};for(var i=0;i<j.orion.length;i++){var s=calc(j.orion[i][0]);if(s.dm<nearPoint.d)nearPoint={t:j.orion[i][0],d:s.dm}}
+ clock=clamp(nearPoint.t-8*3600,lo,hi);
+ try{var mem=Number(localStorage.getItem(store));if(!Q.has('fresh')&&Number.isFinite(mem)&&mem>=lo&&mem<=hi)clock=mem}catch(e){}
+ if(Q.has('t')){var x=Number(Q.get('t'));if(Number.isFinite(x))clock=clamp(x<=1?mix(lo,hi,x):x,lo,hi)}
+ if(Q.has('rate')){var rt=Number(Q.get('rate'));if(Number.isFinite(rt)&&rt>0){rates.push(rt);rateIndex=rates.length-1;setText('rate','× '+rt+' S / SEC')}}
+ if(Q.get('audio')==='0')$('audio').disabled=true;
+ $('message').style.display='none';render(.016);requestAnimationFrame(animate);
+ window.MZ={tick:render,seek:function(t){clock=clamp(t<=1?mix(lo,hi,t):t,lo,hi);smooth.ready=false;render(0)},state:function(){return {clock,shot,mode:camMode,phase:phase(calc(clock),clock),data:true,closest:nearPoint}}};
+}).catch(function(e){$('message').textContent='FLIGHT DATA UNAVAILABLE · '+e.message;console.error(e)});
+})();
+</script>
+</body>
+</html>
