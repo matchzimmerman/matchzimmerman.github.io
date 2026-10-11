@@ -60,7 +60,7 @@ if(OPT.debug){g.fillStyle=dog?'#ff764c':'#f7fcbb';g.font='10px monospace';g.fill
 function drawWorld(g,w,h,P,viewer,thumbnail){
 g.save();ground(g,P,w,h);
 const camera=viewer.cam,all=world.sheep.map(s=>({body:s,d:Math.hypot(s.p.x-camera.pos.x,s.p.z-camera.pos.z),dog:false}));
-all.push({body:world.dog,d:Math.hypot(world.dog.p.x-camera.pos.x,world.dog.p.z-camera.pos.z),dog:true}));
+all.push({body:world.dog,d:Math.hypot(world.dog.p.x-camera.pos.x,world.dog.p.z-camera.pos.z),dog:true});
 all.sort((a,b)=>b.d-a.d);for(const a of all)animal(g,P,a.body,a.dog);
 if(!thumbnail)for(const drone of crew.drones)if(drone!==viewer)crew.drawDrone(g,P,drone,{size:1.2});
 g.restore();
