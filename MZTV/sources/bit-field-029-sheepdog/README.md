@@ -1,5 +1,7 @@
 # MZTV · BIT FIELD 029 · SHEEPDOG
 
+> **Geographic direction (updated 2026-10-11):** The user selected the **red-circled four-building Galway farmstead cluster and surrounding fields** as the preferred real-world environment. The v0.1 square paddocks documented below are an existing functional test, **not** the approved final landscape. The authoritative next-stage site spec is [`MZTV/worlds/galway/sheepdog_farmstead_site_001.json`](../../worlds/galway/sheepdog_farmstead_site_001.json), with instructions in [the Galway world README](../../worlds/galway/README.md). Do not substitute the earlier northern farmland or broad orange southern candidate. Field boundaries, gates, elevation and geology are **not yet verified**; do not present authored versions as mapped truth.
+
 A border collie and individual sheep in two fenced paddocks, filmed by five autonomous drone cameras. The human issues a high-level command; the dog attempts to collect and drive the flock through the gate into the designated field. This is a behavioral simulation, not a recording or a prerecorded animation.
 
 **Program:** https://matchzimmerman.com/MZTV/sources/bit-field-029-sheepdog/
