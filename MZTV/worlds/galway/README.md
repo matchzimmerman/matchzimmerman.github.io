@@ -1,5 +1,18 @@
 # MZTV / Galway geographic world — preferred SHEEPDOG site
 
+## Current build status (2026-10-11) — integrated
+
+**SHEEPDOG v0.2 now renders selected Galway geography**, with measured regional elevation and a clipped OSM site layer. This supersedes any older text in this document suggesting no terrain has been installed.
+
+- `farmstead_eudem25m.json`: 21×23 sample grid, 25m step, ITM origin E506050 N722200; **483 valid interpolated EU-DEM v1.1 elevations**, values 14.987–34.939m. Site anchor direct query about 23.791m. Source: Copernicus/EEA EU-DEM (adapted samples) retrieved 2026-10-11 via Open Topo Data. Caution: 25m digital surface model, **not LiDAR**; roughly ±7m source-reported vertical RMSE, no farmyard-scale height claims. EU-DEM use/citation: https://www.opentopodata.org/datasets/eudem/ and https://www.eea.europa.eu/en/datahub/datahubitem-view/d08852bc-7b5f-4835-a776-08362e2fbf4b .
+- `farmstead_osm_local.json`: **22 clipped/simplified OSM building footprints**, **4 road/path ways**, **1 wall**, source IDs intact, region anchored at E506160 N722560 and derived from the user-supplied OSM extract. This is a **local subset**, not the entire corridor GeoJSON; the full source bundle remains with the conversation artifact.
+- `../../lib/mzgeo-galway.js`: draws the mapped features and elevation-projected ground, and supplies elevation to 3D subject/camera placement. It has no control over sheep/dog decisions.
+- `../../sources/bit-field-029-sheepdog/index.html`: current implementation. Existing seeded MZHERD and MZCAM reused without modification to their core code.
+
+**Important behavioral limitation:** the test paddocks (216m×136m, near the mapped farmstead) and gate/fences are still authored, not verified against property/stock boundaries. Actual sheep/dog movement uses a 2D policy; slope changes projection/camera geometry but is not yet an input to route selection or speed. The road is not a herd crossing route. The four red-marked buildings remain the user-selected anchor; no earlier northern-site proposal should replace them.
+
+**LiDAR search:** Checked point intersection against available GSI polygon inventories for DCHG/Discovery Programme, OPW, OPW NASC and TII; these returned no coverage for the selected anchor. The GSI Phase2 LiDAR collection's published extent is east of this farmstead. This does **not** prove that no other recent high-resolution survey exists. Do not label the regional EU-DEM as a LiDAR scan.
+
 **Current site decision, 2026-10-11:** The user selected the **tight red-circled cluster of mapped structures** beside the bend in the southern Galway road. Use this cluster and **the immediate surrounding fields** as the proposed SHEEPDOG setting. Do not center on the previously suggested northern farmland, the earlier northing 722500 star marker, or the broad orange dashed southern-corridor ellipse. That orange oval was context for locating the exact structures, not the selected site.
 
 ## Canonical site spec for MZ.Claude
