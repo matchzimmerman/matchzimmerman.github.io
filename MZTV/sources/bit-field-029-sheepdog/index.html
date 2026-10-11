@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV — SHEEPDOG · BIT FIELD 029</title>
+<style>
+:root{--paper:#f5f2d7;--lime:#e5f79b;--orange:#ff764c;--dim:#b1c8b7}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#193c43;color:var(--paper);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
+#screen{display:block;width:100vw;height:100vh;object-fit:cover}#wash{position:absolute;inset:0;background:linear-gradient(90deg,rgba(12,31,34,.58),transparent 32%,transparent 82%,rgba(12,31,34,.18)),linear-gradient(0deg,rgba(12,31,34,.58),transparent 28%);pointer-events:none}
+#left{position:absolute;top:26px;left:32px;text-shadow:0 1px 9px #193b3e;pointer-events:none}#brand{font-weight:900;letter-spacing:.19em;font-size:18px}#brand b{color:var(--orange)}#subtitle{font-size:10px;color:#cfdecb;letter-spacing:.14em;margin-top:5px}#mission{margin-top:30px;color:var(--lime);font-size:13px;letter-spacing:.1em}#counter{font-size:clamp(48px,7vw,88px);font-weight:900;letter-spacing:-.09em;line-height:1.05}#counter span{font-weight:400;font-size:14px;letter-spacing:0}#phase{color:#ecf6df;letter-spacing:.08em;margin-top:6px}#phase b{color:var(--orange)}
+#right{position:absolute;right:30px;top:28px;text-align:right;font-size:12px;pointer-events:none;text-shadow:0 1px 8px #12282c}#live{color:var(--lime);letter-spacing:.12em}#live:before{content:'●';color:var(--orange);margin-right:7px}#camera,#clock{margin-top:9px}#clock{color:var(--dim)}
+#events{position:absolute;left:32px;bottom:106px;line-height:1.7;text-shadow:0 1px 7px #0c2526;pointer-events:none;max-width:75%}#events div:first-child{color:var(--lime)}#controls{position:absolute;left:30px;right:30px;bottom:28px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+button{font:11px ui-monospace,monospace;letter-spacing:.08em;padding:11px 13px;border:1px solid #9bbaa6;background:#15363dd9;color:var(--paper);cursor:pointer}button:first-child{background:var(--orange);border-color:var(--orange);color:#132c2f;font-weight:900}button:disabled{opacity:.55;cursor:default}button:hover:not(:disabled){filter:brightness(1.2)}#small{margin-left:auto;color:var(--dim);font-size:10px}
+#bayparent{position:absolute;right:18px;bottom:100px;max-width:43vw;max-height:55vh;overflow:auto}.mzcam-bay{background:#133136eb;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:7px;border:1px solid #91aa97}.mzcam-bay canvas{display:block;width:100%;height:auto}.mzcam-plan{grid-column:span 2;max-height:180px;object-fit:contain}.mzcam-mon{min-width:0;border:1px solid #4a6c69}.mzcam-mon.live{border-color:var(--orange)}.mzcam-lab{font-size:8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:4px;border-left:3px solid var(--orange)}
+#debug{position:absolute;right:20px;bottom:12px;color:#f6ffa7;pointer-events:none}
+@media(max-width:650px){#left{top:16px;left:14px}#brand{font-size:13px}#subtitle{font-size:8px}#mission{margin-top:18px;font-size:10px}#counter{font-size:48px}#counter span{font-size:10px}#phase{font-size:9px}#right{top:16px;right:12px;font-size:9px}#clock{max-width:120px}#events{bottom:130px;left:14px;font-size:9px}#controls{bottom:13px;left:14px;right:14px;gap:5px}button{padding:10px;font-size:10px}#small{display:none}#bayparent{max-width:88vw;right:8px;bottom:110px;max-height:36vh}.mzcam-bay{grid-template-columns:repeat(3,72px)}}
+</style></head><body>
+<canvas id="screen" aria-label="Live autonomous border collie sheep herding simulation"></canvas><div id="wash"></div>
+<section id="left"><div id="brand">MZTV <b>/</b> SHEEPDOG</div><div id="subtitle">BIT FIELD 029 · AUTONOMOUS FIELD STUDY</div><div id="mission">GATHER → NORTH FIELD</div><div id="counter">00<span> / 16 IN FIELD</span></div><div id="phase">DOG <b>IDLE</b></div></section>
+<section id="right"><div id="live">PROGRAM LIVE</div><div id="camera">CAM 01 · OVERVIEW</div><div id="clock">00:00 · EPISODE 001</div></section>
+<div id="events"></div><div id="controls"><button id="go">GIVE COMMAND ↗</button><button id="next">NEXT EPISODE</button><button id="baybutton">CAMERA BAY [C]</button><button id="sound">SOUND [M]</button><span id="small">INDIVIDUAL AGENTS · FIVE AUTONOMOUS CAMERAS</span></div><div id="bayparent"></div><div id="debug"></div>
+<script src="../../lib/mzcam.js"></script><script src="../../lib/mzherd.js"></script>
+<script>
+'use strict';
+const Q=new URLSearchParams(location.search),qn=(name,def)=>{const n=Number(Q.get(name));return Q.has(name)&&Number.isFinite(n)?n:def;};
+const OPT={seed:qn('seed',29)|0,count:Math.max(4,Math.min(40,qn('sheep',16)|0)),play:Q.get('play')==='1',capture:Q.get('capture')==='1',fresh:Q.get('fresh')==='1',info:Q.get('info')!=='0',bay:Q.get('bay')==='1',audio:Q.get('audio')!=='0',rate:Math.max(.1,Math.min(15,qn('rate',1))),debug:Q.get('debug')==='1'};
+const STORE='mztv-bf029-sheepdog-v1',canvas=document.getElementById('screen'),ctx=canvas.getContext('2d',{alpha:false}),WIDTH=960,HEIGHT=540;
+canvas.width=WIDTH;canvas.height=HEIGHT;
+const $=id=>document.getElementById(id),V=MZCam.V;
+let world,crew,bay,run=1,globalTime=0,acc=0,last=0,frame=0,lastSave=0,resetAt=null,muted=!OPT.audio,audio=null;
+function checkpoint(){if(OPT.capture||OPT.fresh)return;try{localStorage.setItem(STORE,JSON.stringify({version:1,run,world:MZHerd.snapshot(world)}));}catch(e){console.warn('checkpoint',e);}}
+function restore(){if(OPT.capture||OPT.fresh||Q.has('seed'))return false;try{const x=JSON.parse(localStorage.getItem(STORE)||'null');if(x&&x.version===1){world=MZHerd.restore(x.world);run=x.run||1;return true;}}catch(e){console.warn('restore',e);}return false;}
+function point(a,y=0){return V(a.x,y,a.z);}
+function polygon(g,P,arr,fill){const ps=P.poly(arr.map(v=>V(v[0],v[1],v[2])));if(!ps)return;g.fillStyle=fill;g.beginPath();ps.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.fill();}
+function segment(g,P,a,b,col,width){const s=P.seg(V(...a),V(...b));if(!s)return;g.lineWidth=width;g.strokeStyle=col;g.beginPath();g.moveTo(s[0][0],s[0][1]);g.lineTo(s[1][0],s[1][1]);g.stroke();}
+function ground(g,P,w,h){
+g.fillStyle='#264c54';g.fillRect(0,0,w,h);
+polygon(g,P,[[-108,-.1,-68],[0,-.1,-68],[0,-.1,68],[-108,-.1,68]],'#638063');
+polygon(g,P,[[0,-.09,-68],[108,-.09,-68],[108,-.09,68],[0,-.09,68]],'#849a6c');
+for(let x=-108;x<108;x+=12)for(let z=-68;z<68;z+=12){if(Math.sin(x*1.37+z*.83)>.12)polygon(g,P,[[x,-.08,z],[x+12,-.08,z],[x+12,-.08,z+12],[x,-.08,z+12]],x<0?'rgba(20,71,56,.10)':'rgba(238,251,162,.055)');}
+const fence='#e9efc6';
+for(const x of [-108,108]){segment(g,P,[x,0,-68],[x,0,68],fence,1.1);}
+for(const z of [-68,68]){segment(g,P,[-108,0,z],[108,0,z],fence,1.1);}
+for(const section of [[-68,-12],[12,68]]){for(const y of [1.2,2.6])segment(g,P,[0,y,section[0]],[0,y,section[1]],fence,1.2);
+for(let z=section[0];z<=section[1]+.01;z+=8)segment(g,P,[0,0,z],[0,3.8,z],'#354c43',2.3);}
+for(const z of [-12,12])segment(g,P,[0,0,z],[0,5,z],'#f5f1cb',3);
+segment(g,P,[19,.05,-60],[19,.05,60],'rgba(236,243,174,.4)',1.4);
+for(let i=0;i<65;i++){const x=-99+(i*37)%196,z=-60+(i*71)%122;segment(g,P,[x,0,z],[x,.5+(.4*Math.sin(i)),z+1.1],'rgba(229,242,177,.17)',.65);}
+}
+function animal(g,P,thing,dog){
+const p=thing.p,mid=P.proj(V(p.x,dog?1.25:1.05,p.z)),floor=P.proj(V(p.x,.03,p.z));if(!mid||!floor)return;
+const scale=Math.min(75,Math.max(1,P.px(mid[2])*(dog?3.4:3.1)));if(scale<.9)return;
+const x=mid[0],y=mid[1],heading=thing.heading||0,head=P.proj(V(p.x+Math.cos(heading)*(dog?2:1.65),dog?1.35:1.15,p.z+Math.sin(heading)*(dog?2:1.65)));
+g.fillStyle='rgba(17,51,46,.24)';g.beginPath();g.ellipse(floor[0],floor[1],scale*.6,scale*.2,0,0,Math.PI*2);g.fill();
+g.fillStyle=dog?'#193336':thing.in?'#e6f49f':'#f1efd7';g.beginPath();g.ellipse(x,y,scale*.63,scale*(dog?.37:.47),0,0,Math.PI*2);g.fill();
+if(dog){g.fillStyle='#ff764c';g.beginPath();g.ellipse(x-scale*.12,y-scale*.08,scale*.27,scale*.31,-.2,0,7);g.fill();}
+else{g.fillStyle='#fcf9e4';g.beginPath();g.ellipse(x-scale*.16,y-scale*.16,scale*.29,scale*.25,0,0,7);g.fill();}
+if(head){g.fillStyle=dog?'#162f32':'#43594f';g.beginPath();g.arc(head[0],head[1],scale*(dog?.23:.2),0,7);g.fill();}
+g.fillStyle=dog?'#263f3c':'#667560';for(const direction of [-1,1])g.fillRect(x+scale*.2*direction,y+scale*.25,Math.max(1,scale*.08),Math.max(2,scale*.26));
+if(OPT.debug){g.fillStyle=dog?'#ff764c':'#f7fcbb';g.font='10px monospace';g.fillText(dog?world.dog.phase:String(thing.id+1),x+5,y-9);}
+}
+function drawWorld(g,w,h,P,viewer,thumbnail){
+g.save();ground(g,P,w,h);
+const camera=viewer.cam,all=world.sheep.map(s=>({body:s,d:Math.hypot(s.p.x-camera.pos.x,s.p.z-camera.pos.z),dog:false}));
+all.push({body:world.dog,d:Math.hypot(world.dog.p.x-camera.pos.x,world.dog.p.z-camera.pos.z),dog:true}));
+all.sort((a,b)=>b.d-a.d);for(const a of all)animal(g,P,a.body,a.dog);
+if(!thumbnail)for(const drone of crew.drones)if(drone!==viewer)crew.drawDrone(g,P,drone,{size:1.2});
+g.restore();
+}
+function planBg(g,w,h,map){g.fillStyle='#17393c';g.fillRect(0,0,w,h);const L=(x1,z1,x2,z2,color)=>{const a=map(x1,z1),b=map(x2,z2);g.strokeStyle=color;g.beginPath();g.moveTo(...a);g.lineTo(...b);g.stroke();};
+L(-108,-68,108,-68,'#99bf96');L(-108,68,108,68,'#99bf96');L(-108,-68,-108,68,'#99bf96');L(108,-68,108,68,'#99bf96');L(0,-68,0,-12,'#f4f1c9');L(0,12,0,68,'#f4f1c9');
+for(const s of world.sheep){const p=map(s.p.x,s.p.z);g.fillStyle=s.in?'#e9ffa5':'#f4f2da';g.fillRect(p[0]-1.5,p[1]-1.5,3,3);}
+const p=map(world.dog.p.x,world.dog.p.z);g.fillStyle='#ff764c';g.fillRect(p[0]-4,p[1]-4,8,8);}
+function makeCrew(){
+if(bay){bay.el.remove();bay=null;}
+const defs=[{name:'CAM 01',role:'aerial'},{name:'CAM 02',role:'dog'},{name:'CAM 03',role:'flock'},{name:'CAM 04',role:'gate'},{name:'CAM 05',role:'rover'}];
+crew=new MZCam.Crew({drones:defs.map(d=>({...d,col:'#e7f5ad'})),speed:115,accel:85,cruise:55,minAlt:1,arrive:3,size:1.2,tallyCol:'#ff764c'});
+const center=()=>MZHerd.state(world).center,view=(p,y=1)=>V(p.x,y,p.z);
+const shots=[
+{label:'HIGH · FIELD OVERVIEW',mark:{pos:V(-8,104,70)},pan:1.5,minHold:7,maxHold:18,aim:()=>({look:V(-2,0,0),fov:57}),want:()=>2.3},
+{label:'CHASE · BORDER COLLIE',pose:()=>{const d=world.dog;return{pos:V(d.p.x-Math.cos(d.heading)*19,12,d.p.z-Math.sin(d.heading)*19-8)};},pan:5,minHold:4,maxHold:11,aim:()=>({look:view(world.dog.p,1.5),fov:40}),want:()=>world.dog.phase==='COLLECT'?6:4},
+{label:'FLOCK · SIDE',pose:()=>{const c=center();return{pos:V(c.x-5,20,c.z-30)};},pan:3,minHold:4,maxHold:12,aim:()=>({look:view(center()),fov:46}),want:()=>MZHerd.state(world).max>22?6.2:3},
+{label:'GATE · CROSSING',mark:{pos:V(28,18,-26)},pan:7,minHold:5,maxHold:14,aim:()=>({look:V(0,2,0),fov:47}),want:()=>Math.abs(center().x)<28?7.2:1.5},
+{label:'ROVER · STRAGGLER',pose:()=>{const s=MZHerd.state(world),p=s.max>19?s.outlier.p:world.dog.p;return{pos:V(p.x+21,21,p.z+27)};},pan:2.6,minHold:5,maxHold:12,aim:()=>{const s=MZHerd.state(world);return{look:view(s.max>19?s.outlier.p:s.center),fov:38};},want:()=>MZHerd.state(world).max>20?7.5:1.6}
+];
+crew.drones.forEach((d,i)=>{crew.assign(d,shots[i]);const goal=crew._goal(d,0);if(goal){d.pos=goal.pos;d.vel=V();d.arrivedAt=0;d.moving=false;}});
+for(let k=0;k<16;k++)crew.update(1/30,k/30);crew.live=0;crew.liveSince=0;
+if(OPT.bay)showBay(true);
+}
+function showBay(on){if(bay){bay.show(on);return;}if(!on)return;
+bay=new MZCam.Bay(crew,{parent:$('bayparent'),w:192,h:108,planW:256,planH:146,bounds:{x0:-108,x1:108,z0:-68,z1:68},every:2,render:(g,w,h,P,viewer,thumbnail)=>drawWorld(g,w,h,P,viewer,true),planBg});}
+function next(){run++;world=MZHerd.create(OPT.seed+run-1,OPT.count);resetAt=null;makeCrew();checkpoint();updateHUD();render();}
+function clock(n){return String(Math.floor(n/60)).padStart(2,'0')+':'+String(Math.floor(n%60)).padStart(2,'0');}
+function updateHUD(){const s=MZHerd.state(world);
+$('counter').innerHTML=String(s.countIn).padStart(2,'0')+'<span> / '+world.count+' IN FIELD</span>';
+$('phase').innerHTML='DOG <b>'+world.dog.phase+'</b> · FLOCK SPREAD '+s.spread.toFixed(1);
+$('camera').textContent=(crew.liveDrone?.name||'CAM')+' · '+(crew.liveDrone?.shot?.label||'FIELD');
+$('clock').textContent=clock(world.t)+' · EPISODE '+String(run).padStart(3,'0')+' · SEED '+world.seed;
+$('events').textContent='';for(const e of world.events.slice(-3).reverse()){const div=document.createElement('div');div.textContent=clock(e.t)+' · '+e.message;$('events').appendChild(div);}
+$('go').disabled=world.commanded;$('go').textContent=world.result==='SUCCESS'?'✓ COMPLETE':world.commanded?'COMMAND ISSUED':'GIVE COMMAND ↗';
+for(const id of ['left','right','events'])$(id).style.display=OPT.info?'':'none';
+if(OPT.debug)$('debug').textContent='CENTER '+s.center.x.toFixed(1)+','+s.center.z.toFixed(1)+' / FLOCK '+s.max.toFixed(1)+' / FRAME '+frame;
+}
+function render(){const d=crew.liveDrone;if(!d||!d.cam)return;const P=MZCam.projector(d.cam,WIDTH,HEIGHT);drawWorld(ctx,WIDTH,HEIGHT,P,d,false);if(bay)bay.tick(frame);frame++;}
+function sim(dt){if(!world.commanded&&!OPT.play&&world.t>2.2)MZHerd.command(world);
+if(world.result){if(resetAt===null)resetAt=globalTime+13;else if(globalTime>=resetAt)next();}else MZHerd.step(world,dt);}
+function tick(realDt){const dt=Math.max(0,Math.min(realDt,.2))*OPT.rate;globalTime+=dt;acc+=dt;let n=0;while(acc>=1/30&&n<25){sim(1/30);acc-=1/30;n++;}crew.update(Math.min(dt,.12),globalTime);render();if(frame%7===0)updateHUD();}
+function loop(now){const dt=last?Math.min((now-last)/1000,.12):1/30;last=now;tick(dt);if(now-lastSave>5000){lastSave=now;checkpoint();}requestAnimationFrame(loop);}
+function sound(){if(!OPT.audio||audio)return;try{const ac=new(window.AudioContext||window.webkitAudioContext)(),osc=ac.createOscillator(),filter=ac.createBiquadFilter(),gain=ac.createGain();osc.type='sine';osc.frequency.value=85;filter.type='lowpass';filter.frequency.value=240;gain.gain.value=0;osc.connect(filter);filter.connect(gain);gain.connect(ac.destination);osc.start();audio={ac,osc,gain};}catch(e){console.warn('audio',e);}}
+function audioTick(){if(!audio)return;const s=MZHerd.state(world),near=MZHerd.dist(world.dog.p,s.center),level=!muted&&world.commanded?Math.max(0,.038-Math.abs(near-24)*.0008):0;audio.osc.frequency.setTargetAtTime(65+s.spread*2,audio.ac.currentTime,.3);audio.gain.gain.setTargetAtTime(level,audio.ac.currentTime,.16);}
+$('go').onclick=()=>{MZHerd.command(world);sound();if(audio)audio.ac.resume();updateHUD();};
+$('next').onclick=next;$('baybutton').onclick=()=>{OPT.bay=!OPT.bay;showBay(OPT.bay);};
+$('sound').onclick=()=>{muted=!muted;sound();if(audio)audio.ac.resume();$('sound').textContent=muted?'SOUND OFF [M]':'SOUND ON [M]';};
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='c')$('baybutton').click();else if(k==='m')$('sound').click();else if(k==='i'){OPT.info=!OPT.info;updateHUD();}else if(k==='n')next();else if(k===' '){e.preventDefault();$('go').click();}});
+addEventListener('beforeunload',checkpoint);
+if(!restore())world=MZHerd.create(OPT.seed,OPT.count);
+makeCrew();updateHUD();render();
+window.MZ={get world(){return world;},get crew(){return crew;},get bay(){return bay;},getState:()=>MZHerd.snapshot(world),tick,command:()=>MZHerd.command(world),reset:next};
+if(!OPT.capture)requestAnimationFrame(loop);setInterval(audioTick,180);
+</script></body></html>
