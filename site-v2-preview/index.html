@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#efeee7">
+<meta name="robots" content="noindex,nofollow">
+<title>MZCMG — V2 Site Prototype / Not Published</title>
+<meta name="description" content="Unpublished working prototype for the MZCMG website V2. MZTV, FIELD STATION: MAGPIE, and their evolving systems.">
+<style>
+:root{--paper:#efeee7;--pale:#e6e4db;--ink:#151716;--line:#bcbdb5;--mute:#696d68;--acid:#ddf14d;--orange:#ff623c;--shadow:rgba(12,22,18,.07);--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:Arial,Helvetica,sans-serif}
+*,*:before,*:after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{background:var(--paper);margin:0;color:var(--ink);font:16px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--orange);outline-offset:3px}
+img{max-width:100%;display:block}
+.shell{max-width:1600px;min-height:100vh;margin:auto;border-inline:1px solid var(--line)}
+.micro,.eyebrow,.mono,.nav,.smallcap,.button,.section-num,.tag,.state,.control-label{font-family:var(--mono);text-transform:uppercase;letter-spacing:.055em}
+.micro{font-size:10px}.eyebrow{font-size:11px;margin:0 0 14px;font-weight:600}
+.bar{position:sticky;top:0;z-index:100;background:rgba(239,238,231,.96);backdrop-filter:blur(15px);border-bottom:1px solid var(--ink)}
+.bar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px;padding:10px clamp(18px,3.3vw,50px)}
+.mark{display:flex;align-items:baseline;gap:12px;flex-shrink:0}.mark b{font-size:17px;font-weight:900;letter-spacing:-.05em}.mark span{font:10px var(--mono);color:var(--mute);letter-spacing:.1em}
+.nav{display:flex;align-items:center;gap:clamp(12px,1.8vw,27px);font-size:10px}.nav a:hover,.textlink:hover{text-decoration:underline;text-underline-offset:4px}
+.nav .watch-nav{background:var(--ink);color:var(--paper);padding:11px 12px}
+.menu{display:none;border:1px solid var(--ink);background:none;padding:8px 12px;font:11px var(--mono)}
+.draftstrip{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--acid);padding:6px clamp(18px,3.3vw,50px);font:10px var(--mono);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--ink)}
+.draftstrip span:last-child{opacity:.7}
+.pagepad{padding-inline:clamp(18px,3.3vw,50px)}
+.intro{padding-block:clamp(36px,5vw,72px) clamp(28px,4vw,56px);display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,.55fr);gap:36px;align-items:end}
+.intro h1{font-size:clamp(56px,8.8vw,146px);line-height:.82;letter-spacing:-.088em;font-weight:900;margin:0;max-width:1050px}
+.intro h1 em{font-weight:400;font-style:normal}
+.intro-aside{max-width:370px;border-left:1px solid var(--ink);padding-left:22px}
+.intro-aside p{font-size:clamp(16px,1.4vw,20px);line-height:1.25;letter-spacing:-.02em;margin:0 0 18px}
+.intro-aside .micro{color:var(--mute);margin:0}
+.seam{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ink);padding-block:13px;font:10px var(--mono);text-transform:uppercase;letter-spacing:.06em}
+section{scroll-margin-top:72px}
+.broadcast{border-top:1px solid var(--ink);background:var(--ink);color:#f2f1e9}
+.broadcast-head{display:flex;align-items:center;justify-content:space-between;padding:14px clamp(18px,3.3vw,50px);border-bottom:1px solid #595e55;font:11px var(--mono);text-transform:uppercase;letter-spacing:.08em;gap:15px}
+.status{display:inline-flex;align-items:center;gap:9px}.status-dot{width:8px;height:8px;background:#9ba198;border-radius:50%;flex-shrink:0}.status.is-live .status-dot{background:var(--orange);box-shadow:0 0 0 4px #ff623c22;animation:pulse 1.5s infinite}.status.is-offline .status-dot{background:#818981}
+.broadcast-grid{display:grid;grid-template-columns:minmax(260px,.68fr) minmax(0,1.55fr);min-height:480px}
+.broadcast-info{padding:clamp(25px,4vw,56px);display:flex;flex-direction:column;align-items:start}
+.broadcast-info h2{font-weight:900;font-size:clamp(78px,10vw,156px);line-height:.8;letter-spacing:-.095em;margin:22px 0 27px}
+.broadcast-info p{font-size:clamp(18px,1.7vw,25px);line-height:1.19;letter-spacing:-.025em;max-width:430px;margin:0 0 26px}
+.broadcast-info .short{font-size:13px;color:#b9c0b5;line-height:1.55;max-width:410px}
+.button{display:inline-flex;align-items:center;justify-content:space-between;gap:30px;border:1px solid currentColor;padding:12px 15px;min-height:44px;background:none;color:inherit;font-size:11px;font-weight:bold;text-align:left;transition:background .15s,color .15s}
+.button:hover{background:var(--acid);border-color:var(--acid);color:var(--ink)}
+.button.acid{background:var(--acid);border-color:var(--acid);color:var(--ink)}
+.button.acid:hover{background:white;border-color:white}
+.button.dark{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.button.dark:hover{background:var(--orange);border-color:var(--orange)}
+.video-outer{padding:clamp(15px,2.3vw,32px);background:#222621;display:flex;flex-direction:column;justify-content:center;gap:12px;border-left:1px solid #555950}
+.video-panel{position:relative;aspect-ratio:16/9;background:#101411;overflow:hidden;min-height:0;border:1px solid #53594f}
+#twitch-player{height:100%;width:100%;position:absolute;inset:0}
+#twitch-player iframe{display:block;width:100%;height:100%;border:0}
+.offline-poster{position:absolute;inset:0;display:none;background:#263128}
+.offline-poster.is-visible{display:block}
+.offline-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.33;filter:grayscale(1)}
+.offline-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:start;justify-content:end;padding:clamp(17px,3vw,42px);background:linear-gradient(0deg,#111911ea,transparent 90%)}
+.offline-overlay h3{font-size:clamp(27px,3vw,52px);line-height:1;letter-spacing:-.055em;margin:12px 0}
+.offline-overlay p{max-width:490px;margin:0 0 20px;font-size:14px}
+.video-note{display:flex;justify-content:space-between;gap:12px;font:10px/1.5 var(--mono);color:#bec6bc;text-transform:uppercase}
+.live-edge{display:flex;gap:0;flex-wrap:wrap;border-top:1px solid #545a51}
+.live-edge a{font:11px var(--mono);text-transform:uppercase;padding:14px clamp(18px,3.3vw,50px);border-right:1px solid #545a51}
+.live-edge a:hover{color:var(--acid)}
+.section-title{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,.47fr);gap:32px;align-items:end;padding-block:clamp(42px,5vw,70px) 27px}
+.section-title h2{font-size:clamp(35px,4.7vw,73px);font-weight:900;letter-spacing:-.065em;line-height:.94;margin:0}
+.section-title p:last-child{margin:0;color:#4c514d;font-size:15px;max-width:470px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--ink);border:1px solid var(--ink)}
+.workcard{display:flex;flex-direction:column;background:var(--paper);min-width:0;transition:background .2s}
+.workcard:hover{background:#e5e5db}
+.workcard .shot{aspect-ratio:16/9;position:relative;overflow:hidden;background:#d7dbca}
+.workcard .shot img{width:100%;height:100%;object-fit:cover;transition:transform .4s ease}
+.workcard:hover .shot img{transform:scale(1.03)}
+.workcard .shot img.magpie-img{object-position:50% 50%}
+.workcard .shot img.plant-img{object-position:center}
+.corner{position:absolute;top:13px;left:13px;background:var(--paper);font:10px var(--mono);padding:6px 9px;border:1px solid var(--ink)}
+.workcard .body{padding:clamp(20px,2.6vw,39px);display:flex;flex:1;flex-direction:column}
+.card-meta{display:flex;justify-content:space-between;gap:15px;font:11px var(--mono);text-transform:uppercase;color:#575b55}
+.workcard h3{font-size:clamp(36px,5vw,78px);line-height:.89;font-weight:900;letter-spacing:-.065em;margin:22px 0}
+.workcard p{font-size:clamp(15px,1.5vw,20px);max-width:610px;margin:0 0 30px;line-height:1.3}
+.arrowlink{margin-top:auto;font:11px var(--mono);text-transform:uppercase;font-weight:bold;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--ink);padding-top:15px}
+.rule{border-top:1px solid var(--ink)}
+.systems{background:#e3e6dc}
+.systemgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--ink);border:1px solid var(--ink)}
+.systemcard{background:#f0efe8;display:flex;flex-direction:column;min-width:0}
+.systemcard .systemvisual{height:clamp(180px,23vw,320px);overflow:hidden;position:relative;background:#17231e}
+.systemvisual img{width:100%;height:100%;object-fit:cover}
+.systemvisual.trackside{background:radial-gradient(ellipse at 70% 90%,#414735 0%,transparent 55%),#253027}
+.trackside .circuit{position:absolute;width:67%;height:65%;left:17%;top:17%;border:8px solid #aab2a3;border-radius:47% 30% 34% 54%;transform:rotate(-23deg);box-shadow:0 0 0 1px #222;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}
+.trackside .line{position:absolute;width:55%;height:55%;left:23%;top:21%;border:1px dashed #90a08e;border-radius:47% 30% 34% 54%;transform:rotate(-23deg)}
+.trackside .orb{position:absolute;top:32%;left:36%;border-radius:100%;background:var(--orange);width:17px;height:17px;box-shadow:0 0 0 6px #ff623c33}
+.trackside .trace{position:absolute;left:15px;top:15px;color:var(--acid);font:12px var(--mono);letter-spacing:.1em}
+.systemvisual.sheepdog{background:repeating-linear-gradient(21deg,transparent 0 38px,#ffffff10 39px 40px),#33483c}
+.sheepdog .field{position:absolute;inset:15% 10%;border:1px solid #9aa892;transform:rotate(-6deg)}
+.sheepdog .sheep{position:absolute;width:8px;height:8px;background:#e4e9d4;border-radius:50%;top:var(--top);left:var(--left)}
+.sheepdog .dog{position:absolute;top:65%;left:59%;width:14px;height:14px;background:var(--orange);transform:rotate(45deg)}
+.sheepdog .trace{position:absolute;top:15px;left:15px;font:12px var(--mono);color:var(--acid)}
+.systemcard .systembody{padding:22px;display:flex;flex-direction:column;flex:1}
+.systemcard .systembody .k{font:10px var(--mono);color:#5e635b;letter-spacing:.1em}
+.systemcard h3{font-size:clamp(30px,3vw,50px);line-height:.95;letter-spacing:-.055em;margin:18px 0 12px}
+.systemcard p{font-size:14px;line-height:1.45;margin:0 0 23px;color:#41463f}
+.systemcard .links{margin-top:auto;display:flex;gap:14px;flex-wrap:wrap;padding-top:15px;border-top:1px solid var(--line);font:10px var(--mono);text-transform:uppercase}
+.systemcard .links a{text-decoration:underline;text-underline-offset:3px}
+.note{font:11px/1.55 var(--mono);color:#5e655f;padding-block:15px 20px}
+.lineage{padding-block:64px;border-top:1px solid var(--ink)}
+.lineage-row{display:grid;grid-template-columns:minmax(250px,1fr) minmax(0,1.4fr);gap:40px;align-items:center}
+.lineage h2{font-size:clamp(37px,4vw,64px);line-height:.96;letter-spacing:-.065em;margin:14px 0 18px}
+.lineage p{max-width:540px}
+.lineage .sub{color:#4f554e}
+.flowchart{background:#191e1a;color:var(--paper);border:1px solid var(--ink);padding:clamp(20px,2.7vw,40px)}
+.flowbox{display:block;padding:15px 19px;border:1px solid #757f74;text-align:left}
+.flowbox strong{display:block;font-size:19px;letter-spacing:-.025em}
+.flowbox span{font:10px var(--mono);text-transform:uppercase;color:#b8c2b4}
+.flowbox .mini{font:12px/1.3 var(--sans);color:#cdd2ca;margin-top:7px}
+.flowbox.highlight{border-color:var(--acid);background:#2b3529}
+.flowconnector{height:25px;margin-left:24px;border-left:1px solid var(--acid);position:relative}
+.flowconnector:after{content:"";position:absolute;bottom:0;left:-4px;width:7px;height:7px;border-right:1px solid var(--acid);border-bottom:1px solid var(--acid);transform:rotate(45deg)}
+.branch{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.branch .flowbox{min-height:114px}
+.archive{background:#e3e6dc;border-top:1px solid var(--ink)}
+.archive-controls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:21px}
+.archive-controls button{background:transparent;border:1px solid var(--ink);padding:9px 14px;font:11px var(--mono);text-transform:uppercase}
+.archive-controls button.active,.archive-controls button:hover{background:var(--ink);color:var(--paper)}
+.archiverows{border-top:1px solid var(--ink)}
+.archiveitem{display:grid;grid-template-columns:125px minmax(0,1fr) 155px 105px 20px;align-items:center;gap:18px;padding:18px 4px;border-bottom:1px solid var(--line);transition:background .15s}
+.archiveitem:hover{background:#d6dbce}
+.archiveitem.hidden{display:none}
+.archiveitem span{font:11px var(--mono);color:#4f5850;text-transform:uppercase}
+.archiveitem strong{font-size:18px;letter-spacing:-.02em}
+.archiveitem .go{text-align:right;font:20px var(--sans);color:var(--ink)}
+.archivefoot{display:flex;gap:20px;justify-content:space-between;padding-block:24px 52px}
+.research{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.75fr);gap:48px;padding-block:clamp(60px,6vw,100px);border-top:1px solid var(--ink)}
+.research h2{font-size:clamp(42px,5vw,78px);line-height:.96;letter-spacing:-.06em;max-width:670px;margin:20px 0}
+.research p{font-size:clamp(17px,1.8vw,25px);line-height:1.25;max-width:780px}
+.research-right{border-left:1px solid var(--ink);padding-left:25px}
+.research-right .topic{border-top:1px solid var(--line);padding:15px 0;display:grid;grid-template-columns:38px 1fr;gap:10px}
+.research-right .topic strong{font-size:15px}
+.research-right .topic span{font:10px var(--mono);color:var(--mute)}
+.more{padding-block:38px 65px;border-top:1px solid var(--ink)}
+.more h2{font-size:clamp(28px,3.1vw,48px);letter-spacing:-.045em;line-height:1.1;margin:0 0 24px}
+.morelinks{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--ink);gap:1px;background:var(--ink)}
+.morelinks a{min-height:114px;background:var(--paper);padding:16px;display:flex;flex-direction:column;justify-content:space-between;font:12px var(--mono);text-transform:uppercase}
+.morelinks a:hover{background:var(--acid)}
+.footer{background:var(--ink);color:var(--paper);padding-block:28px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;font:11px var(--mono);text-transform:uppercase}
+.footer a{text-decoration:underline;text-underline-offset:4px}
+@keyframes pulse{50%{box-shadow:0 0 0 7px #ff623c00}}
+@media(max-width:1120px){.nav{gap:12px}.intro h1{font-size:clamp(60px,8vw,106px)}.broadcast-grid{grid-template-columns:1fr 1.15fr;min-height:410px}.broadcast-info h2{font-size:90px}.video-outer{padding:20px}}
+@media(max-width:850px){.mark span{display:none}.menu{display:block}.nav{display:none;position:absolute;left:0;top:100%;right:0;background:var(--paper);border-bottom:1px solid var(--ink);padding:22px;flex-direction:column;align-items:stretch;gap:16px}.nav.open{display:flex}.nav a{font-size:12px}.intro,.section-title,.lineage-row,.research{grid-template-columns:1fr}.intro{gap:28px}.intro-aside{max-width:650px}.broadcast-grid{grid-template-columns:1fr}.broadcast-info{padding:28px}.broadcast-info h2{font-size:100px;margin:18px 0 22px}.video-outer{border-left:0;border-top:1px solid #555950}.systems .systemgrid{grid-template-columns:1fr 1fr}.systemgrid .systemcard:first-child{grid-column:span 2}.systemcard:first-child{display:grid;grid-template-columns:1fr 1fr}.systemcard:first-child .systemvisual{height:100%;min-height:240px}.lineage-row{gap:22px}.research-right{border-left:0;padding-left:0}.section-title p:last-child{max-width:610px}}
+@media(max-width:590px){.draftstrip{font-size:9px}.draftstrip span:last-child{display:none}.bar-in{min-height:58px}.mark b{font-size:15px}.intro{padding-block:30px 28px}.intro h1{font-size:clamp(57px,14vw,90px)}.intro-aside p{font-size:17px}.seam span:last-child{display:none}.broadcast-head{font-size:9px}.broadcast-info h2{font-size:90px}.video-outer{padding:14px}.video-note span:last-child{display:none}.duo,.systems .systemgrid,.systemcard:first-child,.research,.morelinks{grid-template-columns:1fr}.systemgrid .systemcard:first-child{grid-column:span 1;display:flex}.systemcard:first-child .systemvisual{min-height:200px;height:220px}.workcard h3{font-size:54px}.workcard .shot{aspect-ratio:16/10}.section-title{padding-block:42px 20px;gap:12px}.section-title h2{font-size:44px}.archiveitem{grid-template-columns:72px minmax(0,1fr) 18px;gap:10px;padding:15px 0}.archiveitem strong{font-size:15px}.archiveitem span:nth-of-type(2),.archiveitem span:nth-of-type(3){display:none}.flowchart{padding:16px}.branch{gap:8px}.branch .flowbox{padding:10px}.flowbox strong{font-size:16px}.morelinks{gap:1px}.morelinks a{min-height:65px;flex-direction:row;align-items:center}.footer{grid-template-columns:1fr auto}.footer span:nth-child(2){grid-column:1/-1;grid-row:2}.footer a{grid-column:2;grid-row:1}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell" id="top">
+<div class="draftstrip"><span>V2 / working prototype — not the public site</span><span>Editorial + navigation test · 2026.10.12</span></div>
+<header class="bar">
+  <div class="bar-in">
+    <a class="mark" href="#top" aria-label="MZCMG homepage prototype"><b>MATCH ZIMMERMAN</b><span>CREATIVE MEDIA GROUP</span></a>
+    <button class="menu" id="menuButton" aria-expanded="false" aria-controls="siteNav">MENU +</button>
+    <nav class="nav" id="siteNav" aria-label="Prototype main navigation">
+      <a href="#work">WORK</a><a href="#broadcast">MZTV</a><a href="#systems">LIVE SYSTEMS</a><a href="#archive">ARCHIVE</a><a href="#research">RESEARCH</a><a href="#more">MORE</a><a class="watch-nav" href="https://www.twitch.tv/matchzimmerman" target="_blank" rel="noopener">OPEN TWITCH ↗</a>
+    </nav>
+  </div>
+</header>
+<main>
+<section class="intro pagepad" aria-label="Studio introduction">
+  <div><p class="eyebrow">MZCMG / ACTIVE PRACTICE / 2026</p><h1>Systems<br>build <em>systems.</em></h1></div>
+  <div class="intro-aside"><p>Match Zimmerman Creative Media Group builds and studies distributed cognition systems for embodied human–AI creative practice.</p><p class="micro">Art · Sound · Research · Code · Place · Moving Image</p></div>
+</section>
+<div class="seam pagepad"><span>Two major bodies of work. One evolving practice.</span><span>Explore / Observe / Trace</span></div>
+<section class="broadcast" id="broadcast" aria-label="MZTV broadcast feature">
+  <div class="broadcast-head"><span>01 / current field / MZTV</span><span id="broadcastStatus" class="status"><i class="status-dot" aria-hidden="true"></i><span id="broadcastStatusText">Checking broadcast…</span></span></div>
+  <div class="broadcast-grid">
+    <div class="broadcast-info"><span class="eyebrow">LIVE BROADCAST · EXPERIMENTAL SYSTEM</span><h2>MZ<br>TV.</h2><p>The broadcast is the work.</p><p class="short">An ongoing transmission of generative image, sound, live data, simulations, performances, and long-duration creative systems.</p><a class="button acid" href="https://www.matchzimmerman.com/mztv/">ENTER MZTV <span aria-hidden="true">↗</span></a></div>
+    <div class="video-outer">
+      <div class="video-panel" aria-label="Twitch broadcast viewer">
+        <div id="twitch-player"></div>
+        <div id="offlinePoster" class="offline-poster" aria-hidden="true">
+          <img src="https://www.matchzimmerman.com/MZTV/sources/48-plant-002/archive/final.png" alt="">
+          <div class="offline-overlay"><span class="micro" style="color:var(--acid)">BROADCAST OFF AIR / ARCHIVE AVAILABLE</span><h3>The work continues<br>between broadcasts.</h3><p>Explore experiments, recorded transmissions, and the systems behind MZTV.</p><a class="button" href="#systems">EXPLORE SYSTEMS <span>↗</span></a></div>
+        </div>
+      </div>
+      <div class="video-note"><span>TWITCH / MATCHZIMMERMAN · MUTED BY DEFAULT</span><span>IF PLAYER IS UNAVAILABLE, OPEN TWITCH ↗</span></div>
+    </div>
+  </div>
+  <div class="live-edge"><a href="#systems">Explore current systems ↓</a><a href="#archive">Browse the archive ↓</a><a href="https://www.twitch.tv/matchzimmerman" target="_blank" rel="noopener">Watch on Twitch ↗</a></div>
+</section>
+<section id="work" class="pagepad">
+  <div class="section-title"><div><p class="eyebrow">02 / selected bodies of work</p><h2>Two major projects.<br>Many points of entry.</h2></div><p>MZTV is the ongoing public broadcast environment. FIELD STATION: MAGPIE is an expanding speculative world, exhibition, and archive. Both contain smaller systems, artifacts, and histories.</p></div>
+  <div class="duo">
+    <a class="workcard" href="https://www.matchzimmerman.com/mztv/" aria-label="Visit MZTV project page">
+      <div class="shot"><img class="plant-img" loading="lazy" src="https://www.matchzimmerman.com/MZTV/sources/48-plant-002/archive/final.png" alt="A specimen from the 48 PLANT generative botanical system, one of MZTV's projects"><span class="corner">01 / 2026–ONGOING</span></div>
+      <div class="body"><div class="card-meta"><span>BROADCAST / SYSTEMS</span><span>ACTIVE</span></div><h3>MZTV</h3><p>A public window into evolving systems of image, sound, behavior, and data—developed, observed, broadcast, and archived over time.</p><span class="arrowlink">PROJECT + ARCHIVE <span>↗</span></span></div>
+    </a>
+    <a class="workcard" href="https://www.matchzimmerman.com/field-station-magpie/" aria-label="Visit Field Station Magpie project">
+      <div class="shot"><img class="magpie-img" loading="lazy" src="https://i.ytimg.com/vi/nrq2BpCMCMk/maxresdefault.jpg" alt="FIELD STATION: MAGPIE Tuttle Gallery exhibition documentation"><span class="corner">02 / 2025–ONGOING</span></div>
+      <div class="body"><div class="card-meta"><span>INSTALLATION / WORLD / ARCHIVE</span><span>ONGOING</span></div><h3>FIELD STATION:<br>MAGPIE</h3><p>A speculative world set in 2147, expressed through physical installation, sound, objects, interfaces, fiction, and playable environments.</p><span class="arrowlink">PROJECT + DOCUMENTATION <span>↗</span></span></div>
+    </a>
+  </div>
+  <p class="note">MAGPIE: <a class="textlink" href="https://youtu.be/nrq2BpCMCMk" target="_blank" rel="noopener">WATCH THE TUTTLE EXHIBITION TOUR ↗</a> · <a class="textlink" href="https://www.matchzimmerman.com/field-station-magpie/archive.html">LIVING ARCHIVE ↗</a></p>
+</section>
+<section class="systems" id="systems">
+  <div class="pagepad">
+    <div class="section-title"><div><p class="eyebrow">03 / inside MZTV</p><h2>Systems within<br>the system.</h2></div><p>Not simply a catalog of clips: each recurring project becomes its own entry point, with an identity, playable work, versions, and documentation.</p></div>
+    <div class="systemgrid">
+      <article class="systemcard">
+        <div class="systemvisual"><img loading="lazy" src="https://www.matchzimmerman.com/MZTV/sources/48-plant-002/archive/final.png" alt="48 PLANT Specimen 002 final archived plant image"></div>
+        <div class="systembody"><span class="k">MZTV / GENERATIVE BOTANY / 48H</span><h3>48 PLANT</h3><p>Botanical organisms shaped by historical and incoming activity data. Specimens complete a 48-hour life, then persist as replayable records and three-dimensional artifacts.</p><div class="links"><a href="https://www.matchzimmerman.com/MZTV/sources/48-plant-archive/">SPECIMEN ARCHIVE ↗</a><a href="https://www.matchzimmerman.com/MZTV/sources/48-plant-archive/studio.html?s=002">3D STUDIO ↗</a></div></div>
+      </article>
+      <article class="systemcard">
+        <div class="systemvisual trackside" aria-label="Graphic index marker, not a screenshot of TRACKSIDE"><div class="circuit"></div><div class="line"></div><div class="orb"></div><span class="trace">BF-028 / TRACKSIDE</span></div>
+        <div class="systembody"><span class="k">MZTV / IMMERSIVE DATA / RACE SIM</span><h3>TRACKSIDE</h3><p>A full Grand Prix replay using telemetry and a virtual camera crew. The shared MZCam system directs the coverage.</p><div class="links"><a href="https://www.matchzimmerman.com/MZTV/sources/bit-field-028-trackside/">OPEN SYSTEM ↗</a><a href="https://github.com/matchzimmerman/matchzimmerman.github.io/blob/main/MZTV/sources/bit-field-028-trackside/README.md" target="_blank" rel="noopener">TECHNICAL NOTES ↗</a></div></div>
+      </article>
+      <article class="systemcard">
+        <div class="systemvisual sheepdog" aria-label="Graphic index marker, not a screenshot of SHEEPDOG"><div class="field"></div><i class="sheep" style="--top:38%;--left:44%"></i><i class="sheep" style="--top:47%;--left:46%"></i><i class="sheep" style="--top:53%;--left:41%"></i><i class="sheep" style="--top:40%;--left:54%"></i><i class="sheep" style="--top:52%;--left:53%"></i><i class="sheep" style="--top:34%;--left:62%"></i><i class="sheep" style="--top:48%;--left:61%"></i><i class="sheep" style="--top:56%;--left:60%"></i><i class="sheep" style="--top:45%;--left:69%"></i><i class="dog"></i><span class="trace">BF-029 / SHEEPDOG</span></div>
+        <div class="systembody"><span class="k">MZTV / ANIMAL BEHAVIOR / FIELD SIM</span><h3>SHEEPDOG</h3><p>A border collie herding simulation built from separate herd, geography, and camera systems. An autonomous scene as well as a potential interactive work.</p><div class="links"><a href="https://www.matchzimmerman.com/MZTV/sources/bit-field-029-sheepdog/">OPEN SYSTEM ↗</a><a href="https://github.com/matchzimmerman/matchzimmerman.github.io/tree/main/MZTV/lib" target="_blank" rel="noopener">SHARED MODULES ↗</a></div></div>
+      </article>
+    </div>
+    <p class="note">This is a selective front door, not an exhaustive MZTV inventory. Linked prototypes may be computationally intensive, particularly on mobile.</p>
+  </div>
+</section>
+<section class="lineage pagepad" id="lineage">
+  <div class="lineage-row">
+    <div><p class="eyebrow">04 / system lineage / observed relationship</p><h2>The tools become<br>new tools.</h2><p>One of the clearest documented lineages begins with the automated camera logic developed for 48 PLANT. Extracted as MZCam, that logic is reused in TRACKSIDE and SHEEPDOG.</p><p class="sub">These links are based on source files in the MZTV GitHub repository—not inferred aesthetic similarities. The full archive should eventually make dependencies, version changes, and human direction traceable.</p><a class="button dark" href="https://github.com/matchzimmerman/matchzimmerman.github.io/blob/main/MZTV/lib/README.md" target="_blank" rel="noopener">VIEW MODULE RECORD ↗</a></div>
+    <div class="flowchart" aria-label="System lineage from 48 PLANT to MZCam to TRACKSIDE and SHEEPDOG">
+      <div class="flowbox"><span>Original host · botanical simulation</span><strong>48 PLANT</strong><div class="mini">Camera direction emerges inside a 48-hour artwork.</div></div>
+      <div class="flowconnector"></div>
+      <div class="flowbox highlight"><span>Reusable infrastructure · extracted module</span><strong>MZCam / Camera Crew</strong><div class="mini">Flight, framing, cuts, shot planning and camera bay are separated into shared code.</div></div>
+      <div class="flowconnector"></div>
+      <div class="branch">
+        <div class="flowbox"><span>Reused in</span><strong>TRACKSIDE</strong><div class="mini">Race coverage</div></div>
+        <div class="flowbox"><span>Reused in</span><strong>SHEEPDOG</strong><div class="mini">Field observation</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="archive" id="archive">
+  <div class="pagepad">
+    <div class="section-title"><div><p class="eyebrow">05 / public records</p><h2>Explore the archive.</h2></div><p>A small functional filter prototype. Project records link to existing public destinations; this is not yet a unified searchable backend.</p></div>
+    <div class="archive-controls" id="archiveFilters" role="group" aria-label="Filter public archive records">
+      <button type="button" data-filter="all" class="active" aria-pressed="true">ALL</button>
+      <button type="button" data-filter="mztv" aria-pressed="false">MZTV</button>
+      <button type="button" data-filter="magpie" aria-pressed="false">MAGPIE</button>
+      <button type="button" data-filter="moving" aria-pressed="false">MOVING IMAGE</button>
+    </div>
+    <div class="archiverows" id="archiveRows">
+      <a class="archiveitem" data-class="mztv" href="https://www.matchzimmerman.com/MZTV/sources/48-plant-archive/"><span>MZTV / 001</span><strong>48 PLANT — Specimen Archive</strong><span>GENERATIVE SYSTEM</span><span>2026</span><span class="go">↗</span></a>
+      <a class="archiveitem" data-class="mztv" href="https://www.matchzimmerman.com/MZTV/sources/48-plant-archive/studio.html?s=002"><span>MZTV / 002</span><strong>48 PLANT — 3D Specimen Studio</strong><span>INTERACTIVE ARTIFACT</span><span>2026</span><span class="go">↗</span></a>
+      <a class="archiveitem" data-class="mztv" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-028-trackside/"><span>BF / 028</span><strong>TRACKSIDE — Race Broadcast System</strong><span>LIVE SIMULATION</span><span>2026</span><span class="go">↗</span></a>
+      <a class="archiveitem" data-class="mztv" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-029-sheepdog/"><span>BF / 029</span><strong>SHEEPDOG — Herd Simulation</strong><span>LIVE SIMULATION</span><span>2026</span><span class="go">↗</span></a>
+      <a class="archiveitem" data-class="magpie" href="https://www.matchzimmerman.com/field-station-magpie/exhibition.html"><span>MAG / EXH</span><strong>FIELD STATION: MAGPIE — Tuttle Gallery</strong><span>EXHIBITION</span><span>2025</span><span class="go">↗</span></a>
+      <a class="archiveitem" data-class="magpie" href="https://www.matchzimmerman.com/field-station-magpie/archive.html"><span>MAG / ARC</span><strong>FIELD STATION: MAGPIE — Living Archive</strong><span>ARTIFACTS + SYSTEMS</span><span>ONGOING</span><span class="go">↗</span></a>
+      <a class="archiveitem" data-class="moving" href="https://www.matchzimmerman.com/moving-image/"><span>MZ / MI</span><strong>Moving Image Archive</strong><span>VIDEO + PERFORMANCE</span><span>2005–2026</span><span class="go">↗</span></a>
+    </div>
+    <div class="archivefoot"><span class="micro" id="archiveCount" aria-live="polite">7 RECORDS SHOWN</span><a class="textlink mono micro" href="https://www.matchzimmerman.com/moving-image/">EXPLORE MOVING IMAGE ↗</a></div>
+  </div>
+</section>
+<section class="research pagepad" id="research">
+  <div><p class="eyebrow">06 / core inquiry</p><h2>How does creative practice change when cognition is distributed?</h2><p>Across MZTV, MAGPIE, and the underlying tools, MZCMG builds and examines complex systems of influence. The artwork, its process, and its record remain connected.</p><a class="button dark" href="https://www.matchzimmerman.com/#research">CURRENT RESEARCH PAGE ↗</a></div>
+  <div class="research-right">
+    <p class="eyebrow">RESEARCH FIELDS</p>
+    <div class="topic"><span>01</span><div><strong>Complex systems of influence</strong><div class="micro">Interactions · constraints · emergence</div></div></div>
+    <div class="topic"><span>02</span><div><strong>Distributed human–AI creative practice</strong><div class="micro">Human direction · systems · embodiment</div></div></div>
+    <div class="topic"><span>03</span><div><strong>Systems that build other systems</strong><div class="micro">Reusability · lineage · dependency</div></div></div>
+    <div class="topic"><span>04</span><div><strong>Process as public evidence</strong><div class="micro">Archives · provenance · version histories</div></div></div>
+  </div>
+</section>
+<section class="more pagepad" id="more"><p class="eyebrow">07 / more ways in</p><h2>The broader practice.</h2><div class="morelinks">
+  <a href="https://www.matchzimmerman.com/moving-image/"><span>MOVING IMAGE</span><span>↗</span></a>
+  <a href="https://www.matchzimmerman.com/sonic-lab/"><span>SONIC LAB</span><span>↗</span></a>
+  <a href="https://www.matchzimmerman.com/shop/"><span>SHOP / MZBRDZ</span><span>↗</span></a>
+  <a href="https://www.matchzimmerman.com/#info"><span>ABOUT / CONTACT</span><span>↗</span></a>
+</div></section>
+</main>
+<footer class="footer pagepad"><span>© 2026 Match Zimmerman Creative Media Group</span><span>Prototype only · Not approved for publication</span><a href="#top">Back to top ↑</a></footer>
+</div>
+<script>
+(function(){
+  "use strict";
+  var menu=document.getElementById("menuButton"),nav=document.getElementById("siteNav");
+  menu.addEventListener("click",function(){var active=nav.classList.toggle("open");menu.setAttribute("aria-expanded",String(active));menu.textContent=active?"CLOSE −":"MENU +";});
+  nav.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){nav.classList.remove("open");menu.setAttribute("aria-expanded","false");menu.textContent="MENU +";});});
+  var buttons=document.querySelectorAll("#archiveFilters button"),rows=Array.from(document.querySelectorAll(".archiveitem")),count=document.getElementById("archiveCount");
+  buttons.forEach(function(button){button.addEventListener("click",function(){
+    var val=button.getAttribute("data-filter"),n=0;
+    buttons.forEach(function(b){var yes=b===button;b.classList.toggle("active",yes);b.setAttribute("aria-pressed",String(yes));});
+    rows.forEach(function(row){var visible=val==="all"||row.dataset.class===val;row.classList.toggle("hidden",!visible);if(visible)n++;});
+    count.textContent=n+" RECORD"+(n===1?"":"S")+" SHOWN";
+  });});
+  var status=document.getElementById("broadcastStatus"),label=document.getElementById("broadcastStatusText"),playerHost=document.getElementById("twitch-player"),offline=document.getElementById("offlinePoster");
+  function broadcastState(mode){
+    status.classList.remove("is-live","is-offline");
+    if(mode==="live"){status.classList.add("is-live");label.textContent="LIVE NOW";offline.classList.remove("is-visible");offline.setAttribute("aria-hidden","true");playerHost.style.display="block";}
+    else {status.classList.add("is-offline");label.textContent=mode==="offline"?"OFF AIR":"STATUS UNAVAILABLE";offline.classList.add("is-visible");offline.setAttribute("aria-hidden","false");playerHost.style.display="none";}
+  }
+  function initializePlayer(){
+    if(!window.Twitch||!Twitch.Player){broadcastState("unavailable");return;}
+    try{
+      var p=new Twitch.Player("twitch-player",{channel:"matchzimmerman",width:"100%",height:"100%",autoplay:false,muted:true,parent:[location.hostname]});
+      p.addEventListener(Twitch.Player.ONLINE,function(){broadcastState("live");});
+      p.addEventListener(Twitch.Player.OFFLINE,function(){broadcastState("offline");});
+    }catch(e){broadcastState("unavailable");}
+  }
+  if(location.protocol==="file:"){broadcastState("unavailable");}
+  else{
+    var script=document.createElement("script");
+    script.src="https://player.twitch.tv/js/embed/v1.js";
+    script.async=true;script.onload=initializePlayer;script.onerror=function(){broadcastState("unavailable");};
+    document.head.appendChild(script);
+  }
+})();
+</script>
+</body>
+</html>
