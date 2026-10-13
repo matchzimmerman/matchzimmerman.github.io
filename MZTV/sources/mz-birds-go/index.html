@@ -51,6 +51,16 @@ nav button{border:0;background:none;color:var(--muted);padding:14px 8px;min-heig
 #camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:4;transition:opacity .2s}
 #photoTools{position:relative;z-index:2;display:none;gap:8px}
 @media(max-height:640px){header{padding-top:calc(8px + var(--safeT))}#field{gap:6px;padding-top:6px}#mapbox{min-height:195px}#encounter{min-height:58px;padding:6px}nav button{min-height:48px;padding:10px}}
+
+#camCalibration{position:relative;z-index:3;margin:8px 16px 4px;padding:10px 12px;background:#09272cdd;border:1px solid #77998b;display:grid;gap:8px;font-size:10px;backdrop-filter:blur(5px)}
+#camCalibration .calTop{display:flex;justify-content:space-between;align-items:center;gap:8px;line-height:1.4;color:var(--lime)}
+#camCalibration button{background:#1e454b;color:var(--ink);border:1px solid #92b5a2;padding:7px;font-size:10px}
+#camCalibration label{display:flex;align-items:center;gap:9px;justify-content:space-between;color:var(--ink)}
+#camCalibration label span{color:var(--lime);min-width:36px;text-align:right}
+#camCalibration input{width:45%;accent-color:var(--lime);height:26px}
+#camHint{margin:0 22px;text-align:center;color:var(--lime);line-height:1.5}
+#camCalibration,#camHint{flex-shrink:0}
+@media(max-height:700px){#camCalibration{padding:6px 9px;gap:3px;margin:4px 10px}#camCalibration input{height:22px}.camBottom{padding-top:6px;padding-bottom:calc(7px + var(--safeB))}#snap{width:68px;height:68px}}
 </style>
 </head>
 <body>
@@ -66,22 +76,22 @@ nav button{border:0;background:none;color:var(--muted);padding:14px 8px;min-heig
 <p class="notice" id="hint">Enable location to generate simulated bird encounters around you. A test orb will appear nearby.</p>
 <div id="encounter"><canvas id="orbpreview" width="104" height="104"></canvas><div class="encText"><small id="encLabel">NO SIGNAL SELECTED</small><strong id="encName">FIELD STANDBY</strong><p id="encDistance">Orbs are simulated, not real birds.</p></div></div>
 <div id="fieldButtons"><button class="btn primary" id="start">ENABLE LOCATION</button><button class="btn" id="observe" disabled>OPEN CAMERA ↗</button></div>
-<div class="row" style="margin-bottom:10px"><button class="btn tiny" id="demo">TRY DEMO</button><div style="flex:1;color:var(--muted);font-size:9px;align-self:center;text-align:right">STOP TO VIEW OR PHOTOGRAPH. NO CHASING.</div></div>
+<div class="row" style="margin-bottom:10px"><button class="btn tiny" id="demo">TRY DEMO</button><button class="btn tiny" id="resetAnchor" style="flex:1">PLACE NEW TEST ANCHOR</button></div><p class="notice" style="margin:0 0 9px">Each orb has fixed GPS coordinates. Stop safely to use the camera.</p>
 </section>
 <section id="journal" class="tab"><h2 class="sectiontitle">FIELD JOURNAL</h2><p class="sub">Sightings are saved on this device. Your camera image never uploads to a server.</p><div id="shots"></div><p class="sub" id="shotCount"></p></section>
 <section id="about" class="tab"><h2 class="sectiontitle">FIELD NOTES / 001</h2><p class="sub">An experimental, GPS-triggered birdwatching system built with original MZ-style data orbs. These are fictional encounters, not observations of real wildlife.</p>
 <div class="fact">1 / ENABLE GPS<br>2 / LOOK FOR A SIGNAL ON THE RADAR<br>3 / STOP IN A SAFE PLACE AND OPEN THE CAMERA<br>4 / DRAG THE ORB TO FRAME IT, THEN PHOTOGRAPH<br>5 / VIEW YOUR PERSONAL FIELD JOURNAL</div>
-<details open><summary>What is actually location-based?</summary><p>Most orbs live at stable pseudo-random coordinates in an approximately 250 m radius around your current position. As you travel, new cells load and older ones disappear. You can photograph orbs within about 90 m. A clearly marked test orb spawns near your starting point so the camera can be tested immediately.</p></details>
-<details><summary>Is this full AR?</summary><p>No. Version 001 uses your real camera with a 2D, draggable, animated orb overlaid on the image. It is not attached to a physical branch or world-space surface. We can test the experience without requiring a native ARKit app.</p></details>
-<details><summary>Privacy and reliability</summary><p>GPS coordinates are only used on your device to calculate sightings. The journal stores an approximate coordinate rounded to 3 decimals, plus photo files in this browser's IndexedDB. Nothing is automatically sent to MZCMG. iPhone browsers may pause location updates when screen-locked. Camera and GPS require browser permission and an HTTPS page.</p></details>
+<details open><summary>What is actually location-based?</summary><p>Generated orbs occupy stable seeded GPS locations, not positions that follow your phone. The lime test orb stays at one stored GPS anchor until you press PLACE NEW TEST ANCHOR. Within 90 m you can open your camera and move around an orb; its direction and apparent size follow position and heading changes. GPS accuracy can exceed the apparent size of an orb.</p></details>
+<details><summary>Is this full AR?</summary><p>Version 002 gives each orb fixed GPS coordinates, projects its bearing/distance relative to phone compass and tilt, and redraws it in the camera as you move. This is geospatial compass AR, not precise ARKit visual-inertial tracking: GPS error, magnetic interference, unknown terrain elevation and camera lens variation can cause drift. Use compass calibration if required.</p></details>
+<details><summary>Privacy and reliability</summary><p>GPS coordinates are only used on your device to calculate sightings and local anchors. The test anchor remains in local storage. The journal stores an approximate coordinate rounded to 3 decimals, plus photos in IndexedDB. Nothing is automatically uploaded. iPhone browsers may pause GPS/compass updates when screen-locked. Camera, GPS, and motion sensors require browser permission on HTTPS.</p></details>
 <details><summary>Rarity</summary><p>LIME / field test. CREAM / common. CORAL / uncommon. CYAN / rare. GOLD / exceptional. These labels are experimental and currently determined by a repeatable hash of map cells.</p></details>
-<p class="sub">MZTV / MZ BIRDS GO / BUILD 001 · All orbs algorithmically rendered in JavaScript. No generated image assets or external map dependencies.</p></section>
+<p class="sub">MZTV / MZ BIRDS GO / BUILD 002 · GPS world anchors projected with phone position + compass. No generated image assets or external map dependencies.</p></section>
 <nav><button data-tab="field" class="active">◉ FIELD</button><button data-tab="journal">▤ JOURNAL</button><button data-tab="about">≡ NOTES</button></nav>
 </div>
 <div id="camera" role="dialog" aria-label="Photograph an MZ orb">
 <div id="camStage"><video id="camVideo" autoplay muted playsinline webkit-playsinline></video><canvas id="camOverlay"></canvas><div id="camFlash"></div></div>
 <div class="camHeader"><div><b>MZ BIRDS GO / LIVE LENS</b><br><span id="cameraName">ORB 001</span></div><button id="closeCam">✕ CLOSE</button></div>
-<div id="camHint">DRAG THE ORB TO COMPOSE YOUR PHOTOGRAPH</div>
+<div id="camHint">GPS ANCHORED / POINT THE CAMERA TOWARD THE SIGNAL</div><div id="camCalibration"><div class="calTop"><span id="camBearing">LOADING COMPASS…</span><button id="reMotion">ENABLE MOTION</button></div><label>ALIGN COMPASS <span id="trimValue">+0°</span><input id="headingTrim" type="range" min="-180" max="180" value="0" step="1" aria-label="Compass offset calibration"></label><label id="manualWrap" style="display:none">MANUAL HEADING <span id="manualValue">0°</span><input id="manualHeading" type="range" min="0" max="359" value="0" step="1" aria-label="Manually set camera heading"></label></div>
 <div class="camBottom"><div class="camSmall" id="camMsg">VIRTUAL ORB / REAL CAMERA</div><div class="row" id="photoTools"><button class="btn primary" id="share">SHARE / SAVE PHOTO ↗</button><button class="camClose" id="goJournal">JOURNAL</button></div><div class="row" id="captureRow"><button id="snap" aria-label="Photograph this orb"></button></div></div>
 </div>
 <script>
@@ -89,7 +99,9 @@ nav button{border:0;background:none;color:var(--muted);padding:14px 8px;min-heig
 (function(){
 var $=id=>document.getElementById(id), R=6378137, D=Math.PI/180;
 var radar=$("radar"),g=radar.getContext("2d"),preview=$("orbpreview"),pg=preview.getContext("2d");
-var pos=null, fieldMode="off",watchId=null, firstFix=null,selected=null,signals=[], camStream=null,camOrb=null,camFrame=0,camPosition={x:.53,y:.46}, camSize=.075,lastShot=null, lastPhoto=null;
+var pos=null,fieldMode="off",watchId=null,firstFix=null,selected=null,signals=[],camStream=null,camOrb=null,lastShot=null,lastPhoto=null;
+var sensorHeading=null,sensorPitch=null,sensorAccuracy=null,sensorListening=false,manualHeading=0,headingTrim=0,camProjection=null,compassEvents=0;
+try{var savedAnchor=JSON.parse(localStorage.getItem("mz-birds-go-test-anchor-002")||"null");if(savedAnchor&&Number.isFinite(savedAnchor.lat)&&Number.isFinite(savedAnchor.lon))firstFix=savedAnchor;}catch(e){}
 var journal=[],DB=null,photoURLs=[];
 try{journal=JSON.parse(localStorage.getItem("mz-birds-go-journal-001")||"[]");if(!Array.isArray(journal))journal=[];}catch(e){journal=[]}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
@@ -120,7 +132,7 @@ function gpsUpdate(p,demo){
 var lat=p.coords?p.coords.latitude:p.lat,lon=p.coords?p.coords.longitude:p.lon;
 if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
 pos={lat:lat,lon:lon,acc:p.coords?p.coords.accuracy:9};
-if(!firstFix)firstFix={lat:lat,lon:lon};
+if(!firstFix){firstFix={lat:lat,lon:lon};if(!demo){try{localStorage.setItem("mz-birds-go-test-anchor-002",JSON.stringify(firstFix))}catch(e){}}}
 fieldMode=demo?"demo":"live";
 $("gpsStatus").innerHTML="<strong>"+(demo?"DEMO / SIMULATED":"GPS / ACTIVE")+"</strong>"+(demo?"TEST COORDINATES":"ACCURACY ± "+Math.round(pos.acc)+" M");
 $("modeTag").textContent=demo?"DEMO MODE":"LIVE GPS";
@@ -139,7 +151,8 @@ $("gpsStatus").innerHTML="<strong>GPS UNAVAILABLE</strong>"+(e.code===1?"PERMISS
 $("hint").textContent="Location error: "+e.message+". Demo mode still works.";
 },{enableHighAccuracy:true,timeout:14000,maximumAge:3000});
 }
-function demoGPS(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null} firstFix=null;selected=null;gpsUpdate({lat:39.3327,lon:-76.6293},true);}
+function demoGPS(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null} firstFix={lat:39.3327,lon:-76.6293};selected=null;gpsUpdate({lat:39.3327,lon:-76.6293},true);}
+function resetTestAnchor(){if(!pos){$("hint").textContent="Enable GPS first so the anchor can be placed at your real location.";return;}firstFix={lat:pos.lat,lon:pos.lon};try{if(fieldMode==="live")localStorage.setItem("mz-birds-go-test-anchor-002",JSON.stringify(firstFix))}catch(e){}selected=null;makeSignals();$("hint").textContent="Test orb placed at new fixed coordinates ~22 m northeast. Walk around it to change the camera projection.";}
 function drawOrb(ctx,x,y,r,color,t,dim){
 ctx.save();ctx.globalAlpha=dim==null?1:dim;
 var pulse=1+.07*Math.sin(t*2.8+(x+y)*.02);
