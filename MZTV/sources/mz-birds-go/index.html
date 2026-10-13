@@ -58,7 +58,7 @@ nav button{border:0;background:none;color:var(--muted);padding:14px 8px;min-heig
 #camCalibration label{display:flex;align-items:center;gap:9px;justify-content:space-between;color:var(--ink)}
 #camCalibration label span{color:var(--lime);min-width:36px;text-align:right}
 #camCalibration input{width:45%;accent-color:var(--lime);height:26px}
-#camHint{margin:0 22px;text-align:center;color:var(--lime);line-height:1.5}
+#camHint{margin:auto 22px 0;text-align:center;color:var(--lime);line-height:1.5}
 #camCalibration,#camHint{flex-shrink:0}
 @media(max-height:700px){#camCalibration{padding:6px 9px;gap:3px;margin:4px 10px}#camCalibration input{height:22px}.camBottom{padding-top:6px;padding-bottom:calc(7px + var(--safeB))}#snap{width:68px;height:68px}}
 </style>
@@ -141,6 +141,7 @@ makeSignals();
 $("hint").textContent=demo?"Demo location enabled. Tap an orb or photograph the nearby test signal.":"Locations and encounters are simulated. Tap an orb on the radar; stop before photographing.";
 }
 function startGPS(){
+if(fieldMode==="demo"){firstFix=null;try{var prior=JSON.parse(localStorage.getItem("mz-birds-go-test-anchor-002")||"null");if(prior&&Number.isFinite(prior.lat)&&Number.isFinite(prior.lon))firstFix=prior;}catch(e){}}
 if(!navigator.geolocation){$("hint").textContent="This browser does not support geolocation. Try demo mode.";return}
 $("gpsStatus").innerHTML="<strong>REQUESTING GPS...</strong>ALLOW LOCATION ACCESS";
 $("start").disabled=true;
