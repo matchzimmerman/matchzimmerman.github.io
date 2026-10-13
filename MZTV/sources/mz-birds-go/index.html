@@ -213,26 +213,90 @@ var w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height
 if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
 ctx.setTransform(dpr,0,0,dpr,0,0);return rect;
 }
+
+function wrapAngle(deg){return ((deg+540)%360)-180}
+function bearingTo(a,b){
+var p1=a.lat*D,p2=b.lat*D,dl=(b.lon-a.lon)*D;
+var y=Math.sin(dl)*Math.cos(p2),x=Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl);
+return (Math.atan2(y,x)/D+360)%360;
+}
+function currentHeading(){return ((sensorHeading===null?manualHeading:sensorHeading)+headingTrim+720)%360;}
+function anchorProjection(rect,orb){
+if(!orb||!pos||!rect.width||!rect.height)return null;
+var dist=meters(pos,orb),bearing=bearingTo(pos,orb),heading=currentHeading();
+var yaw=wrapAngle(bearing-heading),viewV=74,viewH=2*Math.atan(Math.tan(viewV*D/2)*rect.width/rect.height)/D;
+var elevation=Math.atan2(2.1-1.6,Math.max(dist,1))/D;
+var pitch=sensorPitch===null?0:sensorPitch;
+var tilt=elevation-pitch;
+var x=.5+.5*Math.tan(yaw*D)/Math.tan(viewH*D/2);
+var y=.5-.5*Math.tan(tilt*D)/Math.tan(viewV*D/2);
+var radius=clamp(.5*rect.width*Math.tan(Math.atan2(1.25,Math.max(dist,2)))/Math.tan(viewH*D/2),8,Math.min(rect.width,rect.height)*.24);
+var visible=Math.abs(yaw)<=viewH/2-1&&Math.abs(tilt)<=viewV/2-1&&x>0&&x<1&&y>0&&y<1;
+return {x:x,y:y,radius:radius,visible:visible,bearing:bearing,heading:heading,yaw:yaw,tilt:tilt,dist:dist};
+}
+function updateSensor(e){
+if(typeof e.webkitCompassHeading==="number"&&Number.isFinite(e.webkitCompassHeading)){
+sensorHeading=(e.webkitCompassHeading+360)%360;sensorAccuracy=Number.isFinite(e.webkitCompassAccuracy)?Math.round(e.webkitCompassAccuracy):null;
+}else if(e.absolute===true&&Number.isFinite(e.alpha)){sensorHeading=(360-e.alpha)%360;}
+if(Number.isFinite(e.beta))sensorPitch=clamp(90-e.beta,-90,90);
+compassEvents++;
+}
+function setSensorListening(){
+if(sensorListening)return;
+window.addEventListener("deviceorientation",updateSensor);
+window.addEventListener("deviceorientationabsolute",updateSensor);
+sensorListening=true;
+}
+function requestSensors(){
+setSensorListening();
+if(typeof DeviceOrientationEvent==="undefined"||typeof DeviceOrientationEvent.requestPermission!=="function")return Promise.resolve();
+try{return DeviceOrientationEvent.requestPermission().then(result=>{
+if(result!=="granted"){$("camMsg").textContent="Motion permission denied. Use manual heading."}
+}).catch(e=>{$("camMsg").textContent="Compass permission error. Use manual heading.";});}
+catch(e){return Promise.resolve();}
+}
+function updateCamUI(p){
+if(!p)return;
+var hasSensor=sensorHeading!==null;
+$("manualWrap").style.display=hasSensor?"none":"flex";
+$("reMotion").style.display=hasSensor?"none":"inline-block";
+$("camBearing").textContent=(hasSensor?"COMPASS":"MANUAL")+" "+Math.round(p.heading)+"° · ORB "+Math.round(p.bearing)+"° · "+Math.round(p.dist)+" M"+(sensorAccuracy!==null?" · ±"+sensorAccuracy+"°":"");
+$("manualValue").textContent=Math.round(manualHeading)+"°";
+if(!hasSensor&&compassEvents===0){$("camHint").textContent="NO COMPASS YET · ENABLE MOTION OR ADJUST MANUAL HEADING";}
+else if(!p.visible&&Math.abs(p.yaw)>22){$("camHint").textContent=(p.yaw>0?"↪ TURN RIGHT ":"↩ TURN LEFT ")+Math.round(Math.abs(p.yaw))+"° TO FIND THIS GPS ANCHOR";}
+else if(!p.visible){$("camHint").textContent=p.tilt>0?"TILT PHONE UP TOWARD GPS ANCHOR":"TILT PHONE DOWN TOWARD GPS ANCHOR";}
+else{$("camHint").textContent="ORB GPS LOCK / "+Math.round(p.dist)+" M · MOVE TO CHANGE PERSPECTIVE";}
+$("snap").disabled=!p.visible||p.dist>90;
+if(p.dist>90){$("camMsg").textContent="OUT OF RANGE · RETURN WITHIN 90 M";}
+else if(p.visible&&$("captureRow").style.display!=="none"){$("camMsg").textContent=hasSensor?"GPS + COMPASS WORLD PROJECTION":"MANUAL HEADING · COMPASS NOT DETECTED";}
+}
 function drawCam(t){
 var canvas=$("camOverlay"),ctx=canvas.getContext("2d"),r=resizeCanvas(canvas,ctx);
 ctx.clearRect(0,0,r.width,r.height);
 if(!camOrb)return;
-drawOrb(ctx,r.width*camPosition.x,r.height*camPosition.y,Math.min(r.width,r.height)*camSize,camOrb.color,t,1);
+var p=anchorProjection(r,camOrb);camProjection=p;
+if(p&&p.visible&&p.dist<=90)drawOrb(ctx,r.width*p.x,r.height*p.y,p.radius,camOrb.color,t,1);
+if(Math.floor(t*5)!==Math.floor((t-.016)*5))updateCamUI(p);
 }
+
 async function startCamera(){
 if(!selected||selected.dist>90)return;
-camOrb={...selected};camPosition={x:.52,y:.43};camSize=.085;lastShot=null;lastPhoto=null;
+camOrb={...selected};sensorHeading=null;sensorPitch=null;sensorAccuracy=null;compassEvents=0;lastShot=null;lastPhoto=null;
+var permissionPromise=requestSensors();
 $("cameraName").textContent=camOrb.name+" / "+camOrb.kind;
-$("camera").classList.add("open");$("camMsg").textContent="REQUESTING CAMERA PERMISSION…";$("photoTools").style.display="none";$("captureRow").style.display="flex";
+$("camera").classList.add("open");$("camMsg").textContent="REQUESTING CAMERA + MOTION PERMISSIONS…";$("photoTools").style.display="none";$("captureRow").style.display="flex";
+$("manualHeading").value=Math.round(bearingTo(pos,camOrb));manualHeading=Number($("manualHeading").value);$("camBearing").textContent="WAITING FOR COMPASS";$("headingTrim").value=headingTrim;$("trimValue").textContent=(headingTrim>0?"+":"")+headingTrim+"°";
 try{
 if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error("Camera API not available here. Open this HTTPS link directly in Safari.");
+await permissionPromise;
 camStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:1920}}});
 $("camVideo").srcObject=camStream;await $("camVideo").play();
-$("camMsg").textContent="VIRTUAL ORB / REAL CAMERA";
+$("camMsg").textContent="GPS ANCHOR / REAL CAMERA";
 }catch(e){$("camMsg").textContent="CAMERA ERROR: "+e.message;$("captureRow").style.display="none";}
 }
 function stopCamera(){
 if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+if(sensorListening){window.removeEventListener("deviceorientation",updateSensor);window.removeEventListener("deviceorientationabsolute",updateSensor);sensorListening=false;}
 $("camVideo").srcObject=null;$("camera").classList.remove("open");camOrb=null;
 }
 function drawPhotoCaption(ctx,w,h){
@@ -248,7 +312,9 @@ var r=$("camStage").getBoundingClientRect(),w=Math.min(960,Math.floor(1600*r.wid
 var ctx=c.getContext("2d"),vw=vid.videoWidth,vh=vid.videoHeight,screenRatio=r.width/r.height,sourceRatio=vw/vh,sx=0,sy=0,sw=vw,sh=vh;
 if(sourceRatio>screenRatio){sw=vh*screenRatio;sx=(vw-sw)/2}else{sh=vw/screenRatio;sy=(vh-sh)/2}
 ctx.drawImage(vid,sx,sy,sw,sh,0,0,w,h);
-drawOrb(ctx,camPosition.x*w,camPosition.y*h,Math.min(w,h)*camSize,camOrb.color,performance.now()/1000,1);
+var projection=anchorProjection(r,camOrb);
+if(!projection||!projection.visible||projection.dist>90)throw new Error("GPS orb has moved out of view or out of range.");
+drawOrb(ctx,projection.x*w,projection.y*h,projection.radius*(w/r.width),camOrb.color,performance.now()/1000,1);
 drawPhotoCaption(ctx,w,h);return c;
 }
 function getDB(){
@@ -262,7 +328,7 @@ async function storePhoto(key,blob){var db=await getDB();if(!db)return false;ret
 async function retrievePhoto(key){var db=await getDB();if(!db)return null;return new Promise(resolve=>{try{var rq=db.transaction("photos").objectStore("photos").get(key);rq.onsuccess=()=>resolve(rq.result||null);rq.onerror=()=>resolve(null)}catch(e){resolve(null)}})}
 function blobCanvas(c){return new Promise(resolve=>c.toBlob(resolve,"image/jpeg",.88))}
 async function snapshot(){
-if(!camStream||!camOrb)return;$("snap").disabled=true;
+if(!camStream||!camOrb||!camProjection||!camProjection.visible||camProjection.dist>90)return;$("snap").disabled=true;
 try{var blob=await blobCanvas(photoCanvas());if(!blob)throw new Error("Could not encode photo.");
 var id=Date.now()+"-"+Math.floor(Math.random()*100000), shot={id:id,name:camOrb.name,kind:camOrb.kind,date:new Date().toISOString(),place:pos?pos.lat.toFixed(3)+", "+pos.lon.toFixed(3):"UNKNOWN"};
 lastPhoto=blob;lastShot=shot;
@@ -304,15 +370,15 @@ document.querySelectorAll("section.tab").forEach(v=>v.classList.toggle("active",
 document.querySelectorAll("nav button").forEach(v=>v.classList.toggle("active",v.dataset.tab===name));
 if(name==="journal")renderJournal();
 }
-$("start").onclick=startGPS;$("demo").onclick=demoGPS;$("observe").onclick=startCamera;
+$("start").onclick=startGPS;$("demo").onclick=demoGPS;$("observe").onclick=startCamera;$("resetAnchor").onclick=resetTestAnchor;
+$("reMotion").onclick=()=>{requestSensors()};
+$("headingTrim").oninput=e=>{headingTrim=Number(e.target.value);$("trimValue").textContent=(headingTrim>0?"+":"")+headingTrim+"°"};
+$("manualHeading").oninput=e=>{manualHeading=Number(e.target.value);$("manualValue").textContent=manualHeading+"°"};
 $("radar").addEventListener("click",tapRadar);
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 $("closeCam").onclick=stopCamera;$("snap").onclick=snapshot;$("share").onclick=sharePhoto;
 $("goJournal").onclick=()=>{stopCamera();tab("journal")};
-var dragging=false;$("camOverlay").addEventListener("pointerdown",e=>{dragging=true;e.currentTarget.setPointerCapture(e.pointerId);moveOrb(e)});
-$("camOverlay").addEventListener("pointermove",e=>{if(dragging)moveOrb(e)});
-$("camOverlay").addEventListener("pointerup",()=>dragging=false);$("camOverlay").addEventListener("pointercancel",()=>dragging=false);
-function moveOrb(e){var r=$("camOverlay").getBoundingClientRect();camPosition.x=clamp((e.clientX-r.left)/r.width,.12,.88);camPosition.y=clamp((e.clientY-r.top)/r.height,.12,.88)}
+// GPS anchored: no dragging to reposition the orb in camera coordinates.
 window.addEventListener("pagehide",stopCamera);
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&camStream)stopCamera()});
 requestAnimationFrame(tick);updateInfo();
