@@ -254,6 +254,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-028-trackside/`
 
+### BIT FIELD 030 — SITTER
+A screen test that never ends. One sitter faces a locked-off camera under one soft light. Every 30 seconds, under a blink, the face moves one step through face space: jaw, nose, brow, lids, mouth, skull, age, tone and hair. Nobody is ever the same person twice, or very different from the person before. The head, hair and stubble were built in code (Blender and Python on the CC0 MakeHuman base mesh) and exported neutral, and every feature is a displacement field applied live in the shaders. Over 48 hours the walk widens. Returns toward remembered sitters arrive at h2, asymmetry at h6, composites of past sitters at h10, performance quirks at h16, caricatures at h20 and split faces at h30. Looks change by era: silver gelatin, 1-bit, silkscreen, phosphor. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?look=NAME ?lite=N
+
+Path:
+`sources/bit-field-030-sitter/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-030-sitter/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 

@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · BIT FIELD 030 · SITTER</title>
+<!--
+  MZTV · BIT FIELD 030 · SITTER
+  A screen test that never ends. One sitter faces the camera, locked off, under one soft light.
+  Every 30 seconds a new sitting begins: under a blink, the face moves a step through face space
+  (jaw, nose, brow, lids, mouth, cheeks, skull, age, tone, hair). Nobody is ever the same person
+  twice, and nobody is ever very different from the person before.
+  The head, hair, brows, lashes and stubble were built in code (Blender, Python) on the CC0
+  MakeHuman base mesh and exported neutral; every feature is applied live here as a field of
+  soft displacements that moves skin, hair and eyes together.
+  Over hours: the walk widens and the pull back to the middle weakens. The sitter remembers
+  every face it has been and can drift back toward one (h2), the two sides of the face begin to
+  drift apart (h6), composites of past sitters appear (h10), the performance develops quirks
+  (h16), caricatures (h20), and the face can split (h30). Looks (gelatin, 1-bit, silkscreen,
+  phosphor) change by era.
+
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?look=gelatin|bit|silk|phosphor
+  Keys:   I info · M mute · L next look
+-->
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #ece2c8; --dim: rgba(236,226,200,0.6); --bg: rgba(12,24,26,0.82); --acc: #e2a43a; --line: rgba(236,226,200,0.2); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c181a; }
+  #v { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #info { position: fixed; left: 1.6vh; bottom: 1.6vh; max-width: 40vw; font: 400 1.18vh/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--ink);
+          background: var(--bg); border-left: 3px solid var(--acc); padding: 1vh 1.3vh; letter-spacing: 0.02em; white-space: pre; }
+  #info b { font-weight: 700; } #info .d { color: var(--dim); } #info .a { color: var(--acc); }
+</style>
+</head>
+<body>
+<canvas id="v"></canvas>
+<div id="info"></div>
+<script>
+'use strict';
+/* ------------------------------------------------------------------ config */
+const Q = new URLSearchParams(location.search);
+const qn = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? v : d; };
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const fin = x => Number.isFinite(x);
+const LOOKS = ['gelatin', 'bit', 'silk', 'phosphor'];
+const CFG = {
+  info: Q.get('info') !== '0', fresh: Q.get('fresh') === '1', audio: Q.get('audio') !== '0',
+  seed: Math.floor(qn('seed', 30)), rate: clamp(qn('rate', 1), 0.05, 200), lines: clamp(Math.round(qn('lines', 270)), 135, 1080),
+  ff: clamp(qn('ff', 0), 0, 96), sit: clamp(qn('sit', 30), 5, 600), lite: clamp(qn('lite', 1), 0.02, 1), look: LOOKS.indexOf(Q.get('look')),
+};
+const STORE = 'mztv-bf030-sitter-v1';
+const PIVOT = [0, 5.6, 0.1];
+
+/* ------------------------------------------------------------------ seeded rng */
+function RNG(s) { this.s = (s >>> 0) || 1; }
+RNG.prototype.f = function () { let t = (this.s = (this.s + 0x6D2B79F5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+RNG.prototype.n = function () { let u = 0, v = 0; while (u === 0) u = this.f(); v = this.f(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2831853 * v); };
+RNG.prototype.r = function (a, b) { return a + (b - a) * this.f(); };
+
+/* ------------------------------------------------------------------ face space
+   Each feature is one or two soft displacement fields (mirrored for symmetric features).
+   Gene value 1 ≈ one noticeable step. Symmetric features carry separate L and R genes so
+   the two halves of the face can drift apart later in the run. */
+const F = [
+  // name, centre (x>0 side), radii, displacement at gene=1, symmetric
+  ['jaw width',      [0.55, 6.45, 0.85], [0.32, 0.30, 0.40], [0.040, 0.000, 0.000], 1],
+  ['chin length',    [0.00, 6.30, 1.30], [0.35, 0.16, 0.40], [0.000,-0.030, 0.015], 0],
+  ['chin',           [0.00, 6.33, 1.38], [0.30, 0.15, 0.30], [0.000, 0.000, 0.025], 0],
+  ['cheekbones',     [0.60, 7.02, 1.02], [0.22, 0.13, 0.28], [0.012, 0.008, 0.025], 1],
+  ['cheek hollow',   [0.48, 6.72, 1.08], [0.20, 0.18, 0.26], [-0.015, 0.00,-0.030], 1],
+  ['nose length',    [0.00, 6.95, 1.66], [0.10, 0.20, 0.20], [0.000,-0.025, 0.030], 0],
+  ['nostrils',       [0.085,6.88, 1.58], [0.07, 0.06, 0.08], [0.012, 0.000, 0.000], 1],
+  ['nose bridge',    [0.00, 7.08, 1.60], [0.06, 0.08, 0.08], [0.000, 0.000, 0.016], 0],
+  ['lips',           [0.00, 6.615,1.57], [0.17, 0.07, 0.10], [0.000, 0.000, 0.018], 0],
+  ['mouth width',    [0.20, 6.615,1.48], [0.08, 0.07, 0.10], [0.018, 0.000, 0.000], 1],
+  ['mouth corners',  [0.22, 6.56, 1.47], [0.06, 0.06, 0.07], [0.000, 0.012, 0.000], 1],
+  ['folds',          [0.20, 6.72, 1.48], [0.04, 0.16, 0.08], [0.000, 0.000,-0.022], 1],
+  ['jowls',          [0.42, 6.38, 1.12], [0.16, 0.12, 0.20], [0.010,-0.020, 0.010], 1],
+  ['brow ridge',     [0.28, 7.50, 1.35], [0.30, 0.10, 0.25], [0.000,-0.012, 0.030], 1],
+  ['brow height',    [0.30, 7.52, 1.30], [0.22, 0.10, 0.20], [0.000, 0.022, 0.000], 1],
+  ['eye depth',      [0.31, 7.29, 1.38], [0.22, 0.20, 0.20], [0.000, 0.000,-0.012], 1],
+  ['under eyes',     [0.32, 7.16, 1.36], [0.17, 0.065,0.12], [0.000,-0.005, 0.020], 1],
+  ['hooded lids',    [0.31, 7.43, 1.36], [0.20, 0.06, 0.12], [0.000,-0.010, 0.010], 1],
+  ['skull width',    [0.78, 7.65, 0.35], [0.35, 0.55, 0.60], [0.060, 0.000, 0.000], 1],
+  ['face width',     [0.72, 6.95, 0.60], [0.25, 0.35, 0.45], [0.035, 0.000, 0.000], 1],
+  ['neck',           [0.42, 6.00, 0.40], [0.22, 0.35, 0.35], [0.040, 0.000, 0.000], 1],
+  ['long face',      [0.00, 6.40, 1.20], [0.60, 0.40, 0.60], [0.000,-0.030, 0.000], 0],
+  ['forehead',       [0.00, 7.90, 1.25], [0.50, 0.30, 0.40], [0.000, 0.000,-0.030], 0],
+  ['cheek fat',      [0.50, 6.70, 1.05], [0.30, 0.30, 0.35], [0.020,-0.020, 0.025], 1],
+];
+const NF = F.length;
+const DSCALE = 2.5;   // one gene step ≈ 0.5–1.5 cm: a different person, not a different expression
+// expand to bump instances: [featureIndex, side(0 centre/L=+x, 1 R=-x)]
+const BUMPS = [];
+for (let i = 0; i < NF; i++) { BUMPS.push([i, 0]); if (F[i][4]) BUMPS.push([i, 1]); }
+const NB = BUMPS.length;
+// non-shape genes
+const XG = ['lids', 'age', 'tone', 'grey', 'stubble', 'iris', 'brows', 'restless'];
+const XR = { lids: [0, 0.32], age: [0, 1], tone: [0, 1], grey: [0, 1], stubble: [0, 1], iris: [0, 1], brows: [0.3, 1], restless: [0, 1] };
+const HAIRS = ['pulled back', 'short', 'shaved'], CLOTHES = ['fleece', 'sweater'];
+
+function zeroGenome() { const g = { L: new Array(NF).fill(0), R: new Array(NF).fill(0), x: {}, hair: 0, clothes: 0 }; for (const k of XG) g.x[k] = lerp(XR[k][0], XR[k][1], 0.35); return g; }
+function cloneG(g) { return { L: g.L.slice(), R: g.R.slice(), x: Object.assign({}, g.x), hair: g.hair, clothes: g.clothes }; }
+function mixG(a, b, t) { const g = cloneG(a); for (let i = 0; i < NF; i++) { g.L[i] = lerp(a.L[i], b.L[i], t); g.R[i] = lerp(a.R[i], b.R[i], t); } for (const k of XG) g.x[k] = lerp(a.x[k], b.x[k], t); return g; }
+function okG(g) { if (!g || !g.L || !g.R || !g.x) return false; for (let i = 0; i < NF; i++) if (!fin(g.L[i]) || !fin(g.R[i])) return false; for (const k of XG) if (!fin(g.x[k])) return false; return true; }
+
+/* ------------------------------------------------------------------ state */
+let S = null;
+function newState() {
+  return {
+    v: 1, seed: CFG.seed, rs: (CFG.seed * 2654435761) >>> 0, t: 0, k: 0,
+    prev: zeroGenome(), cur: zeroGenome(), tgt: zeroGenome(), morph0: 0,
+    archive: [],        // {k, g} for past sittings (dense recent, sparse old)
+    event: 'first sitting', ref: -1, counts: { returns: 0, composites: 0, caricatures: 0, splits: 0 },
+    look: CFG.look >= 0 ? CFG.look : 0, lookPrev: 0, lookT0: -1e9, lookEnd: 3 * 3600,
+    quirk: 'none', quirkEnd: 0, pal: [0, 0, 0, 0],
+  };
+}
+const R = { s: 1, f() { const r = new RNG(this.s); const v = r.f(); this.s = r.s; return v; }, n() { const r = new RNG(this.s); const v = r.n(); this.s = r.s; return v; }, r(a, b) { return a + (b - a) * this.f(); } };
+const H = () => S.t / 3600;
+const UNLOCK = { returns: 2, asym: 6, composites: 10, quirks: 16, caricature: 20, split: 30 };
+
+function stepGenome(base) {
+  const h = H(), g = cloneG(base);
+  const sig = 0.14 + 0.22 * clamp(h / 30, 0, 1);          // the walk widens
+  const pull = 0.09 * (1 - 0.75 * clamp(h / 40, 0, 1));    // the pull home weakens
+  const bound = 1.1 + 1.6 * clamp(h / 36, 0, 1);
+  const asym = h < UNLOCK.asym ? 0 : 0.15 + 0.45 * clamp((h - UNLOCK.asym) / 30, 0, 1);
+  for (let i = 0; i < NF; i++) {
+    const shared = R.n() * sig;
+    g.L[i] = clamp(g.L[i] * (1 - pull) + shared + (F[i][4] ? R.n() * sig * asym : 0), -bound, bound);
+    g.R[i] = F[i][4] ? clamp(g.R[i] * (1 - pull) + shared + R.n() * sig * asym, -bound, bound) : g.L[i];
+    if (F[i][4] && asym === 0) g.R[i] = g.L[i] = (g.L[i] + g.R[i]) / 2;
+  }
+  for (const k of XG) { const [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + R.n() * sig * 0.22 * (b - a) + (lerp(a, b, 0.35) - g.x[k]) * pull, a, b); }
+  if (R.f() < 0.035) g.hair = Math.floor(R.f() * 3);
+  if (R.f() < 0.02) g.clothes = 1 - g.clothes;
+  return g;
+}
+function archivePush() {
+  S.archive.push({ k: S.k, g: cloneG(S.cur) });
+  // thin the archive: keep the recent 240 dense, then every 10th older sitting, max 900
+  if (S.archive.length > 240) { const cut = S.archive.length - 240; S.archive = S.archive.filter((e, i) => i >= cut || e.k % 10 === 0); }
+  if (S.archive.length > 900) S.archive.splice(0, S.archive.length - 900);
+}
+function pickOld(minAge) { const old = S.archive.filter(e => S.k - e.k >= minAge); return old.length ? old[Math.floor(R.f() * old.length)] : null; }
+
+function newSitting(force) {
+  archivePush();
+  S.k++; S.prev = cloneG(S.cur); S.morph0 = S.t; S.ref = -1;
+  const h = H(); let g = stepGenome(S.cur); S.event = 'drifting';
+  const roll = force === 'return' ? 0.01 : force === 'composite' ? 0.1 : force === 'caricature' ? 0.15 : force === 'split' ? 0.19 : R.f();
+  if (h >= UNLOCK.returns && roll < 0.07) { const e = pickOld(40); if (e) { g = mixG(g, e.g, 0.7); S.event = 'returning toward sitting ' + pad(e.k, 4); S.ref = e.k; S.counts.returns++; } }
+  else if (h >= UNLOCK.composites && roll < 0.13) {
+    const n = 3 + Math.floor(R.f() * 5), es = []; for (let i = 0; i < n; i++) { const e = pickOld(10); if (e) es.push(e); }
+    if (es.length >= 2) { let c = cloneG(es[0].g); for (let i = 1; i < es.length; i++) c = mixG(c, es[i].g, 1 / (i + 1)); g = mixG(g, c, 0.8); S.event = 'composite of ' + es.length + ' past sitters'; S.counts.composites++; }
+  } else if (h >= UNLOCK.caricature && roll < 0.17) {
+    const i = Math.floor(R.f() * NF), s = R.f() < 0.5 ? -1 : 1; g.L[i] = s * (2.4 + R.f()); g.R[i] = F[i][4] ? g.L[i] : g.L[i];
+    S.event = 'caricature · ' + F[i][0]; S.counts.caricatures++;
+  } else if (h >= UNLOCK.split && roll < 0.2) {
+    for (let i = 0; i < NF; i++) if (F[i][4]) g.R[i] = clamp(-g.L[i] + R.n() * 0.4, -2.6, 2.6);
+    S.event = 'split · the halves disagree'; S.counts.splits++;
+  }
+  if (!okG(g)) { g = S.archive.length ? cloneG(S.archive[S.archive.length - 1].g) : zeroGenome(); S.event = 'regrown from memory'; }
+  S.tgt = g;
+  // quirks of the performance
+  if (h >= UNLOCK.quirks && S.quirk === 'none' && R.f() < 0.03) { S.quirk = ['metronome', 'still', 'stare'][Math.floor(R.f() * 3)]; S.quirkEnd = S.t + R.r(240, 900); }
+  if (S.quirk !== 'none' && S.t > S.quirkEnd) S.quirk = 'none';
+  // looks change by era
+  if (CFG.look < 0 && S.t > S.lookEnd) { S.lookPrev = S.look; S.look = (S.look + 1 + Math.floor(R.f() * 3)) % LOOKS.length; S.lookT0 = S.t; S.lookEnd = S.t + R.r(2.5, 5.5) * 3600; }
+  BL.forceAt = S.t + 0.02;       // the change happens under a blink
+}
+const MORPH = 7.0;
+function liveGenome() {
+  const u = clamp((S.t - S.morph0) / MORPH, 0, 1), e = u * u * (3 - 2 * u);
+  const g = mixG(S.prev, S.tgt, e); g.hair = e < 0.5 ? S.prev.hair : S.tgt.hair; g.clothes = e < 0.05 ? S.prev.clothes : S.tgt.clothes;
+  g.hairFade = [0, 0, 0]; g.hairFade[S.prev.hair] += 1 - e; g.hairFade[S.tgt.hair] += e;
+  S.cur = g; return g;
+}
+const pad = (n, w) => String(n).padStart(w, '0');
+
+/* ------------------------------------------------------------------ performance: blinks, gaze, breath */
+const BL = { next: 3, t0: -10, forceAt: -1, sacc: [], gx: 0, gy: 0, gtx: 0, gty: 0, nextSacc: 1, swallow: -10, nextSwallow: 25 };
+function blinkCurve(d) { if (d < 0 || d > 0.36) return 0; if (d < 0.09) return Math.sin(d / 0.09 * Math.PI / 2); if (d < 0.13) return 1; const x = (d - 0.13) / 0.23; return 1 - x * x * (3 - 2 * x); }
+function sNoise(t, seed, f) { let s = 0; const ph = [seed * 1.7, seed * 3.1, seed * 5.3, seed * 7.9]; const fr = [1, 2.3, 4.1, 7.7]; for (let i = 0; i < 4; i++) s += Math.sin(t * f * fr[i] + ph[i]) / fr[i]; return s / 1.6; }
+function perform(t, g) {
+  if (BL.forceAt > 0 && t >= BL.forceAt) { BL.t0 = t; BL.forceAt = -1; BL.next = t + R.r(2.5, 6); }
+  if (S.quirk !== 'stare' && t >= BL.next) { BL.t0 = t; BL.next = t + (S.quirk === 'metronome' ? 4.0 : clamp(2.2 + R.n() * 1.4 + R.f() * 2.5, 1.2, 9)); }
+  const blink = blinkCurve(t - BL.t0);
+  const rest = g.x.lids;
+  if (t >= BL.nextSacc) { const a = 0.4 + 1.4 * g.x.restless; BL.gtx = R.n() * a; BL.gty = R.n() * a * 0.6; BL.nextSacc = t + R.r(0.6, 3.2) / (0.5 + g.x.restless); }
+  const k = 1 - Math.exp(-0.016 / 0.025); BL.gx += (BL.gtx - BL.gx) * k; BL.gy += (BL.gty - BL.gy) * k;
+  if (t >= BL.nextSwallow) { BL.swallow = t; BL.nextSwallow = t + R.r(18, 60); }
+  const sd = t - BL.swallow, swallow = sd >= 0 && sd <= 0.7 ? Math.sin(sd / 0.7 * Math.PI) : 0;
+  const still = S.quirk === 'still' ? 0.05 : 1;
+  const breath = Math.sin(t * 2 * Math.PI / 4.2);
+  return {
+    blink: clamp(rest + (1 - rest) * blink, 0, 1), gx: BL.gx + 0.25 * sNoise(t, 3, 9) * still, gy: BL.gy + 0.25 * sNoise(t, 4, 8) * still - 0.6 * blink,
+    jaw: Math.max(0, 0.05 + 0.08 * sNoise(t, 9, 0.5) + 0.04 * Math.sin(t * 2 * Math.PI / 4.2 + 1.2)) * (swallow > 0 ? 0.3 : 1), swallow, breath,
+    pitch: (0.35 * breath + 0.4 * sNoise(t, 1, 0.9)) * still, yaw: 0.6 * sNoise(t, 2, 0.7) * still, roll: 0.35 * sNoise(t, 5, 0.6) * still,
+  };
+}
+
+/* ------------------------------------------------------------------ CPU copy of the field (eyes ride on it) */
+const BC = new Float32Array(NB * 4), BRr = new Float32Array(NB * 4), BD = new Float32Array(NB * 4);
+function setBumps(g) {
+  for (let b = 0; b < NB; b++) {
+    const [i, side] = BUMPS[b], f = F[i], sx = side ? -1 : 1, w = side ? g.R[i] : g.L[i];
+    BC[b * 4] = f[1][0] * sx; BC[b * 4 + 1] = f[1][1]; BC[b * 4 + 2] = f[1][2];
+    BRr[b * 4] = 1 / f[2][0]; BRr[b * 4 + 1] = 1 / f[2][1]; BRr[b * 4 + 2] = 1 / f[2][2];
+    BD[b * 4] = f[3][0] * sx * w * DSCALE; BD[b * 4 + 1] = f[3][1] * w * DSCALE; BD[b * 4 + 2] = f[3][2] * w * DSCALE;
+  }
+}
+function deformCPU(p) {
+  const o = p.slice();
+  for (let b = 0; b < NB; b++) {
+    const qx = (p[0] - BC[b * 4]) * BRr[b * 4], qy = (p[1] - BC[b * 4 + 1]) * BRr[b * 4 + 1], qz = (p[2] - BC[b * 4 + 2]) * BRr[b * 4 + 2];
+    const w = clamp(1 - Math.sqrt(qx * qx + qy * qy + qz * qz), 0, 1), w2 = w * w;
+    o[0] += w2 * BD[b * 4]; o[1] += w2 * BD[b * 4 + 1]; o[2] += w2 * BD[b * 4 + 2];
+  }
+  return o;
+}
+
+/* ------------------------------------------------------------------ GL */
+const cv = document.getElementById('v');
+let gl = null, GL = null, DATA = null, glOK = false;
+const W = () => Math.round(CFG.lines * 16 / 9), Hh = () => CFG.lines;
+
+const FIELD_GLSL = `
+#define NB ${NB}
+uniform vec4 uBC[NB]; uniform vec4 uBR[NB]; uniform vec4 uBD[NB];
+vec3 field(vec3 p) { vec3 o = p; for (int i = 0; i < NB; i++) { vec3 q = (p - uBC[i].xyz) * uBR[i].xyz; float w = clamp(1.0 - length(q), 0.0, 1.0); o += w * w * uBD[i].xyz; } return o; }
+uniform mat4 uVP; uniform mat3 uRot; uniform vec3 uPivot;
+vec3 sway(vec3 p) { return uRot * (p - uPivot) + uPivot; }
+`;
+const VS_SKIN = `precision highp float;
+attribute vec3 aP; attribute vec3 aB; attribute vec3 aJ; attribute vec3 aS; attribute vec3 aN0; attribute vec3 aN1; attribute float aAO;
+uniform float uBlink, uJaw, uSw;
+${FIELD_GLSL}
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
+void main() {
+  vec3 p = aP + aB * uBlink + aJ * uJaw + aS * uSw;
+  vec3 n = normalize(mix(aN0, aN1, uBlink));
+  vec3 t1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0,1,0) : vec3(1,0,0))); vec3 t2 = cross(n, t1);
+  vec3 d0 = field(p), d1 = field(p + t1 * 0.01), d2 = field(p + t2 * 0.01);
+  vec3 nn = normalize(cross(d1 - d0, d2 - d0)); if (dot(nn, n) < 0.0) nn = -nn;
+  vec3 w = sway(d0);
+  vN = uRot * nn; vO = aP; vW = w; vAO = aAO;
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+const COMMON_FS = `precision highp float;
+uniform vec3 uKey; uniform vec3 uFill; uniform vec3 uEye;
+float h31(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float ell(vec3 p, vec3 c, vec3 r, float soft) { float d = length((p - c) / r); return clamp((1.0 - d) / soft, 0.0, 1.0); }
+`;
+const FS_SKIN = COMMON_FS + `
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
+uniform float uAge, uTone, uScalp, uStub;
+void main() {
+  vec3 n = normalize(vN), v = normalize(uEye - vW);
+  vec3 lite = mix(vec3(0.86, 0.66, 0.56), vec3(0.42, 0.27, 0.19), uTone);
+  vec3 dark = mix(vec3(0.70, 0.47, 0.39), vec3(0.30, 0.18, 0.12), uTone);
+  float mot = vnoise(vO * 9.0) * 0.6 + vnoise(vO * 31.0) * 0.4;
+  vec3 col = mix(dark, lite, 0.35 + 0.4 * mot);
+  float lips = ell(vO, vec3(0.0, 6.615, 1.56), vec3(0.19, 0.065, 0.12), 0.6);
+  float flush = max(ell(vO, vec3(0.0, 6.93, 1.62), vec3(0.13, 0.12, 0.12), 0.9), max(ell(vO, vec3(0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0), ell(vO, vec3(-0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0)));
+  col = mix(col, col * vec3(0.95, 0.72, 0.68), flush * 0.5);
+  col = mix(col, col * vec3(0.72, 0.42, 0.4), lips);
+  float under = max(ell(vO, vec3(0.31, 7.2, 1.36), vec3(0.2, 0.2, 0.14), 1.0), ell(vO, vec3(-0.31, 7.2, 1.36), vec3(0.2, 0.2, 0.14), 1.0));
+  col *= 1.0 - under * (0.08 + 0.14 * uAge);
+  // stubble shadow and scalp under hair
+  float beard = step(vO.y, 6.82 - 0.2 * max(abs(vO.x) - 0.24, 0.0)) * step(5.95, vO.y) * step(0.35, vO.z) * step(abs(vO.x), 0.68) * (1.0 - lips);
+  col = mix(col, col * 0.62, beard * uStub * 0.8);
+  float scalp = clamp(((vO.y - 7.55) - (-0.1 + 0.42 * (vO.z - 0.35))) / 0.12, 0.0, 1.0);
+  col = mix(col, vec3(0.08, 0.06, 0.05), scalp * uScalp);
+  // lash line
+  for (int s = 0; s < 2; s++) { vec3 c = vec3(s == 0 ? 0.308 : -0.308, 7.284, 1.233); vec3 d = vO - c; float r = length(d);
+    float band = clamp(1.0 - abs(r - 0.16) / 0.012, 0.0, 1.0) * clamp(d.y / 0.03, 0.0, 1.0) * step(0.0, d.z); col = mix(col, vec3(0.08, 0.05, 0.04), band * 0.7); }
+  // age: forehead lines and crow's feet darken the creases
+  float fh = ell(vO, vec3(0.0, 7.78, 1.25), vec3(0.42, 0.2, 0.3), 0.9);
+  float lines = smoothstep(0.75, 1.0, sin((vO.y + 0.03 * vnoise(vO * 6.0)) * 95.0)) * fh;
+  col *= 1.0 - lines * uAge * 0.25;
+  float ao = mix(1.0, vAO, 0.85);
+  vec3 L = normalize(uKey), F2 = normalize(uFill);
+  float nl = dot(n, L), wrap = clamp((nl + 0.35) / 1.35, 0.0, 1.0);
+  vec3 sss = mix(vec3(1.0, 0.55, 0.45), vec3(1.0), clamp(nl * 2.0 + 0.3, 0.0, 1.0));
+  vec3 diff = col * wrap * sss * 1.05 + col * clamp((dot(n, F2) + 0.5) / 1.5, 0.0, 1.0) * 0.28 + col * 0.12;
+  vec3 hv = normalize(L + v); float oil = 0.4 + 0.6 * vnoise(vO * 14.0) + flush * 0.4;
+  float spec = pow(clamp(dot(n, hv), 0.0, 1.0), 38.0 - 18.0 * uAge) * 0.22 * oil * (1.0 - scalp * uScalp);
+  float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 4.0) * 0.12;
+  gl_FragColor = vec4((diff + spec + fres * col) * ao, 1.0);
+}`;
+const VS_EYE = `precision highp float;
+attribute vec3 aP; uniform mat3 uEyeRot; uniform vec3 uEyeC;
+${FIELD_GLSL}
+varying vec3 vL; varying vec3 vN; varying vec3 vW;
+void main() { vec3 w = sway(uEyeC + uEyeRot * aP); vL = normalize(aP); vN = uRot * (uEyeRot * normalize(aP)); vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+const FS_EYE = COMMON_FS + `
+varying vec3 vL; varying vec3 vN; varying vec3 vW; uniform float uIris;
+void main() {
+  float a = degrees(acos(clamp(vL.z, -1.0, 1.0))), ang = atan(vL.y, vL.x);
+  float fib = vnoise(vec3(ang * 9.0, a * 0.35, 1.0));
+  vec3 i0 = mix(vec3(0.38, 0.45, 0.47), vec3(0.24, 0.15, 0.08), uIris), i1 = mix(vec3(0.10, 0.12, 0.13), vec3(0.05, 0.03, 0.02), uIris);
+  vec3 iris = mix(i1, i0, smoothstep(0.3, 0.75, fib));
+  iris = mix(iris, i1 * 0.6, smoothstep(22.0, 27.5, a));
+  vec3 scl = mix(vec3(0.62, 0.55, 0.5), vec3(0.8, 0.76, 0.72), clamp(vL.z, 0.0, 1.0));
+  vec3 col = a < 9.0 ? vec3(0.01) : a < 28.5 ? iris : scl;
+  col = mix(col, scl, smoothstep(27.5, 29.5, a) * step(9.0, a));
+  vec3 n = normalize(vN), v = normalize(uEye - vW), L = normalize(uKey);
+  float d = clamp((dot(n, L) + 0.3) / 1.3, 0.0, 1.0);
+  float sp = pow(clamp(dot(n, normalize(L + v)), 0.0, 1.0), 260.0) * 2.2;
+  gl_FragColor = vec4(col * (0.25 + 0.75 * d) + sp, 1.0);
+}`;
+const VS_LINE = `precision highp float;
+attribute vec3 aP; attribute vec3 aP2; attribute vec2 aT;
+uniform float uMixP;
+${FIELD_GLSL}
+varying vec2 vT; varying vec3 vW;
+void main() { vec3 p = mix(aP, aP2, uMixP); vec3 w = sway(field(p)); vT = aT; vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+const FS_LINE = COMMON_FS + `
+varying vec2 vT; varying vec3 vW; uniform vec3 uCol; uniform float uAlpha, uGrey;
+void main() {
+  float r = vT.y; vec3 c = mix(uCol, vec3(0.78, 0.76, 0.72), step(1.0 - uGrey, r));
+  c *= 0.75 + 0.5 * r;
+  vec3 L = normalize(uKey); float lit = 0.55 + 0.45 * clamp(dot(normalize(vW - vec3(0.0, 7.4, 0.3)), L), 0.0, 1.0);
+  gl_FragColor = vec4(c * lit * (0.85 + 0.3 * vT.x), uAlpha * (1.0 - 0.55 * vT.x));
+}`;
+const FS_CLOTH = COMMON_FS + `
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO; uniform vec3 uCloth;
+void main() { vec3 n = normalize(vN), L = normalize(uKey), v = normalize(uEye - vW);
+  float d = clamp((dot(n, L) + 0.2) / 1.2, 0.0, 1.0); float sheen = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0) * 0.18;
+  vec3 c = uCloth * (0.85 + 0.3 * vnoise(vO * 60.0));
+  gl_FragColor = vec4(c * (0.25 + 0.9 * d) + sheen * uCloth * 3.0, 1.0); }`;
+const VS_POST = `attribute vec2 aQ; varying vec2 vUV; void main() { vUV = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0.0, 1.0); }`;
+const FS_POST = `precision highp float;
+varying vec2 vUV; uniform sampler2D uTex; uniform vec2 uRes; uniform float uTime, uFade; uniform int uA, uB;
+uniform vec3 uI0, uI1, uI2, uI3;   // live inks: dark, light, accent, mid
+float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+float bayer8(vec2 a) { return bayer4(0.5 * a) * 0.25 + bayer2(a); }
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+vec4 S(vec2 px) { return texture2D(uTex, (floor(px) + 0.5) / uRes); }
+float lum(vec3 c) { return dot(c, vec3(0.33, 0.55, 0.12)); }
+float BGL = 0.62;
+float scene(vec2 px, out float m) { vec4 s = S(px); m = s.a; vec2 q = px / uRes - vec2(0.5, 0.62);
+  float bg = BGL - 0.18 * length(q * vec2(1.0, 1.3)) * BGL / 0.62; return mix(bg, lum(s.rgb), m); }
+vec3 look(int k, vec2 px) {
+  BGL = k == 1 ? 0.97 : k == 3 ? 0.07 : 0.62;
+  float m; float y = scene(px, m);
+  float yl = 0.0; float mm; yl = (scene(px + vec2(1.0, 0.0), mm) + scene(px - vec2(1.0, 0.0), mm) + scene(px + vec2(0.0, 1.0), mm) + scene(px - vec2(0.0, 1.0), mm)) * 0.25;
+  float g = hash(px + fract(uTime * 7.13) * 91.0) - 0.5;
+  vec2 c = px / uRes - 0.5; float vig = 1.0 - 0.35 * pow(max(length(c * vec2(1.4, 1.0)) - 0.35, 0.0), 1.4);
+  if (k == 0) {            // silver gelatin: warm split tone, lifted blacks, fine grain
+    float t = clamp((y + 0.35 * (y - yl)) * 1.08, 0.0, 1.0); t = 0.06 + 0.9 * (t * t * (3.0 - 2.0 * t) * 0.55 + t * 0.45);
+    t = clamp((t + g * 0.06 * (0.4 + 2.0 * t * (1.0 - t))) * vig, 0.0, 1.0);
+    vec3 lo = mix(uI0, mix(uI0, uI1, 0.5), clamp(t / 0.5, 0.0, 1.0)); vec3 hi = mix(mix(uI0, uI1, 0.5), uI1, clamp((t - 0.5) / 0.5, 0.0, 1.0));
+    return t < 0.5 ? lo : hi;
+  }
+  if (k == 1) {            // 1-bit ordered dither + ink contour
+    float t = clamp((y + 0.9 * (y - yl)) * vig, 0.0, 1.0); t = clamp((t - 0.06) / 0.86, 0.0, 1.0);
+    bool ink = (y - yl) < -0.035 || t < bayer8(px);
+    return ink ? uI0 : uI1;
+  }
+  if (k == 2) {            // silkscreen: flat inks, key plate off register, starved pulls
+    float yk = scene(px - vec2(2.0, -1.0), mm); float ykl = (scene(px - vec2(1.0, -1.0), mm) + scene(px - vec2(3.0, -1.0), mm)) * 0.5;
+    vec3 col = m > 0.5 ? (y < 0.42 ? uI3 : uI1) : uI2;
+    bool key = (yk < 0.2 && mm > 0.5) || (yk - ykl) < -0.06; bool rule = yk < 0.12 || mod(px.y + floor(px.x / 3.0), 3.0) > 0.5;
+    if (key && rule) col = uI0;
+    float starve = smoothstep(0.93, 0.97, hash(floor(px / vec2(60.0, 2.0)) + floor(uTime / 6.0))) * step(0.5, m) * ((key && rule) ? 0.0 : 1.0);
+    return mix(col, vec3(0.92), starve * 0.1);
+  }
+  // phosphor: 8 levels, green, scanline gaps, glow
+  float t = floor(clamp(y + 0.6 * (y - yl), 0.0, 1.0) * 7.0 + 0.5) / 7.0;
+  float scan = mod(gl_FragCoord.y, 3.0) < 1.0 ? 0.45 : 1.0;
+  return uI3 * (t * scan * vig + 0.04) * 1.15;
+}
+void main() {
+  vec2 px = floor(vUV * uRes);
+  vec3 a = look(uA, px);
+  if (uFade < 1.0) { vec3 b = look(uB, px); a = bayer8(px * 0.5 + 3.0) < uFade ? a : b; }
+  gl_FragColor = vec4(a, 1.0);
+}`;
+
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').slice(0, 5).join('\n')); return s; }
+function prog(vs, fs) {
+  const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS), u = {}; for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); const nm = a.name.replace(/\[0\]$/, ''); u[nm] = gl.getUniformLocation(p, nm); }
+  const na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES), at = {}; for (let i = 0; i < na; i++) { const a = gl.getActiveAttrib(p, i); at[a.name] = gl.getAttribLocation(p, a.name); }
+  return { p, u, a: at };
+}
+function buf(data, target) { const b = gl.createBuffer(); gl.bindBuffer(target || gl.ARRAY_BUFFER, b); gl.bufferData(target || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
+
+/* ------------------------------------------------------------------ data → geometry */
+function decodeData(meta, bin) {
+  const T = { int16: Int16Array, uint16: Uint16Array, uint8: Uint8Array };
+  const blob = k => { const b = meta.blobs[k]; return new T[b.type](bin, b.offset, b.count); };
+  const b0 = meta.box0, b1 = meta.box1;
+  const deq = q => { const o = new Float32Array(q.length); for (let i = 0; i < q.length; i++) { const c = i % 3; o[i] = b0[c] + (q[i] + 32768) / 65535 * (b1[c] - b0[c]); } return o; };
+  const ddq = (q, s) => { const o = new Float32Array(q.length); for (let i = 0; i < q.length; i++) o[i] = q[i] / 32767 * s; return o; };
+  const normals = (P, I) => { const N = new Float32Array(P.length); for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const k of [a, b, c]) { N[k] += nx; N[k + 1] += ny; N[k + 2] += nz; } }
+    for (let i = 0; i < N.length; i += 3) { const l = Math.hypot(N[i], N[i + 1], N[i + 2]) || 1; N[i] /= l; N[i + 1] /= l; N[i + 2] /= l; } return N; };
+  const D = {};
+  const P = deq(blob('body_pos')), I = blob('body_idx'), Bk = ddq(blob('body_blink'), meta.d_Blink);
+  const P1 = P.map((v, i) => v + Bk[i]);
+  D.body = { P, I, B: Bk, J: ddq(blob('body_jaw'), meta.d_Jaw), S: ddq(blob('body_swallow'), meta.d_Swallow), N0: normals(P, I), N1: normals(P1, I), AO: Float32Array.from(blob('body_ao'), v => v / 255) };
+  for (const k of ['jacket', 'collar', 'sweater']) { const Pc = deq(blob(k + '_pos')), Ic = blob(k + '_idx'); D[k] = { P: Pc, I: Ic, N0: normals(Pc, Ic) }; }
+  // strands → line segments (expanded pairs, so no 32-bit index needed)
+  const lines = (pk, nk, pk2) => {
+    const pts = deq(blob(pk)), pts2 = pk2 ? deq(blob(pk2)) : null, ns = nk ? blob(nk) : null;
+    const counts = ns ? Array.from(ns) : new Array(pts.length / 15).fill(5);
+    let segs = 0; for (const c of counts) segs += c - 1;
+    const A = new Float32Array(segs * 6), A2 = new Float32Array(segs * 6), Tt = new Float32Array(segs * 4); let o = 0, base = 0, sid = 0;
+    for (const c of counts) { const rnd = ((Math.imul(sid++ + 1, 2654435761) >>> 0) % 1000) / 1000;
+      for (let j = 0; j < c - 1; j++) for (const e of [j, j + 1]) { const pi = (base + e) * 3; A[o * 3] = pts[pi]; A[o * 3 + 1] = pts[pi + 1]; A[o * 3 + 2] = pts[pi + 2];
+        const q = pts2 || pts; A2[o * 3] = q[pi]; A2[o * 3 + 1] = q[pi + 1]; A2[o * 3 + 2] = q[pi + 2]; Tt[o * 2] = e / (c - 1); Tt[o * 2 + 1] = rnd; o++; }
+      base += c; }
+    return { A, A2, T: Tt, n: o };
+  };
+  D.hair = [lines('hair_bun_pts', 'hair_bun_n'), lines('hair_short_pts', 'hair_short_n'), null];
+  D.brows = lines('brows_pts', 'brows_n'); D.fuzz = lines('fuzz_pts', 'fuzz_n'); D.stubble = lines('stubble_pts', 'stubble_n');
+  D.lash = lines('lash_open_pts', null, 'lash_closed_pts');
+  D.meta = meta;
+  return D;
+}
+function sphere(r, nu, nv) {
+  const P = [], I = [];
+  for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { const th = j / nv * Math.PI, ph = i / nu * 2 * Math.PI;
+    let x = Math.sin(th) * Math.cos(ph), y = Math.sin(th) * Math.sin(ph), z = Math.cos(th); let rr = r; if (z > 0.82) rr += 0.018 * Math.pow(Math.sin((z - 0.82) / 0.18 * Math.PI / 2), 1.4);
+    P.push(x * rr, y * rr, z * rr); }
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = j * (nu + 1) + i, b = a + nu + 1; I.push(a, b, a + 1, a + 1, b, b + 1); }
+  return { P: new Float32Array(P), I: new Uint16Array(I) };
+}
+function initGL() {
+  gl = cv.getContext('webgl', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false, alpha: false }); if (!gl) throw new Error('no webgl');
+  const G = {};
+  G.skin = prog(VS_SKIN, FS_SKIN); G.cloth = prog(VS_SKIN, FS_CLOTH); G.eye = prog(VS_EYE, FS_EYE); G.line = prog(VS_LINE, FS_LINE); G.post = prog(VS_POST, FS_POST);
+  const D = DATA;
+  const mesh = (m, withShapes) => { const o = { I: buf(m.I, gl.ELEMENT_ARRAY_BUFFER), n: m.I.length, P: buf(m.P), N0: buf(m.N0) };
+    const zero = new Float32Array(m.P.length);
+    o.B = buf(withShapes ? m.B : zero); o.J = buf(withShapes ? m.J : zero); o.S = buf(withShapes ? m.S : zero); o.N1 = buf(withShapes ? m.N1 : m.N0);
+    o.AO = buf(withShapes ? m.AO : new Float32Array(m.P.length / 3).fill(1)); return o; };
+  G.body = mesh(D.body, true); G.jacket = mesh(D.jacket); G.collar = mesh(D.collar); G.sweater = mesh(D.sweater);
+  const ln = l => l ? { A: buf(l.A), A2: buf(l.A2), T: buf(l.T), n: l.n } : null;
+  G.hair = D.hair.map(ln); G.brows = ln(D.brows); G.fuzz = ln(D.fuzz); G.stubble = ln(D.stubble); G.lash = ln(D.lash);
+  const sp = sphere(0.118, 40, 30); G.eyeM = { P: buf(sp.P), I: buf(sp.I, gl.ELEMENT_ARRAY_BUFFER), n: sp.I.length };
+  G.quad = buf(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+  makeTarget(G);
+  GL = G; glOK = true;
+}
+function makeTarget(G) {
+  if (G.fbo) { gl.deleteFramebuffer(G.fbo); gl.deleteTexture(G.tex); gl.deleteRenderbuffer(G.rb); }
+  G.w = W(); G.h = Hh();
+  G.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, G.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, G.w, G.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  G.rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, G.rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, G.w, G.h);
+  G.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, G.fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, G.tex, 0);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, G.rb);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+function resize() {
+  const vw = innerWidth, vh = innerHeight, w = W(), h = Hh();
+  const s = Math.max(1, Math.floor(Math.min(vw / w, vh / h)));
+  const cw = w * s, ch = h * s; cv.width = cw; cv.height = ch;
+  const fit = Math.min(vw / cw, vh / ch); cv.style.width = Math.round(cw * fit) + 'px'; cv.style.height = Math.round(ch * fit) + 'px';
+}
+addEventListener('resize', resize);
+cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glOK = false; }, false);
+cv.addEventListener('webglcontextrestored', () => { try { initGL(); } catch (err) { console.error(err); } }, false);
+
+/* ------------------------------------------------------------------ camera */
+function persp(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; }
+function mmul(a, b) { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k]; return o; }
+function rotXYZ(rx, ry, rz) { const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
+  // R = Rz * Ry * Rx, column-major mat3
+  return [cy * cz, cy * sz, -sy, sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy, cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy]; }
+const EYE_POS = [0, 7.0, 11.6];
+function viewProj() {
+  const view = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -EYE_POS[0], -EYE_POS[1], -EYE_POS[2], 1];
+  return mmul(persp(2 * Math.atan(18 / 98), W() / Hh(), 1, 40), view);
+}
+
+/* ------------------------------------------------------------------ palette (drifts, pulled home, clamped to family) */
+const HOME = {
+  0: [[0.10, 0.09, 0.08], [0.90, 0.875, 0.82], [0.89, 0.64, 0.23], [0.5, 0.48, 0.44]],     // gelatin: warm dark, paper
+  1: [[0.055, 0.10, 0.11], [0.91, 0.86, 0.75], [0.89, 0.64, 0.23], [0.5, 0.5, 0.45]],      // 1-bit: teal-black ink, paper
+  2: [[0.06, 0.09, 0.10], [0.93, 0.68, 0.33], [0.13, 0.42, 0.41], [0.72, 0.36, 0.17]],     // silk: key, amber skin, teal ground, rust shade
+  3: [[0.02, 0.05, 0.04], [0.6, 1.0, 0.55], [0.89, 0.64, 0.23], [0.42, 1.0, 0.5]],         // phosphor green
+};
+const PAL = { d: [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]] };
+function inks(k, t) {
+  const out = [];
+  for (let i = 0; i < 4; i++) { const h = HOME[k][i], d = PAL.d[i];
+    for (let c = 0; c < 3; c++) { d[c] += (sNoise(t * 0.0007 + i * 7 + c * 3, i + c, 1) * 0.06 - d[c]) * 0.002; d[c] = clamp(d[c], -0.05, 0.05); }
+    out.push(h.map((v, c) => clamp(v + d[c] * (i === 0 ? 0.3 : 1), 0, 1))); }
+  return out;
+}
+
+/* ------------------------------------------------------------------ render */
+function bindAttr(pr, name, b, size) { const l = pr.a[name]; if (l === undefined || l < 0) return; gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0); }
+let NATTR = 0;
+function unbindAll() { const n = NATTR || (NATTR = gl.getParameter(gl.MAX_VERTEX_ATTRIBS)); for (let i = 0; i < n; i++) gl.disableVertexAttribArray(i); }
+function common(pr, vp, rot) {
+  const u = pr.u;
+  if (u.uBC) { gl.uniform4fv(u.uBC, BC); gl.uniform4fv(u.uBR, BRr); gl.uniform4fv(u.uBD, BD); }
+  if (u.uVP) gl.uniformMatrix4fv(u.uVP, false, vp);
+  if (u.uRot) gl.uniformMatrix3fv(u.uRot, false, rot);
+  if (u.uPivot) gl.uniform3fv(u.uPivot, PIVOT);
+  if (u.uKey) gl.uniform3f(u.uKey, -5.5, 4.4, 9.0);
+  if (u.uFill) gl.uniform3f(u.uFill, 6.0, -0.1, 10.0);
+  if (u.uEye) gl.uniform3fv(u.uEye, EYE_POS);
+}
+function drawMesh(pr, m) {
+  bindAttr(pr, 'aP', m.P, 3); bindAttr(pr, 'aB', m.B, 3); bindAttr(pr, 'aJ', m.J, 3); bindAttr(pr, 'aS', m.S, 3);
+  bindAttr(pr, 'aN0', m.N0, 3); bindAttr(pr, 'aN1', m.N1, 3); bindAttr(pr, 'aAO', m.AO, 1);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.I); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_SHORT, 0); unbindAll();
+}
+function drawLines(pr, l, col, alpha, grey, mixP) {
+  if (!l || alpha <= 0.003) return;
+  gl.uniform3fv(pr.u.uCol, col); gl.uniform1f(pr.u.uAlpha, alpha); gl.uniform1f(pr.u.uGrey, grey); gl.uniform1f(pr.u.uMixP, mixP || 0);
+  bindAttr(pr, 'aP', l.A, 3); bindAttr(pr, 'aP2', l.A2, 3); bindAttr(pr, 'aT', l.T, 2);
+  gl.drawArrays(gl.LINES, 0, Math.floor(l.n * CFG.lite / 2) * 2); unbindAll();
+}
+function hairCol(g, dark) { const m = clamp(0.25 + 0.75 * (1 - g.x.tone * 0.2), 0, 1); const b = [0.22, 0.15, 0.09].map(v => v * (1.25 - m)); return dark ? b.map(v => v * 0.6) : b; }
+let FR = { n: 0, t: 0, fps: 0 };
+function render(p, g, simT) {
+  if (!glOK || !GL) return;
+  const G = GL; if (G.w !== W() || G.h !== Hh()) makeTarget(G);
+  setBumps(g);
+  const vp = viewProj(), rot = rotXYZ(p.pitch * Math.PI / 180, p.yaw * Math.PI / 180, p.roll * Math.PI / 180);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, G.fbo); gl.viewport(0, 0, G.w, G.h);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
+  // skin
+  let pr = G.skin; gl.useProgram(pr.p); common(pr, vp, rot);
+  gl.uniform1f(pr.u.uBlink, p.blink); gl.uniform1f(pr.u.uJaw, p.jaw); gl.uniform1f(pr.u.uSw, p.swallow);
+  gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble);
+  gl.uniform1f(pr.u.uScalp, g.hairFade[0] + g.hairFade[1] + g.hairFade[2] * 0.35);
+  gl.disable(gl.CULL_FACE); drawMesh(pr, G.body);
+  // clothes
+  pr = G.cloth; gl.useProgram(pr.p); common(pr, vp, rot);
+  gl.uniform1f(pr.u.uBlink, 0); gl.uniform1f(pr.u.uJaw, 0); gl.uniform1f(pr.u.uSw, 0);
+  if (g.clothes === 0) { gl.uniform3f(pr.u.uCloth, 0.035, 0.034, 0.032); drawMesh(pr, G.jacket); drawMesh(pr, G.collar); }
+  gl.uniform3f(pr.u.uCloth, g.clothes === 0 ? 0.06 : 0.07, g.clothes === 0 ? 0.058 : 0.068, g.clothes === 0 ? 0.055 : 0.064); drawMesh(pr, G.sweater);
+  // eyes
+  pr = G.eye; gl.useProgram(pr.p); common(pr, vp, rot); gl.uniform1f(pr.u.uIris, g.x.iris);
+  const er = rotXYZ(-(p.gy) * Math.PI / 180, p.gx * Math.PI / 180, 0);
+  for (const sx of [1, -1]) { const c = deformCPU([0.308 * sx, 7.284, 1.233]); gl.uniform3fv(pr.u.uEyeC, c); gl.uniformMatrix3fv(pr.u.uEyeRot, false, er);
+    bindAttr(pr, 'aP', G.eyeM.P, 3); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, G.eyeM.I); gl.drawElements(gl.TRIANGLES, G.eyeM.n, gl.UNSIGNED_SHORT, 0); unbindAll(); }
+  // strands
+  gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+  pr = G.line; gl.useProgram(pr.p); common(pr, vp, rot);
+  const hc = hairCol(g);
+  for (let i = 0; i < 2; i++) drawLines(pr, G.hair[i], hc, 0.55 * g.hairFade[i], g.x.grey * 0.85, 0);
+  drawLines(pr, G.brows, hairCol(g, true), 0.75 * g.x.brows, g.x.grey * 0.5, 0);
+  drawLines(pr, G.stubble, hairCol(g, true), 0.7 * g.x.stubble, g.x.grey, 0);
+  drawLines(pr, G.fuzz, [0.75, 0.62, 0.52], 0.08, 0, 0);
+  drawLines(pr, G.lash, [0.03, 0.025, 0.02], 0.9, 0, p.blink);
+  gl.depthMask(true); gl.disable(gl.BLEND);
+  // post to screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height); gl.disable(gl.DEPTH_TEST);
+  pr = G.post; gl.useProgram(pr.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, G.tex); gl.uniform1i(pr.u.uTex, 0);
+  gl.uniform2f(pr.u.uRes, G.w, G.h); gl.uniform1f(pr.u.uTime, simT);
+  const fade = clamp((S.t - S.lookT0) / 20, 0, 1);
+  gl.uniform1i(pr.u.uA, S.look); gl.uniform1i(pr.u.uB, S.lookPrev); gl.uniform1f(pr.u.uFade, fade);
+  const ik = inks(S.look, S.t); gl.uniform3fv(pr.u.uI0, ik[0]); gl.uniform3fv(pr.u.uI1, ik[1]); gl.uniform3fv(pr.u.uI2, ik[2]); gl.uniform3fv(pr.u.uI3, ik[3]);
+  S.pal = ik;
+  bindAttr(pr, 'aQ', G.quad, 2); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); unbindAll();
+}
+
+/* ------------------------------------------------------------------ sim clock */
+let last = performance.now(), PERF = null;
+function advance(dt) {
+  S.t += dt;
+  const want = Math.floor(S.t / CFG.sit); let guard = 0;
+  while (S.k < want && guard++ < 20000) { const tt = S.t; S.t = (S.k + 1) * CFG.sit; newSitting(); liveGenome(); S.t = Math.max(tt, S.t); }
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = clamp((now - last) / 1000, 0, 0.25) * CFG.rate; last = now;
+  if (!S) return;
+  try {
+    advance(dt);
+    const g = liveGenome();
+    if (!okG(g)) { S.prev = S.tgt = S.archive.length ? cloneG(S.archive[S.archive.length - 1].g) : zeroGenome(); S.event = 'regrown from memory'; return; }
+    PERF = perform(S.t, g);
+    render(PERF, g, S.t);
+    FR.n++;
+  } catch (err) { console.error(err); }
+}
+
+/* ------------------------------------------------------------------ info */
+const infoEl = document.getElementById('info');
+function fmtH(t) { const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t) % 60; return pad(h, 2) + ':' + pad(m, 2) + ':' + pad(s, 2); }
+function info() {
+  if (!S) return;
+  infoEl.style.display = CFG.info ? 'block' : 'none'; if (!CFG.info) return;
+  const ik = S.pal; if (ik && ik[0]) { const c = a => 'rgb(' + a.map(v => Math.round(v * 255)).join(',') + ')';
+    infoEl.style.setProperty('--acc', c(S.look === 2 ? ik[3] : ik[2])); infoEl.style.setProperty('--ink', c(S.look === 3 ? ik[1] : [0.93, 0.89, 0.79])); }
+  const g = S.tgt, next = CFG.sit - (S.t % CFG.sit);
+  const moves = []; for (let i = 0; i < NF; i++) { const d = (g.L[i] + g.R[i]) / 2 - (S.prev.L[i] + S.prev.R[i]) / 2; if (Math.abs(d) > 0.12) moves.push([Math.abs(d), F[i][0] + ' ' + (d > 0 ? '+' : '−') + Math.abs(d).toFixed(2)]); }
+  moves.sort((a, b) => b[0] - a[0]);
+  let asym = 0; for (let i = 0; i < NF; i++) if (F[i][4]) asym += Math.abs(g.L[i] - g.R[i]); asym /= NF;
+  const h = H(), un = Object.entries(UNLOCK).map(([k, v]) => (h >= v ? '<span class="a">' + k + '</span>' : '<span class="d">' + k + ' h' + v + '</span>')).join(' · ');
+  infoEl.innerHTML =
+    '<b>BIT FIELD 030 · SITTER</b>  <span class="d">a screen test that never ends</span>\n' +
+    'sitting <b>' + pad(S.k, 4) + '</b>  ' + fmtH(S.t) + '  <span class="d">next sitting in ' + Math.ceil(next) + 's</span>\n' +
+    '<span class="a">' + S.event + '</span>\n' +
+    '<span class="d">' + (moves.slice(0, 4).map(m => m[1]).join(' · ') || 'small changes only') + '</span>\n' +
+    'hair ' + HAIRS[g.hair] + ' · ' + CLOTHES[g.clothes] + ' · age ' + g.x.age.toFixed(2) + ' · lids ' + g.x.lids.toFixed(2) + ' · halves apart ' + asym.toFixed(2) + (S.quirk !== 'none' ? ' · <span class="a">' + S.quirk + '</span>' : '') + '\n' +
+    'memory ' + S.archive.length + ' faces · ' + S.counts.returns + ' returns · ' + S.counts.composites + ' composites · ' + S.counts.caricatures + ' caricatures · ' + S.counts.splits + ' splits\n' +
+    un + '\n' +
+    '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · each sitting is ' + CFG.sit + 's, the change lands under a blink · keys I M L</span>';
+}
+setInterval(info, 500);
+
+/* ------------------------------------------------------------------ audio */
+const AU = { ctx: null, g: null, worklet: false, lastCT: -1, stall: 0, silent: 0, builtAt: 0, abuf: new Float32Array(2048), busy: false, ir: null, noiseBuf: null, longNoise: null, thumpFor: -1 };
+let MUTE = !CFG.audio;
+const NOISE_SRC = `class MZNoise extends AudioWorkletProcessor{constructor(){super();this.s=(Math.random()*4294967295)>>>0;this.b=[0,0];}
+process(i,out){const o=out[0];for(let c=0;c<o.length;c++){const a=o[c];let b=this.b[c]||0;for(let k=0;k<a.length;k++){this.s=(Math.imul(this.s,1664525)+1013904223)>>>0;const w=this.s/2147483648-1;b=b*0.992+w*0.1;a[k]=b*0.5;}this.b[c]=b;}return true;}}
+registerProcessor('mz-noise',MZNoise);`;
+function tanhCurve(n, k) { const c = new Float32Array(n), d = Math.tanh(k); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; } return c; }
+function makeNoiseBuffer(ctx, secs) { const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * secs), ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+function makeIR(ctx, secs) { const len = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0; for (let i = 0; i < len; i++) { const t = i / ctx.sampleRate; lp += (Math.random() * 2 - 1 - lp) * (0.15 + 0.5 * Math.exp(-t * 1.6)); d[i] = t < 0.02 ? 0 : lp * Math.exp(-t * 5 / secs) * 0.6; } }
+  return b; }
+function buildGraph(ctx) {
+  const nodes = [], mk = n => (nodes.push(n), n);
+  const out = mk(ctx.createGain()); out.gain.value = 0; out.connect(ctx.destination);
+  const an = mk(ctx.createAnalyser()); an.fftSize = 2048; out.connect(an);
+  const comp = mk(ctx.createDynamicsCompressor()); comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.02; comp.release.value = 0.4;
+  const clip = mk(ctx.createWaveShaper()); clip.curve = tanhCurve(4096, 1.3); clip.oversample = '2x';
+  const tone = mk(ctx.createBiquadFilter()); tone.type = 'lowpass'; tone.frequency.value = 2200; tone.Q.value = 0.4;
+  const hp = mk(ctx.createBiquadFilter()); hp.type = 'highpass'; hp.frequency.value = 26; hp.Q.value = 0.7;
+  const mix = mk(ctx.createGain()); mix.gain.value = 0.7;
+  mix.connect(hp); hp.connect(tone); tone.connect(clip); clip.connect(comp); comp.connect(out);
+  const verb = mk(ctx.createGain()); const conv = mk(ctx.createConvolver()); conv.buffer = AU.ir; const vo = mk(ctx.createGain()); vo.gain.value = 0.35;
+  verb.connect(conv); conv.connect(vo); vo.connect(mix);
+  // echo for the sitting change: filtered + saturated inside the loop, cannot run away
+  const send = mk(ctx.createGain()); const dl = mk(ctx.createDelay(4)); dl.delayTime.value = 1.25; const fb = mk(ctx.createGain()); fb.gain.value = 0.42;
+  const sat = mk(ctx.createWaveShaper()); sat.curve = tanhCurve(2048, 1.1); const lpD = mk(ctx.createBiquadFilter()); lpD.type = 'lowpass'; lpD.frequency.value = 700;
+  send.connect(dl); dl.connect(sat); sat.connect(lpD); lpD.connect(fb); fb.connect(dl); const wet = mk(ctx.createGain()); wet.gain.value = 0.5; lpD.connect(wet); wet.connect(mix);
+  // noise source: worklet (continuous) or crossfaded fresh segments
+  let noise; if (AU.worklet) noise = mk(new AudioWorkletNode(ctx, 'mz-noise', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] })); else { noise = mk(ctx.createGain()); }
+  // room: dark air
+  const rLP = mk(ctx.createBiquadFilter()); rLP.type = 'lowpass'; rLP.frequency.value = 240; const rG = mk(ctx.createGain()); rG.gain.value = 0.05;
+  noise.connect(rLP); rLP.connect(rG); rG.connect(mix);
+  // projector: low band of the noise fluttered by the 24 fps sprocket
+  const pBP = mk(ctx.createBiquadFilter()); pBP.type = 'bandpass'; pBP.frequency.value = 150; pBP.Q.value = 1.6;
+  const pLP = mk(ctx.createBiquadFilter()); pLP.type = 'lowpass'; pLP.frequency.value = 420;
+  const pG = mk(ctx.createGain()); pG.gain.value = 0.11; const lfo = mk(ctx.createOscillator()); lfo.frequency.value = 24; const lfoG = mk(ctx.createGain()); lfoG.gain.value = 0.05;
+  lfo.connect(lfoG); lfoG.connect(pG.gain); noise.connect(pBP); pBP.connect(pLP); pLP.connect(pG); pG.connect(mix);
+  const hum = mk(ctx.createOscillator()); hum.type = 'sine'; hum.frequency.value = 50; const hum2 = mk(ctx.createOscillator()); hum2.frequency.value = 100;
+  const humG = mk(ctx.createGain()); humG.gain.value = 0.018; const h2G = mk(ctx.createGain()); h2G.gain.value = 0.006; hum.connect(humG); hum2.connect(h2G); humG.connect(mix); h2G.connect(mix);
+  // breath: the sitter's air, very close and very quiet
+  const bLP = mk(ctx.createBiquadFilter()); bLP.type = 'lowpass'; bLP.frequency.value = 480; bLP.Q.value = 0.3; const bG = mk(ctx.createGain()); bG.gain.value = 0;
+  noise.connect(bLP); bLP.connect(bG); bG.connect(mix);
+  // drone: the sitter's note, root + fifth, glides at each sitting
+  const d1 = mk(ctx.createOscillator()), d2 = mk(ctx.createOscillator()); d1.type = 'sine'; d2.type = 'triangle'; d1.frequency.value = 55; d2.frequency.value = 82.4;
+  const dLP = mk(ctx.createBiquadFilter()); dLP.type = 'lowpass'; dLP.frequency.value = 320; const dG = mk(ctx.createGain()); dG.gain.value = 0.035;
+  d1.connect(dLP); d2.connect(dLP); dLP.connect(dG); dG.connect(mix); const dS = mk(ctx.createGain()); dS.gain.value = 0.6; dG.connect(dS); dS.connect(verb);
+  const t0 = ctx.currentTime; for (const o of [lfo, hum, hum2, d1, d2]) o.start(t0);
+  const g = { out, an, mix, tone, send, verb, rG, pG, bG, bLP, d1, d2, dG, dLP, noise, nNext: 0, nodes };
+  g.stop = () => { const t = ctx.currentTime; for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (e) { } } setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, 400); };
+  return g;
+}
+async function createContext() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ctx = new AC({ latencyHint: 'playback' }); AU.worklet = false;
+  try { await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true; }
+  catch (e) { try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_SRC], { type: 'application/javascript' }))); AU.worklet = true; } catch (e2) { AU.worklet = false; } }
+  AU.ir = makeIR(ctx, 3.5); AU.noiseBuf = makeNoiseBuffer(ctx, 2); AU.longNoise = null; AU.ctx = ctx;
+  AU.g = buildGraph(ctx); AU.builtAt = ctx.currentTime;
+  const t = ctx.currentTime; AU.g.out.gain.setValueAtTime(0, t); AU.g.out.gain.linearRampToValueAtTime(1, t + 1.5);
+  AU.lastCT = -1; AU.stall = 0; AU.silent = 0;
+  try { await ctx.resume(); } catch (e) { }
+}
+function rebuildGraph() { const ctx = AU.ctx; if (!ctx) return; const old = AU.g, t = ctx.currentTime; const ng = buildGraph(ctx);
+  ng.out.gain.setValueAtTime(0, t); ng.out.gain.linearRampToValueAtTime(1, t + 4);
+  if (old) { try { old.out.gain.cancelScheduledValues(t); old.out.gain.setValueAtTime(old.out.gain.value, t); old.out.gain.linearRampToValueAtTime(0, t + 4); } catch (e) { } setTimeout(() => old.stop(), 4500); }
+  AU.g = ng; AU.builtAt = t; AU.silent = 0; }
+async function recreateContext() { if (AU.busy) return; AU.busy = true; try { const old = AU.ctx; AU.ctx = null; AU.g = null; if (old) { try { await old.close(); } catch (e) { } } await createContext(); } finally { AU.busy = false; } }
+function audioWatch() {
+  const ctx = AU.ctx; if (!ctx || AU.busy) return;
+  if (ctx.state === 'closed') { recreateContext(); return; }
+  if (ctx.state !== 'running') { ctx.resume().catch(() => { }); return; }
+  const ct = ctx.currentTime; if (ct === AU.lastCT) { if (++AU.stall > 6) { recreateContext(); return; } } else AU.stall = 0; AU.lastCT = ct;
+  if (!AU.g) return; const b = AU.abuf; AU.g.an.getFloatTimeDomainData(b);
+  let mx = 0, bad = false; for (let i = 0; i < b.length; i++) { const v = b[i]; if (!Number.isFinite(v)) { bad = true; break; } const a = v < 0 ? -v : v; if (a > mx) mx = a; }
+  if (bad) { rebuildGraph(); return; }
+  AU.silent = mx < 1e-5 ? AU.silent + 1 : 0;
+  if (AU.silent > 20) rebuildGraph(); else if (ct - AU.builtAt > 3 * 3600) rebuildGraph();
+}
+function setP(p, v, tc) { if (!Number.isFinite(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, AU.ctx.currentTime, tc); }
+function done(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }; }
+const FADE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2)), FADE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
+function noiseSegments() { const ctx = AU.ctx, g = AU.g; if (AU.worklet || !g) return; if (!AU.longNoise) AU.longNoise = makeNoiseBuffer(ctx, 20);
+  if (g.nNext < ctx.currentTime) g.nNext = ctx.currentTime + 0.05;
+  while (g.nNext < ctx.currentTime + 1.0) { const t = g.nNext, len = 7, xf = 1.5; const src = ctx.createBufferSource(), v = ctx.createGain();
+    src.buffer = AU.longNoise; src.playbackRate.value = 0.5 + Math.random() * 0.05; v.gain.value = 0; v.gain.setValueCurveAtTime(FADE_IN, t, xf); v.gain.setValueCurveAtTime(FADE_OUT, t + len - xf, xf);
+    src.connect(v); v.connect(g.noise); src.start(t, Math.random() * 12); src.stop(t + len + 0.05); done(src, [src, v]); g.nNext = t + len - xf; } }
+// the sitting turns: a low felt thump into the echo, and a dark wash
+function vThump(t) { const ctx = AU.ctx, g = AU.g; const o = ctx.createOscillator(), v = ctx.createGain(), s = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(62, t); o.frequency.exponentialRampToValueAtTime(41, t + 0.8);
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(0.26, t + 0.02); v.gain.exponentialRampToValueAtTime(0.0006, t + 1.3); v.gain.linearRampToValueAtTime(0, t + 1.35);
+  s.gain.value = 0.5; o.connect(v); v.connect(g.mix); v.connect(s); s.connect(g.send); o.start(t); o.stop(t + 1.4); done(o, [o, v, s]);
+  const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), w = ctx.createGain(); src.buffer = AU.noiseBuf; lp.type = 'lowpass'; lp.frequency.setValueAtTime(420, t); lp.frequency.exponentialRampToValueAtTime(80, t + 1.6);
+  w.gain.setValueAtTime(0, t); w.gain.linearRampToValueAtTime(0.06, t + 0.08); w.gain.exponentialRampToValueAtTime(0.0005, t + 1.7); w.gain.linearRampToValueAtTime(0, t + 1.75);
+  src.connect(lp); lp.connect(w); w.connect(g.verb); src.start(t, Math.random() * 0.2, 1.8); done(src, [src, lp, w]); }
+const ROOTS = [0, 2, 3, 5, 7, 8, 10];
+function rootFor(g) { let h = 0; for (let i = 0; i < NF; i++) h += (g.L[i] + g.R[i]) * (i + 1); const d = ROOTS[((Math.floor(Math.abs(h) * 3) % 7) + 7) % 7]; return 41.2 * Math.pow(2, d / 12); }   // E1 aeolian
+function audioSchedule() {
+  const ctx = AU.ctx; if (!ctx || !AU.g || ctx.state !== 'running' || !S) return;
+  noiseSegments();
+  // look ahead to the next sitting boundary and place the thump on it exactly
+  const nextB = (S.k + 1) * CFG.sit, dtReal = (nextB - S.t) / CFG.rate;
+  if (dtReal >= 0 && dtReal < 0.4 && AU.thumpFor !== S.k + 1 && CFG.rate <= 4) { AU.thumpFor = S.k + 1; try { vThump(ctx.currentTime + dtReal); } catch (e) { } }
+}
+function audioControl() {
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running' || !S || !PERF) return;
+  const gg = S.tgt, f = rootFor(gg);
+  setP(g.d1.frequency, f * 2, 3); setP(g.d2.frequency, f * 3 * (1 + 0.004 * (H() > UNLOCK.split ? 1 : 0)), 3);
+  let asym = 0; for (let i = 0; i < NF; i++) if (F[i][4]) asym += Math.abs(gg.L[i] - gg.R[i]); asym /= NF;
+  setP(g.dLP.frequency, clamp(260 + 220 * asym + 120 * gg.x.age, 200, 700), 2);
+  setP(g.dG.gain, 0.03 + 0.012 * clamp(asym, 0, 1), 2);
+  const inhale = clamp(PERF.breath, 0, 1); setP(g.bG.gain, S.quirk === 'still' ? 0 : 0.03 * inhale * inhale, 0.15); setP(g.bLP.frequency, 300 + 200 * inhale, 0.3);
+}
+function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
+addEventListener('pointerdown', audioUnlock);
+addEventListener('keydown', e => {
+  audioUnlock();
+  const k = e.key.toLowerCase();
+  if (k === 'i') { CFG.info = !CFG.info; info(); }
+  if (k === 'm') { MUTE = !MUTE; if (AU.g) setP(AU.g.out.gain, MUTE ? 0 : 1, 0.2); }
+  if (k === 'l' && S) { S.lookPrev = S.look; S.look = (S.look + 1) % LOOKS.length; S.lookT0 = S.t; }
+});
+setInterval(audioSchedule, 40); setInterval(audioWatch, 1000); setInterval(audioControl, 100);
+
+/* ------------------------------------------------------------------ persistence */
+function save() { try { if (S) localStorage.setItem(STORE, JSON.stringify({ S, R: R.s, BL: { next: BL.next - S.t }, savedAt: Date.now() })); } catch (e) { } }
+function load() {
+  try { const raw = localStorage.getItem(STORE); if (!raw) return false; const o = JSON.parse(raw);
+    if (!o || !o.S || o.S.v !== 1 || !okG(o.S.cur) || !okG(o.S.tgt) || !okG(o.S.prev)) return false;
+    S = o.S; R.s = o.R >>> 0 || 1; S.archive = (S.archive || []).filter(e => okG(e.g)); return true; } catch (e) { return false; }
+}
+setInterval(save, 60000); addEventListener('beforeunload', save);
+
+/* ------------------------------------------------------------------ boot */
+const MZ = {
+  force(op) { if (!S) return; if (op === 'sit') { S.t = (S.k + 1) * CFG.sit; advance(0); }
+    else if (op === 'look') { S.lookPrev = S.look; S.look = (S.look + 1) % 4; S.lookT0 = S.t - 30; }
+    else if (op === 'return' || op === 'composite' || op === 'caricature' || op === 'split') { const need = UNLOCK[op === 'return' ? 'returns' : op === 'composite' ? 'composites' : op] * 3600 + 1;
+      if (S.t < need) { S.t = need; S.k = Math.floor(S.t / CFG.sit) - 1; } else { S.t = (S.k + 1) * CFG.sit; } newSitting(op); S.morph0 = S.t; }
+    else if (op === 'nan') { S.tgt.L[3] = NaN; }
+  },
+  state: () => S, perf: () => PERF, cfg: CFG, audio: () => AU,
+};
+window.MZ = MZ;
+(async function boot() {
+  resize();
+  if (CFG.fresh) { try { localStorage.removeItem(STORE); } catch (e) { } }
+  if (!load()) {
+    S = newState(); R.s = S.rs;
+    // pre-warm: it was running before you arrived
+    S.t = 4 * CFG.sit + 11; for (let i = 0; i < 4; i++) { newSitting(); S.prev = cloneG(S.tgt); S.cur = cloneG(S.tgt); } S.morph0 = -100; S.event = 'drifting';
+  }
+  if (CFG.ff > 0) { const end = S.t + CFG.ff * 3600; while (S.t < end) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); }
+  try {
+    const [meta, bin] = await Promise.all([fetch('data/sitter.json').then(r => r.json()), fetch('data/sitter.bin').then(r => r.arrayBuffer())]);
+    DATA = decodeData(meta, bin); initGL();
+  } catch (err) { console.error(err); infoEl.textContent = 'SITTER · could not load the sitter (' + err.message + ')'; }
+  info(); last = performance.now(); requestAnimationFrame(frame);
+  if (!MUTE) audioUnlock();
+})();
+</script>
+</body>
+</html>
