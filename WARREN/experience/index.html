@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#e4b891"><title>WARREN — Field Study 001</title>
+<meta name="theme-color" content="#e4b891"><title>WARREN — Field Study 002</title>
 <meta name="description" content="A walkable, procedural, OBAS-influenced interpretation of Warren, Maryland, c. 1915–1921. Historical relative geometry; provisional terrain and buildings.">
 <style>
 /* System font stack; no font network dependency. */
@@ -30,9 +30,9 @@ canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block;outline
 </head>
 <body>
 <canvas id="scene" aria-label="An explorable, early-prototype three-dimensional interpretation of Warren, Maryland"></canvas><div id="grain"></div><div id="vignette"></div>
-<div id="top"><div class="brand">WARREN<small>FIELD STUDY / 001 / 1915–1921</small></div><div id="actions"><button class="iconbtn" id="sound" aria-label="Toggle sound">SOUND OFF</button><button class="iconbtn" id="details" aria-label="Open research notes">ⓘ EVIDENCE</button></div></div>
+<div id="top"><div class="brand">WARREN<small>FIELD STUDY / 002 / PRESENT ↔ PAST</small></div><div id="actions"><button class="iconbtn" id="sound" aria-label="Toggle sound">SOUND OFF</button><button class="iconbtn" id="details" aria-label="Open research notes">ⓘ EVIDENCE</button></div></div>
 <div id="bottom"><div id="where"><strong id="placeTitle">THE VILLAGE ROAD</strong><span id="coord">41° / SUN LOW</span><br><span class="caution">SPATIAL STUDY · NOT SURVEYED</span></div><div id="places"><button class="place" data-view="village" aria-pressed="true">01 / STREET</button><button class="place" data-view="mill" aria-pressed="false">02 / MILL</button><button class="place" data-view="river" aria-pressed="false">03 / RIVER</button></div></div>
-<div id="portal"><div class="portal"><div class="eyebrow">A PLACE BEFORE THE WATER</div><h1>WARREN</h1><div class="sub">An encounter with a vanished Maryland village.</div><div class="rule"></div><button id="enter">ENTER WARREN &nbsp;↗</button><div class="instructions" id="how">W A S D TO WALK &nbsp;·&nbsp; MOUSE TO LOOK<br>SHIFT TO MOVE FASTER &nbsp;·&nbsp; ESC FOR CURSOR</div></div></div>
+<div id="portal"><div class="portal"><div class="eyebrow">A PLACE BEFORE THE WATER</div><h1>WARREN</h1><div class="sub">An encounter with a vanished Maryland village.</div><div class="rule"></div><button id="enter">ENTER WARREN &nbsp;↗</button><div class="instructions" id="how">W A S D TO WALK &nbsp;·&nbsp; MOUSE TO LOOK<br>SHIFT TO MOVE FASTER &nbsp;·&nbsp; M FOR MAP &nbsp;·&nbsp; ESC FOR CURSOR</div></div></div>
 <div id="touch"><div id="stick"><div id="knob"></div></div><div id="touchHelp">DRAG TO LOOK</div></div>
 <aside id="info" aria-label="Evidence and limitations"><h2>WARREN / FIELD NOTES</h2><p>This is an <strong>experiential blockout</strong> of a documented historical settlement—not a verified geographic reconstruction or a current-day map.</p><p>The relative arrangement of the <strong>river corridor, three road alignments and five village building zones</strong> derives from a hand-extracted, unregistered detail of the 1915 Bromley Atlas. Their scale and orientation are not surveyed.</p><p>The <strong>five-story mill is historically documented</strong>. Its form, placement in this world, cottages, bridge, trees, hills, water elevation and the figures you may encounter are <strong>provisional interpretations</strong>. No modern lidar or underwater bathymetry is presented as recovered pre-inundation terrain.</p><p><a href="https://msa.maryland.gov/megafile/msa/speccol/sc5300/sc5339/000062/000000/000066/unrestricted/warren_1915_bromley.jpg" target="_blank" rel="noopener">1915 Bromley map ↗</a> · <a href="https://www.hsobc.org/wp-content/uploads/2017/06/htv039n4.pdf" target="_blank" rel="noopener">Historical Society source ↗</a> · <a href="../" target="_blank" rel="noopener">GIS research workbench ↗</a></p><p class="mini">SCENE 001 / UNREGISTERED RELATIONAL GEOMETRY<br>NO IMG/GEN · ALL VISUALS RENDERED IN CODE</p></aside>
 <div id="loadFail"><p>WARREN requires WebGL to render this scene. Your browser could not initialize the 3D engine. Try Chrome or Safari with graphics acceleration enabled.</p></div>
@@ -151,6 +151,20 @@ let camera={x:-30,z:8,yaw:2.15,pitch:-.035,head:1.85}, playing=false,currentView
 const views={village:{x:uv([385,222])[0],z:uv([385,222])[1],yaw:1.42,pitch:-.06,title:'THE VILLAGE ROAD'},mill:{x:uv([508,182])[0],z:uv([508,182])[1],yaw:1.13,pitch:.02,title:'THE MILL APPROACH'},river:{x:uv([668,215])[0],z:uv([668,215])[1],yaw:1.92,pitch:-.09,title:'THE GUNPOWDER'}};
 function travel(name){const v=views[name];if(!v)return;Object.assign(camera,{x:v.x,z:v.z,yaw:v.yaw,pitch:v.pitch});document.querySelector('#placeTitle').textContent=v.title;currentView=name;for(const b of document.querySelectorAll('.place'))b.setAttribute('aria-pressed',String(b.dataset.view===name));}
 travel('village');
+window.WARREN_GEO_API={
+  get:()=>({x:camera.x,z:camera.z}),
+  bridge:()=>({x:uv([706,160])[0],z:uv([706,160])[1]}),
+  home:()=>({x:views.village.x,z:views.village.z}),
+  jump:(x,z)=>{
+    if(!Number.isFinite(x)||!Number.isFinite(z))return;
+    let qx=x,qz=z;
+    if(isBlocked(qx,qz)){outer:for(let r=4;r<48;r+=4)for(let j=0;j<12;j++){const X=x+Math.cos(j*Math.PI/6)*r,Z=z+Math.sin(j*Math.PI/6)*r;if(!isBlocked(X,Z)){qx=X;qz=Z;break outer}}}
+    camera.x=qx;camera.z=qz;camera.yaw=1.5;camera.pitch=-.05;
+    document.querySelector('#placeTitle').textContent='A PLACE YOU SELECTED';
+    for(const btn of document.querySelectorAll('.place'))btn.setAttribute('aria-pressed','false');
+    if(!playing){playing=true;document.querySelector('#portal').classList.add('hidden');document.querySelector('#touch').classList.add('playing')}
+  }
+};
 const keys=new Set();let joy=[0,0],drag=null,pointerLocked=false,last=performance.now(),time=0,frame=0;
 let coarse=matchMedia('(pointer:coarse)').matches;
 document.querySelector('#how').innerHTML=coarse?'LEFT THUMB TO WALK &nbsp;·&nbsp; RIGHT DRAG TO LOOK<br>CHOOSE STREET, MILL, OR RIVER BELOW':'W A S D TO WALK &nbsp;·&nbsp; MOUSE TO LOOK<br>SHIFT TO MOVE FASTER &nbsp;·&nbsp; ESC FOR CURSOR';
@@ -190,4 +204,4 @@ console.info(`WARREN Field Study 001 / procedural WebGL: ${houses} provisional c
 })();
 
 </script>
-</body></html>
+<script src="./map.js" defer></script></body></html>
