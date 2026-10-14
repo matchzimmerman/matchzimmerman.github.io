@@ -120,7 +120,9 @@ input[type=range]{flex:1;accent-color:var(--pumpkin);min-width:0}
 /* phone + small tablet */
 @media (max-width:820px){
   .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto;gap:8px;padding-block:8px}
-  header h1{font-size:18px}
+  header h1{font-size:19px;line-height:1.25}
+  header h1 span{display:block}
+  header h1 span+span{color:var(--pumpkin)}
   header .by{display:none}
   .shop{padding:6px 11px;font-size:13px}
   .pages{flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:0 0 2px;gap:6px}
@@ -138,8 +140,11 @@ input[type=range]{flex:1;accent-color:var(--pumpkin);min-width:0}
   .opts{display:flex;align-items:center;gap:10px}
   .opts .row{flex:1}
   .check{font-size:12.5px;white-space:nowrap}
-  .zoom{right:6px;bottom:6px}
-  .zoom button{width:30px;height:30px}
+  .zoom{right:8px;top:8px;bottom:auto;display:none}
+  body.zoomed .zoom{display:flex}
+  #zIn,#zOut{display:none}
+  .zoom .pct{height:30px;font-size:12px;white-space:nowrap;padding:0 12px}
+  .zoom .pct::before{content:'FIT · '}
   body.sheet-open .tray.page{display:flex;position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:20;box-shadow:0 -10px 40px #000a}
 }
 .scrim{display:none}
@@ -151,7 +156,7 @@ input[type=range]{flex:1;accent-color:var(--pumpkin);min-width:0}
 
 <div class="app">
   <header>
-    <h1>MZBRDZ Halloween Coloring Book</h1>
+    <h1><span>MZBRDZ Halloween</span> <span>Coloring Book</span></h1>
     <span class="by">drawings by Match Zimmerman · @matchzimmerman</span>
   </header>
 
@@ -289,6 +294,7 @@ function applyView(){
   if(h<=r.height) view.ty=(r.height-h)/2; else view.ty=Math.min(r.height*0.5,Math.max(r.height*0.5-h,view.ty));
   sheet.style.transform=`translate(${view.tx}px,${view.ty}px) scale(${view.z})`;
   $('zFit').textContent=Math.round(view.z*100)+'%';
+  document.body.classList.toggle('zoomed',view.z>1.01);
 }
 function fitView(){view.z=1;applyView()}
 function zoomAt(nz,px,py){nz=Math.max(1,Math.min(8,nz));view.tx=px-(px-view.tx)*nz/view.z;view.ty=py-(py-view.ty)*nz/view.z;view.z=nz;applyView()}
