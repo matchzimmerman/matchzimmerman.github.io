@@ -780,22 +780,46 @@ function coverage(kind) {
     wide:    { label: 'WIDE · THE CREW', mark: { pos: mv(3.0 * side, 8.4, 21) }, aim: () => ({ look: mv(0, 7.6, 1.0), fov: 34 }), pan: 0.7 },
     orbit:   { label: 'ORBIT', pose: (t) => { const a = t * 0.07 * side + 0.9; return { pos: mv(Math.sin(a) * 9.4, 7.6, 1.0 + Math.cos(a) * 9.4) }; }, aim: () => ({ look: HEADC, fov: 22 }), pan: 1.2 },
   }[kind];
+  if (S_.mark) S_.mark = routed(S_.mark.pos);
   return Object.assign(S_, { kind, airedAt: -1, minHold: Math.min(hold, 4), maxHold: hold,
     onAir(t) { this.airedAt = t; },
     want() { return nearChange() ? 0.4 : w0; },
     done(t, d, c) { return this.airedAt >= 0 ? (c.live !== d.id || t - this.airedAt > hold + 2) : t - d.assignedAt > 90; } });
 }
 function frontal() {
-  return { kind: 'frontal', label: 'SCREEN TEST', mark: { pos: mv(0, 7.0, 11.6) }, aim: () => ({ look: mv(0, 7.18, 1.0), fov: 21 }), pan: 1.2,
+  return { kind: 'frontal', label: 'SCREEN TEST', mark: routed(mv(0, 7.0, 11.6)), aim: () => ({ look: mv(0, 7.18, 1.0), fov: 21 }), pan: 1.2,
     minHold: 5, maxHold: 30, onAir() { this.maxHold = 9 + crand() * 22; }, want: () => nearChange() ? 4 : 1.5, done: () => false };
 }
 const KINDS = ['eyes', 'eye', 'mouth', 'profile', 'three', 'behind', 'over', 'low', 'wide', 'orbit'];
+// the sitter as obstacles for the crew: head and shoulders
+const OBST = [{ c: mv(0, 7.15, 0.55), r: 2.35 }, { c: mv(0, 5.3, 0.2), r: 2.9 }];
+// inside an obstacle: put the drone on its surface and remove only the inward part of its velocity, so it slides round
+function avoidBody(p, d) {
+  for (const o of OBST) { const v = vsub(p, o.c), l = vlen(v); if (l >= o.r) continue;
+    const n = vmul(v, 1 / (l || 1)); p = vadd(o.c, vmul(n, o.r));
+    if (d && d.vel) { const vn = MZCam.dot(d.vel, n); if (vn < 0) d.vel = vsub(d.vel, vmul(n, vn)); } }
+  return p;
+}
+function segHit(a, b, pad_) { for (const o of OBST) { const ab = vsub(b, a), L2 = MZCam.dot(ab, ab) || 1, t = clamp(MZCam.dot(vsub(o.c, a), ab) / L2, 0, 1);
+  if (vlen(vsub(vadd(a, vmul(ab, t)), o.c)) < o.r + pad_) return o; } return null; }
+// a mark that routes round the sitter: while the straight line is blocked, aim for a point beside and above the obstacle
+// on the side the drone is already on; the waypoint moves with the drone, so the path is a smooth arc
+function routed(goal) {
+  return (t, d) => {
+    if (!d || !d.pos) return { pos: goal };
+    const o = segHit(d.pos, goal, 0.45); if (!o || vlen(vsub(d.pos, goal)) < 0.6) return { pos: goal };
+    const a = vsub(d.pos, o.c), b = vsub(goal, o.c);
+    let side = mv(a.x + b.x * 0.35, 0, a.z + b.z * 0.35); if (vlen(side) < 0.3) side = mv(a.x || 1, 0, a.z || 0);
+    const n = MZCam.norm(side);
+    return { pos: vadd(o.c, vadd(vmul(n, o.r + 2.0), mv(0, 1.6, 0))) };
+  };
+}
 // the scanner: works from a few analysis positions; its tile shows the scan layer, not the picture
 function scanShot() {
   const k = Math.floor(crand() * 4), side = crand() < 0.5 ? 1 : -1;
   const m = [{ l: 'SCAN · FRONT', p: mv(0, 7.25, 8.2), f: 25 }, { l: 'SCAN · FRONT', p: mv(0, 7.4, 9.0), f: 24 },
              { l: 'SCAN · THREE-QUARTER', p: mv(4.6 * side, 7.4, 6.6), f: 25 }, { l: 'SCAN · PROFILE', p: mv(8.4 * side, 7.25, 1.2), f: 23 }][k];
-  return { kind: 'scan', label: m.l, mark: { pos: m.p }, aim: () => ({ look: mv(0, 7.15, 1.0), fov: m.f }), pan: 1.0, airedAt: -1, t0: -1,
+  return { kind: 'scan', label: m.l, mark: routed(m.p), aim: () => ({ look: mv(0, 7.15, 1.0), fov: m.f }), pan: 1.0, airedAt: -1, t0: -1,
     start() { this.t0 = performance.now() / 1000; }, onAir(t) { this.airedAt = t; },
     want: () => (QUAD() ? 0.6 : 0), maxHold: 8, minHold: 4,
     done(t) { return t - this.t0 > (k >= 2 ? 25 : 40); } };
@@ -804,8 +828,8 @@ function initCrew() {
   if (!CFG.crew || !window.MZCam) return;
   crew = new MZCam.Crew({
     drones: [{ name: 'CAM 1 · BOLEX', col: '#e2a43a', pos: mv(0, 7.0, 11.6) }, { name: 'CAM 2', col: '#3f8f8a', pos: mv(6, 8, 8) }, { name: 'CAM 3', col: '#d8cfb8', pos: mv(-6, 8, 8) }, { name: 'CAM 4 · SCANNER', col: '#b5532c', pos: mv(0, 10.5, 14) }],
-    speed: 7, accel: 5, cruise: 10.5, minAlt: 5.2, arrive: 0.12, size: 0.56, clearDist: 14, tallyCol: '#ff5533',
-    avoid: p => { const c = mv(0, 7.0, 0.6), d = vsub(p, c), l = vlen(d); return l < 2.4 ? vadd(c, vmul(d, 2.4 / (l || 1))) : p; },
+    speed: 6, accel: 3.5, cruise: 10.5, minAlt: 5.2, arrive: 0.12, size: 0.56, clearLive: false, stepMax: 0.02, tallyCol: '#ff5533',
+    avoid: (p, d) => avoidBody(p, d),
     gate: t => { if (PEND0 < 0) PEND0 = t; const ok = blinkingNow() || t - PEND0 > 5; if (ok) PEND0 = -1; return ok; },
     onCut: (from, to, t) => { if (S) S.lastCut = to.name + ' · ' + (to.shot ? to.shot.label : ''); },
   });
@@ -822,6 +846,7 @@ function crewTick(dt) {
   for (const d of crew.free()) { if (d.id === 0) { crew.assign(d, frontal()); continue; } if (d.id === 3) { crew.assign(d, scanShot()); continue; }
     const opts = KINDS.filter(k => !busy.has(k)); const k = opts[Math.floor(crand() * opts.length)]; busy.add(k); crew.assign(d, coverage(k)); }
   crew.update(dt, performance.now() / 1000);
+  if (MZ.trackOn) { (MZ.track = MZ.track || []).push(crew.drones.map(d => [d.pos.x, d.pos.y, d.pos.z, d.aim ? d.aim.p.x : 0, d.aim ? d.aim.p.y : 0, d.aim ? d.aim.p.z : 0])); if (MZ.track.length > 20000) MZ.track.shift(); }
 }
 
 /* ------------------------------------------------------------------ sim clock */
@@ -851,14 +876,14 @@ function frame(now) {
 
 /* ------------------------------------------------------------------ the analysis engine
    Every sitting runs one pass of an evolution loop:
-     M · MUTATE    the face takes its step (the morph, under a blink)
+     B · BUILD     the face takes its step (the morph, under a blink)
      A · ANALYZE   the scanner measures the face it now has
      I · INTERPRET the measurements become critiques
-     R · REVISE    a plan for the next pass, which the next sitting applies
+     R · RETURN    a plan for the next pass, returned to the next sitting, which applies it
    The critic pulls toward a plausible face; the journey keeps moving the goal. No model calls:
    every line is computed from the geometry and the genome. */
 const SCAN_INKS = [[0.02, 0.05, 0.04], [0.6, 1.0, 0.55], [0.89, 0.64, 0.23], [0.42, 1.0, 0.5]];
-const PHASES = [['M', 'MUTATE', 0], ['A', 'ANALYZE', 7], ['I', 'INTERPRET', 0.57], ['R', 'REVISE', 0.8]];
+const PHASES = [['B', 'BUILD', 0], ['A', 'ANALYZE', 7], ['I', 'INTERPRET', 0.57], ['R', 'RETURN', 0.8]];
 function phaseOf(t) { const u = (t % CFG.sit) / CFG.sit, a = MORPH / CFG.sit; return u < a ? 0 : u < 0.57 ? 1 : u < 0.8 ? 2 : 3; }
 const LM = name => { const sm = DATA && DATA.scan; const i = sm ? sm.tag.indexOf(name) : -1; return i < 0 ? null : deformCPU(sm.pts[i]); };
 const dist2 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -884,7 +909,7 @@ function analyzeTick() {
   if (AN.k !== S.k) { AN.k = S.k; AN.done = {}; AN.findings = []; AN.focus = []; }
   const u = (S.t % CFG.sit) / CFG.sit, ph = phaseOf(S.t), g = S.tgt, d = S.detailNow;
   const once = (key, fn) => { if (!AN.done[key]) { AN.done[key] = 1; fn(); } };
-  if (ph === 0) once('m', () => logLine('M', 'sitting ' + pad(S.k, 4) + ' · ' + S.event + (S.applied ? ' · applied: ' + S.applied : '')));
+  if (ph === 0) once('m', () => logLine('B', 'sitting ' + pad(S.k, 4) + ' · ' + S.event + (S.applied ? ' · applied: ' + S.applied : '')));
   if (ph >= 1) once('a1', () => { const m = AN.m = measure(g), n = NEUTRAL;
     AN.findings = [];
     const thirds = [m.upper, m.middle, m.lower], tm = (thirds[0] + thirds[1] + thirds[2]) / 3;
@@ -910,9 +935,9 @@ function analyzeTick() {
     // the plan: the strongest two fixes, weighed against the pull toward the next person
     const fixes = AN.findings.filter(f => f.fix).slice(0, 2);
     S.plan = fixes.map(f => f.fix);
-    if (!fixes.length) logLine('R', 'next pass: no correction · let the journey lead');
+    if (!fixes.length) logLine('R', 'return: no correction · let the journey lead');
     for (const f of fixes) { const [gene, v, what] = f.fix; const tgtv = gene[0] !== '~' && gene.indexOf('x:') !== 0 && S.dest ? S.dest.L[F.findIndex(q => q[0] === gene)] : null;
-      logLine('R', 'next pass: ' + what + (typeof v === 'number' && gene[0] !== '~' ? ' ' + (v > 0 ? '+' : '') + v.toFixed(2) : '') + (tgtv !== null && tgtv !== undefined && Math.sign(tgtv) !== Math.sign(v) && Math.abs(tgtv) > 0.6 ? ' · conflicts with person ' + pad(S.person, 2) + ', compromise' : '')); }
+      logLine('R', 'return: ' + what + (typeof v === 'number' && gene[0] !== '~' ? ' ' + (v > 0 ? '+' : '') + v.toFixed(2) : '') + (tgtv !== null && tgtv !== undefined && Math.sign(tgtv) !== Math.sign(v) && Math.abs(tgtv) > 0.6 ? ' · conflicts with person ' + pad(S.person, 2) + ', compromise' : '')); }
   });
 }
 function applyPlan(g) {
@@ -990,7 +1015,7 @@ function drawLog() {
   const el = document.getElementById('log'); if (!el || !S) return;
   el.style.display = CFG.info ? 'block' : 'none'; if (!CFG.info) return;
   const L = (S.log || []).slice(QUAD() ? -11 : -16), esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  el.innerHTML = '<span class="h">ANALYSIS LOG · evolution loop M A I R</span>\n' + L.map(l => '<span class="ph">' + l.ph + '</span><span class="' + (l.cls || '') + '">' + esc(l.text) + '</span> <span class="d">' + pad(l.k, 4) + '</span>').join('\n');
+  el.innerHTML = '<span class="h">ANALYSIS LOG · evolution loop B A I R</span>\n' + L.map(l => '<span class="ph">' + l.ph + '</span><span class="' + (l.cls || '') + '">' + esc(l.text) + '</span> <span class="d">' + pad(l.k, 4) + '</span>').join('\n');
 }
 setInterval(drawLog, 400);
 function drawHud() {

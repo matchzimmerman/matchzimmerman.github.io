@@ -10,14 +10,14 @@ A screen test that never ends. One sitter faces a locked-off camera under one so
 ## Four lenses, one scanner (default layout)
 The feed is a 2×2 grid. **CAM 1 · BOLEX** (top left) holds the frontal screen test. **CAM 2 and CAM 3** are drones flying coverage: eyes, one eye, mouth, profiles, three-quarters, behind, overhead, low, orbit, and a wide that shows the crew. **CAM 4 · SCANNER** (bottom right) works from analysis positions, and its tile shows the scan layer: a phosphor view under a triangulated landmark mesh (about 115 points), heat-coloured by how far each region has been pushed, with a sweep line and measurement lines.
 
-The director (MZCAM, `../../lib/mzcam.js`) still runs: it cuts only inside a blink and comes home to the Bolex for every new sitter. The on-air tile is framed. Drones appear in each other's shots, and the studio plan sits top right. `V` switches to a single program feed (`?layout=single`), where the bay shows a monitor per drone.
+The drones route round the sitter's head and shoulders: when the straight line to a mark is blocked they arc over and round it, and they slide along the surface instead of bumping into it. The director (MZCAM, `../../lib/mzcam.js`) still runs: it cuts only inside a blink and comes home to the Bolex for every new sitter. The on-air tile is framed. Drones appear in each other's shots, and the studio plan sits top right. `V` switches to a single program feed (`?layout=single`), where the bay shows a monitor per drone.
 
 ## The evolution loop
-Every sitting runs one pass:
-- **M · MUTATE**: the face takes its step, under a blink.
+Every sitting runs one pass of the BAIR loop:
+- **B · BUILD**: the face takes its step, under a blink.
 - **A · ANALYZE**: the scanner measures the face it now has: eye spacing against skull, facial thirds, brow-to-lid gap, mouth width, jaw, symmetry, extreme features, and age against grey hair against stubble.
 - **I · INTERPRET**: measurements become critiques, for example "brows sitting on the lids: brow hair reads as hair on the eyelids · distracting".
-- **R · REVISE**: a plan for the next pass, for example "next pass: raise brows +0.45". The next sitting applies it and logs "applied".
+- **R · RETURN**: a plan returned to the next pass, for example "return: raise brows +0.45". The next sitting applies it and logs "applied".
 
 The critic pulls toward a plausible face while the journey keeps moving the goal. When the two disagree, the log says so. There are no model calls: every line is computed from the geometry and the genome, and the log window shows the last passes.
 
