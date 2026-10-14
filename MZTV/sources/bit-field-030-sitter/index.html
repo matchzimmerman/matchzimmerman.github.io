@@ -32,7 +32,16 @@
 <style>
   :root { --ink: #ece2c8; --dim: rgba(236,226,200,0.6); --bg: rgba(12,24,26,0.82); --acc: #e2a43a; --line: rgba(236,226,200,0.2); }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c181a; }
-  #v { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #v, #hud { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #hud { pointer-events: none; }
+  body.quad .mzcam-mon { display: none; }
+  #log { position: fixed; right: 1.2vh; bottom: 1.6vh; width: 46vh; max-height: 40vh; overflow: hidden; font: 400 1.05vh/1.45 "JetBrains Mono", ui-monospace, monospace;
+         color: var(--ink); background: var(--bg); border-left: 3px solid var(--acc); padding: 0.8vh 1.1vh; white-space: pre-wrap; }
+  #log .h { color: var(--acc); font-weight: 700; } #log .d { color: var(--dim); } #log .ph { display: inline-block; width: 2.2em; color: var(--acc); }
+  #log .c { color: #ff7a52; }
+  body.quad #info { display: none !important; }
+  body.quad #log { left: 1.6vh; right: auto; bottom: 1.6vh; width: 52vh; }
+  body.quad .mzcam-bay { top: 1.2vh; right: 1.2vh; }
   #info { position: fixed; left: 1.6vh; bottom: 1.6vh; max-width: 40vw; font: 400 1.18vh/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--ink);
           background: var(--bg); border-left: 3px solid var(--acc); padding: 1vh 1.3vh; letter-spacing: 0.02em; white-space: pre; }
   #info b { font-weight: 700; } #info .d { color: var(--dim); } #info .a { color: var(--acc); }
@@ -46,7 +55,9 @@
 </head>
 <body>
 <canvas id="v"></canvas>
+<canvas id="hud" width="960" height="540"></canvas>
 <div id="info"></div>
+<div id="log"></div>
 <script src="../../lib/mzcam.js"></script>
 <script>
 'use strict';
@@ -59,8 +70,8 @@ const fin = x => Number.isFinite(x);
 const LOOKS = ['gelatin', 'bit', 'silk', 'phosphor'];
 const CFG = {
   info: Q.get('info') !== '0', fresh: Q.get('fresh') === '1', audio: Q.get('audio') !== '0',
-  seed: Math.floor(qn('seed', 30)), rate: clamp(qn('rate', 1), 0.05, 200), lines: clamp(Math.round(qn('lines', 270)), 135, 1080),
-  ff: clamp(qn('ff', 0), 0, 96), sit: clamp(qn('sit', 30), 5, 600), lite: clamp(qn('lite', 1), 0.02, 1), look: LOOKS.indexOf(Q.get('look')), bay: Q.get('bay') !== '0', crew: Q.get('crew') !== '0',
+  seed: Math.floor(qn('seed', 30)), rate: clamp(qn('rate', 1), 0.05, 200), lines: clamp(Math.round(qn('lines', 300)), 135, 1080),
+  ff: clamp(qn('ff', 0), 0, 96), sit: clamp(qn('sit', 30), 5, 600), lite: clamp(qn('lite', 1), 0.02, 1), look: LOOKS.indexOf(Q.get('look')), bay: Q.get('bay') !== '0', crew: Q.get('crew') !== '0', layout: Q.get('layout') === 'single' ? 'single' : 'quad',
 };
 const STORE = 'mztv-bf030-sitter-v1';
 const PIVOT = [0, 5.6, 0.1];
@@ -103,6 +114,13 @@ const F = [
   ['cheek fat',      [0.50, 6.70, 1.05], [0.30, 0.30, 0.35], [0.020,-0.020, 0.025], 1],
 ];
 const NF = F.length;
+// detail level at which each feature starts to be drawn: the sitter learns coarse form first
+const LEVEL = { 'skull width': 0, 'face width': 0, 'jaw width': 0, 'long face': 0, 'neck': 0, 'chin length': 0, 'forehead': 0,
+  'cheekbones': 0.25, 'cheek fat': 0.25, 'cheek hollow': 0.3, 'nose length': 0.25, 'brow ridge': 0.3, 'brow height': 0.3, 'lips': 0.3, 'chin': 0.25, 'eye depth': 0.35,
+  'nostrils': 0.5, 'nose bridge': 0.45, 'mouth width': 0.45, 'mouth corners': 0.55, 'folds': 0.5, 'jowls': 0.55, 'under eyes': 0.5, 'hooded lids': 0.6 };
+// age writes itself into the face
+const AGEF = { 'folds': 1.3, 'jowls': 1.3, 'under eyes': 1.1, 'hooded lids': 0.9, 'cheek hollow': 0.6, 'mouth corners': -0.7 };
+const FLV = F.map(f => LEVEL[f[0]] || 0), FAG = F.map(f => AGEF[f[0]] || 0);
 const DSCALE = 2.5;   // one gene step ≈ 0.5–1.5 cm: a different person, not a different expression
 // expand to bump instances: [featureIndex, side(0 centre/L=+x, 1 R=-x)]
 const BUMPS = [];
@@ -128,27 +146,46 @@ function newState() {
     event: 'first sitting', ref: -1, counts: { returns: 0, composites: 0, caricatures: 0, splits: 0 },
     look: CFG.look >= 0 ? CFG.look : 0, lookPrev: 0, lookT0: -1e9, lookEnd: 3 * 3600,
     quirk: 'none', quirkEnd: 0, pal: [0, 0, 0, 0],
+    person: 0, dest: null, destFrom: null, destEnd: 0, detailTarget: 0.1, detailNow: 0.1,
   };
 }
 const R = { s: 1, f() { const r = new RNG(this.s); const v = r.f(); this.s = r.s; return v; }, n() { const r = new RNG(this.s); const v = r.n(); this.s = r.s; return v; }, r(a, b) { return a + (b - a) * this.f(); } };
 const H = () => S.t / 3600;
 const UNLOCK = { returns: 2, asym: 6, composites: 10, quirks: 16, caricature: 20, split: 30 };
+// the journey: every few hours a new person is chosen and the sitter drifts toward them.
+// Each new person is drawn with more detail than the last.
+function randomPerson() {
+  const h = H(), g = zeroGenome(), spread = 0.9 + 0.6 * clamp(h / 48, 0, 1);
+  for (let i = 0; i < NF; i++) { g.L[i] = clamp(R.n() * spread, -2.2, 2.2); g.R[i] = g.L[i]; }
+  const age = R.f();
+  g.x = { lids: R.r(0, 0.28), age, tone: R.f(), grey: clamp(age * 1.2 - 0.3 + R.n() * 0.12, 0, 1), stubble: R.f() < 0.45 ? R.r(0.35, 1) : R.r(0, 0.1),
+    iris: R.f(), brows: R.r(0.4, 1), restless: R.f() };
+  g.hair = Math.floor(R.f() * 3); g.clothes = R.f() < 0.5 ? 0 : 1;
+  return g;
+}
+function newDestination() {
+  S.person++; S.dest = randomPerson(); S.destFrom = cloneG(S.cur || zeroGenome());
+  S.destEnd = S.t + R.r(2.2, 4.6) * 3600;
+  S.detailTarget = clamp(0.1 + 0.09 * S.person, 0, 1);
+}
+function journey() { if (!S.dest) return 0; let a = 0, b = 0; for (let i = 0; i < NF; i++) { a += Math.abs(S.cur.L[i] - S.dest.L[i]); b += Math.abs(S.destFrom.L[i] - S.dest.L[i]); } return clamp(1 - a / (b + 1e-6), 0, 1); }
 
 function stepGenome(base) {
   const h = H(), g = cloneG(base);
-  const sig = 0.14 + 0.22 * clamp(h / 30, 0, 1);          // the walk widens
-  const pull = 0.09 * (1 - 0.75 * clamp(h / 40, 0, 1));    // the pull home weakens
-  const bound = 1.1 + 1.6 * clamp(h / 36, 0, 1);
+  const sig = 0.07 + 0.12 * clamp(h / 30, 0, 1);          // the walk widens
+  const pull = 0.022;                                      // toward the person it is becoming
+  const bound = 1.6 + 1.2 * clamp(h / 36, 0, 1);
+  const D = S.dest || zeroGenome();
   const asym = h < UNLOCK.asym ? 0 : 0.15 + 0.45 * clamp((h - UNLOCK.asym) / 30, 0, 1);
   for (let i = 0; i < NF; i++) {
     const shared = R.n() * sig;
-    g.L[i] = clamp(g.L[i] * (1 - pull) + shared + (F[i][4] ? R.n() * sig * asym : 0), -bound, bound);
-    g.R[i] = F[i][4] ? clamp(g.R[i] * (1 - pull) + shared + R.n() * sig * asym, -bound, bound) : g.L[i];
+    g.L[i] = clamp(g.L[i] + (D.L[i] - g.L[i]) * pull + shared + (F[i][4] ? R.n() * sig * asym : 0), -bound, bound);
+    g.R[i] = F[i][4] ? clamp(g.R[i] + (D.R[i] - g.R[i]) * pull + shared + R.n() * sig * asym, -bound, bound) : g.L[i];
     if (F[i][4] && asym === 0) g.R[i] = g.L[i] = (g.L[i] + g.R[i]) / 2;
   }
-  for (const k of XG) { const [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + R.n() * sig * 0.22 * (b - a) + (lerp(a, b, 0.35) - g.x[k]) * pull, a, b); }
-  if (R.f() < 0.035) g.hair = Math.floor(R.f() * 3);
-  if (R.f() < 0.02) g.clothes = 1 - g.clothes;
+  for (const k of XG) { const [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + R.n() * sig * 0.12 * (b - a) + (D.x[k] - g.x[k]) * pull, a, b); }
+  if (g.hair !== D.hair && R.f() < 0.02) g.hair = D.hair;
+  if (g.clothes !== D.clothes && R.f() < 0.015) g.clothes = D.clothes;
   return g;
 }
 function archivePush() {
@@ -162,7 +199,10 @@ function pickOld(minAge) { const old = S.archive.filter(e => S.k - e.k >= minAge
 function newSitting(force) {
   archivePush();
   S.k++; S.prev = cloneG(S.cur); S.morph0 = S.t; S.ref = -1;
-  const h = H(); let g = stepGenome(S.cur); S.event = 'drifting';
+  const h = H();
+  let fresh = false; if (!S.dest || S.t > S.destEnd) { newDestination(); fresh = true; }
+  let g = stepGenome(S.cur); S.applied = ''; if (S.plan && S.plan.length) applyPlan(g);
+  S.event = fresh ? 'a new person begins to emerge · draft ' + pad(S.person, 2) : 'drifting toward person ' + pad(S.person, 2);
   const roll = force === 'return' ? 0.01 : force === 'composite' ? 0.1 : force === 'caricature' ? 0.15 : force === 'split' ? 0.19 : R.f();
   if (h >= UNLOCK.returns && roll < 0.07) { const e = pickOld(40); if (e) { g = mixG(g, e.g, 0.7); S.event = 'returning toward sitting ' + pad(e.k, 4); S.ref = e.k; S.counts.returns++; } }
   else if (h >= UNLOCK.composites && roll < 0.13) {
@@ -219,7 +259,9 @@ function perform(t, g) {
 const BC = new Float32Array(NB * 4), BRr = new Float32Array(NB * 4), BD = new Float32Array(NB * 4);
 function setBumps(g) {
   for (let b = 0; b < NB; b++) {
-    const [i, side] = BUMPS[b], f = F[i], sx = side ? -1 : 1, w = side ? g.R[i] : g.L[i];
+    const [i, side] = BUMPS[b], f = F[i], sx = side ? -1 : 1, dt_ = S ? S.detailNow : 1;
+    const gate = clamp((dt_ - FLV[i]) / 0.25, 0, 1), gate2 = gate * gate * (3 - 2 * gate);
+    const w = ((side ? g.R[i] : g.L[i]) + FAG[i] * (g.x.age - 0.35) * 2) * gate2;
     BC[b * 4] = f[1][0] * sx; BC[b * 4 + 1] = f[1][1]; BC[b * 4 + 2] = f[1][2];
     BRr[b * 4] = 1 / f[2][0]; BRr[b * 4 + 1] = 1 / f[2][1]; BRr[b * 4 + 2] = 1 / f[2][2];
     BD[b * 4] = f[3][0] * sx * w * DSCALE; BD[b * 4 + 1] = f[3][1] * w * DSCALE; BD[b * 4 + 2] = f[3][2] * w * DSCALE;
@@ -236,9 +278,13 @@ function deformCPU(p) {
 }
 
 /* ------------------------------------------------------------------ GL */
-const cv = document.getElementById('v');
+const cv = document.getElementById('v'), hud = document.getElementById('hud'), hctx = hud.getContext('2d');
 let gl = null, GL = null, DATA = null, glOK = false;
-const W = () => Math.round(CFG.lines * 16 / 9), Hh = () => CFG.lines;
+let curLines = 150;
+const W = () => Math.round(curLines * 16 / 9), Hh = () => curLines;
+const QUAD = () => CFG.layout === 'quad' && !!crew;
+const OW = () => W() * (QUAD() ? 2 : 1), OH = () => Hh() * (QUAD() ? 2 : 1);
+function detailLines() { const d = S ? S.detailNow : 0.1; return Math.max(120, Math.round(lerp(132, CFG.lines, d) / 12) * 12); }
 
 const FIELD_GLSL = `
 #define NB ${NB}
@@ -272,13 +318,14 @@ float ell(vec3 p, vec3 c, vec3 r, float soft) { float d = length((p - c) / r); r
 `;
 const FS_SKIN = COMMON_FS + `
 varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
-uniform float uAge, uTone, uScalp, uStub;
+uniform float uAge, uTone, uScalp, uStub, uDetail;
 void main() {
   vec3 n = normalize(vN), v = normalize(uEye - vW);
   vec3 lite = mix(vec3(0.86, 0.66, 0.56), vec3(0.42, 0.27, 0.19), uTone);
   vec3 dark = mix(vec3(0.70, 0.47, 0.39), vec3(0.30, 0.18, 0.12), uTone);
   float mot = vnoise(vO * 9.0) * 0.6 + vnoise(vO * 31.0) * 0.4;
   vec3 col = mix(dark, lite, 0.35 + 0.4 * mot);
+  float pore = vnoise(vO * 140.0) * vnoise(vO * 67.0); col *= 1.0 - 0.16 * uDetail * pore;
   float lips = ell(vO, vec3(0.0, 6.615, 1.56), vec3(0.19, 0.065, 0.12), 0.6);
   float flush = max(ell(vO, vec3(0.0, 6.93, 1.62), vec3(0.13, 0.12, 0.12), 0.9), max(ell(vO, vec3(0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0), ell(vO, vec3(-0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0)));
   col = mix(col, col * vec3(0.95, 0.72, 0.68), flush * 0.5);
@@ -296,8 +343,8 @@ void main() {
   // age: forehead lines and crow's feet darken the creases
   float fh = ell(vO, vec3(0.0, 7.78, 1.25), vec3(0.42, 0.2, 0.3), 0.9);
   float lines = smoothstep(0.75, 1.0, sin((vO.y + 0.03 * vnoise(vO * 6.0)) * 95.0)) * fh;
-  col *= 1.0 - lines * uAge * 0.25;
-  float ao = mix(1.0, vAO, 0.85);
+  col *= 1.0 - lines * uAge * 0.3 * uDetail;
+  float ao = mix(1.0, vAO, 0.45 + 0.45 * uDetail);
   vec3 L = normalize(uKey), F2 = normalize(uFill);
   float nl = dot(n, L), wrap = clamp((nl + 0.35) / 1.35, 0.0, 1.0);
   vec3 sss = mix(vec3(1.0, 0.55, 0.45), vec3(1.0), clamp(nl * 2.0 + 0.3, 0.0, 1.0));
@@ -434,7 +481,9 @@ function decodeData(meta, bin) {
   const P = deq(blob('body_pos')), I = blob('body_idx'), Bk = ddq(blob('body_blink'), meta.d_Blink);
   const P1 = P.map((v, i) => v + Bk[i]);
   D.body = { P, I, B: Bk, J: ddq(blob('body_jaw'), meta.d_Jaw), S: ddq(blob('body_swallow'), meta.d_Swallow), N0: normals(P, I), N1: normals(P1, I), AO: Float32Array.from(blob('body_ao'), v => v / 255) };
-  for (const k of ['jacket', 'collar', 'sweater']) { const Pc = deq(blob(k + '_pos')), Ic = blob(k + '_idx'); D[k] = { P: Pc, I: Ic, N0: normals(Pc, Ic) }; }
+  for (const k of ['jacket', 'sweater']) { const Pc = deq(blob(k + '_pos')), Ic = blob(k + '_idx'); D[k] = { P: Pc, I: Ic, N0: normals(Pc, Ic) }; }
+  D.collar = buildCollar(P, normals);
+  D.scan = buildScanMesh(P, D.body.N0);
   // strands → line segments (expanded pairs, so no 32-bit index needed)
   const lines = (pk, nk, pk2) => {
     const pts = deq(blob(pk)), pts2 = pk2 ? deq(blob(pk2)) : null, ns = nk ? blob(nk) : null;
@@ -452,6 +501,59 @@ function decodeData(meta, bin) {
   D.lash = lines('lash_open_pts', null, 'lash_closed_pts');
   D.meta = meta;
   return D;
+}
+// the scanner's face mesh: a jittered grid of front-facing landmarks plus the features, Delaunay triangulated
+function buildScanMesh(P, N) {
+  const pts = [], tag = [];
+  const front = (gx, gy, rx, ry) => { let best = -1, bz = -1e9; for (let i = 0; i < P.length; i += 3) { if (Math.abs(P[i] - gx) > rx || Math.abs(P[i + 1] - gy) > ry || N[i + 2] < 0.25) continue; if (P[i + 2] > bz) { bz = P[i + 2]; best = i; } }
+    return best < 0 ? null : [P[best], P[best + 1], P[best + 2]]; };
+  const FEAT = { 'eye L inner': [0.19, 7.29], 'eye L outer': [0.43, 7.28], 'eye R inner': [-0.19, 7.29], 'eye R outer': [-0.43, 7.28], 'lid L': [0.31, 7.4], 'lid R': [-0.31, 7.4],
+    'brow L': [0.3, 7.5], 'brow R': [-0.3, 7.5], 'brow L out': [0.48, 7.46], 'brow R out': [-0.48, 7.46], 'nose tip': [0, 6.88], 'nose base': [0, 6.8], 'nostril L': [0.09, 6.84], 'nostril R': [-0.09, 6.84],
+    'mouth L': [0.2, 6.6], 'mouth R': [-0.2, 6.6], 'lip top': [0, 6.65], 'lip low': [0, 6.55], 'chin': [0, 6.25], 'jaw L': [0.52, 6.45], 'jaw R': [-0.52, 6.45],
+    'cheek L': [0.55, 6.95], 'cheek R': [-0.55, 6.95], 'temple L': [0.66, 7.5], 'temple R': [-0.66, 7.5], 'hairline': [0, 8.0], 'glabella': [0, 7.42] };
+  for (const [k, [x, y]] of Object.entries(FEAT)) { const p = front(x, y, 0.03, 0.03) || front(x, y, 0.07, 0.07); if (p) { pts.push(p); tag.push(k); } }
+  for (let gy = 6.18; gy <= 8.1; gy += 0.15) for (let gx = -0.66; gx <= 0.67; gx += 0.14) {
+    const jx = gx + ((gy * 7.3) % 1 - 0.5) * 0.05; if ((jx / 0.7) ** 2 + ((gy - 7.15) / 1.0) ** 2 > 1) continue;
+    if (pts.some(q => Math.hypot(q[0] - jx, q[1] - gy) < 0.07)) continue;
+    const p = front(jx, gy, 0.045, 0.045); if (p) { pts.push(p); tag.push(''); } }
+  // Bowyer–Watson in the frontal plane
+  const xy = pts.map(p => [p[0], p[1]]), big = [[-10, 0], [10, 0], [0, 20]], A = xy.concat(big), n = xy.length;
+  let tris = [[n, n + 1, n + 2]];
+  const circ = t => { const [a, b, c] = t.map(i => A[i]); const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])); if (Math.abs(d) < 1e-12) return [0, 0, 1e18];
+    const a2 = a[0] ** 2 + a[1] ** 2, b2 = b[0] ** 2 + b[1] ** 2, c2 = c[0] ** 2 + c[1] ** 2; const ux = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d, uy = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d;
+    return [ux, uy, (a[0] - ux) ** 2 + (a[1] - uy) ** 2]; };
+  for (let i = 0; i < n; i++) { const p = A[i], bad = [], keep = [];
+    for (const t of tris) { const c = circ(t); ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 < c[2] ? bad : keep).push(t); }
+    const edges = []; for (const t of bad) for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const k = edges.findIndex(e => (e[0] === v && e[1] === u) || (e[0] === u && e[1] === v)); if (k >= 0) edges.splice(k, 1); else edges.push([u, v]); }
+    tris = keep.concat(edges.map(([u, v]) => [u, v, i])); }
+  tris = tris.filter(t => t.every(i => i < n) && Math.max(...[[0, 1], [1, 2], [2, 0]].map(([a, b]) => Math.hypot(A[t[a]][0] - A[t[b]][0], A[t[a]][1] - A[t[b]][1]))) < 0.36);
+  return { pts, tag, tris };
+}
+// a stand collar that wraps the whole neck (open at the front), sized from the neck itself
+function buildCollar(P, normals) {
+  const zs = []; for (let i = 0; i < P.length; i += 3) if (P[i + 1] > 5.85 && P[i + 1] < 6.25 && Math.abs(P[i]) < 0.6) zs.push(P[i + 2]);
+  zs.sort((a, b) => a - b); const cz = zs[zs.length >> 1] || 0.35;
+  const NA = 72, NL = 9, open = 26 * Math.PI / 180, TAU = Math.PI * 2;
+  const rings = [];
+  for (let j = 0; j < NL; j++) {
+    const yy = 5.8 + 0.74 * j / (NL - 1), ys = Math.min(yy, 6.12), best = new Float32Array(NA);
+    for (let i = 0; i < P.length; i += 3) { if (Math.abs(P[i + 1] - ys) > 0.045) continue; const x = P[i], z = P[i + 2] - cz, r = Math.hypot(x, z); if (r > 0.75) continue;
+      let a = Math.atan2(x, z); if (a < 0) a += TAU; const b = Math.floor(a / TAU * NA) % NA; if (r > best[b]) best[b] = r; }
+    for (let pass = 0; pass < NA; pass++) for (let b = 0; b < NA; b++) if (!best[b]) best[b] = best[(b + NA - 1) % NA] || best[(b + 1) % NA];
+    const sm = new Float32Array(NA); for (let b = 0; b < NA; b++) { let a = 0; for (let k = -4; k <= 4; k++) a += best[(b + k + NA) % NA] || 0.42; sm[b] = a / 9; }
+    rings.push(sm);
+  }
+  const V = [], ring = (j, k, off) => { const a = open + (TAU - 2 * open) * k / NA, b = Math.floor(((a % TAU) + TAU) % TAU / TAU * NA) % NA;
+    const t = j / (NL - 1), r = rings[j][b] + off + 0.06 * Math.pow(t, 1.5); V.push(Math.sin(a) * r, 5.8 + 0.74 * t, cz + Math.cos(a) * r); };
+  for (const off of [0.11, 0.045]) for (let j = 0; j < NL; j++) for (let k = 0; k <= NA; k++) ring(j, k, off);
+  const n = (NL) * (NA + 1), id = (o, j, k) => o * n + j * (NA + 1) + k, I = [];
+  for (let j = 0; j < NL - 1; j++) for (let k = 0; k < NA; k++) {
+    I.push(id(0, j, k), id(0, j, k + 1), id(0, j + 1, k + 1), id(0, j, k), id(0, j + 1, k + 1), id(0, j + 1, k));
+    I.push(id(1, j, k), id(1, j + 1, k + 1), id(1, j, k + 1), id(1, j, k), id(1, j + 1, k), id(1, j + 1, k + 1)); }
+  for (let k = 0; k < NA; k++) { const j = NL - 1; I.push(id(0, j, k), id(1, j, k), id(1, j, k + 1), id(0, j, k), id(1, j, k + 1), id(0, j, k + 1)); }
+  for (const k of [0, NA]) for (let j = 0; j < NL - 1; j++) I.push(id(0, j, k), id(1, j, k), id(1, j + 1, k), id(0, j, k), id(1, j + 1, k), id(0, j + 1, k));
+  const Pc = new Float32Array(V), Ic = new Uint16Array(I);
+  return { P: Pc, I: Ic, N0: normals(Pc, Ic) };
 }
 function sphere(r, nu, nv) {
   const P = [], I = [];
@@ -495,7 +597,10 @@ function newTarget(w, h, depth) {
   if (depth) { T.rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, T.rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, T.rb); }
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); return T;
 }
+function freeTarget(T) { if (!T) return; gl.deleteFramebuffer(T.fbo); gl.deleteTexture(T.tex); if (T.rb) gl.deleteRenderbuffer(T.rb); }
 function makeTarget(G) {
+  if (G.tiles) G.tiles.forEach(freeTarget);
+  G.tiles = [0, 1, 2, 3].map(() => newTarget(W(), Hh(), true));
   if (G.fbo) { gl.deleteFramebuffer(G.fbo); gl.deleteTexture(G.tex); gl.deleteRenderbuffer(G.rb); }
   G.w = W(); G.h = Hh();
   G.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, G.tex);
@@ -508,10 +613,11 @@ function makeTarget(G) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 function resize() {
-  const vw = innerWidth, vh = innerHeight, w = W(), h = Hh();
+  const vw = innerWidth, vh = innerHeight, w = OW(), h = OH();
   const s = Math.max(1, Math.floor(Math.min(vw / w, vh / h)));
   const cw = w * s, ch = h * s; cv.width = cw; cv.height = ch;
   const fit = Math.min(vw / cw, vh / ch); cv.style.width = Math.round(cw * fit) + 'px'; cv.style.height = Math.round(ch * fit) + 'px';
+  hud.style.width = cv.style.width; hud.style.height = cv.style.height; document.body.classList.toggle('quad', QUAD()); drawHud();
 }
 addEventListener('resize', resize);
 cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glOK = false; }, false);
@@ -570,7 +676,7 @@ function drawLines(pr, l, col, alpha, grey, mixP) {
   if (!l || alpha <= 0.003) return;
   gl.uniform3fv(pr.u.uCol, col); gl.uniform1f(pr.u.uAlpha, alpha); gl.uniform1f(pr.u.uGrey, grey); gl.uniform1f(pr.u.uMixP, mixP || 0);
   bindAttr(pr, 'aP', l.A, 3); bindAttr(pr, 'aP2', l.A2, 3); bindAttr(pr, 'aT', l.T, 2);
-  gl.drawArrays(gl.LINES, 0, Math.floor(l.n * CFG.lite / 2) * 2); unbindAll();
+  gl.drawArrays(gl.LINES, 0, Math.floor(l.n * CFG.lite * (S ? 0.3 + 0.7 * S.detailNow : 1) / 2) * 2); unbindAll();
 }
 function hairCol(g, dark) { const m = clamp(0.25 + 0.75 * (1 - g.x.tone * 0.2), 0, 1); const b = [0.22, 0.15, 0.09].map(v => v * (1.25 - m)); return dark ? b.map(v => v * 0.6) : b; }
 let FR = { n: 0, t: 0, fps: 0 };
@@ -582,7 +688,7 @@ function renderScene(T, cam, p, g, viewer) {
   gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
   let pr = G.skin; gl.useProgram(pr.p); common(pr, vp, rot, eye);
   gl.uniform1f(pr.u.uBlink, p.blink); gl.uniform1f(pr.u.uJaw, p.jaw); gl.uniform1f(pr.u.uSw, p.swallow);
-  gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble);
+  gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble); gl.uniform1f(pr.u.uDetail, S.detailNow);
   gl.uniform1f(pr.u.uScalp, g.hairFade[0] + g.hairFade[1] + g.hairFade[2] * 0.35);
   drawMesh(pr, G.body);
   pr = G.cloth; gl.useProgram(pr.p); common(pr, vp, rot, eye);
@@ -605,28 +711,38 @@ function renderScene(T, cam, p, g, viewer) {
   const hc = hairCol(g);
   for (let i = 0; i < 2; i++) drawLines(pr, G.hair[i], hc, 0.55 * g.hairFade[i], g.x.grey * 0.85, 0);
   drawLines(pr, G.brows, hairCol(g, true), 0.75 * g.x.brows, g.x.grey * 0.5, 0);
-  drawLines(pr, G.stubble, hairCol(g, true), 0.7 * g.x.stubble, g.x.grey, 0);
-  drawLines(pr, G.fuzz, [0.75, 0.62, 0.52], 0.08, 0, 0);
+  drawLines(pr, G.stubble, hairCol(g, true), 0.7 * g.x.stubble * (0.5 + 0.5 * S.detailNow), g.x.grey, 0);
+  drawLines(pr, G.fuzz, [0.75, 0.62, 0.52], 0.1 * S.detailNow, 0, 0);
   drawLines(pr, G.lash, [0.03, 0.025, 0.02], 0.9, 0, p.blink);
   gl.depthMask(true); gl.disable(gl.BLEND);
 }
-function postPass(src, dst, w, h, simT) {
-  const G = GL; gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fbo : null); gl.viewport(0, 0, w, h); gl.disable(gl.DEPTH_TEST);
+function postPass(src, dst, w, h, simT, x0, y0, lookOv) {
+  const G = GL; gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fbo : null); gl.viewport(x0 || 0, y0 || 0, w, h); gl.disable(gl.DEPTH_TEST);
   const pr = G.post; gl.useProgram(pr.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(pr.u.uTex, 0);
   gl.uniform2f(pr.u.uRes, src.w, src.h); gl.uniform1f(pr.u.uTime, simT);
-  gl.uniform1i(pr.u.uA, S.look); gl.uniform1i(pr.u.uB, S.lookPrev); gl.uniform1f(pr.u.uFade, clamp((S.t - S.lookT0) / 20, 0, 1));
-  const ik = S.pal; gl.uniform3fv(pr.u.uI0, ik[0]); gl.uniform3fv(pr.u.uI1, ik[1]); gl.uniform3fv(pr.u.uI2, ik[2]); gl.uniform3fv(pr.u.uI3, ik[3]);
+  const ov = lookOv !== undefined;
+  gl.uniform1i(pr.u.uA, ov ? lookOv : S.look); gl.uniform1i(pr.u.uB, ov ? lookOv : S.lookPrev); gl.uniform1f(pr.u.uFade, ov ? 1 : clamp((S.t - S.lookT0) / 20, 0, 1));
+  const ik = ov ? SCAN_INKS : S.pal; gl.uniform3fv(pr.u.uI0, ik[0]); gl.uniform3fv(pr.u.uI1, ik[1]); gl.uniform3fv(pr.u.uI2, ik[2]); gl.uniform3fv(pr.u.uI3, ik[3]);
   bindAttr(pr, 'aQ', G.quad, 2); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); unbindAll();
 }
 const hexCache = {};
 function hex3(h) { return hexCache[h] || (hexCache[h] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)); }
 function render(p, g, simT) {
   if (!glOK || !GL) return;
+  const want = detailLines(); if (want !== curLines) { curLines = want; resize(); }
   const G = GL; if (G.w !== W() || G.h !== Hh()) makeTarget(G);
+  if (cv.width !== OW() * Math.max(1, Math.floor(Math.min(innerWidth / OW(), innerHeight / OH())))) resize();
   setBumps(g); S.pal = inks(S.look, S.t);
+  if (QUAD() && !MZ.camOverride) {
+    // four lenses, four tiles: CAM 1 top left, CAM 2 top right, CAM 3 bottom left, CAM 4 bottom right
+    const tw = cv.width / 2, th = cv.height / 2;
+    crew.drones.forEach((d, i) => { if (!d.cam) return; renderScene(G.tiles[i], d.cam, p, g, d);
+      postPass(G.tiles[i], null, tw, th, simT + i * 7.1, (i % 2) * tw, (i < 2 ? 1 : 0) * th, i === 3 ? 3 : undefined); });
+    return;
+  }
   const live = crew && crew.liveDrone.cam ? crew.liveDrone : null;
-  renderScene({ fbo: G.fbo, w: G.w, h: G.h }, live ? live.cam : HOME_CAM(), p, g, live);
+  renderScene({ fbo: G.fbo, w: G.w, h: G.h }, MZ.camOverride || (live ? live.cam : HOME_CAM()), p, g, live);
   postPass({ tex: G.tex, w: G.w, h: G.h }, null, cv.width, cv.height, simT);
 }
 // a bay monitor: the same scene and look through one drone, read back into its 2D canvas
@@ -674,17 +790,27 @@ function frontal() {
     minHold: 5, maxHold: 30, onAir() { this.maxHold = 9 + crand() * 22; }, want: () => nearChange() ? 4 : 1.5, done: () => false };
 }
 const KINDS = ['eyes', 'eye', 'mouth', 'profile', 'three', 'behind', 'over', 'low', 'wide', 'orbit'];
+// the scanner: works from a few analysis positions; its tile shows the scan layer, not the picture
+function scanShot() {
+  const k = Math.floor(crand() * 4), side = crand() < 0.5 ? 1 : -1;
+  const m = [{ l: 'SCAN · FRONT', p: mv(0, 7.25, 8.2), f: 25 }, { l: 'SCAN · FRONT', p: mv(0, 7.4, 9.0), f: 24 },
+             { l: 'SCAN · THREE-QUARTER', p: mv(4.6 * side, 7.4, 6.6), f: 25 }, { l: 'SCAN · PROFILE', p: mv(8.4 * side, 7.25, 1.2), f: 23 }][k];
+  return { kind: 'scan', label: m.l, mark: { pos: m.p }, aim: () => ({ look: mv(0, 7.15, 1.0), fov: m.f }), pan: 1.0, airedAt: -1, t0: -1,
+    start() { this.t0 = performance.now() / 1000; }, onAir(t) { this.airedAt = t; },
+    want: () => (QUAD() ? 0.6 : 0), maxHold: 8, minHold: 4,
+    done(t) { return t - this.t0 > (k >= 2 ? 25 : 40); } };
+}
 function initCrew() {
   if (!CFG.crew || !window.MZCam) return;
   crew = new MZCam.Crew({
-    drones: [{ name: 'CAM 1 · BOLEX', col: '#e2a43a', pos: mv(0, 7.0, 11.6) }, { name: 'CAM 2', col: '#3f8f8a', pos: mv(6, 8, 8) }, { name: 'CAM 3', col: '#d8cfb8', pos: mv(-6, 8, 8) }, { name: 'CAM 4', col: '#b5532c', pos: mv(0, 10.5, 14) }],
+    drones: [{ name: 'CAM 1 · BOLEX', col: '#e2a43a', pos: mv(0, 7.0, 11.6) }, { name: 'CAM 2', col: '#3f8f8a', pos: mv(6, 8, 8) }, { name: 'CAM 3', col: '#d8cfb8', pos: mv(-6, 8, 8) }, { name: 'CAM 4 · SCANNER', col: '#b5532c', pos: mv(0, 10.5, 14) }],
     speed: 7, accel: 5, cruise: 10.5, minAlt: 5.2, arrive: 0.12, size: 0.56, clearDist: 14, tallyCol: '#ff5533',
     avoid: p => { const c = mv(0, 7.0, 0.6), d = vsub(p, c), l = vlen(d); return l < 2.4 ? vadd(c, vmul(d, 2.4 / (l || 1))) : p; },
     gate: t => { if (PEND0 < 0) PEND0 = t; const ok = blinkingNow() || t - PEND0 > 5; if (ok) PEND0 = -1; return ok; },
     onCut: (from, to, t) => { if (S) S.lastCut = to.name + ' · ' + (to.shot ? to.shot.label : ''); },
   });
   crew.assign(crew.drones[0], frontal());
-  if (CFG.bay) bay = new MZCam.Bay(crew, { w: 192, h: 108, every: 2, render: (g, w, h, P, d) => renderThumb(g, w, h, d), bounds: { x0: -12, x1: 12, z0: -10, z1: 22 },
+  if (CFG.bay) bay = new MZCam.Bay(crew, { w: 192, h: 108, every: 2, render: (g, w, h, P, d) => { if (!QUAD()) renderThumb(g, w, h, d); }, bounds: { x0: -12, x1: 12, z0: -10, z1: 22 },
     planBg: (g, W_, H_, map, sc) => { g.fillStyle = '#0c181a'; g.fillRect(0, 0, W_, H_); const c = map(0, 1.0); g.fillStyle = 'rgba(226,164,58,0.5)'; g.beginPath(); g.arc(c[0], c[1], 0.9 * sc, 0, 6.283); g.fill();
       g.strokeStyle = 'rgba(236,226,200,0.18)'; g.strokeRect(...map(-12, -9), 24 * sc, 0.3 * sc); },
     planInk: '#ece2c8' });
@@ -693,7 +819,7 @@ function crewTick(dt) {
   if (!crew) return;
   if (!crew.pending) PEND0 = -1;
   const busy = new Set(crew.drones.filter(d => d.shot).map(d => d.shot.kind));
-  for (const d of crew.free()) { if (d.id === 0) { crew.assign(d, frontal()); continue; }
+  for (const d of crew.free()) { if (d.id === 0) { crew.assign(d, frontal()); continue; } if (d.id === 3) { crew.assign(d, scanShot()); continue; }
     const opts = KINDS.filter(k => !busy.has(k)); const k = opts[Math.floor(crand() * opts.length)]; busy.add(k); crew.assign(d, coverage(k)); }
   crew.update(dt, performance.now() / 1000);
 }
@@ -711,15 +837,185 @@ function frame(now) {
   if (!S) return;
   try {
     advance(dt);
+    S.detailNow += (S.detailTarget - S.detailNow) * (1 - Math.exp(-dt / 900));
     const g = liveGenome();
     if (!okG(g)) { S.prev = S.tgt = S.archive.length ? cloneG(S.archive[S.archive.length - 1].g) : zeroGenome(); S.event = 'regrown from memory'; return; }
     PERF = perform(S.t, g);
     crewTick(Math.min(dt, 0.25));
     render(PERF, g, S.t);
     if (bay) bay.tick(FR.n);
+    analyzeTick(); drawHud();
     FR.n++;
   } catch (err) { console.error(err); }
 }
+
+/* ------------------------------------------------------------------ the analysis engine
+   Every sitting runs one pass of an evolution loop:
+     M · MUTATE    the face takes its step (the morph, under a blink)
+     A · ANALYZE   the scanner measures the face it now has
+     I · INTERPRET the measurements become critiques
+     R · REVISE    a plan for the next pass, which the next sitting applies
+   The critic pulls toward a plausible face; the journey keeps moving the goal. No model calls:
+   every line is computed from the geometry and the genome. */
+const SCAN_INKS = [[0.02, 0.05, 0.04], [0.6, 1.0, 0.55], [0.89, 0.64, 0.23], [0.42, 1.0, 0.5]];
+const PHASES = [['M', 'MUTATE', 0], ['A', 'ANALYZE', 7], ['I', 'INTERPRET', 0.57], ['R', 'REVISE', 0.8]];
+function phaseOf(t) { const u = (t % CFG.sit) / CFG.sit, a = MORPH / CFG.sit; return u < a ? 0 : u < 0.57 ? 1 : u < 0.8 ? 2 : 3; }
+const LM = name => { const sm = DATA && DATA.scan; const i = sm ? sm.tag.indexOf(name) : -1; return i < 0 ? null : deformCPU(sm.pts[i]); };
+const dist2 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+let NEUTRAL = null;
+function measure(g) {
+  setBumps(g); const L = n => LM(n);
+  const eL = deformCPU([0.308, 7.284, 1.233]), eR = deformCPU([-0.308, 7.284, 1.233]);
+  const m = {}, br = L('brow L'), brR = L('brow R'), tL = L('temple L'), tR = L('temple R'), nb = L('nose base'), ch = L('chin'), hl = L('hairline'), gl_ = L('glabella');
+  m.ipd = dist2(eL, eR); m.face = tL && tR ? dist2(tL, tR) : 1.3; m.eyeRatio = m.ipd / m.face;
+  m.mouth = dist2(L('mouth L') || [0.2, 0], L('mouth R') || [-0.2, 0]) / m.ipd;
+  m.upper = hl && gl_ ? hl[1] - gl_[1] : 0.6; m.middle = gl_ && nb ? gl_[1] - nb[1] : 0.6; m.lower = nb && ch ? nb[1] - ch[1] : 0.6;
+  m.gapL = br ? br[1] - eL[1] : 0.2; m.gapR = brR ? brR[1] - eR[1] : 0.2;
+  m.jaw = dist2(L('jaw L') || [0.5, 0], L('jaw R') || [-0.5, 0]) / m.face;
+  let asy = 0, worst = -1, wv = 0; for (let i = 0; i < NF; i++) if (F[i][4]) { const d = Math.abs(g.L[i] - g.R[i]); asy += d; if (d > wv) { wv = d; worst = i; } } m.asym = asy / NF; m.asymWorst = worst; m.asymV = wv;
+  let ext = -1, ev = 0; for (let i = 0; i < NF; i++) { const v = Math.max(Math.abs(g.L[i]), Math.abs(g.R[i])); if (v > ev) { ev = v; ext = i; } } m.ext = ext; m.extV = ev;
+  return m;
+}
+const AN = { k: -1, done: {}, plan: [], findings: [], focus: [] };
+function logLine(ph, text, cls) { if (!S) return; S.log = S.log || []; S.log.push({ t: S.t, k: S.k, ph, text, cls: cls || '' }); if (S.log.length > 80) S.log.splice(0, S.log.length - 80); }
+function analyzeTick() {
+  if (!S || !DATA || !DATA.scan) return;
+  if (!NEUTRAL) NEUTRAL = measure(zeroGenome());
+  if (AN.k !== S.k) { AN.k = S.k; AN.done = {}; AN.findings = []; AN.focus = []; }
+  const u = (S.t % CFG.sit) / CFG.sit, ph = phaseOf(S.t), g = S.tgt, d = S.detailNow;
+  const once = (key, fn) => { if (!AN.done[key]) { AN.done[key] = 1; fn(); } };
+  if (ph === 0) once('m', () => logLine('M', 'sitting ' + pad(S.k, 4) + ' · ' + S.event + (S.applied ? ' · applied: ' + S.applied : '')));
+  if (ph >= 1) once('a1', () => { const m = AN.m = measure(g), n = NEUTRAL;
+    AN.findings = [];
+    const thirds = [m.upper, m.middle, m.lower], tm = (thirds[0] + thirds[1] + thirds[2]) / 3;
+    logLine('A', 'landmarks ' + DATA.scan.pts.length + ' · mesh ' + DATA.scan.tris.length + ' tris · detail ' + Math.round(d * 100) + '% · person ' + pad(S.person, 2) + ' ' + Math.round(journey() * 100) + '% reached');
+    logLine('A', 'eye spacing ' + (m.eyeRatio / n.eyeRatio * 100).toFixed(0) + '% of norm · mouth ' + (m.mouth / n.mouth * 100).toFixed(0) + '% · thirds ' + thirds.map(v => (v / tm).toFixed(2)).join(' / '));
+    if (Math.min(m.gapL, m.gapR) < n.gapL * 0.72) AN.findings.push({ key: 'brows', text: 'brows sitting on the lids: brow hair reads as hair on the eyelids · distracting', fix: ['brow height', 0.45, 'raise brows'], focus: ['brow L', 'brow R', 'lid L', 'lid R'] });
+    if (m.lower / tm > 1.18) AN.findings.push({ key: 'lower', text: 'lower third long (' + (m.lower / tm).toFixed(2) + ') · face reads stretched', fix: ['chin length', -0.35, 'shorten chin'], focus: ['chin', 'nose base'] });
+    if (m.lower / tm < 0.84) AN.findings.push({ key: 'lower', text: 'lower third short (' + (m.lower / tm).toFixed(2) + ') · jaw compressed', fix: ['chin length', 0.3, 'lengthen chin'], focus: ['chin'] });
+    if (m.eyeRatio / n.eyeRatio < 0.9) AN.findings.push({ key: 'eyes', text: 'eyes close-set for this skull (' + (m.eyeRatio / n.eyeRatio * 100).toFixed(0) + '%)', fix: ['skull width', -0.3, 'narrow skull'], focus: ['eye L outer', 'eye R outer', 'temple L', 'temple R'] });
+    if (m.mouth / n.mouth > 1.22) AN.findings.push({ key: 'mouth', text: 'mouth wide against the eyes (' + (m.mouth / n.mouth * 100).toFixed(0) + '%)', fix: ['mouth width', -0.4, 'narrow mouth'], focus: ['mouth L', 'mouth R'] });
+    if (H() < UNLOCK.split && m.asymV > 0.55) AN.findings.push({ key: 'asym', text: 'asymmetry in ' + F[m.asymWorst][0] + ' (' + m.asymV.toFixed(2) + ') beyond a living face', fix: ['~sym', m.asymWorst, 'meet ' + F[m.asymWorst][0] + ' halfway'], focus: [] });
+    if (m.extV > 2.0) AN.findings.push({ key: 'ext', text: F[m.ext][0] + ' at ' + m.extV.toFixed(2) + ' · outside the plausible range', fix: ['~pull', m.ext, 'pull ' + F[m.ext][0] + ' back'], focus: [] });
+    if (g.x.brows < 0.5 && d > 0.35) AN.findings.push({ key: 'browd', text: 'brows sparse (' + g.x.brows.toFixed(2) + ') at this detail · face reads unfinished', fix: ['x:brows', 0.15, 'increase brow density'], focus: ['brow L', 'brow R'] });
+    if (Math.abs(g.x.grey - clamp(g.x.age * 1.2 - 0.3, 0, 1)) > 0.45) AN.findings.push({ key: 'grey', text: 'grey ' + g.x.grey.toFixed(2) + ' against age ' + g.x.age.toFixed(2) + ' · inconsistent', fix: ['x:grey', clamp(g.x.age * 1.2 - 0.3, 0, 1) - g.x.grey, 'reconcile grey with age'], focus: ['hairline'] });
+    if (g.x.stubble > 0.65 && g.x.age < 0.18) AN.findings.push({ key: 'stub', text: 'heavy stubble at age ' + g.x.age.toFixed(2) + ' · unlikely', fix: ['x:stubble', -0.25, 'thin stubble'], focus: ['chin', 'jaw L', 'jaw R'] });
+    if (g.x.lids > 0.24) AN.findings.push({ key: 'lids', text: 'lids resting low (' + g.x.lids.toFixed(2) + ') · iris half covered', fix: ['x:lids', -0.08, 'open lids'], focus: ['lid L', 'lid R'] });
+    if (d < 0.5) AN.findings.push({ key: 'draft', text: 'draft ' + pad(S.person, 2) + ': fine features not yet drawn (' + F.filter((f, i) => FLV[i] > d).map(f => f[0]).slice(0, 3).join(', ') + ')', fix: null, focus: [] });
+    if (!AN.findings.length) AN.findings.push({ key: 'ok', text: 'no faults above threshold · holding course toward person ' + pad(S.person, 2), fix: null, focus: [] });
+  });
+  if (ph >= 1 && u > 0.42) once('a2', () => { const m = AN.m; logLine('A', 'brow–lid gap ' + (m.gapL * 100).toFixed(0) + ' / ' + (m.gapR * 100).toFixed(0) + ' mm · jaw ' + (m.jaw * 100).toFixed(0) + '% of face · halves apart ' + m.asym.toFixed(2)); });
+  if (ph >= 2) AN.findings.forEach((f, i) => { if (u > 0.58 + i * 0.05) once('i' + i, () => { logLine('I', f.text, f.fix ? 'c' : ''); AN.focus = AN.focus.concat(f.focus || []); }); });
+  if (ph >= 3) once('r', () => {
+    // the plan: the strongest two fixes, weighed against the pull toward the next person
+    const fixes = AN.findings.filter(f => f.fix).slice(0, 2);
+    S.plan = fixes.map(f => f.fix);
+    if (!fixes.length) logLine('R', 'next pass: no correction · let the journey lead');
+    for (const f of fixes) { const [gene, v, what] = f.fix; const tgtv = gene[0] !== '~' && gene.indexOf('x:') !== 0 && S.dest ? S.dest.L[F.findIndex(q => q[0] === gene)] : null;
+      logLine('R', 'next pass: ' + what + (typeof v === 'number' && gene[0] !== '~' ? ' ' + (v > 0 ? '+' : '') + v.toFixed(2) : '') + (tgtv !== null && tgtv !== undefined && Math.sign(tgtv) !== Math.sign(v) && Math.abs(tgtv) > 0.6 ? ' · conflicts with person ' + pad(S.person, 2) + ', compromise' : '')); }
+  });
+}
+function applyPlan(g) {
+  const done = [];
+  for (const [gene, v, what] of (S.plan || [])) {
+    if (gene === '~sym') { const i = v; const mid = (g.L[i] + g.R[i]) / 2; g.L[i] = lerp(g.L[i], mid, 0.6); g.R[i] = lerp(g.R[i], mid, 0.6); }
+    else if (gene === '~pull') { g.L[v] *= 0.7; g.R[v] *= 0.7; }
+    else if (gene.indexOf('x:') === 0) { const k = gene.slice(2), [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + v, a, b); }
+    else { const i = F.findIndex(f => f[0] === gene); if (i >= 0) { g.L[i] += v * 0.6; g.R[i] += v * 0.6; } }
+    done.push(what);
+  }
+  S.plan = []; S.applied = done.join(', ');
+}
+
+/* ------------------------------------------------------------------ the HUD: bitmap type drawn on the grid */
+const GLYPH = (() => { const src = {
+  A: '01110100011000111111100011000110001', B: '11110100011000111110100011000111110', C: '01110100011000010000100001000101110', D: '11110100011000110001100011000111110',
+  E: '11111100001000011110100001000011111', F: '11111100001000011110100001000010000', G: '01110100011000010111100011000101111', H: '10001100011000111111100011000110001',
+  I: '01110001000010000100001000010001110', J: '00111000100001000010000101001001100', K: '10001100101010011000101001001010001', L: '10000100001000010000100001000011111',
+  M: '10001110111010110101100011000110001', N: '10001100011100110101100111000110001', O: '01110100011000110001100011000101110', P: '11110100011000111110100001000010000',
+  Q: '01110100011000110001101011001001101', R: '11110100011000111110101001001010001', S: '01111100001000001110000010000111110', T: '11111001000010000100001000010000100',
+  U: '10001100011000110001100011000101110', V: '10001100011000110001100010101000100', W: '10001100011000110101101011010101010', X: '10001100010101000100010101000110001',
+  Y: '10001100011000101010001000010000100', Z: '11111000010001000100010001000011111',
+  0: '01110100011001110101110011000101110', 1: '00100011000010000100001000010001110', 2: '01110100010000100010001000100011111', 3: '11111000100010000010000011000101110',
+  4: '00010001100101010010111110001000010', 5: '11111100001111000001000011000101110', 6: '00110010001000011110100011000101110', 7: '11111000010001000100010000100001000',
+  8: '01110100011000101110100011000101110', 9: '01110100011000101111000010001001100', '-': '00000000000000011111000000000000000', '·': '00000000000000000100000000000000000',
+  ':': '00000001000000000000000000010000000', '%': '11000110010001000100010001001100011', '/': '00001000100001000100010000100010000', ' ': '00000000000000000000000000000000000',
+  "'": '00100001000100000000000000000000000' };
+  const o = {}; for (const k in src) o[k] = src[k]; return o; })();
+function btext(g, str, x, y, sc, col) {
+  g.fillStyle = col; let cx = x;
+  for (const ch of String(str).toUpperCase()) { const m = GLYPH[ch] || GLYPH[' '];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) if (m[r * 5 + c] === '1') g.fillRect(cx + c * sc, y + r * sc, sc, sc);
+    cx += 6 * sc; }
+  return cx - x;
+}
+const twidth = (str, sc) => String(str).length * 6 * sc;
+const css = a => 'rgb(' + a.map(v => Math.round(clamp(v, 0, 1) * 255)).join(',') + ')';
+function drawScan(g, d, x0, y0, w, h) {
+  if (!d.cam || !DATA || !DATA.scan || !PERF) return;
+  const sm = DATA.scan, P = MZCam.projector(d.cam, w, h), rot = rotXYZ(PERF.pitch * Math.PI / 180, PERF.yaw * Math.PI / 180, PERF.roll * Math.PI / 180);
+  setBumps(S.cur);
+  const sw = p => { const q = deformCPU(p), a = q[0] - PIVOT[0], b = q[1] - PIVOT[1], c = q[2] - PIVOT[2];
+    return MZCam.V(rot[0] * a + rot[3] * b + rot[6] * c + PIVOT[0], rot[1] * a + rot[4] * b + rot[7] * c + PIVOT[1], rot[2] * a + rot[5] * b + rot[8] * c + PIVOT[2]); };
+  const scr = sm.pts.map(p => { const q = P.proj(sw(p)); return q ? [x0 + q[0], y0 + q[1], q[2]] : null; });
+  const heat = sm.pts.map(p => { const q = deformCPU(p); return clamp(Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) / 0.09, 0, 1); });
+  const ph = phaseOf(S.t), u = (S.t % CFG.sit) / CFG.sit, a0 = MORPH / CFG.sit;
+  const sweep = ph === 1 ? (u - a0) / (0.57 - a0) : ph > 1 ? 1.1 : -0.1;   // scan line runs top to bottom during ANALYZE
+  let ymin = 1e9, ymax = -1e9; for (const q of scr) if (q) { ymin = Math.min(ymin, q[1]); ymax = Math.max(ymax, q[1]); }
+  const sy = ymin + (ymax - ymin) * sweep, focus = new Set(AN.focus.map(n => sm.tag.indexOf(n)).filter(i => i >= 0));
+  g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+  for (const t of sm.tris) { const A = scr[t[0]], B = scr[t[1]], C = scr[t[2]]; if (!A || !B || !C) continue;
+    // facing the scanner only
+    if ((B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]) > 0 === false && Math.abs(d.cam.f.x) > 0.6) continue;
+    const cy = (A[1] + B[1] + C[1]) / 3, scanned = cy < sy, hv = (heat[t[0]] + heat[t[1]] + heat[t[2]]) / 3, foc = ph >= 2 && t.some(i => focus.has(i));
+    if (scanned || foc) { g.fillStyle = foc ? 'rgba(255,90,50,0.42)' : `rgba(${Math.round(40 + 200 * hv)},${Math.round(150 + 60 * (1 - hv))},${Math.round(140 - 100 * hv)},${0.1 + 0.28 * hv})`;
+      g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.lineTo(C[0], C[1]); g.closePath(); g.fill(); }
+    g.strokeStyle = scanned ? 'rgba(160,255,190,0.55)' : 'rgba(160,255,190,0.16)'; g.lineWidth = 0.6;
+    g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.lineTo(C[0], C[1]); g.closePath(); g.stroke(); }
+  // landmarks + measurement lines
+  sm.tag.forEach((tg, i) => { if (!tg || !scr[i]) return; const q = scr[i]; g.fillStyle = focus.has(i) && ph >= 2 ? '#ff5a32' : '#e2a43a'; g.fillRect(Math.round(q[0]) - 1, Math.round(q[1]) - 1, 3, 3); });
+  const pp = n => scr[sm.tag.indexOf(n)];
+  const line = (a, b, col) => { if (!a || !b) return; g.strokeStyle = col; g.lineWidth = 1; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); };
+  if (ph >= 1 && sweep > 0.3) { line(pp('eye L outer'), pp('eye R outer'), 'rgba(226,164,58,0.8)'); line(pp('mouth L'), pp('mouth R'), 'rgba(226,164,58,0.8)'); }
+  if (ph >= 1 && sweep > 0.6) { line(pp('hairline'), pp('glabella'), 'rgba(236,226,200,0.7)'); line(pp('glabella'), pp('nose base'), 'rgba(226,164,58,0.7)'); line(pp('nose base'), pp('chin'), 'rgba(236,226,200,0.7)'); }
+  if (ph === 1 && sweep >= 0 && sweep <= 1) { g.fillStyle = 'rgba(160,255,190,0.85)'; g.fillRect(x0 + 6, Math.round(sy), w - 12, 1); }
+  g.restore();
+  // phase banner
+  const P_ = PHASES[ph], lab = P_[0] + ' · ' + P_[1], bx = x0 + 8, by = y0 + 8;
+  g.fillStyle = 'rgba(12,24,26,0.85)'; g.fillRect(bx, by, twidth(lab, 2) + 10, 20); btext(g, lab, bx + 5, by + 3, 2, '#a0ffbe');
+  let px = bx; for (let k = 0; k < 4; k++) { const on = k === ph; g.fillStyle = on ? '#a0ffbe' : 'rgba(160,255,190,0.25)'; g.fillRect(px, by + 23, 26, 3); px += 30; }
+  btext(g, 'PERSON ' + pad(S.person, 2) + ' · DETAIL ' + Math.round(S.detailNow * 100) + '%', bx, by + 30, 1, 'rgba(160,255,190,0.85)');
+}
+function drawLog() {
+  const el = document.getElementById('log'); if (!el || !S) return;
+  el.style.display = CFG.info ? 'block' : 'none'; if (!CFG.info) return;
+  const L = (S.log || []).slice(QUAD() ? -11 : -16), esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  el.innerHTML = '<span class="h">ANALYSIS LOG · evolution loop M A I R</span>\n' + L.map(l => '<span class="ph">' + l.ph + '</span><span class="' + (l.cls || '') + '">' + esc(l.text) + '</span> <span class="d">' + pad(l.k, 4) + '</span>').join('\n');
+}
+setInterval(drawLog, 400);
+function drawHud() {
+  const g = hctx, Wd = 960, Hd = 540; g.clearRect(0, 0, Wd, Hd);
+  if (!S || !S.pal || !S.pal[0]) return;
+  const ink = S.look === 3 ? S.pal[1] : [0.93, 0.89, 0.79], acc = S.look === 2 ? S.pal[3] : S.pal[2], dark = 'rgba(12,24,26,0.8)';
+  // the lockup: MZTV large, the studio beneath
+  const l1 = 'MZTV', l2 = 'MATCH ZIMMERMAN CREATIVE MEDIA GROUP', l3 = 'BIT FIELD 030 · SITTER';
+  const bw = Math.max(twidth(l1, 4), twidth(l2, 1), twidth(l3, 1)) + 12;
+  g.fillStyle = dark; g.fillRect(8, 8, bw, 56); g.fillStyle = css(acc); g.fillRect(8, 8, 2, 56);
+  btext(g, l1, 15, 13, 4, css(ink)); btext(g, l2, 15, 46, 1, css(ink)); btext(g, l3, 15, 55, 1, css(acc));
+  if (QUAD() && crew) {
+    g.fillStyle = 'rgba(12,24,26,0.9)'; g.fillRect(Wd / 2 - 1, 0, 2, Hd); g.fillRect(0, Hd / 2 - 1, Wd, 2);
+    crew.drones.forEach((d, i) => {
+      const x0 = (i % 2) * Wd / 2, y0 = (i < 2 ? 0 : 1) * Hd / 2, live = crew.live === d.id;
+      const lab = d.name + ' · ' + (d.shot ? d.shot.label : 'IDLE') + (d.status === 'MOVING' ? ' · MOVING' : '');
+      const w = twidth(lab, 1) + 14, x = x0 + Wd / 2 - w - 6, y = y0 + Hd / 2 - 17;
+      g.fillStyle = dark; g.fillRect(x, y, w, 11); g.fillStyle = d.col; g.fillRect(x, y, 4, 11); btext(g, lab, x + 8, y + 2, 1, css(ink));
+      if (i === 3) drawScan(g, d, x0, y0, Wd / 2, Hd / 2);
+      if (live) { g.strokeStyle = css(acc); g.lineWidth = 2; g.strokeRect(x0 + 2, y0 + 2, Wd / 2 - 4, Hd / 2 - 4);
+        const t = 'ON AIR'; const tw = twidth(t, 1) + 8; g.fillStyle = '#ff5533'; g.fillRect(x - tw - 3, y, tw, 11); btext(g, t, x - tw + 1, y + 2, 1, '#0c181a'); }
+    });
+  }
+}
+
 
 /* ------------------------------------------------------------------ info */
 const infoEl = document.getElementById('info');
@@ -739,11 +1035,12 @@ function info() {
     'sitting <b>' + pad(S.k, 4) + '</b>  ' + fmtH(S.t) + '  <span class="d">next sitting in ' + Math.ceil(next) + 's</span>\n' +
     '<span class="a">' + S.event + '</span>\n' +
     '<span class="d">' + (moves.slice(0, 4).map(m => m[1]).join(' · ') || 'small changes only') + '</span>\n' +
+    'person <b>' + pad(S.person, 2) + '</b> · ' + Math.round(journey() * 100) + '% of the way there · drawn at detail ' + Math.round(S.detailNow * 100) + '% · ' + Math.round((S.destEnd - S.t) / 60) + ' min until the next person\n' +
     'hair ' + HAIRS[g.hair] + ' · ' + CLOTHES[g.clothes] + ' · age ' + g.x.age.toFixed(2) + ' · lids ' + g.x.lids.toFixed(2) + ' · halves apart ' + asym.toFixed(2) + (S.quirk !== 'none' ? ' · <span class="a">' + S.quirk + '</span>' : '') + '\n' +
     'memory ' + S.archive.length + ' faces · ' + S.counts.returns + ' returns · ' + S.counts.composites + ' composites · ' + S.counts.caricatures + ' caricatures · ' + S.counts.splits + ' splits\n' +
     un + '\n' +
     (crew ? 'on air <span class="a">' + crew.liveDrone.name + ' · ' + (crew.liveDrone.shot ? crew.liveDrone.shot.label : '') + '</span> <span class="d">· ' + crew.cuts + ' cuts, all inside a blink</span>\n' : '') +
-    '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · each sitting is ' + CFG.sit + 's, the change lands under a blink · keys I M L C</span>';
+    '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · each sitting is ' + CFG.sit + 's, the change lands under a blink · keys I M L C V</span>';
 }
 setInterval(info, 500);
 
@@ -867,6 +1164,7 @@ addEventListener('keydown', e => {
   if (k === 'i') { CFG.info = !CFG.info; info(); }
   if (k === 'm') { MUTE = !MUTE; if (AU.g) setP(AU.g.out.gain, MUTE ? 0 : 1, 0.2); }
   if (k === 'c' && bay) bay.show(!bay.on);
+  if (k === 'v') { CFG.layout = CFG.layout === 'quad' ? 'single' : 'quad'; resize(); }
   if (k === 'l' && S) { S.lookPrev = S.look; S.look = (S.look + 1) % LOOKS.length; S.lookT0 = S.t; }
 });
 setInterval(audioSchedule, 40); setInterval(audioWatch, 1000); setInterval(audioControl, 100);
@@ -876,7 +1174,8 @@ function save() { try { if (S) localStorage.setItem(STORE, JSON.stringify({ S, R
 function load() {
   try { const raw = localStorage.getItem(STORE); if (!raw) return false; const o = JSON.parse(raw);
     if (!o || !o.S || o.S.v !== 1 || !okG(o.S.cur) || !okG(o.S.tgt) || !okG(o.S.prev)) return false;
-    S = o.S; R.s = o.R >>> 0 || 1; S.archive = (S.archive || []).filter(e => okG(e.g)); return true; } catch (e) { return false; }
+    S = o.S; R.s = o.R >>> 0 || 1; S.archive = (S.archive || []).filter(e => okG(e.g));
+    if (!okG(S.dest)) { S.dest = null; S.person = S.person || 0; } if (!fin(S.detailNow)) S.detailNow = S.detailTarget = 0.1; return true; } catch (e) { return false; }
 }
 setInterval(save, 60000); addEventListener('beforeunload', save);
 
@@ -895,11 +1194,11 @@ window.MZ = MZ;
   resize();
   if (CFG.fresh) { try { localStorage.removeItem(STORE); } catch (e) { } }
   if (!load()) {
-    S = newState(); R.s = S.rs;
+    S = newState(); R.s = S.rs; newDestination();
     // pre-warm: it was running before you arrived
     S.t = 4 * CFG.sit + 11; for (let i = 0; i < 4; i++) { newSitting(); S.prev = cloneG(S.tgt); S.cur = cloneG(S.tgt); } S.morph0 = -100; S.event = 'drifting';
   }
-  if (CFG.ff > 0) { const end = S.t + CFG.ff * 3600; while (S.t < end) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); }
+  if (CFG.ff > 0) { const end = S.t + CFG.ff * 3600; while (S.t < end) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); S.detailNow = S.detailTarget; }
   try {
     const [meta, bin] = await Promise.all([fetch('data/sitter.json').then(r => r.json()), fetch('data/sitter.bin').then(r => r.arrayBuffer())]);
     DATA = decodeData(meta, bin); initGL(); initCrew();
