@@ -19,8 +19,12 @@
   (h16), caricatures (h20), and the face can split (h30). Looks (gelatin, 1-bit, silkscreen,
   phosphor) change by era.
 
-  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?look=gelatin|bit|silk|phosphor
-  Keys:   I info · M mute · L next look
+  Filmed by MZCAM (MZTV/lib/mzcam.js): the Bolex holds the frontal screen test; three drones fly
+  coverage (eyes, mouth, profiles, three-quarters, behind, overhead, orbit, wide). The director
+  cuts only inside a blink, and comes home to the frontal for every change of sitter.
+
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?look=gelatin|bit|silk|phosphor ?bay=0 ?crew=0
+  Keys:   I info · M mute · L next look · C camera bay
 -->
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,11 +36,18 @@
   #info { position: fixed; left: 1.6vh; bottom: 1.6vh; max-width: 40vw; font: 400 1.18vh/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--ink);
           background: var(--bg); border-left: 3px solid var(--acc); padding: 1vh 1.3vh; letter-spacing: 0.02em; white-space: pre; }
   #info b { font-weight: 700; } #info .d { color: var(--dim); } #info .a { color: var(--acc); }
+  .mzcam-bay { position: fixed; right: 1.2vh; top: 1.2vh; width: 19vh; display: flex; flex-direction: column; gap: 0.7vh; }
+  .mzcam-plan { width: 19vh; height: 19vh; border: 1px solid var(--line); }
+  .mzcam-mon { position: relative; border: 1px solid var(--line); background: #0c181a; }
+  .mzcam-mon canvas { width: 19vh; height: 10.69vh; image-rendering: pixelated; display: block; }
+  .mzcam-mon.live { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+  .mzcam-lab { font: 400 0.95vh/1.3 "JetBrains Mono", monospace; color: var(--ink); background: var(--bg); padding: 0.25vh 0.5vh; border-left: 4px solid var(--acc); white-space: nowrap; overflow: hidden; }
 </style>
 </head>
 <body>
 <canvas id="v"></canvas>
 <div id="info"></div>
+<script src="../../lib/mzcam.js"></script>
 <script>
 'use strict';
 /* ------------------------------------------------------------------ config */
@@ -49,7 +60,7 @@ const LOOKS = ['gelatin', 'bit', 'silk', 'phosphor'];
 const CFG = {
   info: Q.get('info') !== '0', fresh: Q.get('fresh') === '1', audio: Q.get('audio') !== '0',
   seed: Math.floor(qn('seed', 30)), rate: clamp(qn('rate', 1), 0.05, 200), lines: clamp(Math.round(qn('lines', 270)), 135, 1080),
-  ff: clamp(qn('ff', 0), 0, 96), sit: clamp(qn('sit', 30), 5, 600), lite: clamp(qn('lite', 1), 0.02, 1), look: LOOKS.indexOf(Q.get('look')),
+  ff: clamp(qn('ff', 0), 0, 96), sit: clamp(qn('sit', 30), 5, 600), lite: clamp(qn('lite', 1), 0.02, 1), look: LOOKS.indexOf(Q.get('look')), bay: Q.get('bay') !== '0', crew: Q.get('crew') !== '0',
 };
 const STORE = 'mztv-bf030-sitter-v1';
 const PIVOT = [0, 5.6, 0.1];
@@ -337,6 +348,17 @@ void main() { vec3 n = normalize(vN), L = normalize(uKey), v = normalize(uEye - 
   float d = clamp((dot(n, L) + 0.2) / 1.2, 0.0, 1.0); float sheen = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0) * 0.18;
   vec3 c = uCloth * (0.85 + 0.3 * vnoise(vO * 60.0));
   gl_FragColor = vec4(c * (0.25 + 0.9 * d) + sheen * uCloth * 3.0, 1.0); }`;
+const VS_DRONE = `precision highp float;
+attribute vec3 aP; attribute vec3 aN0; uniform mat4 uVP; uniform vec3 uC, uF, uR, uU; uniform float uSz;
+varying vec3 vN; varying vec3 vL; varying vec3 vW;
+void main() { vec3 w = uC + (uF * aP.x + uR * aP.y + uU * aP.z) * uSz; vN = uF * aN0.x + uR * aN0.y + uU * aN0.z; vL = aP; vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+const FS_DRONE = `precision highp float;
+varying vec3 vN; varying vec3 vL; varying vec3 vW; uniform vec3 uCol, uKey, uEye; uniform float uTally;
+void main() { vec3 n = normalize(vN); float d = 0.35 + 0.65 * clamp(dot(n, normalize(uKey)) * 0.5 + 0.5, 0.0, 1.0);
+  vec3 c = uCol * d;
+  if (vL.x > 0.99 && length(vL.yz) < 0.55) { c = vec3(0.03, 0.04, 0.05); float s = pow(clamp(dot(reflect(-normalize(uEye - vW), n), normalize(uKey)), 0.0, 1.0), 30.0); c += s * 0.8; }
+  if (vL.z > 0.99 && length(vL.xy) < 0.35 && uTally > 0.5) c = vec3(1.0, 0.33, 0.2);
+  gl_FragColor = vec4(c, 1.0); }`;
 const VS_POST = `attribute vec2 aQ; varying vec2 vUV; void main() { vUV = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0.0, 1.0); }`;
 const FS_POST = `precision highp float;
 varying vec2 vUV; uniform sampler2D uTex; uniform vec2 uRes; uniform float uTime, uFade; uniform int uA, uB;
@@ -442,7 +464,7 @@ function sphere(r, nu, nv) {
 function initGL() {
   gl = cv.getContext('webgl', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false, alpha: false }); if (!gl) throw new Error('no webgl');
   const G = {};
-  G.skin = prog(VS_SKIN, FS_SKIN); G.cloth = prog(VS_SKIN, FS_CLOTH); G.eye = prog(VS_EYE, FS_EYE); G.line = prog(VS_LINE, FS_LINE); G.post = prog(VS_POST, FS_POST);
+  G.skin = prog(VS_SKIN, FS_SKIN); G.cloth = prog(VS_SKIN, FS_CLOTH); G.eye = prog(VS_EYE, FS_EYE); G.line = prog(VS_LINE, FS_LINE); G.post = prog(VS_POST, FS_POST); G.drone = prog(VS_DRONE, FS_DRONE);
   const D = DATA;
   const mesh = (m, withShapes) => { const o = { I: buf(m.I, gl.ELEMENT_ARRAY_BUFFER), n: m.I.length, P: buf(m.P), N0: buf(m.N0) };
     const zero = new Float32Array(m.P.length);
@@ -453,8 +475,25 @@ function initGL() {
   G.hair = D.hair.map(ln); G.brows = ln(D.brows); G.fuzz = ln(D.fuzz); G.stubble = ln(D.stubble); G.lash = ln(D.lash);
   const sp = sphere(0.118, 40, 30); G.eyeM = { P: buf(sp.P), I: buf(sp.I, gl.ELEMENT_ARRAY_BUFFER), n: sp.I.length };
   G.quad = buf(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+  const cb = cube(); G.cube = { P: buf(cb.P), N0: buf(cb.N), I: buf(cb.I, gl.ELEMENT_ARRAY_BUFFER), n: cb.I.length };
   makeTarget(G);
+  G.th = newTarget(192, 108, true); G.thp = newTarget(192, 108, false); G.thPix = new Uint8Array(192 * 108 * 4);
   GL = G; glOK = true;
+}
+function cube() {
+  const P = [], N = [], I = []; const F = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  for (const n of F) { const a = n.findIndex(v => v !== 0), b = (a + 1) % 3, c = (a + 2) % 3, base = P.length / 3;
+    for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const p = [0, 0, 0]; p[a] = n[a]; p[b] = u; p[c] = v; P.push(...p); N.push(...n); }
+    I.push(base, base + 1, base + 2, base, base + 2, base + 3); }
+  return { P: new Float32Array(P), N: new Float32Array(N), I: new Uint16Array(I) };
+}
+function newTarget(w, h, depth) {
+  const T = { w, h, tex: gl.createTexture() }; gl.bindTexture(gl.TEXTURE_2D, T.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  T.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, T.tex, 0);
+  if (depth) { T.rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, T.rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, T.rb); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); return T;
 }
 function makeTarget(G) {
   if (G.fbo) { gl.deleteFramebuffer(G.fbo); gl.deleteTexture(G.tex); gl.deleteRenderbuffer(G.rb); }
@@ -484,10 +523,12 @@ function mmul(a, b) { const o = new Array(16).fill(0); for (let c = 0; c < 4; c+
 function rotXYZ(rx, ry, rz) { const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
   // R = Rz * Ry * Rx, column-major mat3
   return [cy * cz, cy * sz, -sy, sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy, cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy]; }
-const EYE_POS = [0, 7.0, 11.6];
-function viewProj() {
-  const view = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -EYE_POS[0], -EYE_POS[1], -EYE_POS[2], 1];
-  return mmul(persp(2 * Math.atan(18 / 98), W() / Hh(), 1, 40), view);
+const HOME_CAM = () => MZCam.lens(MZCam.V(0, 7.0, 11.6), MZCam.V(0, 7.18, 1.0), 21);
+function camVP(cam, asp) {
+  const p = cam.pos, r = cam.r, u = cam.u, f = cam.f;
+  const view = [r.x, u.x, -f.x, 0, r.y, u.y, -f.y, 0, r.z, u.z, -f.z, 0,
+    -(r.x * p.x + r.y * p.y + r.z * p.z), -(u.x * p.x + u.y * p.y + u.z * p.z), f.x * p.x + f.y * p.y + f.z * p.z, 1];
+  return mmul(persp(cam.fov * Math.PI / 180, asp, 0.25, 80), view);
 }
 
 /* ------------------------------------------------------------------ palette (drifts, pulled home, clamped to family) */
@@ -510,7 +551,7 @@ function inks(k, t) {
 function bindAttr(pr, name, b, size) { const l = pr.a[name]; if (l === undefined || l < 0) return; gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0); }
 let NATTR = 0;
 function unbindAll() { const n = NATTR || (NATTR = gl.getParameter(gl.MAX_VERTEX_ATTRIBS)); for (let i = 0; i < n; i++) gl.disableVertexAttribArray(i); }
-function common(pr, vp, rot) {
+function common(pr, vp, rot, eye) {
   const u = pr.u;
   if (u.uBC) { gl.uniform4fv(u.uBC, BC); gl.uniform4fv(u.uBR, BRr); gl.uniform4fv(u.uBD, BD); }
   if (u.uVP) gl.uniformMatrix4fv(u.uVP, false, vp);
@@ -518,7 +559,7 @@ function common(pr, vp, rot) {
   if (u.uPivot) gl.uniform3fv(u.uPivot, PIVOT);
   if (u.uKey) gl.uniform3f(u.uKey, -5.5, 4.4, 9.0);
   if (u.uFill) gl.uniform3f(u.uFill, 6.0, -0.1, 10.0);
-  if (u.uEye) gl.uniform3fv(u.uEye, EYE_POS);
+  if (u.uEye) gl.uniform3f(u.uEye, eye.x, eye.y, eye.z);
 }
 function drawMesh(pr, m) {
   bindAttr(pr, 'aP', m.P, 3); bindAttr(pr, 'aB', m.B, 3); bindAttr(pr, 'aJ', m.J, 3); bindAttr(pr, 'aS', m.S, 3);
@@ -533,33 +574,34 @@ function drawLines(pr, l, col, alpha, grey, mixP) {
 }
 function hairCol(g, dark) { const m = clamp(0.25 + 0.75 * (1 - g.x.tone * 0.2), 0, 1); const b = [0.22, 0.15, 0.09].map(v => v * (1.25 - m)); return dark ? b.map(v => v * 0.6) : b; }
 let FR = { n: 0, t: 0, fps: 0 };
-function render(p, g, simT) {
-  if (!glOK || !GL) return;
-  const G = GL; if (G.w !== W() || G.h !== Hh()) makeTarget(G);
-  setBumps(g);
-  const vp = viewProj(), rot = rotXYZ(p.pitch * Math.PI / 180, p.yaw * Math.PI / 180, p.roll * Math.PI / 180);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, G.fbo); gl.viewport(0, 0, G.w, G.h);
+function renderScene(T, cam, p, g, viewer) {
+  const G = GL, eye = cam.pos;
+  const vp = camVP(cam, T.w / T.h), rot = rotXYZ(p.pitch * Math.PI / 180, p.yaw * Math.PI / 180, p.roll * Math.PI / 180);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.viewport(0, 0, T.w, T.h);
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
-  // skin
-  let pr = G.skin; gl.useProgram(pr.p); common(pr, vp, rot);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+  let pr = G.skin; gl.useProgram(pr.p); common(pr, vp, rot, eye);
   gl.uniform1f(pr.u.uBlink, p.blink); gl.uniform1f(pr.u.uJaw, p.jaw); gl.uniform1f(pr.u.uSw, p.swallow);
   gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble);
   gl.uniform1f(pr.u.uScalp, g.hairFade[0] + g.hairFade[1] + g.hairFade[2] * 0.35);
-  gl.disable(gl.CULL_FACE); drawMesh(pr, G.body);
-  // clothes
-  pr = G.cloth; gl.useProgram(pr.p); common(pr, vp, rot);
+  drawMesh(pr, G.body);
+  pr = G.cloth; gl.useProgram(pr.p); common(pr, vp, rot, eye);
   gl.uniform1f(pr.u.uBlink, 0); gl.uniform1f(pr.u.uJaw, 0); gl.uniform1f(pr.u.uSw, 0);
   if (g.clothes === 0) { gl.uniform3f(pr.u.uCloth, 0.035, 0.034, 0.032); drawMesh(pr, G.jacket); drawMesh(pr, G.collar); }
   gl.uniform3f(pr.u.uCloth, g.clothes === 0 ? 0.06 : 0.07, g.clothes === 0 ? 0.058 : 0.068, g.clothes === 0 ? 0.055 : 0.064); drawMesh(pr, G.sweater);
-  // eyes
-  pr = G.eye; gl.useProgram(pr.p); common(pr, vp, rot); gl.uniform1f(pr.u.uIris, g.x.iris);
+  pr = G.eye; gl.useProgram(pr.p); common(pr, vp, rot, eye); gl.uniform1f(pr.u.uIris, g.x.iris);
   const er = rotXYZ(-(p.gy) * Math.PI / 180, p.gx * Math.PI / 180, 0);
   for (const sx of [1, -1]) { const c = deformCPU([0.308 * sx, 7.284, 1.233]); gl.uniform3fv(pr.u.uEyeC, c); gl.uniformMatrix3fv(pr.u.uEyeRot, false, er);
     bindAttr(pr, 'aP', G.eyeM.P, 3); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, G.eyeM.I); gl.drawElements(gl.TRIANGLES, G.eyeM.n, gl.UNSIGNED_SHORT, 0); unbindAll(); }
-  // strands
+  // the crew, seen by each other
+  if (crew) { pr = G.drone; gl.useProgram(pr.p); gl.uniformMatrix4fv(pr.u.uVP, false, vp); gl.uniform3f(pr.u.uKey, -5.5, 4.4, 9.0); gl.uniform3f(pr.u.uEye, eye.x, eye.y, eye.z);
+    for (const d of crew.drones) { if (d === viewer || !d.cam) continue;
+      const f = MZCam.norm(MZCam.V(d.cam.f.x, 0, d.cam.f.z)), r = MZCam.norm(MZCam.cross(f, MZCam.UP)), u = MZCam.UP;
+      gl.uniform3f(pr.u.uC, d.pos.x, d.pos.y, d.pos.z); gl.uniform3f(pr.u.uF, f.x, f.y, f.z); gl.uniform3f(pr.u.uR, r.x, r.y, r.z); gl.uniform3f(pr.u.uU, u.x, u.y, u.z);
+      gl.uniform1f(pr.u.uSz, 0.28); gl.uniform1f(pr.u.uTally, d.id === crew.live ? 1 : 0); gl.uniform3fv(pr.u.uCol, hex3(d.col));
+      bindAttr(pr, 'aP', G.cube.P, 3); bindAttr(pr, 'aN0', G.cube.N0, 3); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, G.cube.I); gl.drawElements(gl.TRIANGLES, G.cube.n, gl.UNSIGNED_SHORT, 0); unbindAll(); } }
   gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
-  pr = G.line; gl.useProgram(pr.p); common(pr, vp, rot);
+  pr = G.line; gl.useProgram(pr.p); common(pr, vp, rot, eye);
   const hc = hairCol(g);
   for (let i = 0; i < 2; i++) drawLines(pr, G.hair[i], hc, 0.55 * g.hairFade[i], g.x.grey * 0.85, 0);
   drawLines(pr, G.brows, hairCol(g, true), 0.75 * g.x.brows, g.x.grey * 0.5, 0);
@@ -567,16 +609,93 @@ function render(p, g, simT) {
   drawLines(pr, G.fuzz, [0.75, 0.62, 0.52], 0.08, 0, 0);
   drawLines(pr, G.lash, [0.03, 0.025, 0.02], 0.9, 0, p.blink);
   gl.depthMask(true); gl.disable(gl.BLEND);
-  // post to screen
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height); gl.disable(gl.DEPTH_TEST);
-  pr = G.post; gl.useProgram(pr.p);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, G.tex); gl.uniform1i(pr.u.uTex, 0);
-  gl.uniform2f(pr.u.uRes, G.w, G.h); gl.uniform1f(pr.u.uTime, simT);
-  const fade = clamp((S.t - S.lookT0) / 20, 0, 1);
-  gl.uniform1i(pr.u.uA, S.look); gl.uniform1i(pr.u.uB, S.lookPrev); gl.uniform1f(pr.u.uFade, fade);
-  const ik = inks(S.look, S.t); gl.uniform3fv(pr.u.uI0, ik[0]); gl.uniform3fv(pr.u.uI1, ik[1]); gl.uniform3fv(pr.u.uI2, ik[2]); gl.uniform3fv(pr.u.uI3, ik[3]);
-  S.pal = ik;
+}
+function postPass(src, dst, w, h, simT) {
+  const G = GL; gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fbo : null); gl.viewport(0, 0, w, h); gl.disable(gl.DEPTH_TEST);
+  const pr = G.post; gl.useProgram(pr.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(pr.u.uTex, 0);
+  gl.uniform2f(pr.u.uRes, src.w, src.h); gl.uniform1f(pr.u.uTime, simT);
+  gl.uniform1i(pr.u.uA, S.look); gl.uniform1i(pr.u.uB, S.lookPrev); gl.uniform1f(pr.u.uFade, clamp((S.t - S.lookT0) / 20, 0, 1));
+  const ik = S.pal; gl.uniform3fv(pr.u.uI0, ik[0]); gl.uniform3fv(pr.u.uI1, ik[1]); gl.uniform3fv(pr.u.uI2, ik[2]); gl.uniform3fv(pr.u.uI3, ik[3]);
   bindAttr(pr, 'aQ', G.quad, 2); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); unbindAll();
+}
+const hexCache = {};
+function hex3(h) { return hexCache[h] || (hexCache[h] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)); }
+function render(p, g, simT) {
+  if (!glOK || !GL) return;
+  const G = GL; if (G.w !== W() || G.h !== Hh()) makeTarget(G);
+  setBumps(g); S.pal = inks(S.look, S.t);
+  const live = crew && crew.liveDrone.cam ? crew.liveDrone : null;
+  renderScene({ fbo: G.fbo, w: G.w, h: G.h }, live ? live.cam : HOME_CAM(), p, g, live);
+  postPass({ tex: G.tex, w: G.w, h: G.h }, null, cv.width, cv.height, simT);
+}
+// a bay monitor: the same scene and look through one drone, read back into its 2D canvas
+function renderThumb(ctx, w, h, d) {
+  if (!glOK || !GL || !d.cam || !PERF || !S) return;
+  const G = GL, g = S.cur;
+  renderScene(G.th, d.cam, PERF, g, d);
+  postPass(G.th, G.thp, G.thp.w, G.thp.h, S.t);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, G.thp.fbo); gl.readPixels(0, 0, G.thp.w, G.thp.h, gl.RGBA, gl.UNSIGNED_BYTE, G.thPix); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const img = ctx.createImageData(w, h), src = G.thPix, row = w * 4;
+  for (let y = 0; y < h; y++) img.data.set(src.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ------------------------------------------------------------------ MZCAM: the crew and the edit
+   The Bolex (CAM 1) holds the screen test. Three drones fly coverage and wait on their marks.
+   The director cuts only inside a blink, and comes home to the frontal for every new sitter. */
+const { V: mv, add: vadd, sub: vsub, mul: vmul, len: vlen } = MZCam;
+const HEADC = mv(0, 7.25, 1.0), EYESC = mv(0, 7.28, 1.33), MOUTHC = mv(0, 6.62, 1.5);
+let crew = null, bay = null, PEND0 = -1;
+const crand = () => Math.random();
+function blinkingNow() { return !!(PERF && S && PERF.blink - S.cur.x.lids > 0.45); }
+function nearChange() { if (!S) return false; const ph = S.t % CFG.sit; return ph > CFG.sit - 3.5 || ph < MORPH + 0.5; }
+function coverage(kind) {
+  const side = crand() < 0.5 ? 1 : -1, hold = 4 + crand() * 7, w0 = 0.9 + crand() * 1.1;
+  const S_ = {
+    eyes:    { label: 'EYES', mark: { pos: mv(0, 7.3, 5.2) }, aim: () => ({ look: EYESC, fov: 13 }), pan: 1.6 },
+    eye:     { label: side > 0 ? 'LEFT EYE' : 'RIGHT EYE', mark: { pos: mv(0.31 * side, 7.31, 3.5) }, aim: () => ({ look: mv(0.31 * side, 7.29, 1.35), fov: 9 }), pan: 1.4 },
+    mouth:   { label: 'MOUTH', mark: { pos: mv(0.15, 6.66, 4.7) }, aim: () => ({ look: MOUTHC, fov: 12 }), pan: 1.4 },
+    profile: { label: side > 0 ? 'PROFILE L' : 'PROFILE R', mark: { pos: mv(9.6 * side, 7.25, 1.1) }, aim: () => ({ look: HEADC, fov: 20 }), pan: 1.0 },
+    three:   { label: 'THREE-QUARTER', mark: { pos: mv(6.6 * side, 7.7, 7.8) }, aim: () => ({ look: HEADC, fov: 21 }), pan: 1.0 },
+    behind:  { label: 'BEHIND', mark: { pos: mv(2.4 * side, 7.9, -8.2) }, aim: () => ({ look: mv(0, 7.55, 0.3), fov: 22 }), pan: 0.9 },
+    over:    { label: 'OVERHEAD', mark: { pos: mv(0.8 * side, 12.6, 4.4) }, aim: () => ({ look: mv(0, 7.5, 0.8), fov: 24 }), pan: 0.9 },
+    low:     { label: 'LOW', mark: { pos: mv(0.7 * side, 5.7, 7.6) }, aim: () => ({ look: mv(0, 7.15, 1.0), fov: 24 }), pan: 0.9 },
+    wide:    { label: 'WIDE · THE CREW', mark: { pos: mv(3.0 * side, 8.4, 21) }, aim: () => ({ look: mv(0, 7.6, 1.0), fov: 34 }), pan: 0.7 },
+    orbit:   { label: 'ORBIT', pose: (t) => { const a = t * 0.07 * side + 0.9; return { pos: mv(Math.sin(a) * 9.4, 7.6, 1.0 + Math.cos(a) * 9.4) }; }, aim: () => ({ look: HEADC, fov: 22 }), pan: 1.2 },
+  }[kind];
+  return Object.assign(S_, { kind, airedAt: -1, minHold: Math.min(hold, 4), maxHold: hold,
+    onAir(t) { this.airedAt = t; },
+    want() { return nearChange() ? 0.4 : w0; },
+    done(t, d, c) { return this.airedAt >= 0 ? (c.live !== d.id || t - this.airedAt > hold + 2) : t - d.assignedAt > 90; } });
+}
+function frontal() {
+  return { kind: 'frontal', label: 'SCREEN TEST', mark: { pos: mv(0, 7.0, 11.6) }, aim: () => ({ look: mv(0, 7.18, 1.0), fov: 21 }), pan: 1.2,
+    minHold: 5, maxHold: 30, onAir() { this.maxHold = 9 + crand() * 22; }, want: () => nearChange() ? 4 : 1.5, done: () => false };
+}
+const KINDS = ['eyes', 'eye', 'mouth', 'profile', 'three', 'behind', 'over', 'low', 'wide', 'orbit'];
+function initCrew() {
+  if (!CFG.crew || !window.MZCam) return;
+  crew = new MZCam.Crew({
+    drones: [{ name: 'CAM 1 · BOLEX', col: '#e2a43a', pos: mv(0, 7.0, 11.6) }, { name: 'CAM 2', col: '#3f8f8a', pos: mv(6, 8, 8) }, { name: 'CAM 3', col: '#d8cfb8', pos: mv(-6, 8, 8) }, { name: 'CAM 4', col: '#b5532c', pos: mv(0, 10.5, 14) }],
+    speed: 7, accel: 5, cruise: 10.5, minAlt: 5.2, arrive: 0.12, size: 0.56, clearDist: 14, tallyCol: '#ff5533',
+    avoid: p => { const c = mv(0, 7.0, 0.6), d = vsub(p, c), l = vlen(d); return l < 2.4 ? vadd(c, vmul(d, 2.4 / (l || 1))) : p; },
+    gate: t => { if (PEND0 < 0) PEND0 = t; const ok = blinkingNow() || t - PEND0 > 5; if (ok) PEND0 = -1; return ok; },
+    onCut: (from, to, t) => { if (S) S.lastCut = to.name + ' · ' + (to.shot ? to.shot.label : ''); },
+  });
+  crew.assign(crew.drones[0], frontal());
+  if (CFG.bay) bay = new MZCam.Bay(crew, { w: 192, h: 108, every: 2, render: (g, w, h, P, d) => renderThumb(g, w, h, d), bounds: { x0: -12, x1: 12, z0: -10, z1: 22 },
+    planBg: (g, W_, H_, map, sc) => { g.fillStyle = '#0c181a'; g.fillRect(0, 0, W_, H_); const c = map(0, 1.0); g.fillStyle = 'rgba(226,164,58,0.5)'; g.beginPath(); g.arc(c[0], c[1], 0.9 * sc, 0, 6.283); g.fill();
+      g.strokeStyle = 'rgba(236,226,200,0.18)'; g.strokeRect(...map(-12, -9), 24 * sc, 0.3 * sc); },
+    planInk: '#ece2c8' });
+}
+function crewTick(dt) {
+  if (!crew) return;
+  if (!crew.pending) PEND0 = -1;
+  const busy = new Set(crew.drones.filter(d => d.shot).map(d => d.shot.kind));
+  for (const d of crew.free()) { if (d.id === 0) { crew.assign(d, frontal()); continue; }
+    const opts = KINDS.filter(k => !busy.has(k)); const k = opts[Math.floor(crand() * opts.length)]; busy.add(k); crew.assign(d, coverage(k)); }
+  crew.update(dt, performance.now() / 1000);
 }
 
 /* ------------------------------------------------------------------ sim clock */
@@ -595,7 +714,9 @@ function frame(now) {
     const g = liveGenome();
     if (!okG(g)) { S.prev = S.tgt = S.archive.length ? cloneG(S.archive[S.archive.length - 1].g) : zeroGenome(); S.event = 'regrown from memory'; return; }
     PERF = perform(S.t, g);
+    crewTick(Math.min(dt, 0.25));
     render(PERF, g, S.t);
+    if (bay) bay.tick(FR.n);
     FR.n++;
   } catch (err) { console.error(err); }
 }
@@ -621,7 +742,8 @@ function info() {
     'hair ' + HAIRS[g.hair] + ' · ' + CLOTHES[g.clothes] + ' · age ' + g.x.age.toFixed(2) + ' · lids ' + g.x.lids.toFixed(2) + ' · halves apart ' + asym.toFixed(2) + (S.quirk !== 'none' ? ' · <span class="a">' + S.quirk + '</span>' : '') + '\n' +
     'memory ' + S.archive.length + ' faces · ' + S.counts.returns + ' returns · ' + S.counts.composites + ' composites · ' + S.counts.caricatures + ' caricatures · ' + S.counts.splits + ' splits\n' +
     un + '\n' +
-    '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · each sitting is ' + CFG.sit + 's, the change lands under a blink · keys I M L</span>';
+    (crew ? 'on air <span class="a">' + crew.liveDrone.name + ' · ' + (crew.liveDrone.shot ? crew.liveDrone.shot.label : '') + '</span> <span class="d">· ' + crew.cuts + ' cuts, all inside a blink</span>\n' : '') +
+    '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · each sitting is ' + CFG.sit + 's, the change lands under a blink · keys I M L C</span>';
 }
 setInterval(info, 500);
 
@@ -744,6 +866,7 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'i') { CFG.info = !CFG.info; info(); }
   if (k === 'm') { MUTE = !MUTE; if (AU.g) setP(AU.g.out.gain, MUTE ? 0 : 1, 0.2); }
+  if (k === 'c' && bay) bay.show(!bay.on);
   if (k === 'l' && S) { S.lookPrev = S.look; S.look = (S.look + 1) % LOOKS.length; S.lookT0 = S.t; }
 });
 setInterval(audioSchedule, 40); setInterval(audioWatch, 1000); setInterval(audioControl, 100);
@@ -779,7 +902,7 @@ window.MZ = MZ;
   if (CFG.ff > 0) { const end = S.t + CFG.ff * 3600; while (S.t < end) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); }
   try {
     const [meta, bin] = await Promise.all([fetch('data/sitter.json').then(r => r.json()), fetch('data/sitter.bin').then(r => r.arrayBuffer())]);
-    DATA = decodeData(meta, bin); initGL();
+    DATA = decodeData(meta, bin); initGL(); initCrew();
   } catch (err) { console.error(err); infoEl.textContent = 'SITTER · could not load the sitter (' + err.message + ')'; }
   info(); last = performance.now(); requestAnimationFrame(frame);
   if (!MUTE) audioUnlock();

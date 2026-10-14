@@ -4,7 +4,7 @@ Shared modules that MZTV pieces load with a relative script tag (`<script src=".
 
 ## mzcam.js · the drone camera crew (v1.0.0)
 
-The crew, director and surveillance bay from 48 PLANT, extracted so any piece can attach them. First host: BIT FIELD 028 · TRACKSIDE. 48 PLANT itself still carries its own inline copy; migrating it is a later step (Specimen 002 was live while this was extracted).
+The crew, director and surveillance bay from 48 PLANT, extracted so any piece can attach them. First host: BIT FIELD 028 · TRACKSIDE. Also used by BIT FIELD 030 · SITTER, where the program and the bay monitors render in WebGL through each drone's lens and cuts are gated to the sitter's blinks. 48 PLANT itself still carries its own inline copy; migrating it is a later step (Specimen 002 was live while this was extracted).
 
 The crew is presentation only. It never changes the system it films.
 

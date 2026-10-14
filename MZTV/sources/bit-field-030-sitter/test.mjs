@@ -1,9 +1,9 @@
 // Headless check for BIT FIELD 030 · SITTER.
-// node test.mjs [port]  — expects a static server on the repo's MZTV/sources dir.
+// node test.mjs [port]  — expects a static server at the repo root (python3 -m http.server 8031), so ../../lib/mzcam.js resolves.
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 import fs from 'fs';
-const port = process.argv[2] || 8030;
-const base = `http://localhost:${port}/bit-field-030-sitter/`;
+const port = process.argv[2] || 8031;
+const base = `http://localhost:${port}/MZTV/sources/bit-field-030-sitter/`;
 const out = process.env.OUT || '/tmp/bf030';
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });

@@ -7,6 +7,14 @@ A screen test that never ends. One sitter faces a locked-off camera under one so
 - Live, every facial feature is a soft displacement field evaluated in the vertex shaders. Skin, hair, brows, lashes, stubble and eye positions all ride on the same field, so the whole person changes together.
 - Performance: blinks with a fast close and slow open, saccades and drift, breathing, postural sway, jaw settle and the occasional swallow. Every change lands under a forced blink, with a 7 s morph.
 
+## Filmed by MZCAM
+`../../lib/mzcam.js` gives the piece a crew and an edit:
+- **CAM 1 · BOLEX** holds the frontal screen test, the original Warhol frame.
+- **CAMs 2–4** are drones flying coverage. Each takes a shot, flies to its mark off air and waits there: eyes, one eye, mouth, profile, three-quarter, behind, overhead, low angle, a slow orbit, or a wide that shows the crew hovering around the sitter.
+- **The director cuts only inside a blink.** It comes home to the Bolex a few seconds before each new sitting, so every change of person is seen in the screen-test frame. Coverage shots hold 4–11 s; the frontal holds 9–31 s.
+- **The drones appear in each other's shots** as small cubes with a lens, and the live camera carries a tally light.
+- **The surveillance bay** (top right) has one live monitor per drone, rendered in the current look, plus a plan of the studio. `C` toggles it, and `?bay=0` hides it. `?crew=0` returns the piece to a single locked-off camera.
+
 ## Over 48 hours
 - The walk widens and the pull back to the middle weakens.
 - h2: **returns**, a drift back toward a remembered sitter.
@@ -22,8 +30,8 @@ A screen test that never ends. One sitter faces a locked-off camera under one so
 A dark room, a projector motor with a 24 fps sprocket flutter, and the sitter's breath. The sitter's note, a root and a fifth, glides to a new pitch with each face and darkens with asymmetry and age. A felt thump into a filtered echo marks each new sitting. Hardened per MZTV protocol: worklet noise, a watchdog, and graph rebuilds.
 
 ## Params and keys
-`?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?look=gelatin|bit|silk|phosphor ?lite=0..1` (hair density, for slow machines)
-Keys: `I` info · `M` mute · `L` next look
+`?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?look=gelatin|bit|silk|phosphor ?lite=0..1 ?bay=0 ?crew=0` (`lite` sets hair density, for slow machines)
+Keys: `I` info · `M` mute · `L` next look · `C` camera bay
 
 ## Test
-`python3 -m http.server 8030` in `MZTV/sources`, then `node test.mjs`.
+`python3 -m http.server 8031` at the repo root, then `node test.mjs`.
