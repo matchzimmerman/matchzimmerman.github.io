@@ -12,6 +12,10 @@ This branch is a **staged migration**, not a live switch. Do not merge or change
 - `data/catalog.json` is the initial **MZ-owned catalog manifest**. `GET /api/catalog` exposes only products with verified publish prerequisites; the Two Houses sweater is a draft and is not for sale.
 - The live `/shop/shop.js` storefront still reads `/api/inventory` and `/api/product`. Switching to MZ catalog, authenticated write/publish endpoints, and automated Printful product creation are separate follow-up phases.
 
+## Vercel Hobby function quota
+
+The `shop-api` project must stay at **12 or fewer functions** on Vercel Hobby. The `api/` directory contains 12 deployable `.js` files. To avoid adding functions for low-volume routes, `/api/catalog` and `/api/verify-mzcmg-store` are implemented as two query-mode branches of `api/inventory.js`; `vercel.json` rewrites preserve both original URLs. The store verifier itself lives in `lib/verify-mzcmg-store.js` (not `api/`) and still refuses non-Preview environments. `npm test` checks the function count and rewrites automatically. Future endpoints must reuse a function or consolidate existing ones, rather than add another file under `api/`.
+
 ## Private native-store verification (Preview only)
 
 The store ID can be discovered without copying credentials into chat or looking through the Printful dashboard:
