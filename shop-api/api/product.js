@@ -1,5 +1,6 @@
 var requireAdmin = require("../lib/auth").requireAdmin;
 var printful = require("../lib/printful");
+var storeConfig = require("../lib/store-config");
 
 var STOREFRONT_EXCLUDED = {
   "387424863": true,
@@ -95,7 +96,7 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-      var store = { id: 16437938, name: "Match Zimmerman", type: "squarespace" };
+      var store = await storeConfig.resolveNativeStore(printful);
       var payload = await printful.getStoreProduct(store, id);
       var result = payload.result || {};
       var syncProduct = result.sync_product || result.product || {};
