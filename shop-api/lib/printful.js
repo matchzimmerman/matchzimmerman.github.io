@@ -10,9 +10,11 @@ function PrintfulError(message, status, payload) {
 PrintfulError.prototype = Object.create(Error.prototype);
 
 function getToken() {
-  var token = process.env.PRINTFUL_TOKEN;
+  // The new MZCMG API store can be tested in Preview without overwriting the
+  // existing production token used by the legacy shop.
+  var token = process.env.PRINTFUL_MZCMG_TOKEN || process.env.PRINTFUL_TOKEN;
   if (!token) {
-    throw new PrintfulError("PRINTFUL_TOKEN is not configured.", 503);
+    throw new PrintfulError("Printful token is not configured.", 503);
   }
   return token;
 }
