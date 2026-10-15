@@ -375,7 +375,7 @@ module.exports = async function handler(req, res) {
     if (req.method === "GET" && action === "health") {
       return send(res, 200, {
         ok: true,
-        printfulConfigured: Boolean(process.env.PRINTFUL_TOKEN),
+        printfulConfigured: Boolean(process.env.PRINTFUL_MZCMG_TOKEN || process.env.PRINTFUL_TOKEN),
         printfulStoreConfigured: /^[1-9][0-9]*$/.test(String(process.env.PRINTFUL_STORE_ID || "")),
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
         webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
