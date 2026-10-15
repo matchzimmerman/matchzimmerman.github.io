@@ -266,15 +266,19 @@ async function fulfillSession(sessionId) {
   var order = current.result || {};
   var status = String(order.status || "").toLowerCase();
 
-  if (session.livemode === false) {
+  var printfulConfirmationEnabled =
+    String(process.env.MZ_SHOP_CONFIRM_PRINTFUL || "").toLowerCase() === "true";
+
+  if (session.livemode === false || !printfulConfirmationEnabled) {
     return {
       ok: true,
       paid: true,
-      testMode: true,
+      testMode: session.livemode === false,
+      fulfillmentHeld: true,
       sessionId: session.id,
       orderRef: (session.metadata && session.metadata.order_ref) || session.client_reference_id || "",
       printfulOrderId: orderId,
-      fulfillmentStatus: "test-paid-not-submitted"
+      fulfillmentStatus: session.livemode === false ? "test-paid-not-submitted" : "live-paid-held-for-launch"
     };
   }
 
@@ -369,6 +373,7 @@ module.exports = async function handler(req, res) {
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
         webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
         automaticTax: String(process.env.STRIPE_AUTOMATIC_TAX || "").toLowerCase() === "true",
+        printfulConfirmationEnabled: String(process.env.MZ_SHOP_CONFIRM_PRINTFUL || "").toLowerCase() === "true",
         stripeMode: process.env.STRIPE_SECRET_KEY
           ? (String(process.env.STRIPE_SECRET_KEY).indexOf("sk_test_") === 0 ? "test" : "live")
           : "unconfigured"
