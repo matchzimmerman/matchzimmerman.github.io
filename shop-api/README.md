@@ -24,7 +24,8 @@ The store ID is a non-secret identifier and can be discovered without copying cr
 2. Open the migration branch's **Vercel Preview deployment URL** and append `/api/verify-mzcmg-store`. Do **not** use `mzcmg-shop-api.vercel.app` because that is the production alias.
 3. No separate `MZ_SHOP_ADMIN_PASSWORD` is required for this temporary, read-only endpoint. Vercel deployment protection, if configured, may still require signing into Vercel.
 4. The response contains only `{ "ok": true, "store": { "id": ..., "name": "MZCMG", "type": "native" }, "next_env_key": "PRINTFUL_STORE_ID" }` (not the token). If no unique store matches, no ID is returned.
-5. Save that returned numeric ID as `PRINTFUL_STORE_ID` **for Preview only**. Optionally set `PRINTFUL_STORE_NAME=MZCMG`. Changes to Preview environment variables require a new Preview deployment to take effect.
+5. If the endpoint returns `single_store_mismatch`, inspect its `accessible_store` name/type/id to confirm the new token was created for the correct store. If `store_not_found`, check `accessible_store_count` and `mzcmg_named_candidates`—unrelated stores are never listed. Do not recreate stores until the specific mismatch is confirmed.
+6. Save that returned numeric ID as `PRINTFUL_STORE_ID` **for Preview only**. Optionally set `PRINTFUL_STORE_NAME=MZCMG`. Changes to Preview environment variables require a new Preview deployment to take effect.
 
 Security: the endpoint refuses non-Preview environments (404), requires a dedicated Preview `PRINTFUL_MZCMG_TOKEN`, never falls back to the older token, and returns no raw Printful response, token, or other stores. Because the numeric store ID is not secret, this single fixed read-only lookup requires no extra admin password. Remove the temporary diagnostic once setup is complete; do not deploy it as an active production endpoint. Other existing admin workstation routes still require their admin password.
 
