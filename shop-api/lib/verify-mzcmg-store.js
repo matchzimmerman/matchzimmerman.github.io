@@ -11,26 +11,71 @@ function send(res, status, payload) {
 }
 
 function identify(stores) {
-  var matches = (Array.isArray(stores) ? stores : []).filter(function (store) {
-    return store && String(store.name || "").trim() === "MZCMG" &&
-      String(store.type || "").toLowerCase() === "native";
+  var accessible = Array.isArray(stores) ? stores : [];
+  var normalize = function (name) {
+    return String(name || "").trim().replace(/\\s+/g, " ").toLowerCase();
+  };
+  var summary = function (entry) {
+    var id = Number(entry && entry.id);
+    return {
+      id: Number.isSafeInteger(id) && id > 0 ? id : null,
+      name: String(entry && entry.name || "").slice(0, 120),
+      type: String(entry && entry.type || "").slice(0, 50)
+    };
+  };
+  var matches = accessible.filter(function (store) {
+    return store && normalize(store.name) === "mzcmg" &&
+      normalize(store.type) === "native";
   });
-  if (matches.length === 0) {
-    return { status: 404, result: { ok: false, error: "No native MZCMG store is available to this token." } };
+  if (matches.length === 1) {
+    var matchingStore = summary(matches[0]);
+    if (!matchingStore.id) {
+      return { status: 502, result: { ok: false, code: "invalid_store_id", error: "Printful returned an invalid store identifier." } };
+    }
+    return {
+      status: 200,
+      result: {
+        ok: true,
+        store: matchingStore,
+        next_env_key: "PRINTFUL_STORE_ID"
+      }
+    };
   }
-  if (matches.length !== 1) {
-    return { status: 409, result: { ok: false, error: "More than one native store is named MZCMG; selection requires manual review." } };
+  if (matches.length > 1) {
+    return { status: 409, result: { ok: false, code: "duplicate_native_name", error: "Multiple native stores are named MZCMG; selection requires review." } };
   }
-  var id = Number(matches[0].id);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    return { status: 502, result: { ok: false, error: "Printful returned an invalid store identifier." } };
+
+  // A single-store token is normally scoped to one store. Returning that
+  // store's basic identity helps diagnose mistaken token selection.
+  if (accessible.length === 1) {
+    var only = summary(accessible[0]);
+    return {
+      status: 409,
+      result: {
+        ok: false, code: "single_store_mismatch",
+        error: "Token is authorized for a store other than the expected native MZCMG store.",
+        accessible_store: only,
+        next_step: only.type === "native" ? "Confirm the store name or token selection." : "Create or select a token scoped to the MZCMG Manual Order/API store."
+      }
+    };
   }
+
+  // Account-level tokens can see multiple stores. Do not expose unrelated
+  // names or identifiers; include only plausible MZCMG candidates.
+  var nearby = accessible.filter(function (store) {
+    return store && normalize(store.name).includes("mzcmg");
+  }).slice(0, 5).map(summary);
   return {
-    status: 200,
+    status: 404,
     result: {
-      ok: true,
-      store: { id: id, name: "MZCMG", type: "native" },
-      next_env_key: "PRINTFUL_STORE_ID"
+      ok: false, code: "store_not_found",
+      error: "No native MZCMG store was available to this token.",
+      accessible_store_count: accessible.length,
+      native_store_count: accessible.filter(function (store) {
+        return store && normalize(store.type) === "native";
+      }).length,
+      mzcmg_named_candidates: nearby,
+      next_step: "Check token single-store selection and Printful store name."
     }
   };
 }
