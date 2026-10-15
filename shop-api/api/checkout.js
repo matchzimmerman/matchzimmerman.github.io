@@ -266,6 +266,18 @@ async function fulfillSession(sessionId) {
   var order = current.result || {};
   var status = String(order.status || "").toLowerCase();
 
+  if (session.livemode === false) {
+    return {
+      ok: true,
+      paid: true,
+      testMode: true,
+      sessionId: session.id,
+      orderRef: (session.metadata && session.metadata.order_ref) || session.client_reference_id || "",
+      printfulOrderId: orderId,
+      fulfillmentStatus: "test-paid-not-submitted"
+    };
+  }
+
   if (status === "draft" || status === "failed") {
     var confirmed = await printful.confirmOrder(STORE_ID, orderId);
     order = confirmed.result || order;
@@ -356,7 +368,10 @@ module.exports = async function handler(req, res) {
         printfulConfigured: Boolean(process.env.PRINTFUL_TOKEN),
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
         webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
-        automaticTax: String(process.env.STRIPE_AUTOMATIC_TAX || "").toLowerCase() === "true"
+        automaticTax: String(process.env.STRIPE_AUTOMATIC_TAX || "").toLowerCase() === "true",
+        stripeMode: process.env.STRIPE_SECRET_KEY
+          ? (String(process.env.STRIPE_SECRET_KEY).indexOf("sk_test_") === 0 ? "test" : "live")
+          : "unconfigured"
       });
     }
 

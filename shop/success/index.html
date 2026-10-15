@@ -41,8 +41,13 @@
         const j=await r.json();
         if(j.ok&&j.paid){
           localStorage.removeItem("mzbrdz-cart");
-          title.innerHTML="ORDER<br>RECEIVED.";
-          status.textContent="Payment is complete and your order has been submitted for fulfillment.";
+          if(j.testMode){
+            title.innerHTML="TEST<br>COMPLETE.";
+            status.textContent="Stripe test payment succeeded. The Printful order remains an unsubmitted draft, so no production charge was triggered.";
+          }else{
+            title.innerHTML="ORDER<br>RECEIVED.";
+            status.textContent="Payment is complete and your order has been submitted for fulfillment.";
+          }
           meta.textContent=(j.orderRef?"ORDER "+j.orderRef+" · ":"")+"FULFILLMENT "+String(j.fulfillmentStatus||"submitted").toUpperCase();
           return;
         }
