@@ -16,18 +16,17 @@ This branch is a **staged migration**, not a live switch. Do not merge or change
 
 The `shop-api` project must stay at **12 or fewer functions** on Vercel Hobby. The `api/` directory contains 12 deployable `.js` files. To avoid adding functions for low-volume routes, `/api/catalog` and `/api/verify-mzcmg-store` are implemented as two query-mode branches of `api/inventory.js`; `vercel.json` rewrites preserve both original URLs. The store verifier itself lives in `lib/verify-mzcmg-store.js` (not `api/`) and still refuses non-Preview environments. `npm test` checks the function count and rewrites automatically. Future endpoints must reuse a function or consolidate existing ones, rather than add another file under `api/`.
 
-## Private native-store verification (Preview only)
+## Native-store verification (Preview only)
 
-The store ID can be discovered without copying credentials into chat or looking through the Printful dashboard:
+The store ID is a non-secret identifier and can be discovered without copying credentials into chat or looking through the Printful dashboard:
 
 1. Configure `PRINTFUL_MZCMG_TOKEN` on **Preview** for the shop API project. Keep the old `PRINTFUL_TOKEN` unchanged.
-2. Ensure the **existing** `MZ_SHOP_ADMIN_PASSWORD` is accessible to the Preview deployment (add a Preview-scoped value in Vercel if necessary; do not expose the password in code or chat).
-3. Open the migration branch's **Vercel Preview deployment URL** and append `/api/verify-mzcmg-store`. Do **not** use `mzcmg-shop-api.vercel.app` because that is the production alias.
-4. When the browser requests HTTP Basic authentication, use username `match` and the configured admin password.
-5. The read-only response contains only `{ "ok": true, "store": { "id": ..., "name": "MZCMG", "type": "native" }, "next_env_key": "PRINTFUL_STORE_ID" }` (not the token). If authentication fails or no store matches, no ID is returned.
-6. Save that returned numeric ID as `PRINTFUL_STORE_ID` **for Preview only**. Optionally set `PRINTFUL_STORE_NAME=MZCMG`. Changes to Preview environment variables require a new Preview deployment to take effect.
+2. Open the migration branch's **Vercel Preview deployment URL** and append `/api/verify-mzcmg-store`. Do **not** use `mzcmg-shop-api.vercel.app` because that is the production alias.
+3. No separate `MZ_SHOP_ADMIN_PASSWORD` is required for this temporary, read-only endpoint. Vercel deployment protection, if configured, may still require signing into Vercel.
+4. The response contains only `{ "ok": true, "store": { "id": ..., "name": "MZCMG", "type": "native" }, "next_env_key": "PRINTFUL_STORE_ID" }` (not the token). If no unique store matches, no ID is returned.
+5. Save that returned numeric ID as `PRINTFUL_STORE_ID` **for Preview only**. Optionally set `PRINTFUL_STORE_NAME=MZCMG`. Changes to Preview environment variables require a new Preview deployment to take effect.
 
-Security: this endpoint refuses any non-Preview environment (404), requires admin authentication, refuses a missing `PRINTFUL_MZCMG_TOKEN`, never falls back to the older token, and returns no raw Printful response or token. Do not merge/deploy it to production as part of cutover. Later remove this temporary diagnostic when store setup is complete.
+Security: the endpoint refuses non-Preview environments (404), requires a dedicated Preview `PRINTFUL_MZCMG_TOKEN`, never falls back to the older token, and returns no raw Printful response, token, or other stores. Because the numeric store ID is not secret, this single fixed read-only lookup requires no extra admin password. Remove the temporary diagnostic once setup is complete; do not deploy it as an active production endpoint. Other existing admin workstation routes still require their admin password.
 
 ## Required environment variables
 
