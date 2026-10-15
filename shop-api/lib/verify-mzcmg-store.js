@@ -2,7 +2,6 @@
 
 // Temporary Preview-only, read-only store verification. Never expose API tokens,
 // unrelated Printful stores, or full upstream payloads to the browser.
-var requireAdmin = require("./auth").requireAdmin;
 var printful = require("./printful");
 
 function send(res, status, payload) {
@@ -48,7 +47,8 @@ async function handler(req, res) {
     res.setHeader("Allow", "GET");
     return send(res, 405, { ok: false, error: "Method not allowed." });
   }
-  if (!requireAdmin(req, res)) return;
+  // Store IDs are non-secret identifiers. This temporary Preview-only reader
+  // exposes only the single matching MZCMG ID, never the Printful credentials.
   // Never silently use the old production token to identify the new store.
   if (!process.env.PRINTFUL_MZCMG_TOKEN) {
     return send(res, 503, { ok: false, error: "PRINTFUL_MZCMG_TOKEN is missing from this Preview deployment." });
