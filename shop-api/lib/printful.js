@@ -121,6 +121,33 @@ async function getStoreProduct(store, productId) {
   return request(base + encodeURIComponent(productId), { storeId: store.id });
 }
 
+async function getSyncVariant(storeId, variantId) {
+  return request("/sync/variant/" + encodeURIComponent(variantId), { storeId: storeId });
+}
+
+async function createOrder(storeId, body) {
+  return request("/orders", { storeId: storeId, method: "POST", body: body });
+}
+
+async function getOrder(storeId, orderId) {
+  return request("/orders/" + encodeURIComponent(orderId), { storeId: storeId });
+}
+
+async function confirmOrder(storeId, orderId) {
+  return request("/orders/" + encodeURIComponent(orderId) + "/confirm", {
+    storeId: storeId,
+    method: "POST",
+    body: {}
+  });
+}
+
+async function cancelOrder(storeId, orderId) {
+  return request("/orders/" + encodeURIComponent(orderId), {
+    storeId: storeId,
+    method: "DELETE"
+  });
+}
+
 async function getProductTemplate(templateId) {
   return request("/product-templates/" + encodeURIComponent(templateId));
 }
@@ -211,6 +238,11 @@ module.exports = {
   listStoreProducts: listStoreProducts,
   listProductTemplates: listProductTemplates,
   getStoreProduct: getStoreProduct,
+  getSyncVariant: getSyncVariant,
+  createOrder: createOrder,
+  getOrder: getOrder,
+  confirmOrder: confirmOrder,
+  cancelOrder: cancelOrder,
   getProductTemplate: getProductTemplate,
   getCatalogProduct: getCatalogProduct,
   createMockupTask: createMockupTask,

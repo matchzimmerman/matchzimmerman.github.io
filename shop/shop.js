@@ -106,7 +106,59 @@ function renderBag(){
 function openBag(){$("#bag-drawer").classList.add("open");$("#bag-drawer").setAttribute("aria-hidden","false");$("#bag-scrim").hidden=false}
 function closeBag(){$("#bag-drawer").classList.remove("open");$("#bag-drawer").setAttribute("aria-hidden","true");$("#bag-scrim").hidden=true}
 $("#bag-button").onclick=openBag;$("#bag-close").onclick=closeBag;$("#bag-scrim").onclick=closeBag;
-$("#checkout-button").onclick=()=>alert("The browse + cart model is working. Stripe payment and Printful fulfillment are the next isolated module.");
+const checkoutDialog=$("#checkout-dialog");
+const checkoutForm=$("#checkout-form");
+const checkoutError=$("#checkout-error");
+const checkoutSubmit=$("#checkout-submit");
+
+function syncStateRequirement(){
+  const country=$("#ship-country").value;
+  const state=$("#ship-state");
+  const required=["US","CA","AU"].includes(country);
+  state.required=required;
+  state.placeholder=country==="US"?"MD":country==="CA"?"ON":country==="AU"?"NSW":"";
+}
+$("#ship-country").onchange=syncStateRequirement;
+syncStateRequirement();
+
+$("#checkout-button").onclick=()=>{
+  if(!cart.length){alert("YOUR BAG IS EMPTY.");return}
+  closeBag();
+  checkoutError.textContent="";
+  checkoutDialog.showModal();
+};
+$("#checkout-close").onclick=()=>checkoutDialog.close();
+
+checkoutForm.onsubmit=async e=>{
+  e.preventDefault();
+  if(!cart.length)return;
+  checkoutError.textContent="";
+  checkoutSubmit.disabled=true;
+  checkoutSubmit.textContent="CALCULATING SHIPPING…";
+  const recipient={
+    name:clean($("#ship-name").value),
+    email:clean($("#ship-email").value),
+    address1:clean($("#ship-address1").value),
+    address2:clean($("#ship-address2").value),
+    city:clean($("#ship-city").value),
+    state_code:clean($("#ship-state").value).toUpperCase(),
+    country_code:clean($("#ship-country").value).toUpperCase(),
+    zip:clean($("#ship-zip").value),
+    phone:clean($("#ship-phone").value)
+  };
+  const items=cart.map(x=>({variantId:String(x.variantId),qty:Number(x.qty)||1}));
+  try{
+    const r=await fetch(API+"/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recipient,items})});
+    const j=await r.json().catch(()=>({ok:false,error:"Checkout service returned an unreadable response."}));
+    if(!r.ok||!j.ok)throw new Error(j.error||"Checkout could not be started.");
+    checkoutSubmit.textContent="OPENING STRIPE…";
+    window.location.assign(j.url);
+  }catch(err){
+    checkoutError.textContent=err.message||"Checkout could not be started.";
+    checkoutSubmit.disabled=false;
+    checkoutSubmit.textContent="CONTINUE TO STRIPE";
+  }
+};
 
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function escapeAttr(s){return escapeHtml(s)}

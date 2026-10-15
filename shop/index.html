@@ -58,10 +58,56 @@
     <div class="bag-head"><strong>BAG</strong><button id="bag-close" type="button">CLOSE ×</button></div>
     <div id="bag-items" class="bag-items"></div>
     <div class="bag-total"><span>SUBTOTAL</span><strong id="bag-subtotal">$0.00</strong></div>
-    <button class="checkout-button" id="checkout-button" type="button">CHECKOUT / PAYMENT BRIDGE NEXT</button>
-    <p class="checkout-note">Browse, options, and cart are live. Stripe payment + Printful fulfillment are being connected as a separate module.</p>
+    <button class="checkout-button" id="checkout-button" type="button">SECURE CHECKOUT</button>
+    <p class="checkout-note">Secure payment via Stripe. Fulfillment by Printful.</p>
   </aside>
   <div id="bag-scrim" class="bag-scrim" hidden></div>
+
+  <dialog id="checkout-dialog" class="checkout-dialog">
+    <form id="checkout-form">
+      <div class="checkout-dialog-head">
+        <div><p class="shop-kicker">THE SHOP / CHECKOUT</p><h2>SHIP IT.</h2></div>
+        <button id="checkout-close" type="button">CLOSE ×</button>
+      </div>
+      <p class="checkout-intro">Enter the shipping address so the shop can calculate the actual Printful fulfillment cost before sending you to Stripe for secure payment.</p>
+      <div class="checkout-fields">
+        <label class="wide">NAME<input id="ship-name" name="name" autocomplete="name" required></label>
+        <label class="wide">EMAIL<input id="ship-email" name="email" type="email" autocomplete="email" required></label>
+        <label class="wide">ADDRESS<input id="ship-address1" name="address1" autocomplete="shipping street-address" required></label>
+        <label class="wide">ADDRESS 2<input id="ship-address2" name="address2" autocomplete="shipping address-line2"></label>
+        <label>CITY<input id="ship-city" name="city" autocomplete="shipping address-level2" required></label>
+        <label>STATE / REGION CODE<input id="ship-state" name="state_code" autocomplete="shipping address-level1" placeholder="MD"></label>
+        <label>POSTAL CODE<input id="ship-zip" name="zip" autocomplete="shipping postal-code" required></label>
+        <label>COUNTRY
+          <select id="ship-country" name="country_code" autocomplete="shipping country" required>
+            <option value="US" selected>UNITED STATES</option>
+            <option value="CA">CANADA</option>
+            <option value="GB">UNITED KINGDOM</option>
+            <option value="IE">IRELAND</option>
+            <option value="AU">AUSTRALIA</option>
+            <option value="NZ">NEW ZEALAND</option>
+            <option value="DE">GERMANY</option>
+            <option value="FR">FRANCE</option>
+            <option value="NL">NETHERLANDS</option>
+            <option value="BE">BELGIUM</option>
+            <option value="ES">SPAIN</option>
+            <option value="IT">ITALY</option>
+            <option value="PT">PORTUGAL</option>
+            <option value="NO">NORWAY</option>
+            <option value="SE">SWEDEN</option>
+            <option value="DK">DENMARK</option>
+            <option value="FI">FINLAND</option>
+            <option value="AT">AUSTRIA</option>
+            <option value="CH">SWITZERLAND</option>
+          </select>
+        </label>
+        <label class="wide">PHONE <span class="optional">(OPTIONAL)</span><input id="ship-phone" name="phone" type="tel" autocomplete="tel"></label>
+      </div>
+      <div id="checkout-error" class="checkout-error" role="alert"></div>
+      <button class="checkout-submit" id="checkout-submit" type="submit">CONTINUE TO STRIPE</button>
+      <p class="checkout-fineprint">Your shipping details are sent to Printful to calculate fulfillment and create a draft order. The draft is only submitted for production after successful Stripe payment.</p>
+    </form>
+  </dialog>
 
   <script src="/shop/shop.js"></script>
 </body>

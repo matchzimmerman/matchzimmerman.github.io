@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f1efe8">
+  <title>Order Received — Match Zimmerman Creative Media Group</title>
+  <link rel="stylesheet" href="/site-v1.css">
+  <link rel="stylesheet" href="/shop/shop.css">
+  <style>
+    .success-shell{width:min(980px,calc(100% - 28px));margin:auto;padding:38px 0 80px}
+    .success-card{border-top:9px solid var(--ink);padding-top:22px}
+    .success-card h1{font-size:clamp(64px,12vw,150px);line-height:.78;letter-spacing:-.075em;margin:12px 0 34px}
+    .success-status{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:18px 0;font-size:18px;line-height:1.45}
+    .success-meta{font-family:monospace;font-size:10px;letter-spacing:.09em;margin-top:16px;color:var(--muted)}
+    .success-link{display:inline-block;margin-top:32px;background:var(--ink);color:var(--paper);padding:14px 18px;text-decoration:none;font-weight:800}
+  </style>
+</head>
+<body>
+  <main class="success-shell">
+    <section class="success-card">
+      <p class="shop-kicker">MATCH ZIMMERMAN CREATIVE MEDIA GROUP / THE SHOP</p>
+      <h1 id="success-title">PAYMENT<br>RECEIVED.</h1>
+      <div class="success-status" id="success-status">Confirming your order with Printful…</div>
+      <div class="success-meta" id="success-meta"></div>
+      <a class="success-link" href="/shop/">RETURN TO THE SHOP</a>
+    </section>
+  </main>
+  <script>
+    const API="https://mzcmg-shop-api.vercel.app/api";
+    const params=new URLSearchParams(location.search);
+    const session=params.get("session_id");
+    const status=document.getElementById("success-status");
+    const meta=document.getElementById("success-meta");
+    const title=document.getElementById("success-title");
+
+    async function complete(attempt){
+      if(!session){title.innerHTML="ORDER<br>STATUS.";status.textContent="Missing checkout session.";return}
+      try{
+        const r=await fetch(API+"/checkout?action=complete&session_id="+encodeURIComponent(session));
+        const j=await r.json();
+        if(j.ok&&j.paid){
+          localStorage.removeItem("mzbrdz-cart");
+          title.innerHTML="ORDER<br>RECEIVED.";
+          status.textContent="Payment is complete and your order has been submitted for fulfillment.";
+          meta.textContent=(j.orderRef?"ORDER "+j.orderRef+" · ":"")+"FULFILLMENT "+String(j.fulfillmentStatus||"submitted").toUpperCase();
+          return;
+        }
+        if(attempt<5){
+          status.textContent="Payment is processing. Checking again…";
+          setTimeout(()=>complete(attempt+1),1800);
+          return;
+        }
+        title.innerHTML="PAYMENT<br>PROCESSING.";
+        status.textContent="Your payment has not finished processing yet. Keep your Stripe receipt; the order can be reconciled from the checkout session.";
+      }catch(e){
+        title.innerHTML="ORDER<br>RECEIVED.";
+        status.textContent="Payment returned successfully. Fulfillment confirmation is temporarily unavailable; your Stripe receipt is the payment record.";
+      }
+    }
+    complete(0);
+  </script>
+</body>
+</html>
