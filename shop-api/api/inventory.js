@@ -1,5 +1,6 @@
 var requireAdmin = require("../lib/auth").requireAdmin;
 var printful = require("../lib/printful");
+var storeConfig = require("../lib/store-config");
 
 var STOREFRONT_EXCLUDED = {
   "387424863": true, // Knitted crew neck sweater
@@ -47,15 +48,7 @@ module.exports = async function handler(req, res) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
 
     try {
-      var stores = await printful.listStores();
-      var store = stores.filter(function (candidate) {
-        return candidate && candidate.name === "Match Zimmerman" && candidate.type === "squarespace";
-      })[0];
-
-      if (!store) {
-        res.statusCode = 404;
-        return res.end(JSON.stringify({ ok: false, error: "Storefront store not found." }));
-      }
+      var store = await storeConfig.resolveNativeStore(printful);
 
       var products = await printful.listStoreProducts(store);
       var eligible = products
