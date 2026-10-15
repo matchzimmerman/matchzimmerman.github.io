@@ -1,7 +1,7 @@
 var crypto = require("crypto");
 var printful = require("../lib/printful");
 
-var STORE_ID = 16437938;
+var storeConfig = require("../lib/store-config");
 var BASE_URL = process.env.MZ_SHOP_BASE_URL || "https://www.matchzimmerman.com";
 var ALLOWED_ORIGINS = {
   "https://www.matchzimmerman.com": true,
@@ -138,7 +138,7 @@ function appendLineItem(form, index, item) {
   form.append("line_items[" + index + "][quantity]", String(item.qty));
 }
 
-async function createStripeSession(validatedItems, shipping, recipient, printfulOrderId, orderRef) {
+async function createStripeSession(validatedItems, shipping, recipient, printfulOrderId, orderRef, storeId) {
   var form = new URLSearchParams();
   form.append("mode", "payment");
   form.append("success_url", BASE_URL + "/shop/success/?session_id={CHECKOUT_SESSION_ID}");
@@ -148,8 +148,10 @@ async function createStripeSession(validatedItems, shipping, recipient, printful
   form.append("billing_address_collection", "auto");
   form.append("expires_at", String(Math.floor(Date.now() / 1000) + 3600));
   form.append("metadata[printful_order_id]", String(printfulOrderId));
+  form.append("metadata[printful_store_id]", String(storeId));
   form.append("metadata[order_ref]", orderRef);
   form.append("payment_intent_data[metadata][printful_order_id]", String(printfulOrderId));
+  form.append("payment_intent_data[metadata][printful_store_id]", String(storeId));
   form.append("payment_intent_data[metadata][order_ref]", orderRef);
 
   if (String(process.env.STRIPE_AUTOMATIC_TAX || "").toLowerCase() === "true") {
@@ -177,11 +179,11 @@ async function createStripeSession(validatedItems, shipping, recipient, printful
   });
 }
 
-async function serverValidateItems(items) {
+async function serverValidateItems(items, storeId) {
   var validated = [];
   for (var i = 0; i < items.length; i += 1) {
     var requested = items[i];
-    var payload = await printful.getSyncVariant(STORE_ID, requested.variantId);
+    var payload = await printful.getSyncVariant(storeId, requested.variantId);
     var variant = payload.result || {};
     var productId = variant.sync_product_id || variant.product_id ||
       (variant.product && (variant.product.id || variant.product.sync_product_id));
@@ -210,10 +212,12 @@ function orderReference() {
 
 async function startCheckout(req, res) {
   stripeKey(); // fail before creating a Printful draft if Stripe is not configured
+  var store = await storeConfig.resolveNativeStore(printful);
+  var storeId = store.id;
   var body = await readJson(req);
   var recipient = validateRecipient(body.recipient);
   var requestedItems = validateItems(body.items);
-  var items = await serverValidateItems(requestedItems);
+  var items = await serverValidateItems(requestedItems, storeId);
   var orderRef = orderReference();
 
   var orderPayload = {
@@ -229,14 +233,14 @@ async function startCheckout(req, res) {
     })
   };
 
-  var draft = await printful.createOrder(STORE_ID, orderPayload);
+  var draft = await printful.createOrder(storeId, orderPayload);
   var order = draft.result || {};
   if (!order.id) throw new Error("Printful did not return a draft order ID.");
 
   var shipping = moneyNumber(order.costs && order.costs.shipping) || 0;
 
   try {
-    var session = await createStripeSession(items, shipping, recipient, order.id, orderRef);
+    var session = await createStripeSession(items, shipping, recipient, order.id, orderRef, storeId);
     return send(res, 200, {
       ok: true,
       url: session.url,
@@ -244,7 +248,7 @@ async function startCheckout(req, res) {
       orderRef: orderRef
     });
   } catch (error) {
-    try { await printful.cancelOrder(STORE_ID, order.id); } catch (cleanupError) {}
+    try { await printful.cancelOrder(storeId, order.id); } catch (cleanupError) {}
     throw error;
   }
 }
@@ -262,7 +266,8 @@ async function fulfillSession(sessionId) {
   var orderId = session.metadata && session.metadata.printful_order_id;
   if (!orderId) throw new Error("Paid session is missing its Printful order reference.");
 
-  var current = await printful.getOrder(STORE_ID, orderId);
+  var storeId = storeConfig.storeIdForSession(session);
+  var current = await printful.getOrder(storeId, orderId);
   var order = current.result || {};
   var status = String(order.status || "").toLowerCase();
 
@@ -283,7 +288,7 @@ async function fulfillSession(sessionId) {
   }
 
   if (status === "draft" || status === "failed") {
-    var confirmed = await printful.confirmOrder(STORE_ID, orderId);
+    var confirmed = await printful.confirmOrder(storeId, orderId);
     order = confirmed.result || order;
     status = String(order.status || status).toLowerCase();
   }
@@ -301,11 +306,12 @@ async function fulfillSession(sessionId) {
 async function cancelDraftFromSession(session) {
   var orderId = session && session.metadata && session.metadata.printful_order_id;
   if (!orderId) return;
+  var storeId = storeConfig.storeIdForSession(session);
   try {
-    var current = await printful.getOrder(STORE_ID, orderId);
+    var current = await printful.getOrder(storeId, orderId);
     var order = current.result || {};
     if (String(order.status || "").toLowerCase() === "draft") {
-      await printful.cancelOrder(STORE_ID, orderId);
+      await printful.cancelOrder(storeId, orderId);
     }
   } catch (error) {}
 }
@@ -370,6 +376,7 @@ module.exports = async function handler(req, res) {
       return send(res, 200, {
         ok: true,
         printfulConfigured: Boolean(process.env.PRINTFUL_TOKEN),
+        printfulStoreConfigured: /^[1-9][0-9]*$/.test(String(process.env.PRINTFUL_STORE_ID || "")),
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
         webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
         automaticTax: String(process.env.STRIPE_AUTOMATIC_TAX || "").toLowerCase() === "true",
