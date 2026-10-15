@@ -47,6 +47,41 @@ test("store identification fails closed when missing or ambiguous", () => {
   assert.equal(handler.identify([{ id: "oops", name: "MZCMG", type: "native" }]).status, 502);
 });
 
+test("a single-store token reports the authorized store for mismatch diagnosis", () => {
+  const result = handler.identify([{ id: 9421, name: "Old Shop", type: "squarespace" }]);
+  assert.equal(result.status, 409);
+  assert.equal(result.result.code, "single_store_mismatch");
+  assert.deepEqual(result.result.accessible_store, {id: 9421, name: "Old Shop", type: "squarespace"});
+  assert.doesNotMatch(JSON.stringify(result.result), /Bearer|access_token|secret/);
+});
+
+test("minor MZCMG name whitespace and casing differences normalize", () => {
+  const result = handler.identify([{ id: 9422, name: "  mzcmg   ", type: "NATIVE" }]);
+  assert.equal(result.status, 200);
+  assert.equal(result.result.store.id, 9422);
+});
+
+test("account-level token results give bounded candidate metadata, not unrelated stores", () => {
+  const result = handler.identify([
+    {id: 1, name: "Unrelated Private Store", type: "shopify"},
+    {id: 2, name: "MZCMG Shop", type: "native"},
+    {id: 3, name: "Another private", type: "native"}
+  ]);
+  assert.equal(result.status, 404);
+  assert.equal(result.result.code, "store_not_found");
+  assert.equal(result.result.accessible_store_count, 3);
+  assert.deepEqual(result.result.mzcmg_named_candidates, [
+    {id: 2, name: "MZCMG Shop", type: "native"}
+  ]);
+  assert.doesNotMatch(JSON.stringify(result.result), /Unrelated Private|Another private/);
+});
+
+test("empty store list returns count and no token info", () => {
+  const result = handler.identify([]);
+  assert.equal(result.status, 404);
+  assert.equal(result.result.accessible_store_count, 0);
+});
+
 test("verification route is inaccessible in production", async () =>
   runWithEnv({ VERCEL_ENV: "production" }, async () => {
     const res = response();
