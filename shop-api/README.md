@@ -1,51 +1,50 @@
 # MZCMG Shop API
 
-Private serverless bridge between the custom MZCMG storefront and Printful.
+Vercel API for [matchzimmerman.com/shop](https://matchzimmerman.com/shop). The customer-facing storefront is custom GitHub Pages. Stripe handles payments, and Printful handles print-on-demand production and fulfillment. Squarespace is not part of the target architecture.
 
-This subproject is isolated from the GitHub Pages site. A Vercel project can point to this repository with Root Directory set to shop-api. Doing that does not change where matchzimmerman.com is hosted.
+## Cutover state (October 2026)
 
-## Environment variables
+This branch is a **staged migration**, not a live switch. Do not merge or change production environment variables until the checklist below is complete.
 
-Set these only in the deployment environment. Never commit their values.
+- `api/inventory.js` and `api/product.js` now select one dedicated native Printful store via `lib/store-config.js`, never by the name/type of an ecommerce integration.
+- `api/checkout.js` validates the same native store, then associates each new Stripe Checkout session with its Printful store ID.
+- Completed/expired pre-cutover Stripe sessions may use `PRINTFUL_LEGACY_STORE_ID` temporarily to resolve drafts in the original Printful store. Remove only after outstanding orders, refunds, and Stripe events have been reconciled.
+- `data/catalog.json` is the initial **MZ-owned catalog manifest**. `GET /api/catalog` exposes only products with verified publish prerequisites; the Two Houses sweater is a draft and is not for sale.
+- The live `/shop/shop.js` storefront still reads `/api/inventory` and `/api/product`. Switching to MZ catalog, authenticated write/publish endpoints, and automated Printful product creation are separate follow-up phases.
 
-PRINTFUL_TOKEN
-The Printful private token.
+## Required environment variables
 
-MZ_SHOP_ADMIN_PASSWORD
-A separate strong password for the private inventory endpoints.
+Set these **only** in the Vercel deployment settings, not in the repository. See `.env.example`:
 
-The Basic Auth username is: match
+- `PRINTFUL_TOKEN`: Printful token with access to the native/manual-order API store. Required scopes include products and orders for intended automation.
+- `PRINTFUL_STORE_ID`: **required** positive numeric ID of a dedicated **Manual Order Platform/API** Printful store (`type: native`). The code fails closed if absent or pointing to an ecommerce integration.
+- `PRINTFUL_STORE_NAME`: optional exact-name check for additional protection.
+- `PRINTFUL_LEGACY_STORE_ID`: transitional ID for existing Stripe sessions that lack store association metadata; needed only during the drain window.
+- `MZ_SHOP_ADMIN_PASSWORD`: private workstation auth, not used in browser-side JavaScript.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`: existing Stripe credentials.
+- `MZ_SHOP_BASE_URL`: shop hostname for checkout return URLs.
+- `MZ_SHOP_CONFIRM_PRINTFUL`: must remain `false` until successful end-to-end proof and approval.
 
-## Initial routes
+## Safe activation checklist
 
-/api/health
-Shows whether the required environment variables are configured without exposing them.
+1. In Printful, create a **Manual Order Platform/API store** dedicated to MZCMG; do not disconnect the old account during transition.
+2. Generate / authorize an appropriately scoped token and identify the actual native store ID. Never commit the token.
+3. Grant Vercel team/project access, and configure `PRINTFUL_TOKEN`, `PRINTFUL_STORE_ID`, and optional name guard in deployment settings.
+4. Set `PRINTFUL_LEGACY_STORE_ID` to the retired Printful store's ID **only** while old Stripe sessions/fulfillment need it.
+5. Audit existing visible products, variants, print files, previous orders, and migration strategy. Native and ecommerce-linked stores do **not** share sync-product IDs automatically. Do not present old variants from one store as variants of another.
+6. Deploy a **preview environment** and validate `/api/inventory?storefront=1`, individual `/api/product?storefront=1&id=...`, and `/api/catalog`. Until native products have been created, the public inventory may be empty.
+7. Run regression tests (`cd shop-api && npm test`). Test a purchase with Stripe **test** credentials, Printful mock/draft, shipping calculation, expired-session cleanup, webhooks, and a post-payment fulfillment hold.
+8. Only then transition production environment variables and catalog source together, preserving continuity for old orders; verify products, sizes, costs, and prices in the real storefront. Keep fulfillment held until separately approved.
+9. Remove `PRINTFUL_LEGACY_STORE_ID` once old pending sessions and legitimate post-purchase support obligations are handled by an alternative verified path.
 
-/api/inventory
-Password-protected live inventory of all accessible Printful stores, store products, and Product Templates.
+## Owned catalog v1
 
-/api/product
-Password-protected product and variant detail endpoint. Required query parameters: storeId, storeType, id.
+`data/catalog.json` is version-controlled MZCMG product intent, not Printful's inventory. Each product has identity, line/category, status, artwork/placement files, yarn validation, Printful IDs and variants, retail price, mockups, and review approvals. The initial `TWO HOUSES` record is a deliberate unpublished draft. `lib/catalog.js` requires both production validation and an explicit published state before returning products publicly. A product's presence in the manifest is **not** permission to charge a customer.
 
-## Safety model
+The current catalog is read-only through the API. A later publisher must validate the actual knitting placement rules from the selected Printful product and size, create production products/assets, obtain verified cost/variant mappings, and only then update the MZ manifest through a reviewed, authenticated write path. It must never publish on a mockup alone.
 
-The Printful token may carry write permissions so the system can later automate product creation, orders, files, webhooks, and fulfillment.
+## Development
 
-The current application code performs GET requests only.
+Run `cd shop-api && npm test` (Node 20+). Tests run without external credentials or paid API calls. Do not place Printful or Stripe tokens in GitHub Actions secrets unless explicitly authorized.
 
-Write operations will be added as separate deliberate phases after the existing catalog has been inspected.
-
-## Architecture
-
-matchzimmerman.com/shop
-GitHub Pages storefront
-
-MZCMG Shop API
-Separate Vercel project using shop-api as its Root Directory
-
-Printful
-Catalog, production, fulfillment, and shipping
-
-## OBAS Foundry demo
-
-The private prototype can generate procedural OBAS print sources and request Printful mockup tasks for candidate physical products without publishing products to the store.
+Existing API routes (inventory, product, checkout, mockup generation, workstation) remain otherwise in place. The old foundry is a candidate/mockup tool, **not** a product publisher yet.
