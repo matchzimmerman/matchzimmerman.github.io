@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const handler = require("../api/verify-mzcmg-store");
+const handler = require("../lib/verify-mzcmg-store");
 const printful = require("../lib/printful");
 
 function response() {
@@ -94,4 +94,20 @@ test("authorized verification returns only the new MZCMG store ID, not tokens", 
     } finally {
       printful.listStores = original;
     }
+  }));
+
+test("catalog endpoint shares inventory function without exposing drafts", async () => {
+  const inventory = require("../api/inventory");
+  const res = response();
+  await inventory({method: "GET", query: {mode: "catalog"}, headers: {}}, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body), {ok: true, source: "mzcmg", products: []});
+});
+
+test("verification path through inventory still rejects production requests", async () =>
+  runWithEnv({ VERCEL_ENV: "production" }, async () => {
+    const inventory = require("../api/inventory");
+    const res = response();
+    await inventory({method: "GET", query: {mode: "verify-mzcmg-store"}, headers: {}}, res);
+    assert.equal(res.statusCode, 404);
   }));
