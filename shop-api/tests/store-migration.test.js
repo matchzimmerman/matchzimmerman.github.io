@@ -108,6 +108,6 @@ test("public routes do not contain the retired hardcoded store ID", () => {
   for (const rel of ["api/inventory.js","api/product.js","api/checkout.js"]) {
     const code = fs.readFileSync(path.join(__dirname, "..", rel), "utf8");
     assert.doesNotMatch(code, /16437938/);
-    assert.doesNotMatch(code, /type:\\s*["']squarespace["']/);
+    assert.doesNotMatch(code, /type:\s*["']squarespace["']/);
   }
 });
