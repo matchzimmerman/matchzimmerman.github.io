@@ -396,3 +396,8 @@ module.exports = async function handler(req, res) {
     return send(res, status, { ok: false, error: error.message || "Checkout failed." });
   }
 };
+
+
+// Stripe webhook signatures require the exact raw request body.
+// Checkout JSON is parsed manually above, so Vercel's body parser can stay disabled safely.
+module.exports.config = { api: { bodyParser: false } };
