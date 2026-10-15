@@ -55,20 +55,27 @@ test("verification route is inaccessible in production", async () =>
     assert.equal(res.headers["cache-control"], "no-store, private");
   }));
 
-test("verification route is private, with Basic authentication required", async () =>
-  runWithEnv({ VERCEL_ENV: "preview", MZ_SHOP_ADMIN_PASSWORD: "test-only-password" }, async () => {
-    const res = response();
-    await handler({ method: "GET", headers: {} }, res);
-    assert.equal(res.statusCode, 401);
-    assert.equal(res.headers["www-authenticate"], 'Basic realm="MZCMG Shop Inventory"');
+test("verification requires only Preview, not an admin password", async () =>
+  runWithEnv({ VERCEL_ENV: "preview", MZ_SHOP_ADMIN_PASSWORD: null,
+    PRINTFUL_MZCMG_TOKEN: "test-new-secret" }, async () => {
+    const original = printful.listStores;
+    printful.listStores = async () => [{ id: 56, type: "native", name: "MZCMG" }];
+    try {
+      const res = response();
+      await handler({ method: "GET", headers: {} }, res);
+      assert.equal(res.statusCode, 200);
+      assert.equal(JSON.parse(res.body).store.id, 56);
+      assert.equal(res.headers["www-authenticate"], undefined);
+    } finally {
+      printful.listStores = original;
+    }
   }));
 
 test("verification requires the distinct new token in Preview", async () =>
   runWithEnv({ VERCEL_ENV: "preview", MZ_SHOP_ADMIN_PASSWORD: "test-only-password",
     PRINTFUL_MZCMG_TOKEN: null, PRINTFUL_TOKEN: "legacy-token" }, async () => {
     const res = response();
-    const auth = "Basic " + Buffer.from("match:test-only-password").toString("base64");
-    await handler({ method: "GET", headers: { authorization: auth } }, res);
+    await handler({ method: "GET", headers: {} }, res);
     assert.equal(res.statusCode, 503);
     assert.match(JSON.parse(res.body).error, /PRINTFUL_MZCMG_TOKEN/);
   }));
@@ -84,8 +91,7 @@ test("authorized verification returns only the new MZCMG store ID, not tokens", 
     ];
     try {
       const res = response();
-      const auth = "Basic " + Buffer.from("match:test-only-password").toString("base64");
-      await handler({ method: "GET", headers: { authorization: auth } }, res);
+      await handler({ method: "GET", headers: {} }, res);
       assert.equal(res.statusCode, 200);
       const output = JSON.parse(res.body);
       assert.deepEqual(output.store, { id: 21, name: "MZCMG", type: "native" });
