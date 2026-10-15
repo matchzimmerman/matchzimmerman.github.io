@@ -1,0 +1,27 @@
+name: Shop API regression tests
+
+on:
+  pull_request:
+    paths:
+      - 'shop-api/**'
+      - '.github/workflows/shop-api-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'shop-api/**'
+      - '.github/workflows/shop-api-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run dependency-free regression suite
+        working-directory: shop-api
+        run: npm test
