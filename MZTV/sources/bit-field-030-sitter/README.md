@@ -13,8 +13,8 @@ The feed is a 2×2 grid. **CAM 1 · BOLEX** (top left) holds the frontal screen 
 The drones route round the sitter's head and shoulders: when the straight line to a mark is blocked they arc over and round it, and they slide along the surface instead of bumping into it. The director (MZCAM, `../../lib/mzcam.js`) still runs: it cuts only inside a blink and comes home to the Bolex for every new sitter. The on-air tile is framed. Drones appear in each other's shots, and the studio plan sits top right. `V` switches to a single program feed (`?layout=single`), where the bay shows a monitor per drone.
 
 ## The evolution loop
-Every sitting runs one pass of the BAIR loop:
-- **B · BUILD**: the face takes its step, under a blink.
+Every sitting can be described using the CAIR lens (COLLECT · ANALYZE · INTERPRET · RETURN). The existing face-construction/morph step remains part of the implementation, not the first term of CAIR:
+- **C · COLLECT**: capture the sitter's current geometry, landmark and genome state after the blink-driven step for the scanner and critic.
 - **A · ANALYZE**: the scanner measures the face it now has: eye spacing against skull, facial thirds, brow-to-lid gap, mouth width, jaw, symmetry, extreme features, and age against grey hair against stubble.
 - **I · INTERPRET**: measurements become critiques, for example "brows sitting on the lids: brow hair reads as hair on the eyelids · distracting".
 - **R · RETURN**: a plan returned to the next pass, for example "return: raise brows +0.45". The next sitting applies it and logs "applied".
