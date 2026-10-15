@@ -111,3 +111,21 @@ test("public routes do not contain the retired hardcoded store ID", () => {
     assert.doesNotMatch(code, /type:\s*["']squarespace["']/);
   }
 });
+
+test("a Preview MZCMG token takes priority over the legacy token", async () => {
+  await withEnvAsync({ PRINTFUL_MZCMG_TOKEN: "test-native", PRINTFUL_TOKEN: "test-legacy" }, async () => {
+    const originalFetch = global.fetch;
+    let auth;
+    global.fetch = async (url, options) => {
+      auth = options.headers.Authorization;
+      return { ok: true, text: async () => JSON.stringify({ result: [] }) };
+    };
+    try {
+      const printful = require("../lib/printful");
+      await printful.listStores();
+      assert.equal(auth, "Bearer test-native");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
