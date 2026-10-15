@@ -263,6 +263,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-030-sitter/`
 
+### BIT FIELD 031 — MZ WORLD · HEADLAND
+A living coast above Inverin, Galway Bay, printed every frame as carved linocut lines that follow each surface and resolve into six OBAS inks. Cliffs, sea stacks, a pier, a gully stair and a cottage path under the real Galway sun and moon, driven by live bay weather and swell. A keeper in a long black veil walks errands between the house, the cliff edge and the pier end, and the fabric moves with the real wind. A boat fishes, gulls soar and perch, and a seal surfaces. Seven observational cameras cut on the 16th note. The live lens is the microphone: waves striking rocks thump where they are in frame, and the keeper's position picks the bass degree. Rarely, and only when conditions allow, the landscape is alive: the sun opens an eye and follows the keeper, the cliffs breathe with the swell, a stack turns to look, the gulls draw a ring around the light, the pier reaches out to sea on some nights. Events remember the weather they happened in. Tension from stability and events ends in a hush (the sea goes flat) and a rupture into new inks, line grammar and harmonic centre. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-031-headland/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-031-headland/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 
