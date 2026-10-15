@@ -12,6 +12,19 @@ This branch is a **staged migration**, not a live switch. Do not merge or change
 - `data/catalog.json` is the initial **MZ-owned catalog manifest**. `GET /api/catalog` exposes only products with verified publish prerequisites; the Two Houses sweater is a draft and is not for sale.
 - The live `/shop/shop.js` storefront still reads `/api/inventory` and `/api/product`. Switching to MZ catalog, authenticated write/publish endpoints, and automated Printful product creation are separate follow-up phases.
 
+## Private native-store verification (Preview only)
+
+The store ID can be discovered without copying credentials into chat or looking through the Printful dashboard:
+
+1. Configure `PRINTFUL_MZCMG_TOKEN` on **Preview** for the shop API project. Keep the old `PRINTFUL_TOKEN` unchanged.
+2. Ensure the **existing** `MZ_SHOP_ADMIN_PASSWORD` is accessible to the Preview deployment (add a Preview-scoped value in Vercel if necessary; do not expose the password in code or chat).
+3. Open the migration branch's **Vercel Preview deployment URL** and append `/api/verify-mzcmg-store`. Do **not** use `mzcmg-shop-api.vercel.app` because that is the production alias.
+4. When the browser requests HTTP Basic authentication, use username `match` and the configured admin password.
+5. The read-only response contains only `{ "ok": true, "store": { "id": ..., "name": "MZCMG", "type": "native" }, "next_env_key": "PRINTFUL_STORE_ID" }` (not the token). If authentication fails or no store matches, no ID is returned.
+6. Save that returned numeric ID as `PRINTFUL_STORE_ID` **for Preview only**. Optionally set `PRINTFUL_STORE_NAME=MZCMG`. Changes to Preview environment variables require a new Preview deployment to take effect.
+
+Security: this endpoint refuses any non-Preview environment (404), requires admin authentication, refuses a missing `PRINTFUL_MZCMG_TOKEN`, never falls back to the older token, and returns no raw Printful response or token. Do not merge/deploy it to production as part of cutover. Later remove this temporary diagnostic when store setup is complete.
+
 ## Required environment variables
 
 Set these **only** in the Vercel deployment settings, not in the repository. See `.env.example`:
