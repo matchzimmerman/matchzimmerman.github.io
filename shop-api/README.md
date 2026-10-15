@@ -16,7 +16,8 @@ This branch is a **staged migration**, not a live switch. Do not merge or change
 
 Set these **only** in the Vercel deployment settings, not in the repository. See `.env.example`:
 
-- `PRINTFUL_TOKEN`: Printful token with access to the native/manual-order API store. Required scopes include products and orders for intended automation.
+- `PRINTFUL_MZCMG_TOKEN`: preferred new Printful token for the native/manual-order API store. In staging, scope this secret to Preview only. The code prioritizes it over the old `PRINTFUL_TOKEN`; do not overwrite or remove the existing production secret. Required scopes include products and orders for intended automation.
+- `PRINTFUL_TOKEN`: legacy/backup Printful credential retained while the existing storefront is still live.
 - `PRINTFUL_STORE_ID`: **required** positive numeric ID of a dedicated **Manual Order Platform/API** Printful store (`type: native`). The code fails closed if absent or pointing to an ecommerce integration.
 - `PRINTFUL_STORE_NAME`: optional exact-name check for additional protection.
 - `PRINTFUL_LEGACY_STORE_ID`: transitional ID for existing Stripe sessions that lack store association metadata; needed only during the drain window.
@@ -29,7 +30,7 @@ Set these **only** in the Vercel deployment settings, not in the repository. See
 
 1. In Printful, create a **Manual Order Platform/API store** dedicated to MZCMG; do not disconnect the old account during transition.
 2. Generate / authorize an appropriately scoped token and identify the actual native store ID. Never commit the token.
-3. Grant Vercel team/project access, and configure `PRINTFUL_TOKEN`, `PRINTFUL_STORE_ID`, and optional name guard in deployment settings.
+3. Grant Vercel team/project access, and configure `PRINTFUL_MZCMG_TOKEN`, `PRINTFUL_STORE_ID`, and optional name guard for the migration preview only. Leave the existing production `PRINTFUL_TOKEN` untouched.
 4. Set `PRINTFUL_LEGACY_STORE_ID` to the retired Printful store's ID **only** while old Stripe sessions/fulfillment need it.
 5. Audit existing visible products, variants, print files, previous orders, and migration strategy. Native and ecommerce-linked stores do **not** share sync-product IDs automatically. Do not present old variants from one store as variants of another.
 6. Deploy a **preview environment** and validate `/api/inventory?storefront=1`, individual `/api/product?storefront=1&id=...`, and `/api/catalog`. Until native products have been created, the public inventory may be empty.
