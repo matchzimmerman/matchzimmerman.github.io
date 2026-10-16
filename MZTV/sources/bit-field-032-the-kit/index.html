@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1b1f3a"><title>MZ WORLD 032 — THE KIT / ROOFTOP 001</title>
+<style>
+:root{--ink:#1b1f3a;--paper:#efe6cf;--sea:#3f9aa6;--hot:#f0603f;--glow:#f2c14e;--deep:#2c3e7a;font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;color:var(--ink)}*{box-sizing:border-box}body{margin:0;overflow:hidden;background:var(--ink);touch-action:none}canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}#mask{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(27,31,58,.045) 3px 4px);mix-blend-mode:multiply}#ui{position:fixed;inset:0;pointer-events:none}.title{position:absolute;top:20px;left:22px;padding:10px 13px;background:rgba(239,230,207,.94);border:2px solid var(--ink);font-size:10px;letter-spacing:.12em;line-height:1.5}.title strong{display:block;font-size:15px;letter-spacing:.12em}.topRight{position:absolute;top:20px;right:22px;text-align:right;padding:8px 11px;background:rgba(239,230,207,.91);border:2px solid var(--ink);font-size:10px;line-height:1.65;letter-spacing:.06em}.bottom{position:absolute;left:22px;bottom:22px;width:min(465px,calc(100vw - 44px));background:rgba(239,230,207,.95);border:2px solid var(--ink);padding:10px 12px 11px}.bottom .header{display:flex;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:5px;margin-bottom:6px;font-size:11px;letter-spacing:.07em;font-weight:700}.bottom p{font-size:11px;line-height:1.5;margin:5px 0 10px;max-height:3.3em;overflow:hidden}.buttons{display:flex;flex-wrap:wrap;gap:6px;pointer-events:auto}.buttons button,.menuBtn{border:2px solid var(--ink);border-radius:0;background:var(--paper);color:var(--ink);padding:8px 10px;cursor:pointer;text-transform:uppercase;font:700 10px/1 ui-monospace,monospace;letter-spacing:.05em}.buttons button:active,.buttons button:hover,.menuBtn:hover{background:var(--glow)}.buttons button.primary{background:var(--hot)}.buttons button[disabled]{opacity:.35;cursor:default}.minor{display:flex;justify-content:space-between;gap:6px;font-size:9px;color:var(--deep);padding-top:8px;text-transform:uppercase;letter-spacing:.02em}.marker{position:absolute;right:22px;bottom:22px;color:var(--ink);background:var(--paper);border:2px solid var(--ink);padding:10px 12px;font-size:10px;letter-spacing:.05em;max-width:240px}.marker strong{font-size:12px;display:block;padding-bottom:4px}.hidden{display:none!important}.flicker{animation:f 0.23s 1}@keyframes f{0%{opacity:.6}100%{opacity:1}}@media(max-width:730px){.title{top:10px;left:10px;padding:6px 7px;font-size:8px}.title strong{font-size:11px}.topRight{right:10px;top:10px;font-size:8px;padding:5px 7px}.bottom{left:10px;bottom:10px;width:calc(100% - 20px);padding:8px}.bottom p{font-size:10px;max-height:2.9em}.buttons{gap:5px}.buttons button{padding:10px 6px;font-size:9px;flex:1;min-width:60px}.minor{font-size:8px}.marker{right:10px;bottom:160px;font-size:9px;padding:6px;max-width:135px}}@media(max-height:480px){.bottom{padding:5px}.bottom p{display:none}.bottom .minor{display:none}.marker{display:none}}
+</style></head><body>
+<canvas id="world" aria-label="Interactive printed 3D rooftop loft with autonomous flying pigeons"></canvas><div id="mask"></div>
+<div id="ui"><div class="title"><span>MZTV / MZ WORLD / FIELD 032</span><strong>THE KIT</strong><span>ROOFTOP 001 · A LIVING LOFT</span></div><div class="topRight" id="telemetry">MZMULTICAM · INITIALIZING</div><div class="bottom" id="controlPanel"><div class="header"><span id="sceneTitle">THE LOFT</span><span id="clock">DAY 001 · 07:42</span></div><p id="observation">Early light on the roof. The flock is already circling. Watch where they return.</p><div class="buttons"><button id="recall" class="primary" title="Recall whistle">WHISTLE ↶</button><button id="release" title="Release pigeons that have returned to their home loft">RELEASE ↑</button><button id="feed" title="Put grain down near the loft">FEED ·</button><button id="cameras" title="Toggle observation cameras">MULTICAM</button><button id="guide" title="Open keeper's notebook">NOTEBOOK</button></div><div class="minor"><span id="counts">18 FLYING · 6 AT REST</span><span>DRAG: LOOK · SPACE: WHISTLE · V: CAM</span></div></div><div class="marker hidden" id="eventCard"><strong id="eventHead">EVENT</strong><span id="eventBody"></span></div></div>
+<script>
+'use strict';
+/* MZ WORLD / THE KIT — standalone procedural 3D print renderer. No external libs, assets or IMG/GEN.
+   Spatial projection, 3D geometry, autonomous birds, event-triggered observational directing,
+   multiview camera compositing, keeper actions, and HEADLAND-inspired Atlantic Print six inks. */
+const P={INK:'#1b1f3a',DEEP:'#2c3e7a',SEA:'#3f9aa6',HOT:'#f0603f',GLOW:'#f2c14e',PAPER:'#efe6cf'};
+const C=document.getElementById('world'), ctx=C.getContext('2d',{alpha:false,desynchronized:true});
+let CW=1280,CH=720,DPR=1; function resize(){const q=Math.min(devicePixelRatio||1,1.5);let w=innerWidth*q,h=innerHeight*q,cap=1550,s=Math.min(1,cap/Math.max(w,h));CW=Math.max(320,Math.round(w*s));CH=Math.max(220,Math.round(h*s));C.width=CW;C.height=CH;DPR=CW/innerWidth;} addEventListener('resize',resize);resize();
+const PI=Math.PI,TAU=2*PI,clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),mix=(a,b,t)=>a+(b-a)*t;
+const v=(x=0,y=0,z=0)=>({x,y,z}),add=(a,b)=>v(a.x+b.x,a.y+b.y,a.z+b.z),sub=(a,b)=>v(a.x-b.x,a.y-b.y,a.z-b.z),mul=(a,s)=>v(a.x*s,a.y*s,a.z*s),len=a=>Math.hypot(a.x,a.y,a.z),norm=a=>mul(a,1/(len(a)||1)),dot=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z,cross=(a,b)=>v(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x),dist=(a,b)=>len(sub(a,b)),copy=a=>v(a.x,a.y,a.z);
+const rand=(a,b)=>a+Math.random()*(b-a),hash=n=>{let x=Math.sin(n*127.1+41.7)*43758.5453;return x-Math.floor(x)};
+let phase=0, simtime=0,day=1, weather={wind:2.4,dir:.37}, shotIdx=0,shotSince=0,lastEvent=0, featured=null, eventLabel='', eventUntil=0,camMix=true, notebook=false, guideStep=0, releaseCount=0, followPointer={x:0,y:0},pointerOn=false, whistlePulse=0,grainPulse=0, shutter=0, preferredShot=-1;
+const cameraNames=['ROOFTOP','EAST PARAPET','LOFT DOOR','SKY / LONG LENS','KIT / PURSUIT','FIRE ESCAPE','COURTYARD'];
+const mats={roof:P.DEEP,roofTop:P.SEA,wood:P.HOT,woodSide:P.DEEP,wire:P.INK,concrete:P.PAPER,shadow:P.INK};
+const faces=[],segments=[];
+function polygon(points,fill,ink=P.INK,hatch=false){faces.push({pts:points,fill,ink,hatch});}
+function line(a,b,col=P.INK,width=1){segments.push({a,b,col,width});}
+const POINTS8=[[-1,0,-1],[1,0,-1],[1,0,1],[-1,0,1],[-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1]];
+function box(x,y,z,w,h,d,top=P.PAPER,side=P.DEEP,front=P.SEA,outline=P.INK,hatch=false){
+const pts=POINTS8.map(t=>v(x+t[0]*w*.5,y+t[1]*h,z+t[2]*d*.5));
+for(const [a,color] of [[[4,5,6,7],top],[[1,2,6,5],side],[[0,3,7,4],side],[[2,3,7,6],front],[[0,1,5,4],front]])polygon(a.map(j=>pts[j]),color,outline,hatch);
+for(const ids of [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]])line(pts[ids[0]],pts[ids[1]],outline,.75);
+}
+function plane(x1,z1,x2,z2,y,col,hatch=false){polygon([v(x1,y,z1),v(x1,y,z2),v(x2,y,z2),v(x2,y,z1)],col,P.INK,hatch)}
+function loft(x,z,w=10,d=6){
+ box(x,.15,z,w,.7,d,P.DEEP,P.INK,P.DEEP);
+ box(x,.85,z,w,4,d,P.GLOW,P.HOT,P.HOT,P.INK,true);
+ // sloped pitched coop roof with geometric ridge (model includes local roof edge)
+ polygon([v(x-w/2-.7,4.85,z-d/2-.6),v(x,6.1,z-d/2-.6),v(x,6.1,z+d/2+.6),v(x-w/2-.7,4.85,z+d/2+.6)],P.DEEP,P.INK,true);
+ polygon([v(x,6.1,z-d/2-.6),v(x+w/2+.7,4.85,z-d/2-.6),v(x+w/2+.7,4.85,z+d/2+.6),v(x,6.1,z+d/2+.6)],P.SEA,P.INK,true);
+ line(v(x-w/2-.7,4.85,z-d/2-.6),v(x,6.1,z-d/2-.6),P.INK,2);line(v(x,6.1,z-d/2-.6),v(x+w/2+.7,4.85,z-d/2-.6),P.INK,2);
+ for(let k=0;k<7;k++){let xx=x-w/2+1+k*(w-2)/6;line(v(xx,1.5,z-d/2-.07),v(xx,4.75,z-d/2-.07),P.INK,.65);}
+ for(let i=0;i<5;i++){let ax=x-w/2+1.15+(i%5)*(w-2.3)/5;box(ax,2.45,z-d/2-.17,1.05,1.25,.08,P.INK,P.INK,P.INK);line(v(ax-.45,1.95,z-d/2-.3),v(ax+.45,1.95,z-d/2-.3),P.PAPER,1);}
+ // entrances, one way trap, landing decks
+ box(x+1,1.22,z-d/2-.27,2.15,1.55,.2,P.INK,P.INK,P.INK);plane(x,z-d/2-3,x+2.6,z-d/2,.95,P.DEEP,true);
+ for(let i=0;i<6;i++)line(v(x-.2+i*.45,.98,z-d/2-3),v(x-.2+i*.45,.98,z-d/2),P.PAPER,.9);
+ line(v(x-w/2,4.8,z-d/2),v(x+w/2,4.8,z-d/2),P.INK,1.4);
+}
+function cage(x,z,w=4,d=4){
+ box(x,.1,z,w,.28,d,P.DEEP,P.INK,P.DEEP);
+ const H=3.8, xx=[x-w/2,x+w/2],zz=[z-d/2,z+d/2];
+ for(let a of xx)for(let b of zz)line(v(a,.28,b),v(a,H,b),P.INK,2.4);
+ for(let a of xx)for(let b of zz)line(v(a,H,b),v(a===xx[0]?xx[1]:xx[0],H,b),P.INK,1.3);
+ for(let s=0;s<2;s++)for(let i=0;i<=8;i++){
+ let yy=.35+i*(H-.35)/8;
+ line(v(xx[0],yy,zz[s]),v(xx[1],yy,zz[s]),P.DEEP,.45);
+ line(v(xx[s],yy,zz[0]),v(xx[s],yy,zz[1]),P.DEEP,.45);
+ }
+ for(let s=0;s<2;s++)for(let i=1;i<12;i++){
+ let xx2=xx[0]+i*w/12, zz2=zz[0]+i*d/12;
+ line(v(xx2,.3,zz[s]),v(xx2,H,zz[s]),P.INK,.4);
+ line(v(xx[s],.3,zz2),v(xx[s],H,zz2),P.INK,.4);
+ }
+ line(v(x-w/2,H,z-d/2),v(x+w/2,H,z+d/2),P.INK,1.4);
+}
+function buildWorld(){
+ // giant printed city foundations, distinct buildings, separated from the rooftop
+ for(let i=0;i<34;i++){let xx=-185+i*12+rand(-3,3), zz=75+rand(0,100);if(Math.abs(xx)<32 && zz<100)zz+=40;
+ const bW=rand(8,20),h=rand(17,50),bD=rand(10,22);box(xx,-26,zz,bW,h,bD,i%7===0?P.GLOW:P.PAPER,i%4===0?P.DEEP:P.INK,i%4===0?P.SEA:P.DEEP,false);
+ for(let k=0;k<4;k++)for(let j=0;j<5;j++){
+  const yy=-25+2+j*((h-4)/6),xw=xx-bW*.4+k*(bW*.8)/3;
+  box(xw,yy,zz-bD/2-.03,.48,.9,.03,(i+j+k)%5===0?P.HOT:P.DEEP,P.DEEP,P.DEEP,P.DEEP);
+ }
+ }
+ for(let i=0;i<18;i++){let xx=-130+i*14+rand(-4,4),zz=-74-rand(0,40),h=rand(11,43);box(xx,-28,zz,rand(9,17),h,rand(12,25),P.PAPER,P.DEEP,P.SEA,P.INK,false)}
+ // rooftop has real thickness and observable parapets
+ box(0,-2.7,0,59,3.3,39,P.SEA,P.DEEP,P.DEEP,P.INK,true);
+ plane(-29,-19,29,19,0,P.PAPER,true);
+ for(let t of [-29.25,29.25])box(t,0,-0,1,1.35,39,P.PAPER,P.DEEP,P.SEA,P.INK,true);
+ for(let t of [-19.4,19.4])box(0,0,t,59,1.15,1,P.PAPER,P.DEEP,P.SEA,P.INK,true);
+ // layers of seams, roof paper / fabric / repair marks
+ for(let i=0;i<11;i++)line(v(-29,0,-18+i*3.45),v(29,0,-18+i*3.45),P.DEEP,.3);
+ for(let i=0;i<17;i++)line(v(-29+i*3.5,0,-19),v(-29+i*3.5,0,19),P.DEEP,.3);
+ loft(-15.5,7.8,12,7.3);loft(10.5,11.3,9,5.5);
+ cage(1.1,11.6,6,6);cage(21.5,5.5,4,7);
+ // rest platforms/perches
+ for(let i=0;i<10;i++){let x=-20+i*4.2,z=-11+Math.sin(i*.7)*1.1;box(x,.15,z,.85,.33,1.8,P.SEA,P.DEEP,P.SEA)}
+ // wire clothes line / poles
+ for(let x of [-24,-5,16,25]){line(v(x,.2,-13),v(x,5.3,-13),P.INK,2);line(v(x,5.3,-13),v(x+3.2,5.3,-13),P.INK,1.2)}
+ line(v(-24,4.8,-13),v(27,4.8,-13),P.INK,.7);
+ // water tank on far neighboring roof visible
+ box(39,-17,57,20,25,22,P.DEEP,P.INK,P.DEEP,P.INK,true);box(39,8,57,12,13,12,P.INK,P.DEEP,P.HOT,P.INK,true);
+ // utility housing, vents, exhaust cowls
+ box(19,.3,-13,8,3.2,5,P.DEEP,P.INK,P.SEA,P.INK,true);
+ for(let i=0;i<4;i++){let xx=16.2+i*1.7;line(v(xx,1,-15.6),v(xx,2.7,-15.6),P.INK,1.4)}
+ for(let i=0;i<4;i++)box(-3+i*1.3,.2,-5,1.2,.85,1.2,P.INK,P.INK,P.DEEP);
+ for(let i=0;i<5;i++)line(v(-5+i*.35,.1,-5.5),v(-5+i*.35,.8,-5.5),P.HOT,.9);
+ box(-24,.12,1,2.5,.8,2.5,P.HOT,P.INK,P.DEEP);
+ box(-10,.13,-2,1.7,1.1,1.7,P.GLOW,P.INK,P.DEEP);
+ // feed buckets and an open container
+ box(-9,.3,2,.85,.6,.85,P.PAPER,P.DEEP,P.HOT);
+ line(v(25,1.3,-17),v(25,8,-17),P.INK,2);line(v(22,7.8,-17),v(28,7.8,-17),P.INK,1.5);
+}
+buildWorld();
+const kits=[];const birds=[];
+function createBirds(){for(let g=0;g<3;g++){let kit={id:g,orbit:g*TAU/3,rollTimer:rand(9,19)+g*4,nextRoll:rand(19,32)+g*10,rollUntil:0,rollDuration:0,leader:v(0,14,0),flightCount:0};kits.push(kit);for(let j=0;j<8;j++){
+ let resting=g===2&&j>=2;birds.push({id:g*8+j,g,index:j,name:['Moss','Stripe','Pip','Fern','Lark','Ash','Knock','Nell','Turf','Pearl','Cinder','Quick','Iris','Blue','Soot','Mica','Fern II','June','Marl','Thorn','Ink','Rye','Salt','Hush'][g*8+j],pos:v((g-1)*11+rand(-4,4),resting?2.4:15+g*4+rand(-3,3),resting?5.5:rand(-12,13)),vel:v(rand(-3,3),rand(-.5,.5),rand(-2,2)),phase:rand(0,6.28),color:(g*9+j)%5,mode:resting?'rest':'flight',trust:rand(.72,.99),energy:rand(.7,1),roll:0,twist:0,restSpot:v(-19+rand(-5,6),1.7+rand(0,1.3),7.5+rand(-4,1.5)),flap:rand(0,TAU),landT:0,homeAfter:0,kit});}
+ }}createBirds();
+const birdColors=[P.INK,P.PAPER,P.SEA,P.DEEP,P.HOT];
+function recall(){whistlePulse=4.5;for(const b of birds)if(b.mode==='flight'&&Math.random()<b.trust*.94){b.mode='home';b.homeAfter=simtime+rand(0,2.5);} observation('A whistle crosses the roof. Birds separate from their circling routes, some sooner than others.');noteEvent('RECALL SIGNAL','The flock begins to find its way home.',4);}
+function release(){let n=0;for(const b of birds)if(b.mode==='rest'&&Math.random()<.9){b.mode='flight';b.pos=add(b.restSpot,v(rand(-1,1),rand(0,1),-3));b.vel=v(rand(-2,2),3,-4-rand(0,1));b.energy=1;b.homeAfter=0;n++}if(n)observation(n+' birds move off the loft. The circling pattern will emerge from their flight.');else observation('No birds are ready to release. The loft is quiet.');}
+function feed(){grainPulse=8;for(const b of birds)if(b.mode==='rest')b.trust=clamp(b.trust+.04,0,1);observation('Grain on the board. Feeding is a routine rather than a reward for a trick.');noteEvent('FEEDING','The keeper returns to the same place.',3);}
+let noteText=['The birds need an established home. A loft is more than shelter: a place of feeding, rest and repeated return.','A whistle is meaningful because it reliably predicts the same routine. Birds learn associations individually.','Rolling belongs to specialized roller breeds. A synchronized break is an emergent event, not a button-triggered trick.','Keepers watch the weather, predators and each bird’s condition. No impressive flight is worth a bird’s safety.'];
+function notebookToggle(){notebook=!notebook;document.getElementById('guide').textContent=notebook?'CLOSE NOTES':'NOTEBOOK';if(notebook){observation('KEEPER’S NOTE '+(guideStep+1)+' / 4 — '+noteText[guideStep]);guideStep=(guideStep+1)%noteText.length;}else observation('The notebook closes. The roof continues without instruction.');}
+function observation(x){document.getElementById('observation').textContent=x;}
+function noteEvent(head,body,duration){eventLabel=head;eventUntil=simtime+duration;document.getElementById('eventHead').textContent=head;document.getElementById('eventBody').textContent=body;document.getElementById('eventCard').classList.remove('hidden');lastEvent=simtime;}
+function birdUpdate(dt){whistlePulse=Math.max(0,whistlePulse-dt);grainPulse=Math.max(0,grainPulse-dt);
+ for(let g=0;g<3;g++){let k=kits[g];k.orbit+=dt*(.13+weather.wind*.015);let base=12+g*3;
+ k.leader=v(Math.sin(k.orbit)*22+Math.sin(k.orbit*.3)*4,base+6+3.5*Math.sin(k.orbit*.9),Math.cos(k.orbit)*12-4);
+ k.rollTimer-=dt;if(k.rollTimer<=0){let awake=birds.filter(b=>b.kit===k&&b.mode==='flight');if(awake.length>=4){k.rollDuration=rand(1.8,3.3);k.rollUntil=simtime+k.rollDuration;k.rollTimer=rand(17,31);featured=k;noteEvent('KIT 0'+(g+1)+' / BREAK',awake.length+' pigeons hold formation; several begin to roll.',4.6);shutter=.35;}else k.rollTimer=rand(10,20)}
+ }
+ for(let b of birds){const k=b.kit;if(b.mode==='rest'){
+ b.pos.x=mix(b.pos.x,b.restSpot.x,Math.min(1,dt*4));b.pos.y=mix(b.pos.y,b.restSpot.y,Math.min(1,dt*4));b.pos.z=mix(b.pos.z,b.restSpot.z,Math.min(1,dt*4));b.vel=mul(b.vel,.9);b.flap+=dt*.2;
+ continue;}
+ if(b.mode==='home'){
+ let target=simtime<b.homeAfter?k.leader:v(-14.5+b.index*.24,2.25,3.1);
+ const dx=sub(target,b.pos),desired=mul(norm(dx),simtime<b.homeAfter?4.1:6.2);
+ b.vel=add(mul(b.vel,Math.exp(-dt*1.45)),mul(desired,1-Math.exp(-dt*1.45)));
+ b.pos=add(b.pos,mul(b.vel,dt));if(simtime>=b.homeAfter&&dist(b.pos,target)<1.4){b.mode='rest';b.pos=copy(b.restSpot);b.vel=v();if(Math.random()<.15){noteEvent('HOME / RETURN',b.name+' returns to the loft.',4);}}
+ }else{
+ let center=v(),alignment=v(),separate=v(),count=0;
+ for(const o of birds)if(o!==b&&o.mode==='flight'&&o.kit===b.kit){let dd=dist(o.pos,b.pos);if(dd<10){center=add(center,o.pos);alignment=add(alignment,o.vel);count++;if(dd<2.3)separate=add(separate,mul(sub(b.pos,o.pos),1/(dd*dd+.2)));}}
+ let target=add(k.leader,v((b.index-3.5)*1.2,Math.sin(k.orbit*.7+b.index)*1.1,(b.index%3-1)*1.3));
+ let steer=mul(norm(sub(target,b.pos)),3.7);
+ if(count){steer=add(steer,mul(norm(sub(mul(center,1/count),b.pos)),1.05));steer=add(steer,mul(norm(alignment),.9));steer=add(steer,mul(separate,2.5));}
+ steer=add(steer,v(Math.cos(weather.dir)*weather.wind*.12,Math.sin(simtime*.37+b.id)*.09,Math.sin(weather.dir)*weather.wind*.12));
+ // soft roof boundary + sky ceiling + open air navigation
+ if(b.pos.y<6)steer.y+=3.5;if(b.pos.y>39)steer.y-=2.5;
+ b.vel=add(mul(b.vel,Math.exp(-dt*1.2)),mul(steer,1-Math.exp(-dt*1.2)));let speed=clamp(len(b.vel),3.1,7.2);b.vel=mul(norm(b.vel),speed);
+ b.pos=add(b.pos,mul(b.vel,dt));b.energy=Math.max(.3,b.energy-dt*.00032);
+ }
+ b.flap+=dt*(9.4+len(b.vel)*.38);
+ let active=simtime<k.rollUntil&&b.mode==='flight';let progress=active?1-(k.rollUntil-simtime)/k.rollDuration:0;
+ let strength=(b.index%6===0?.45:1);b.roll=active?progress*TAU*(1.2+(b.index%3)*.4)*strength:mix(b.roll,0,Math.min(1,dt*5));
+ b.twist=active?Math.sin(progress*TAU*1.2+b.index*.4)*1.5*strength:mix(b.twist,0,Math.min(1,dt*5));
+ }
+}
+function sceneCamera(id){let k=featured && simtime<featured.rollUntil+4?featured:kits[Math.floor((simtime/36)%3)],target=k.leader;
+ const wander=Math.sin(simtime*.08);let eye,at,fov=55;
+ switch(id){
+ case 0:eye=v(4+Math.sin(simtime*.055)*4,24,52);at=v(0,12,-1);fov=58;break;
+ case 1:eye=v(45,18,9+Math.sin(simtime*.075)*4);at=v(0,13,0);fov=51;break;
+ case 2:eye=v(-17,5.6,18);at=v(-12,9,-2);fov=53;break;
+ case 3:eye=add(target,v(8+Math.sin(simtime*.08)*4,8,33));at=add(target,v(0,.2,0));fov=29;break;
+ case 4:eye=add(target,v(-12,-1,22));at=add(target,v(1,0,-1));fov=42;break;
+ case 5:eye=v(24,7,-23);at=v(-12,14,4);fov=48;break;
+ case 6:eye=v(-39,11,35);at=v(0,14,2);fov=59;break;
+ }
+ // Operators drift. They observe; event presence is not guaranteed.
+ eye=add(eye,v(Math.sin(simtime*.11+id)*.42,Math.sin(simtime*.19+id)*.23,Math.cos(simtime*.13+id)*.36));
+ at=add(at,v(wander*.16,Math.sin(simtime*.1+id)*.13,0));
+ // Manual camera study: drag the world to temporarily shift the observational lens.
+ if(pointerOn || preferredShot>=0){at=add(at,v(followPointer.x*12,-followPointer.y*7,followPointer.x*2));}
+ return {eye,at,fov};
+}
+function basis(cam){let f=norm(sub(cam.at,cam.eye)),r=norm(cross(f,v(0,1,0))),up=cross(r,f);return {eye:cam.eye,f,r,up,fov:cam.fov};}
+function proj(point,ca,rect){let rel=sub(point,ca.eye),z=dot(rel,ca.f);if(z<.25)return null;let fl=(rect.h*.5)/Math.tan(ca.fov*PI/360);return {x:rect.x+rect.w/2+dot(rel,ca.r)/z*fl,y:rect.y+rect.h/2-dot(rel,ca.up)/z*fl,d:z};}
+function tri(points,col,outline=P.INK,stroke=.65){ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);for(let i=1;i<points.length;i++)ctx.lineTo(points[i].x,points[i].y);ctx.closePath();ctx.fillStyle=col;ctx.fill();if(stroke){ctx.strokeStyle=outline;ctx.lineWidth=stroke;ctx.stroke()}}
+const skyStars=Array.from({length:120},(_,i)=>({x:hash(i*11+4),y:hash(i*42+7),r:.5+hash(i*9)*1.4}));
+function paintSky(rect,ca){let {x,y,w,h}=rect;ctx.fillStyle=P.PAPER;ctx.fillRect(x,y,w,h);
+ // fixed screen print bands, hard ink roles, and tangent-line cloud contours
+ ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+ ctx.fillStyle=P.SEA;ctx.fillRect(x,y+h*.41,w,h*.54);
+ ctx.fillStyle=P.DEEP;ctx.fillRect(x,y+h*.56,w,h*.34);
+ ctx.fillStyle=P.SEA;ctx.fillRect(x,y+h*.49,w,h*.06);
+ ctx.fillStyle=P.GLOW;ctx.beginPath();ctx.arc(x+w*.75+Math.sin(simtime*.005)*w*.13,y+h*.28,Math.max(7,w*.038),0,TAU);ctx.fill();
+ // long, broken carved contours across atmospheric band
+ ctx.lineWidth=1;for(let i=0;i<20;i++){let yy=y+h*(.37+i*.017),amp=(3+i*.11)*w/800;ctx.strokeStyle=i%5===0?P.INK:i%3===0?P.PAPER:P.DEEP;ctx.beginPath();for(let j=0;j<=18;j++){let xx=x+(j/18)*w,yyy=yy+Math.sin(j*.83+i*.9+simtime*.019)*amp;if(j===0)ctx.moveTo(xx,yyy);else ctx.lineTo(xx,yyy)}ctx.stroke()}
+ for(let i=0;i<skyStars.length;i++){let s=skyStars[i],xx=x+s.x*w,yy=y+s.y*h*.78;ctx.fillStyle=i%8===0?P.HOT:P.INK;ctx.fillRect(xx,yy,s.r,s.r)}
+ ctx.restore();}
+function hatchPoly(pts,kind){ // form-following carved hatch clipped to its projected surface
+ let xmin=Math.min(...pts.map(a=>a.x)),xmax=Math.max(...pts.map(a=>a.x)),ymin=Math.min(...pts.map(a=>a.y)),ymax=Math.max(...pts.map(a=>a.y));if((xmax-xmin)*(ymax-ymin)<110)return;
+ ctx.save();ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.closePath();ctx.clip();ctx.lineWidth=.5;ctx.strokeStyle=P.INK;ctx.globalAlpha=.38;
+ const step=kind===P.HOT?5.5:kind===P.SEA?7:9,span=clamp(xmax-xmin,2,1900),height=clamp(ymax-ymin,1,1000);
+ if(span*height>700000)return ctx.restore();
+ for(let p=xmin-height-25;p<xmax+height+25;p+=step){ctx.beginPath();ctx.moveTo(p,ymin-12);ctx.lineTo(p+height*.33,ymax+12);ctx.stroke();}
+ ctx.restore();}
+function scenery(rect,ca,detail){let renderList=[];let addPoly=(pts,col,ink,hatch)=>{let pp=pts.map(p=>proj(p,ca,rect));if(pp.some(p=>!p))return;let depth=pp.reduce((s,a)=>s+a.d,0)/pp.length;if(pp.every(p=>p.x<rect.x-5)||pp.every(p=>p.x>rect.x+rect.w+5)||pp.every(p=>p.y<rect.y-5)||pp.every(p=>p.y>rect.y+rect.h+5))return;
+ renderList.push({kind:'face',pts:pp,col,ink,hatch,depth});};
+ for(const f of faces)addPoly(f.pts,f.fill,f.ink,detail&&f.hatch);
+ for(const l of segments){let a=proj(l.a,ca,rect),b=proj(l.b,ca,rect);if(!a||!b)continue;renderList.push({kind:'line',a,b,col:l.col,stroke:l.width,depth:(a.d+b.d)/2-.02})}
+ function B(b){let f=b.mode==='rest'?v(0,0,-1):norm(b.vel);let right=norm(cross(f,v(0,1,0)));if(len(right)<.2)right=v(1,0,0);let up=norm(cross(right,f));let roll=b.roll,twist=b.twist;
+ function local(x,y,z){let Y=y*Math.cos(roll)-x*Math.sin(roll),X=y*Math.sin(roll)+x*Math.cos(roll);let Z=z*Math.cos(twist)-Y*Math.sin(twist),Y2=z*Math.sin(twist)+Y*Math.cos(twist);
+ return add(b.pos,add(add(mul(right,X),mul(up,Y2)),mul(f,Z)));}
+ let flutter=b.mode==='rest'?0:Math.sin(b.flap)*.35,wingLift=.25+flutter;
+ let ids=[
+ [[-.42,-.04,.15],[-.82,wingLift,.35],[-1.16,wingLift+.13,-.33],[-.39,.07,-.12]],
+ [[.42,-.04,.15],[.82,wingLift,.35],[1.16,wingLift+.13,-.33],[.39,.07,-.12]],
+ [[-.27,.04,.34],[.27,.04,.34],[.26,-.12,-.45],[-.26,-.12,-.45]],
+ [[-.23,-.02,-.33],[-.55,-.035,-.87],[0,-.04,-.65]],
+ [[.23,-.02,-.33],[.55,-.035,-.87],[0,-.04,-.65]],
+ [[-.16,.1,.53],[.16,.1,.53],[0,.22,.69]]
+ ];
+ let color=birdColors[b.color],w1=b.color%2===0?P.SEA:P.PAPER;
+ for(let n=0;n<ids.length;n++){let pt=ids[n].map(i=>local(...i));let pp=pt.map(p=>proj(p,ca,rect));if(pp.some(p=>!p))continue;
+ let ink=n<2?(b.id%5===0?P.HOT:color):n===2?color:n<5?P.DEEP:P.GLOW;
+ let depth=pp.reduce((s,a)=>s+a.d,0)/pp.length;
+ renderList.push({kind:'face',pts:pp,col:ink,ink:P.INK,hatch:false,depth:depth-(n===2?.04:0)});
+ }
+ let head=local(0,.12,.63),tip=local(0,.08,.85);let hp=proj(head,ca,rect),bp=proj(tip,ca,rect);
+ if(hp&&bp)renderList.push({kind:'birdHead',hp,bp,col:color,depth:hp.d-.2,rad:Math.max(.6,rect.h*.5/Math.tan(ca.fov*PI/360)/hp.d*.18)});
+ }
+ for(const b of birds)B(b);
+ renderList.sort((a,b)=>b.depth-a.depth);
+ for(const ob of renderList){if(ob.kind==='face'){tri(ob.pts,ob.col,ob.ink,Math.max(.35,detail?.65:.38));if(ob.hatch)hatchPoly(ob.pts,ob.col);}else if(ob.kind==='line'){ctx.strokeStyle=ob.col;ctx.lineWidth=ob.stroke*clamp(rect.h/660,.4,1.2);ctx.beginPath();ctx.moveTo(ob.a.x,ob.a.y);ctx.lineTo(ob.b.x,ob.b.y);ctx.stroke();}else if(ob.kind==='birdHead'){ctx.fillStyle=ob.col;ctx.strokeStyle=P.INK;ctx.lineWidth=.75;ctx.beginPath();ctx.arc(ob.hp.x,ob.hp.y,ob.rad,0,TAU);ctx.fill();ctx.stroke();ctx.strokeStyle=P.HOT;ctx.beginPath();ctx.moveTo(ob.hp.x,ob.hp.y);ctx.lineTo(ob.bp.x,ob.bp.y);ctx.stroke();}}
+}
+function viewport(rect,id,details=true){const ca=basis(sceneCamera(id));ctx.save();ctx.beginPath();ctx.rect(rect.x,rect.y,rect.w,rect.h);ctx.clip();paintSky(rect,ca);scenery(rect,ca,details);
+ // frame corner chips inside the observational film print
+ if(details){ctx.fillStyle=P.PAPER;ctx.strokeStyle=P.INK;ctx.lineWidth=1.3;const t=`CAM ${String(id+1).padStart(2,'0')}  /  ${cameraNames[id]}`;ctx.font=`bold ${Math.max(9,Math.min(13,rect.w/95))}px ui-monospace,monospace`;let width=ctx.measureText(t).width+20;ctx.fillRect(rect.x+12,rect.y+rect.h-38,width,26);ctx.strokeRect(rect.x+12,rect.y+rect.h-38,width,26);ctx.fillStyle=P.INK;ctx.fillText(t,rect.x+22,rect.y+rect.h-20);}
+ ctx.restore();}
+function autoDirector(dt){shotSince+=dt;const meaningful=featured&&simtime<featured.rollUntil+3;const homeCount=birds.filter(b=>b.mode==='home').length;
+ let desire=meaningful?3+(featured.id%2):homeCount>3?2:(Math.floor(simtime/19)%7);
+ const minHold=meaningful?1.1:7.6,maxHold=meaningful?4.2:15;
+ if(shotSince>minHold&&(shotSince>maxHold||(shotIdx!==desire && Math.random()<dt*(meaningful?1.1:.16)))){shotIdx=preferredShot>=0?preferredShot:desire;shotSince=0;shutter=.36;}
+ if(preferredShot>=0)shotIdx=preferredShot;
+}
+function render(){ctx.fillStyle=P.INK;ctx.fillRect(0,0,CW,CH);let main={x:0,y:0,w:CW,h:CH};viewport(main,shotIdx,true);
+ if(camMix){
+ let smallH=Math.max(55,Math.min(CH*.193,150)),smallW=Math.max(90,Math.min(CW*.225,230)),gap=5;
+ if(CW<620){smallW=CW*.258;smallH=smallW*.59;}
+ let x=CW-smallW-16,y=CH*.19,alts=[(shotIdx+2)%7,(shotIdx+4)%7,(shotIdx+6)%7];
+ for(let i=0;i<3;i++){let r={x,y:y+i*(smallH+gap),w:smallW,h:smallH};if(r.y+r.h>CH*.79)break;ctx.fillStyle=P.INK;ctx.fillRect(r.x-3,r.y-3,r.w+6,r.h+6);viewport(r,alts[i],false);ctx.fillStyle=P.PAPER;ctx.fillRect(r.x+3,r.y+4,76,15);ctx.fillStyle=P.INK;ctx.font='bold 9px ui-monospace,monospace';ctx.fillText(`MZ / ${String(alts[i]+1).padStart(2,'0')}`,r.x+8,r.y+15)}
+ }
+ // unobtrusive registration and frame boundaries
+ ctx.strokeStyle=P.INK;ctx.lineWidth=3;ctx.strokeRect(1.5,1.5,CW-3,CH-3);
+ if(shutter>0){ctx.fillStyle=P.PAPER;ctx.globalAlpha=shutter*.08;ctx.fillRect(0,0,CW,CH);ctx.globalAlpha=1;}
+}
+let last=0,frameN=0,paused=false;const frame=(now)=>{let dt=last?clamp((now-last)/1000,0,.055):.016;last=now;if(!paused){simtime+=dt;phase+=dt;let wind=1.8+.7*Math.sin(simtime*.022)+.8*Math.sin(simtime*.071);weather.wind=clamp(wind,.4,5.2);weather.dir=.4+Math.sin(simtime*.014)*.8;
+ birdUpdate(dt);autoDirector(dt);shutter=Math.max(0,shutter-dt*3);render();updateUI(now);}requestAnimationFrame(frame)};
+function updateUI(now){if(frameN++%16!==0)return;let fly=birds.filter(b=>b.mode==='flight').length,home=birds.filter(b=>b.mode==='home').length,rest=birds.length-fly-home;
+ let mins=42+Math.floor(simtime/17),hour=(7+Math.floor(mins/60))%24;document.getElementById('clock').textContent=`DAY ${String(day).padStart(3,'0')} · ${String(hour).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+ document.getElementById('telemetry').innerHTML=`MZMULTICAM / AUTONOMOUS<br>${cameraNames[shotIdx]} · LENS ${shotIdx+1}/7<br>WIND ${weather.wind.toFixed(1)} M/S · ${Math.round(weather.dir*180/PI)}°<br>${Math.round(simtime)} S / CONTINUOUS`;
+ document.getElementById('counts').textContent=`${fly} IN FLIGHT · ${home} RETURNING · ${rest} AT REST`;
+ if(simtime>eventUntil)document.getElementById('eventCard').classList.add('hidden');
+ if(!notebook){let paragraph;if(home>0)paragraph='Watch the routes change. Returning birds leave the airborne formation at different moments.';
+ else if(simtime<20)paragraph='Early light on the roof. Three kits move above the city. The loft and its doors remain below.';
+ else if(featured&&simtime<featured.rollUntil+4)paragraph='A break. The rolling birds move through one another’s airspace. No camera was promised the perfect view.';
+ else if(fly<6)paragraph='The roof is quieter. The birds that have returned settle on their habitual perches.';
+ else paragraph='There is no fixed performance. The circling changes with the wind, each bird, and the group.';
+ if(Math.floor(now/9500)!==Math.floor((now-1000)/9500)&&now>30000)observation(paragraph);
+ }}
+ document.getElementById('recall').onclick=recall;document.getElementById('release').onclick=release;document.getElementById('feed').onclick=feed;
+ document.getElementById('guide').onclick=notebookToggle;
+ document.getElementById('cameras').onclick=()=>{camMix=!camMix;document.getElementById('cameras').textContent=camMix?'SINGLE VIEW':'MULTICAM';observation(camMix?'Auxiliary lenses are visible. MZCAM continues choosing the main shot.':'One uninterrupted observational feed. The director is still working.');};
+ addEventListener('keydown',e=>{if(e.repeat)return;switch(e.key.toLowerCase()){case ' ':e.preventDefault();recall();break;case 'f':feed();break;case 'r':release();break;case 'v':document.getElementById('cameras').click();break;case 'i':notebookToggle();break;case 'c':preferredShot=preferredShot<6?preferredShot+1:0;shotIdx=preferredShot;shotSince=0;break;case 'a':preferredShot=-1;followPointer.x=0;followPointer.y=0;break;}});
+ let dragX=0,dragY=0;C.addEventListener('pointerdown',e=>{pointerOn=true;dragX=e.clientX;dragY=e.clientY;C.setPointerCapture(e.pointerId)});C.addEventListener('pointermove',e=>{if(!pointerOn)return;let dx=e.clientX-dragX,dy=e.clientY-dragY;dragX=e.clientX;dragY=e.clientY;followPointer.x=clamp(followPointer.x+dx/innerWidth*2,-1,1);followPointer.y=clamp(followPointer.y+dy/innerHeight*2,-1,1);if(Math.abs(dx)+Math.abs(dy)>1.5){preferredShot=preferredShot<0?shotIdx:preferredShot;}});C.addEventListener('pointerup',()=>{pointerOn=false;setTimeout(()=>preferredShot=-1,2500)});
+ window.MZ={world:'THE KIT · ROOFTOP 001',camera:(i)=>{preferredShot=i<0?-1:((i%7+7)%7);shotSince=0},whistle:recall,release,feed,stats:()=>({time:simtime,shot:cameraNames[shotIdx],birds:birds.map(b=>({name:b.name,mode:b.mode,trust:b.trust,kit:b.g}))}),roll:(g=0)=>{let k=kits[g%3];k.rollDuration=3;k.rollUntil=simtime+3;featured=k;noteEvent(`KIT 0${g+1} / BREAK`,'Rolling event observed.',4)},capture:()=>C.toDataURL('image/png')};
+ requestAnimationFrame(frame);
+</script></body></html>
