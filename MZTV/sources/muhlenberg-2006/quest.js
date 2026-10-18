@@ -8,7 +8,7 @@ const style=document.createElement('style');
 style.textContent='#questhud{position:absolute;z-index:9;left:10px;top:56px;width:min(315px,calc(100% - 100px));background:rgba(13,27,25,.95);color:#f8ecdb;border:1px solid #dcab75;box-shadow:0 9px 25px #07121080;padding:11px 13px;font-family:ui-monospace,Menlo,Consolas,monospace;pointer-events:auto}#questhud .qmeta{font-size:9px;letter-spacing:.14em;color:#dcb38c;margin-bottom:6px}#questhud strong{font-size:13px;line-height:1.3;letter-spacing:.02em}#questhud p{font-size:10px;line-height:1.48;color:#d0d4c7;margin:6px 0 7px}#questhud .qstatus{font-size:11px;color:#f8d4a0;line-height:1.45;min-height:20px}#questhud .qactions{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}#questhud button,#questpad button,#questpickup{background:#273b34;color:#fff0d4;border:1px solid #b08c65;font:700 11px ui-monospace,Menlo,monospace;cursor:pointer}#questhud button{padding:9px 10px}#questhud button.on{background:#e6b078;color:#15211e}#questhud button:disabled{opacity:.5;cursor:default}#questpad{position:absolute;z-index:10;right:10px;bottom:43px;display:none;grid-template-columns:repeat(3,53px);grid-template-rows:repeat(2,52px);gap:3px;touch-action:none;user-select:none}#questpad button{padding:0;font-size:22px;touch-action:none;-webkit-user-select:none;user-select:none;border-radius:5px;background:#182822df}#questpad button.active{background:#daaf7b;color:#111b1a}#questpad .qleft{grid-column:1;grid-row:2}#questpad .qright{grid-column:3;grid-row:2}#questpad .qup{grid-column:2;grid-row:1}#questpad .qdown{grid-column:2;grid-row:2}#questpickup{position:absolute;z-index:11;left:50%;bottom:34px;transform:translateX(-50%);background:#d4a878;color:#11211f;padding:13px 20px;border:2px solid #fff0cf;letter-spacing:.07em;display:none;white-space:nowrap}#questhelp{position:absolute;z-index:8;bottom:10px;right:10px;font:10px ui-monospace,Menlo,monospace;color:#fae6bc;background:#16231fc9;padding:5px 7px;display:none}@media(max-width:760px){#questhud{top:42px;left:7px;width:min(270px,calc(100% - 79px));padding:9px 10px}#questhud strong{font-size:12px}#questhud p{font-size:9px;margin:4px 0 5px}#questhud .qstatus{font-size:10px}#questpad{bottom:38px;right:7px;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(2,50px)}#questpickup{bottom:16px;padding:12px 14px;font-size:10px}#questhelp{display:none!important}.corner{bottom:4px!important;left:6px!important;max-width:calc(100% - 174px)!important;padding:4px 5px!important;font-size:8px!important}}@media(max-width:375px){#questhud{width:245px}#questhud .qactions button{padding:7px 6px;font-size:9px}}';
 document.head.appendChild(style);
 const hud=document.createElement('div');hud.id='questhud';hud.setAttribute('aria-label','Lost RAZR quest');
-hud.innerHTML='<div class="qmeta">FIELD QUEST / 001 / SPRING 2006</div><strong>THE LOST RAZR</strong><p>Somebody lost a silver Motorola RAZR V3 on the Green. Explore the campus, listen for a ringtone, and find it.</p><div class="qstatus" id="qstatus" aria-live="polite">READY TO SEARCH</div><div class="qactions"><button id="qstart" class="on">START SEARCH</button><button id="qgps">GPS: OFF</button><button id="qreset">NEW GAME</button></div><p>Virtual item only; no real phone is hidden. May 2006 campus form remains provisional.</p>';
+hud.innerHTML='<div class="qmeta">FIELD QUEST / 001 / SPRING 2006</div><strong>THE LOST RAZR</strong><p>Somebody lost a silver Motorola RAZR V3 on the Green. Explore the campus, listen for a ringtone, and find it.</p><div class="qstatus" id="qstatus" aria-live="polite">READY TO SEARCH</div><div class="qactions"><button id="qstart" class="on">START SEARCH</button><button id="qgps">GPS: OFF</button><button id="qaudio">RING: ON</button><button id="qreset">NEW GAME</button></div><p>Virtual item only; no real phone is hidden. May 2006 campus form remains provisional.</p>';
 section.appendChild(hud);
 const pad=document.createElement('div');pad.id='questpad';pad.setAttribute('aria-label','Walk controls');
 pad.innerHTML='<button class="qup" data-go="up" aria-label="Walk north">▲</button><button class="qleft" data-go="left" aria-label="Walk west">◀</button><button class="qdown" data-go="down" aria-label="Walk south">▼</button><button class="qright" data-go="right" aria-label="Walk east">▶</button>';
@@ -19,11 +19,17 @@ const dropSites=[{x:88,z:-40},{x:42,z:-46},{x:116,z:-40},{x:11,z:-42}];
 let goal=dropSites[0],character={x:-48,z:-42,face:1},started=false,won=false,useGPS=false;
 let lastTick=0,walkDistance=0;
 const held=new Set();
+let audioEnabled=true,audio=null,nextChirp=0;
+function primeAudio(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audio=audio||new Audio();if(audio.state==='suspended')audio.resume().catch(()=>{});}catch(e){}}
+function chirp(){
+ if(!audioEnabled||!audio||audio.state!=='running')return;
+ try{const t=audio.currentTime;for(let i=0;i<4;i++){const osc=audio.createOscillator(),gain=audio.createGain();osc.type='sine';osc.frequency.value=i%2?784:659;osc.connect(gain);gain.connect(audio.destination);const when=t+i*.115;gain.gain.setValueAtTime(.0001,when);gain.gain.exponentialRampToValueAtTime(.035,when+.015);gain.gain.exponentialRampToValueAtTime(.0001,when+.1);osc.start(when);osc.stop(when+.105);}}catch(e){}
+}
 const qStatus=s=>{$('qstatus').textContent=s;};
 function between(){return Math.hypot(character.x-goal.x,character.z-goal.z);}
 function trackCam(){const p=pr(character.x,character.z);xpan+=W*.48-p[0];ypan+=H*.58-p[1];}
 function startGame(){
- started=true;won=false;useGPS=false;walkDistance=0;held.clear();
+ primeAudio();started=true;won=false;useGPS=false;walkDistance=0;held.clear();
  goal=dropSites[Math.floor(Math.random()*dropSites.length)];
  character={x:-48,z:-42,face:1};
  $('qstart').textContent='PAUSE WALK';$('qstart').classList.add('on');
@@ -100,6 +106,7 @@ $('qstart').addEventListener('click',()=>{
  }else stopGame();
 });
 $('qreset').addEventListener('click',startGame);
+$('qaudio').addEventListener('click',()=>{audioEnabled=!audioEnabled;$('qaudio').textContent=audioEnabled?'RING: ON':'RING: OFF';if(audioEnabled){primeAudio();chirp();}});
 $('qgps').addEventListener('click',()=>{
  if(!started)startGame();useGPS=!useGPS;
  $('qgps').textContent=useGPS?'GPS: ON':'GPS: OFF';$('qgps').classList.toggle('on',useGPS);pad.style.display=useGPS?'none':'grid';
@@ -122,7 +129,7 @@ for(const b of pad.querySelectorAll('button[data-go]')){
 }
 const keys={arrowup:'up',w:'up',arrowdown:'down',s:'down',arrowleft:'left',a:'left',arrowright:'right',d:'right'};
 document.addEventListener('keydown',e=>{
- if(/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement?.tagName||''))return;
+ if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||''))return;
  const dir=keys[e.key.toLowerCase()];
  if(dir&&started&&!useGPS){held.add(dir);e.preventDefault();}
  if((e.key===' '||e.key.toLowerCase()==='e')&&started&&between()<10){pickup.click();e.preventDefault();}
@@ -131,6 +138,7 @@ document.addEventListener('keyup',e=>{const dir=keys[e.key.toLowerCase()];if(dir
 window.addEventListener('blur',()=>held.clear());
 function tick(now){
  const dt=Math.min(.06,(now-lastTick)/1000||.016);lastTick=now;
+ if(started&&!won&&between()<72&&now>nextChirp){chirp();nextChirp=now+3200+between()*21;}
  if(started&&!won&&!useGPS){
  let dx=Number(held.has('right'))-Number(held.has('left')),dz=Number(held.has('up'))-Number(held.has('down'));
  if(dx||dz){
