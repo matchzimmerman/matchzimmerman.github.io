@@ -14,6 +14,11 @@ This first runnable bridge places the human-directed, procedural **Warren Field 
 - In Mick's mirror, `engine/index.html` and `engine/map.js` are **byte-for-byte copies** of the MZ source at `WARREN/experience/` at initial integration. They exist so the scene can run from Mick's own checkout. On the MZ website, this interface loads the still-canonical `../experience/index.html`.
 - On the public MZ site, the private Mick research viewers are deliberately *not* embedded or republished; an authorized collaborator can open the research repository separately.
 
+
+### Source-custody check
+
+The original WebGL `index.html` and `map.js` are pinned by their exact Git blob hashes in `source-pin.json`. Run `node integrations/mz-worlds/verify-mirror.cjs` in Mick's repository, or `node WARREN/mz-worlds/verify-mirror.cjs` in the MZ repository. This verifies that the local engine copy still matches the initial source pin. It does not establish runtime compatibility or historical accuracy. Changes to the scene need an explicit source-pin update and reviewer-visible diff.
+
 ## Handoff contract
 
 `EXPORT HANDOFF` downloads a `mz-warren-observation/v1` JSON file with the human's typed observation and the evidence view under inspection. The export is **unverified**; `historicalLocation` and `sourceReference` are explicitly null. It does not issue a pull request, push files, claim a foundation, or open a private data connection.
