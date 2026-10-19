@@ -1,1 +1,0 @@
-console.log('HARIL Interactive v3 loaded');

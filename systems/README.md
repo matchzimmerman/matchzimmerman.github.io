@@ -41,7 +41,6 @@ Use these existing packages instead of creating duplicate families:
 | Signal / conformal field instrument | `systems/signal-conformal/` |
 | P03B CHAMBER STATIC | `systems/chamber-static/` |
 | Modular MAGPIE workstation | `systems/modular-workstation/` |
-| Archive / HARIL visualization | `systems/archive-haril/` |
 
 Only scaffold a new package when the recovered work does not belong to one of these families.
 
