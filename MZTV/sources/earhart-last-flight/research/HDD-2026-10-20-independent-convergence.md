@@ -125,3 +125,16 @@ No predetermined outcome percentages. Planned success is not itself evidence for
 - **Next actionable cycle:** (1) Primary Itasca log and Chater facsimile acquisition, (2) fuel/leg calibration table, (3) NOAA 1937 subset with native ensemble spread, (4) independent run package and freeze, (5) comparator evidence packet and discrepancy report. No extra-cost agent invocation without existing HARIL approval gates.
 
 Prepared 2026-10-20 · MZ.GPT · preliminary investigative HDD dossier; it does **not** establish Earhart's fate.
+
+
+## Addendum — NARA released corpus identified (2026-10-20)
+
+A separate [National Archives online release portal](https://www.archives.gov/research/ameliaearhart) contains digitized records issued between November 2025 and January 2026. Its published release summaries list **4,624 pages (November 14, 2025), 3,715 pages (November 25), 1,810 pages (December 17), then 6 and 41 pages (January 9, 2026)**: a total of **10,196 pages** in those listed releases, across many files. This is not the same as the older NARA archival holdings inventory above. Inventory and availability are confirmed; no line-by-line review, deduplication, primary scan normalization or rights adjudication has yet been conducted.
+
+**Priority upgrade G0:** index this public release at record/file/page level, deduplicate overlaps with existing Itasca / Navy search compilations, preserve original record dates versus 2025–26 release dates, and link to specific primary pages. Some released records are later interpretations or recollections; the existence of a declassified document does not raise its historical reliability automatically.
+
+References:
+- https://www.archives.gov/research/ameliaearhart
+- https://archive.dni.gov/index.php/newsroom/press-releases/press-releases-2025/4125-pr-41-25
+
+*This addendum modifies source-access priorities, not any historical outcome or probability claim.*
