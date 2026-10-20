@@ -220,7 +220,8 @@ class Worker:
         data = dest.read_bytes()
         self.ev("source.acquired", sid, {
             "retrieval_time": utcnow(), "bytes": len(data), "content_type": ctype, "error": None,
-            "attempts": att, "local_cache": "data/raw (gitignored; never published)"}, ns=ns)
+            "attempts": att, "content_retained": 0 if m.get("retain") is False else 1,
+            "local_cache": "data/raw (gitignored; never published)"}, ns=ns)
 
     def _local(self, sid):
         d = self.raw / sid

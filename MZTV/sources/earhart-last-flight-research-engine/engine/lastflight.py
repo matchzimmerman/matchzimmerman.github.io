@@ -81,8 +81,12 @@ def cmd_work(a):
                 print(f"SIMULATED CRASH after event {ev['seq']} ({ev['type']}) — logged but not projected", flush=True)
                 os._exit(9)
         L.on_append = hook
-    rid = _start_run(L, a)
     W = P.Worker(L, ROOT, ocr_budget=a.ocr_budget, metadata_limit=a.metadata_limit)
+    pending = L.q("SELECT COUNT(*) n FROM sources WHERE ingestion_state IN ('retry_wait','partially_extracted','extracted_partial')")[0]["n"]
+    if not W.actionable() and not pending and not L.q("SELECT 1 FROM runs WHERE status='running'"):
+        print("idle: nothing actionable; no run recorded")
+        return
+    rid = _start_run(L, a)
     steps = W.run(max_steps=a.max_steps)
     for ns in ("real", "demo"):
         P.classify_claims(L, ns)

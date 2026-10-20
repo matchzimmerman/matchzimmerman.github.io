@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b1f3a">
+<title>MZTV / THE LAST FLIGHT · Research Engine</title>
+<meta name="description" content="MZTV THE LAST FLIGHT research intake and evolving world, BUILD-001. Exploratory surrogate; not a validated model or a wreck-location claim.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1b1f3a;--deep:#2c3e7a;--sea:#3f9aa6;--hot:#f0603f;--glow:#f2c14e;--paper:#efe6cf;--panel:rgba(27,31,58,.92);--rule:rgba(239,230,207,.18);
+  --f:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--paper);font-family:var(--f);font-size:12px;overflow:hidden}
+body.obs{cursor:none}
+#app{position:fixed;inset:0;display:grid;grid-template-columns:0fr 1fr;transition:grid-template-columns .9s ease}
+#app.split{grid-template-columns:minmax(380px,37%) 1fr}
+#panel{overflow:hidden;background:var(--panel);border-right:1px solid var(--rule);min-width:0;position:relative}
+#panel .scroll{position:absolute;inset:0;overflow:auto;padding:14px 16px 18px}
+#worldwrap{position:relative;min-width:0;overflow:hidden}
+#world{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+.hud{position:absolute;pointer-events:none;color:var(--paper)}
+#hudT>div,#hudR>div,#hudL>div{display:table;background:rgba(27,31,58,.78);padding:2px 7px;margin-bottom:2px}
+#hudR>div{margin-left:auto}
+#hudL{left:18px;bottom:16px;max-width:min(560px,70%)}
+#hudR{right:18px;top:14px;text-align:right}
+#hudT{left:18px;top:14px}
+.h1{font-weight:800;letter-spacing:.14em;font-size:13px}
+.h1 b{color:var(--glow);font-weight:800}
+.mono-s{font-size:11px;line-height:1.55;letter-spacing:.02em}
+.tag{display:inline-block;padding:1px 6px 0;margin:2px 4px 2px 0;font-size:10px;font-weight:600;letter-spacing:.08em;border:1px solid currentColor;text-shadow:none;white-space:nowrap}
+.t-arch{color:var(--glow)} .t-hyp{color:var(--hot)} .t-cand{color:var(--ink);background:var(--glow);border-color:var(--glow)}
+.t-rev{color:var(--ink);background:var(--paper);border-color:var(--paper)} .t-wx{color:var(--sea)} .t-fc{color:var(--sea);border-style:dashed}
+.t-demo{color:var(--paper);background:repeating-linear-gradient(45deg,var(--deep) 0 4px,var(--ink) 4px 8px);border-color:var(--paper)}
+.t-real{color:var(--sea)} .t-auth{color:var(--paper);border-style:dotted}
+#ticker{position:absolute;left:0;right:0;bottom:0;height:22px;display:flex;align-items:center;gap:18px;padding:0 18px;font-size:10.5px;letter-spacing:.06em;
+  background:rgba(27,31,58,.88);color:var(--paper);white-space:nowrap;overflow:hidden;pointer-events:none}
+#ticker b{color:var(--glow);font-weight:600}
+#banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);border:1px solid var(--glow);color:var(--glow);padding:6px 12px;
+  font-size:11px;letter-spacing:.08em;opacity:0;transition:opacity .6s;pointer-events:none;max-width:80%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#banner.on{opacity:1}
+#info{position:absolute;right:18px;bottom:30px;width:min(440px,46%);background:var(--panel);border:1px solid var(--rule);padding:10px 12px;font-size:10.5px;line-height:1.5;display:none}
+#info.on{display:block}
+#info h4,.sec h4{margin:0 0 6px;font-size:11px;letter-spacing:.14em;color:var(--glow);font-weight:800}
+.sec{border-top:1px solid var(--rule);padding:10px 0 8px}
+.sec:first-child{border-top:none;padding-top:0}
+.row{display:flex;justify-content:space-between;gap:10px;line-height:1.6}
+.row span:first-child{color:rgba(239,230,207,.66)}
+.k{color:rgba(239,230,207,.66)}
+.big{font-size:22px;font-weight:800;letter-spacing:.02em;color:var(--paper)}
+.rails{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
+.rail{border:1px solid var(--rule);padding:4px 4px 6px;min-height:64px;position:relative}
+.rail .nm{font-size:9px;letter-spacing:.08em;color:rgba(239,230,207,.7)}
+.rail .ct{font-size:16px;font-weight:800}
+.tok{display:inline-block;width:6px;height:6px;margin:1px;background:var(--sea)}
+.tok.demo{background:repeating-linear-gradient(45deg,var(--paper) 0 1px,var(--deep) 1px 3px)}
+.tok.pulse{background:var(--glow);box-shadow:0 0 0 1px var(--glow)}
+.aside{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:10.5px}
+.aside b{color:var(--paper)}
+.denom{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:4px}
+.denom div{border-left:2px solid var(--deep);padding-left:6px}
+.denom .v{font-size:15px;font-weight:800}
+.denom .l{font-size:9.5px;color:rgba(239,230,207,.7);letter-spacing:.04em}
+table{border-collapse:collapse;width:100%;font-size:10.5px}
+td,th{padding:2px 4px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+th{color:rgba(239,230,207,.7);font-weight:600;letter-spacing:.06em;font-size:9.5px}
+.ok{color:var(--sea)} .no{color:var(--hot)}
+.ev{display:grid;grid-template-columns:52px 74px 1fr;gap:6px;font-size:10px;line-height:1.5;border-bottom:1px solid rgba(239,230,207,.07)}
+.ev .ty{color:var(--glow)}
+.ev.demo .ty{color:var(--paper);opacity:.75}
+.lineage{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:6px 0}
+.lineage div{border:1px solid var(--rule);padding:4px 6px;font-size:10px;max-width:22%;min-width:0;overflow-wrap:anywhere}
+.lineage i{font-style:normal;align-self:center;padding:0 3px;color:var(--glow)}
+canvas.map{width:100%;height:220px;display:block;background:var(--ink);border:1px solid var(--rule);margin-top:6px}
+.gate{display:flex;gap:8px;line-height:1.6} .gate b{width:14px}
+a{color:var(--glow)}
+#tap{position:absolute;right:18px;bottom:34px;background:var(--ink);color:var(--glow);border:1px solid var(--glow);font:600 11px var(--f);letter-spacing:.08em;padding:6px 10px;cursor:pointer;display:none}
+body.obs #tap{display:none!important}
+@media (max-width:760px){
+  #app,#app.split{grid-template-columns:1fr;grid-template-rows:58vh 1fr}
+  #worldwrap{grid-row:1} #panel{grid-row:2;border-right:none;border-top:1px solid var(--rule)}
+  #app:not(.split){grid-template-rows:1fr 0fr}
+  #hudL{max-width:92%} #info{width:92%}
+  #hudR{left:18px;right:auto;top:52px;text-align:left;font-size:10px} #hudR>div{margin-left:0} .rails{grid-template-columns:repeat(4,1fr)} .denom{grid-template-columns:repeat(2,1fr)}
+  .lineage div{max-width:46%}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel" aria-live="polite"><div class="scroll" id="panelBody"></div></aside>
+  <section id="worldwrap">
+    <canvas id="world" aria-label="Procedural Pacific world: the simulated Electra over the ocean"></canvas>
+    <div id="hudT" class="hud"></div>
+    <div id="hudR" class="hud mono-s"></div>
+    <div id="hudL" class="hud mono-s"></div>
+    <div id="banner"></div>
+    <div id="ticker"></div>
+    <div id="info"></div>
+    <button id="tap" type="button">♪ ENABLE SOUND</button>
+  </section>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<!-- the ORIGINAL public prototype's surrogate model, loaded read-only and hash-checked -->
+<script src="../earhart-last-flight/model.js"></script>
+<script type="module" src="viewer.js"></script>
+</body>
+</html>
