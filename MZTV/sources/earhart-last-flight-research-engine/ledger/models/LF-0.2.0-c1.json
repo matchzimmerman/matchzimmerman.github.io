@@ -1,0 +1,107 @@
+{
+  "base_artifact_sha256": "67b2178777e1463db44391f57a7ee98afd35c972a3a5bfe165e4f5d2454783f7",
+  "base_model": "LF-0.1.0",
+  "code_commit": "5cad5c663e74",
+  "ensemble": {
+    "count": 192,
+    "seed": 19370702
+  },
+  "evidence_manifest": [
+    {
+      "claim_id": "CLM-22c5178b-p0061-l0031-1",
+      "locator": "p61:l31",
+      "normalized_value": 1100.0,
+      "original_url": "https://www.archives.gov/files3/research/ameliaearhart/releases/2025/1217/080_PC31-22_146_07_Report_of_Earhart_Search_by_U.S._Navy_and_U.S._Coast_Guard_July_2_18_1937.pdf",
+      "sha256": "e48a2ae3c7fa4d153e2f85e05baadd2198057720cd7b180d44931eeae36e8a80",
+      "source_id": "SRC-NARA-080-PC31-22-146-07-REPORT-OF-EARHART-SEA-3939649b05",
+      "unit": "US_gal"
+    },
+    {
+      "claim_id": "CLM-a29267ae-p0001-l0041-1",
+      "locator": "p1:l41",
+      "normalized_value": 1100.0,
+      "original_url": "https://tighar.org/Projects/Earhart/Archives/Documents/Collopy_Letter.html",
+      "sha256": "395a6a0e581211e247d148c4d8859e0eb414b46a83334d3019c81a7b6bd0985c",
+      "source_id": "SRC-TIGHAR-COLLOPY-1937",
+      "unit": "US_gal"
+    },
+    {
+      "claim_id": "CLM-e02b1f88-p0001-l0083-1",
+      "locator": "p1:l83",
+      "normalized_value": 1100.0,
+      "original_url": "https://tighar.org/Projects/Earhart/Archives/Documents/Chater_Report.html",
+      "sha256": "e4480ed170cb1e309ef531e2c7172d6a6bf743286f75555c98f689cf6b4c19dc",
+      "source_id": "SRC-TIGHAR-CHATER-1937",
+      "unit": "US_gal"
+    }
+  ],
+  "evidence_manifest_hash": "b6373a6c1acc32f8584465909ba906a68f28a87104b2a41c37902d2f9631f84a",
+  "kind": "candidate",
+  "model_id": "LF-0.2.0-c1",
+  "namespace": "real",
+  "parameters": {
+    "airspeed": {
+      "bounds": [
+        80,
+        180
+      ],
+      "calibration_status": "illustrative (prototype default)",
+      "distribution": "seeded gauss sd 3 kt per trial (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "kt",
+      "value": 124
+    },
+    "burn": {
+      "bounds": [
+        15,
+        100
+      ],
+      "calibration_status": "illustrative (prototype default)",
+      "distribution": "seeded gauss sd 1.7 gal/h per trial (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "US_gal/h",
+      "value": 49
+    },
+    "fuelStart": {
+      "bounds": [
+        100,
+        1151
+      ],
+      "calibration_status": "evidence-derived candidate (uncalibrated against held-out legs)",
+      "distribution": "seeded gauss sd 20 gal per trial (model.js)",
+      "evidence_claim_ids": [
+        "CLM-22c5178b-p0061-l0031-1",
+        "CLM-a29267ae-p0001-l0041-1",
+        "CLM-e02b1f88-p0001-l0083-1"
+      ],
+      "unit": "US_gal",
+      "value": 1100.0
+    },
+    "nav": {
+      "bounds": [
+        0,
+        20
+      ],
+      "calibration_status": "illustrative (prototype default)",
+      "distribution": "seeded gauss fixed bias (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "deg (open-loop heading uncertainty sd)",
+      "value": 3
+    },
+    "wind": {
+      "bounds": [
+        -45,
+        45
+      ],
+      "calibration_status": "SYNTHETIC weather · not 1937 reanalysis",
+      "distribution": "seeded gauss sd 2 kt N, 4 kt E (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "kt (northward component, synthetic)",
+      "value": 0
+    }
+  },
+  "reason": "accepted claims CLM-22c5178b-p0061-l0031-1, CLM-a29267ae-p0001-l0041-1, CLM-e02b1f88-p0001-l0083-1 move fuelStart 1070→1100.0 US_gal (> 2% tolerance)",
+  "surrogate": "../earhart-last-flight/model.js (pinned sha256 in model/runner.js)",
+  "validation": "NOT VALIDATED · candidate",
+  "version": "0.2.0-c1"
+}

@@ -1,0 +1,190 @@
+{
+  "label": "DEMO / SYNTHETIC \u2014 BUILD-001 fixture corpus",
+  "count": 20,
+  "fixtures": [
+    {
+      "fixture_id": "D01",
+      "title": "radio log (two-page PDF, context only)",
+      "file": "D01_demo_radio_log.pdf",
+      "content_type": "application/pdf",
+      "expect": "classified; display-only claims",
+      "original_url": "demo://fixtures/D01_demo_radio_log.pdf"
+    },
+    {
+      "fixture_id": "D02",
+      "title": "weather note (PDF, context only)",
+      "file": "D02_demo_weather_note.pdf",
+      "content_type": "application/pdf",
+      "expect": "classified; display-only claims",
+      "original_url": "demo://fixtures/D02_demo_weather_note.pdf"
+    },
+    {
+      "fixture_id": "D03",
+      "title": "performance memo A (airspeed 130 kt)",
+      "file": "D03_demo_performance_memo.txt",
+      "content_type": "text/plain",
+      "expect": "accepted (DEMO reviewer) \u2192 candidate",
+      "original_url": "demo://fixtures/D03_demo_performance_memo.txt",
+      "demo_review": {
+        "airspeed": [
+          "accept",
+          "science",
+          "DEMO reviewer: consistent with D05"
+        ]
+      }
+    },
+    {
+      "fixture_id": "D04",
+      "title": "fuel sheet A (1100 gal)",
+      "file": "D04_demo_fuel_sheet.txt",
+      "content_type": "text/plain",
+      "expect": "conflicts with D07 \u2192 blocked",
+      "original_url": "demo://fixtures/D04_demo_fuel_sheet.txt"
+    },
+    {
+      "fixture_id": "D05",
+      "title": "cruise report B (airspeed 130 kt)",
+      "file": "D05_demo_cruise_report.pdf",
+      "content_type": "application/pdf",
+      "expect": "accepted (DEMO reviewer) \u2192 candidate",
+      "original_url": "demo://fixtures/D05_demo_cruise_report.pdf",
+      "demo_review": {
+        "airspeed": [
+          "accept",
+          "science",
+          "DEMO reviewer: consistent with D03"
+        ]
+      }
+    },
+    {
+      "fixture_id": "D06",
+      "title": "hearsay note (175 kt, rejected)",
+      "file": "D06_demo_rumour.txt",
+      "content_type": "text/plain",
+      "expect": "rejected in review \u2192 no mutation",
+      "original_url": "demo://fixtures/D06_demo_rumour.txt",
+      "demo_review": {
+        "airspeed": [
+          "reject",
+          "science",
+          "DEMO reviewer: hearsay, untraceable speaker; unsafe for model input"
+        ]
+      }
+    },
+    {
+      "fixture_id": "D07",
+      "title": "fuel sheet B (950 gal, conflicts with D04)",
+      "file": "D07_demo_fuel_sheet_b.txt",
+      "content_type": "text/plain",
+      "expect": "conflicts with D04 \u2192 blocked",
+      "original_url": "demo://fixtures/D07_demo_fuel_sheet_b.txt"
+    },
+    {
+      "fixture_id": "D08",
+      "title": "duplicate of D03 (byte-identical)",
+      "file": "D08_demo_performance_memo_copy.txt",
+      "content_type": "text/plain",
+      "expect": "duplicate",
+      "original_url": "demo://fixtures/D08_demo_performance_memo_copy.txt"
+    },
+    {
+      "fixture_id": "D09",
+      "title": "truncated PDF",
+      "file": "D09_demo_truncated.pdf",
+      "content_type": "application/pdf",
+      "expect": "corrupt",
+      "original_url": "demo://fixtures/D09_demo_truncated.pdf"
+    },
+    {
+      "fixture_id": "D10",
+      "title": "legacy spreadsheet (unsupported)",
+      "file": "D10_demo_spreadsheet.xls",
+      "content_type": "application/vnd.ms-excel",
+      "expect": "unsupported",
+      "original_url": "demo://fixtures/D10_demo_spreadsheet.xls"
+    },
+    {
+      "fixture_id": "D11",
+      "title": "flaky mirror (fails twice, then succeeds)",
+      "file": "D11_demo_flaky_scan.txt",
+      "content_type": "text/plain",
+      "expect": "retry \u00d72 then classified",
+      "original_url": "demo://fixtures/D11_demo_flaky_scan.txt",
+      "fail_first_n": 2
+    },
+    {
+      "fixture_id": "D12",
+      "title": "rights-restricted item",
+      "file": "D12_demo_restricted.txt",
+      "content_type": "text/plain",
+      "expect": "blocked_rights (metadata only)",
+      "original_url": "demo://fixtures/D12_demo_restricted.txt",
+      "display_policy": "blocked",
+      "rights": "DEMO \u00b7 RESTRICTED (authored test of rights block)"
+    },
+    {
+      "fixture_id": "D13",
+      "title": "ambiguous burn figure (no unit)",
+      "file": "D13_demo_ambiguous.txt",
+      "content_type": "text/plain",
+      "expect": "claim ineligible: ambiguous unit",
+      "original_url": "demo://fixtures/D13_demo_ambiguous.txt"
+    },
+    {
+      "fixture_id": "D14",
+      "title": "anonymous note (no provenance)",
+      "file": "D14_demo_untraceable.txt",
+      "content_type": "text/plain",
+      "expect": "claim ineligible: untraceable",
+      "original_url": null
+    },
+    {
+      "fixture_id": "D15",
+      "title": "volume document 15 (context only)",
+      "file": "D15_demo_volume_15.txt",
+      "content_type": "text/plain",
+      "expect": "classified; display-only",
+      "original_url": "demo://fixtures/D15_demo_volume_15.txt"
+    },
+    {
+      "fixture_id": "D16",
+      "title": "volume document 16 (context only)",
+      "file": "D16_demo_volume_16.txt",
+      "content_type": "text/plain",
+      "expect": "classified; display-only",
+      "original_url": "demo://fixtures/D16_demo_volume_16.txt"
+    },
+    {
+      "fixture_id": "D17",
+      "title": "volume document 17 (context only)",
+      "file": "D17_demo_volume_17.txt",
+      "content_type": "text/plain",
+      "expect": "classified; display-only",
+      "original_url": "demo://fixtures/D17_demo_volume_17.txt"
+    },
+    {
+      "fixture_id": "D18",
+      "title": "volume document 18 (context only)",
+      "file": "D18_demo_volume_18.txt",
+      "content_type": "text/plain",
+      "expect": "classified; display-only",
+      "original_url": "demo://fixtures/D18_demo_volume_18.txt"
+    },
+    {
+      "fixture_id": "D19",
+      "title": "volume document 19 (context only)",
+      "file": "D19_demo_volume_19.txt",
+      "content_type": "text/plain",
+      "expect": "classified; display-only",
+      "original_url": "demo://fixtures/D19_demo_volume_19.txt"
+    },
+    {
+      "fixture_id": "D20",
+      "title": "volume document 20 (context only)",
+      "file": "D20_demo_volume_20.txt",
+      "content_type": "text/plain",
+      "expect": "classified; display-only",
+      "original_url": "demo://fixtures/D20_demo_volume_20.txt"
+    }
+  ]
+}

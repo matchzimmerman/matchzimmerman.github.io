@@ -1,0 +1,27 @@
+{
+  "model_id": "LF-0.1.0",
+  "version": "0.1.0",
+  "kind": "baseline",
+  "namespace": "real",
+  "validation": "NOT VALIDATED · exploratory kinematic surrogate",
+  "description": "The inputs of the original public MZTV / THE LAST FLIGHT prototype (model.js DEFAULTS). Illustrative values, not historical assertions (see ../earhart-last-flight/README.md).",
+  "surrogate": {
+    "path": "../earhart-last-flight/model.js",
+    "sha256": "fbd0d6e8e48caf165e0d5317717cb426cfd6baf0e5df7d98ee50638679c80cb2",
+    "surrogate_version": "0.1.0",
+    "repo_commit_at_pin": "5cad5c663e74aab26721c1f961b73fcdeaf017dc"
+  },
+  "parameters": {
+    "airspeed": {"value": 124, "unit": "kt", "bounds": [80, 180], "distribution": "seeded gauss sd 3 kt per trial (model.js)", "evidence_claim_ids": [], "calibration_status": "illustrative (prototype default)"},
+    "fuelStart": {"value": 1070, "unit": "US_gal", "bounds": [100, 1151], "distribution": "seeded gauss sd 20 gal per trial (model.js)", "evidence_claim_ids": [], "calibration_status": "illustrative (prototype default)"},
+    "burn": {"value": 49, "unit": "US_gal/h", "bounds": [15, 100], "distribution": "seeded gauss sd 1.7 gal/h per trial (model.js)", "evidence_claim_ids": [], "calibration_status": "illustrative (prototype default)"},
+    "wind": {"value": 0, "unit": "kt (northward component, synthetic)", "bounds": [-45, 45], "distribution": "seeded gauss sd 2 kt N, 4 kt E (model.js)", "evidence_claim_ids": [], "calibration_status": "SYNTHETIC weather · not 1937 reanalysis"},
+    "nav": {"value": 3, "unit": "deg (open-loop heading uncertainty sd)", "bounds": [0, 20], "distribution": "seeded gauss fixed bias (model.js)", "evidence_claim_ids": [], "calibration_status": "illustrative (prototype default)"}
+  },
+  "ensemble": {"seed": 19370702, "count": 192},
+  "scenario": {
+    "departure_utc": "1937-07-02T00:00:00Z",
+    "departure_basis": "Lae departure about 10:00 local (UTC+10) on 2 July 1937 per contemporary Lae accounts; reference only",
+    "weather_provenance": "SYNTHETIC (model.js seeded wind); no 1937 reanalysis or observations ingested"
+  }
+}

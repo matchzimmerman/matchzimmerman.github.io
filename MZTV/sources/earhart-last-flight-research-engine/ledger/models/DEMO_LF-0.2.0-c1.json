@@ -1,0 +1,97 @@
+{
+  "base_artifact_sha256": "67b2178777e1463db44391f57a7ee98afd35c972a3a5bfe165e4f5d2454783f7",
+  "base_model": "DEMO/LF-0.1.0",
+  "code_commit": "5cad5c663e74",
+  "ensemble": {
+    "count": 192,
+    "seed": 19370702
+  },
+  "evidence_manifest": [
+    {
+      "claim_id": "CLM-816ca3a2-p0001-l0003-1",
+      "locator": "p1:l3",
+      "normalized_value": 130.0,
+      "original_url": "demo://fixtures/D05_demo_cruise_report.pdf",
+      "sha256": "ed42f23e8daa1f4077072b66f293d4a82024ef61a61eafd5a2b70d3d4a4d8385",
+      "source_id": "DEMO-D05",
+      "unit": "kt"
+    },
+    {
+      "claim_id": "CLM-874a3525-p0001-l0003-1",
+      "locator": "p1:l3",
+      "normalized_value": 130.0,
+      "original_url": "demo://fixtures/D03_demo_performance_memo.txt",
+      "sha256": "351c95420b3bbe0dd84bb4d35272d7e20337b16d893b509445325d2a8e82b7d3",
+      "source_id": "DEMO-D03",
+      "unit": "kt"
+    }
+  ],
+  "evidence_manifest_hash": "bb7cf123767419cb9dd038bfc6cf1a703f67f7938acccad49209a405791c0dfa",
+  "kind": "candidate",
+  "model_id": "DEMO/LF-0.2.0-c1",
+  "namespace": "demo",
+  "parameters": {
+    "airspeed": {
+      "bounds": [
+        80,
+        180
+      ],
+      "calibration_status": "evidence-derived candidate (uncalibrated against held-out legs)",
+      "distribution": "seeded gauss sd 3 kt per trial (model.js)",
+      "evidence_claim_ids": [
+        "CLM-816ca3a2-p0001-l0003-1",
+        "CLM-874a3525-p0001-l0003-1"
+      ],
+      "unit": "kt",
+      "value": 130.0
+    },
+    "burn": {
+      "bounds": [
+        15,
+        100
+      ],
+      "calibration_status": "illustrative (prototype default)",
+      "distribution": "seeded gauss sd 1.7 gal/h per trial (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "US_gal/h",
+      "value": 49
+    },
+    "fuelStart": {
+      "bounds": [
+        100,
+        1151
+      ],
+      "calibration_status": "illustrative (prototype default)",
+      "distribution": "seeded gauss sd 20 gal per trial (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "US_gal",
+      "value": 1070
+    },
+    "nav": {
+      "bounds": [
+        0,
+        20
+      ],
+      "calibration_status": "illustrative (prototype default)",
+      "distribution": "seeded gauss fixed bias (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "deg (open-loop heading uncertainty sd)",
+      "value": 3
+    },
+    "wind": {
+      "bounds": [
+        -45,
+        45
+      ],
+      "calibration_status": "SYNTHETIC weather · not 1937 reanalysis",
+      "distribution": "seeded gauss sd 2 kt N, 4 kt E (model.js)",
+      "evidence_claim_ids": [],
+      "unit": "kt (northward component, synthetic)",
+      "value": 0
+    }
+  },
+  "reason": "accepted claims CLM-816ca3a2-p0001-l0003-1, CLM-874a3525-p0001-l0003-1 move airspeed 124→130.0 kt (> 3% tolerance)",
+  "surrogate": "../earhart-last-flight/model.js (pinned sha256 in model/runner.js)",
+  "validation": "NOT VALIDATED · candidate",
+  "version": "0.2.0-c1"
+}
