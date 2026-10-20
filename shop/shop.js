@@ -146,7 +146,7 @@ checkoutForm.onsubmit=async e=>{
     zip:clean($("#ship-zip").value),
     phone:clean($("#ship-phone").value)
   };
-  const items=cart.map(x=>({variantId:String(x.variantId),qty:Number(x.qty)||1}));
+  const items=cart.map(x=>({productId:String(x.productId),variantId:String(x.variantId),qty:Number(x.qty)||1}));
   try{
     const r=await fetch(API+"/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recipient,items})});
     const j=await r.json().catch(()=>({ok:false,error:"Checkout service returned an unreadable response."}));
