@@ -94,9 +94,10 @@ function validateItems(items) {
   if (items.length > 30) throw new Error("Too many separate items in one checkout.");
   return items.map(function (item) {
     var id = clean(item && item.variantId, 40);
+    var productId = clean(item && item.productId, 40);
     var qty = Math.max(1, Math.min(10, Math.floor(Number(item && item.qty) || 1)));
-    if (!/^\d+$/.test(id)) throw new Error("One bag item is invalid.");
-    return { variantId: id, qty: qty };
+    if (!/^\d+$/.test(id) || !/^\d+$/.test(productId)) throw new Error("One bag item is invalid.");
+    return { variantId: id, productId: productId, qty: qty };
   });
 }
 
@@ -179,28 +180,62 @@ async function createStripeSession(validatedItems, shipping, recipient, printful
 
 async function serverValidateItems(items) {
   var validated = [];
+  var productCache = {};
+
   for (var i = 0; i < items.length; i += 1) {
     var requested = items[i];
-    var payload = await printful.getSyncVariant(STORE_ID, requested.variantId);
-    var variant = payload.result || {};
-    var productId = variant.sync_product_id || variant.product_id ||
-      (variant.product && (variant.product.id || variant.product.sync_product_id));
 
-    if (productId && EXCLUDED_PRODUCTS[String(productId)]) {
+    if (EXCLUDED_PRODUCTS[String(requested.productId)]) {
       throw new Error("One item in your bag is no longer available.");
     }
-    if (variant.is_ignored) throw new Error("One item in your bag is not available for fulfillment.");
+
+    if (!productCache[requested.productId]) {
+      productCache[requested.productId] = await printful.getStoreProduct(
+        { id: STORE_ID, type: "squarespace" },
+        requested.productId
+      );
+    }
+
+    var payload = productCache[requested.productId];
+    var result = payload.result || {};
+    var variants = Array.isArray(result.sync_variants)
+      ? result.sync_variants
+      : (Array.isArray(result.variants) ? result.variants : []);
+
+    var variant = null;
+    for (var v = 0; v < variants.length; v += 1) {
+      var candidate = variants[v] || {};
+      var candidateId = candidate.id || candidate.sync_variant_id;
+      if (String(candidateId) === String(requested.variantId)) {
+        variant = candidate;
+        break;
+      }
+    }
+
+    if (!variant) throw new Error("One item in your bag is no longer available.");
+    if (variant.is_ignored || variant.synced === false) {
+      throw new Error("One item in your bag is not available for fulfillment.");
+    }
+
+    var availability = String(variant.availability_status || "").toLowerCase();
+    if (availability === "discontinued" || availability === "out_of_stock" || availability === "unavailable") {
+      throw new Error("One item in your bag is currently unavailable.");
+    }
 
     var price = moneyNumber(variant.retail_price);
-    if (price === null || price <= 0) throw new Error("One item in your bag does not have a valid retail price.");
+    if (price === null || price <= 0) {
+      throw new Error("One item in your bag does not have a valid retail price.");
+    }
 
     validated.push({
+      productId: requested.productId,
       variantId: requested.variantId,
       qty: requested.qty,
       price: price,
       name: clean(variant.name || (variant.product && variant.product.name) || "MZCMG Shop Item", 180)
     });
   }
+
   return validated;
 }
 
