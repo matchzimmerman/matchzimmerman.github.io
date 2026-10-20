@@ -25,7 +25,10 @@ def counters(L, ns):
         "SELECT ingestion_state, COUNT(*) n FROM sources WHERE namespace=? GROUP BY ingestion_state", (ns,))}
     c["by_state"] = by_state
     c["known_targets"] = sum(by_state.values())
-    c["metadata_verified"] = by_state.get("metadata_only", 0)
+    # verified = size AND type recorded; reachable-only is counted separately and never shown as verified
+    c["metadata_verified"] = _count(L, "SELECT COUNT(*) n FROM sources WHERE namespace=? AND ingestion_state='metadata_only' "
+                                       "AND bytes IS NOT NULL AND content_type IS NOT NULL", (ns,))
+    c["metadata_reachable_only"] = by_state.get("metadata_only", 0) - c["metadata_verified"]
     acquired_states = ("acquired", "verified", "extracting", "extracted", "extracted_partial", "partially_extracted", "normalized",
                        "claims_extracted", "classified", "duplicate", "corrupt", "unsupported")
     c["content_acquired"] = sum(by_state.get(s, 0) for s in acquired_states)
@@ -94,7 +97,7 @@ def export(L, root, recent=400):
     pub_src = ("source_id", "namespace", "original_url", "provider", "title", "original_date", "release_date",
                "retrieval_time", "page_count", "pages_extracted", "bytes", "content_type", "rights", "rights_basis",
                "display_policy", "sha256", "version", "ingestion_state", "error", "attempts", "record_kind",
-               "content_retained", "duplicate_of", "discovered_at", "updated_at")
+               "content_retained", "duplicate_of", "discovered_at", "updated_at", "last_modified")
     snap["sources"] = [{k: r[k] for k in pub_src} | {"meta": json.loads(r["meta_json"] or "{}")}
                        for r in L.q("SELECT * FROM sources ORDER BY namespace, discovered_at, source_id")]
     for s in snap["sources"]:

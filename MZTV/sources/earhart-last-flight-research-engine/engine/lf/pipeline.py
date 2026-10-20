@@ -174,6 +174,10 @@ class Worker:
                     nxt = _iso(_now() + dt.timedelta(seconds=self.backoff_base ** att))
                     self.ev("source.metadata_retry", sid, {"error": str(err), "attempts": att, "next_attempt_at": nxt})
                 continue
+            if not (h.get("content-length") and h.get("content-type")):
+                self.ev("source.metadata_incomplete", sid, {
+                    "retrieval_time": utcnow(), "error": "HEAD returned no content-length/content-type; reachability only"})
+                continue
             self.ev("source.metadata_verified", sid, {
                 "retrieval_time": utcnow(), "bytes": int(h.get("content-length") or 0) or None,
                 "content_type": (h.get("content-type") or "").split(";")[0] or None,
@@ -448,6 +452,18 @@ class Worker:
                 "note": "remaining pages queued for the next run's OCR budget"}, ns=ns)
             return
         self.ev("source.classified", sid, {"claims_by_eligibility": {c["eligibility"]: c["n"] for c in cl}}, ns=ns)
+
+    def reverify_metadata(self):
+        """Correction pass: metadata_only sources whose earlier event recorded no size/type."""
+        rows = self.L.q("SELECT * FROM sources WHERE ingestion_state='metadata_only' AND bytes IS NULL ORDER BY source_id")
+        for i in range(0, len(rows), 8):
+            batch = rows[i:i + 8]
+            for r in batch:
+                self.ev("source.metadata_correction", r["source_id"], {
+                    "note": "earlier source.metadata_verified recorded reachability only (HEAD parser bug: proxy CONNECT block "
+                            "shadowed the final response headers). Re-verifying."})
+            self.metadata_batch(batch)
+        return len(rows)
 
     def run(self, max_steps=None, crash_after=None):
         steps = 0

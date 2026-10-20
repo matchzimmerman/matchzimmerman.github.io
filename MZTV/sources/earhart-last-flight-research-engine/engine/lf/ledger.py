@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS sources(
   pages_extracted INTEGER DEFAULT 0, bytes INTEGER, content_type TEXT, rights TEXT, rights_basis TEXT,
   display_policy TEXT, sha256 TEXT, version INTEGER DEFAULT 1, ingestion_state TEXT, error TEXT,
   attempts INTEGER DEFAULT 0, next_attempt_at TEXT, record_kind TEXT, content_retained INTEGER DEFAULT 0,
-  duplicate_of TEXT, discovered_at TEXT, updated_at TEXT, meta_json TEXT);
+  duplicate_of TEXT, discovered_at TEXT, updated_at TEXT, meta_json TEXT, last_modified TEXT);
 CREATE TABLE IF NOT EXISTS claims(
   claim_id TEXT PRIMARY KEY, namespace TEXT, source_id TEXT, locator TEXT, page INTEGER, line INTEGER,
   excerpt TEXT, excerpt_policy TEXT, quantity TEXT, normalized_value REAL, unit TEXT, param_key TEXT,
@@ -74,6 +74,7 @@ STATE_EVENTS = {
     "source.acquire_failed": "retry_wait",
     "source.failed": "failed",
     "source.metadata_verified": "metadata_only",
+    "source.metadata_incomplete": "metadata_only",
     "source.integrity_ok": "verified",
     "source.duplicate": "duplicate",
     "source.corrupt": "corrupt",
@@ -157,9 +158,16 @@ class Ledger:
         self.db = sqlite3.connect(self.db_path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        if not self.db.execute("SELECT value FROM meta WHERE key='last_seq'").fetchone():
+            self._set_meta("schema_sha", sha256_text(SCHEMA))
         row = self.db.execute("SELECT value FROM meta WHERE key='last_seq'").fetchone()
         db_seq = int(row["value"]) if row else 0
+        sv = self.db.execute("SELECT value FROM meta WHERE key='schema_sha'").fetchone()
         replayed = 0
+        if db_seq and (not sv or sv["value"] != sha256_text(SCHEMA)):
+            # projection built by an older schema: rebuild from the log (the log is truth)
+            self.rebuild(events)
+            return {"events": n, "replayed": n, "torn_tail_dropped": bool(self._torn_tail), "schema_rebuild": True}
         if db_seq > n:
             # projection is ahead of the log: rebuild from scratch
             self.rebuild(events)
@@ -183,6 +191,7 @@ class Ledger:
         for ev in events:
             self._apply(ev)
         self._set_meta("last_seq", len(events))
+        self._set_meta("schema_sha", sha256_text(SCHEMA))
         self.db.commit()
         return len(events)
 
@@ -246,7 +255,7 @@ class Ledger:
                 fields["ingestion_state"] = STATE_EVENTS[t]
             for k in ("retrieval_time", "bytes", "content_type", "sha256", "page_count", "pages_extracted",
                       "duplicate_of", "error", "attempts", "next_attempt_at", "rights", "rights_basis",
-                      "display_policy", "content_retained", "record_kind", "title"):
+                      "display_policy", "content_retained", "record_kind", "title", "last_modified"):
                 if k in d and t != "source.discovered":
                     fields[k] = d[k]
             if t == "source.version_bumped":

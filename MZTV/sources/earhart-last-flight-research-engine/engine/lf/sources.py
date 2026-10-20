@@ -44,10 +44,12 @@ class FetchError(Exception):
 
 
 def curl(url, out_path=None, head=False, timeout=120):
-    """Return (status, headers dict, body bytes or None)."""
-    args = ["curl", "-sS", "-L", "--max-time", str(timeout), "-D", "-"]
+    """Return (status, headers dict of the final response, body bytes or None)."""
+    args = ["curl", "-sS", "-L", "--max-time", str(timeout)]
     if head:
-        args.append("-I")
+        args.append("-I")                  # headers go to stdout once
+    else:
+        args += ["-D", "-"]                # headers to stdout, body to -o file (or after headers)
     if out_path:
         args += ["-o", str(out_path)]
     args.append(url)
@@ -57,31 +59,34 @@ def curl(url, out_path=None, head=False, timeout=120):
         raise FetchError(f"timeout after {timeout}s", transient=True)
     if p.returncode != 0:
         raise FetchError(f"curl exit {p.returncode}: {p.stderr.decode(errors='replace')[:200]}", transient=True)
-    raw = p.stdout
-    # split header blocks (may be several with redirects / proxy CONNECT)
-    status, headers, body = None, {}, b""
-    data = raw
+    data = p.stdout
+    status, headers = None, {}
+    # walk every header block (proxy CONNECT, redirects, final); keep the last real response
     while True:
-        m = re.match(rb"HTTP/[\d.]+ (\d{3})[^\r\n]*\r?\n", data)
+        data = data.lstrip(b"\r\n")
+        m = re.match(rb"HTTP/[\d.]+ (\d{3})[^\r\n]*", data)
         if not m:
             break
-        end = data.find(b"\r\n\r\n")
-        sep = 4
+        end = data.find(b"\r\n\r\n"); sep = 4
         if end < 0:
             end = data.find(b"\n\n"); sep = 2
         if end < 0:
-            break
+            end, sep = len(data), 0
         block = data[:end].decode("latin-1")
-        status = int(m.group(1))
+        data = data[end + sep:]
+        code = int(m.group(1))
+        if "connection established" in block.lower().split("\n")[0]:
+            continue
+        status = code
         headers = {}
         for ln in block.split("\n")[1:]:
             if ":" in ln:
                 k, v = ln.split(":", 1)
                 headers[k.strip().lower()] = v.strip()
-        data = data[end + sep:]
-        if status not in (100, 101, 301, 302, 303, 307, 308) and not (status == 200 and "connection established" in block.lower()):
-            break
-    body = data if not out_path else None
+        if code in (301, 302, 303, 307, 308):
+            continue
+        break
+    body = None if (out_path or head) else data
     if status is None:
         raise FetchError("no HTTP status parsed", transient=True)
     if status >= 500 or status == 429:
@@ -122,6 +127,8 @@ def classify_nara_file(fname):
         kind = "later recollection (oral history)"
     if f.endswith(".mp3"):
         ctype = "audio/mpeg"
+    elif f.endswith(".mp4"):
+        ctype = "video/mp4"
     elif f.endswith(".pdf"):
         ctype = "application/pdf"
     else:
@@ -129,8 +136,8 @@ def classify_nara_file(fname):
     if kind == "later secondary / press material":
         rights = "THIRD-PARTY COPYRIGHT POSSIBLE (press clipping inside federal file)"
         policy = "metadata-only"
-    elif ctype == "audio/mpeg":
-        rights = "RIGHTS UNVERIFIED (historical audio inside federal release)"
+    elif ctype in ("audio/mpeg", "video/mp4"):
+        rights = "RIGHTS UNVERIFIED (historical audio/film inside federal release)"
         policy = "metadata-only"
     else:
         rights = "U.S. FEDERAL RECORD · NARA public release · no known copyright (verify per item)"

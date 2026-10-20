@@ -96,6 +96,18 @@ def cmd_work(a):
     print(f"{rid}: {steps} steps · {L.last_seq} events")
 
 
+def cmd_reverify(a):
+    L = open_ledger()
+    rows = L.q("SELECT COUNT(*) n FROM sources WHERE ingestion_state='metadata_only' AND bytes IS NULL")[0]["n"]
+    if not rows:
+        print("nothing to re-verify"); return
+    rid = _start_run(L, a)
+    n = P.Worker(L, ROOT).reverify_metadata()
+    L.append("run.ended", "run", rid, {"status": "ok", "steps": n, "kind": "metadata correction pass"})
+    F.export(L, ROOT)
+    print(f"re-verified {n} sources")
+
+
 def cmd_review(a):
     L = open_ledger()
     c = L.one("SELECT * FROM claims WHERE claim_id=?", (a.claim,))
@@ -232,6 +244,10 @@ def main():
     w.add_argument("--metadata-limit", type=int)
     w.add_argument("--crash-after", type=int)
     w.set_defaults(fn=cmd_work)
+    rv = sp.add_parser("reverify-metadata")
+    rv.add_argument("--ocr-budget", type=int, default=0)
+    rv.add_argument("--metadata-limit", type=int)
+    rv.set_defaults(fn=cmd_reverify)
     r = sp.add_parser("review")
     r.add_argument("--claim", required=True)
     r.add_argument("--decision", choices=["accept", "reject", "needs_human"], required=True)

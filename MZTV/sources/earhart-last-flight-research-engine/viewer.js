@@ -20,7 +20,7 @@ const num = (k, d) => (Q.has(k) && Number.isFinite(+Q.get(k)) ? +Q.get(k) : d);
 const P = {
   obs: Q.get('obs') === '1', info: Q.get('info') !== '0', audio: Q.get('audio') === '1', auto: Q.get('auto') !== '0',
   scene: Q.get('scene'), cam: Q.get('cam'), rate: num('rate', 1), ff: num('ff', 0), t: Q.has('t') ? num('t', 0) : null,
-  trial: Q.has('trial') ? num('trial', 0) : null, poll: num('poll', 10), lines: num('lines', 540), capture: Q.get('capture') === '1',
+  trial: Q.has('trial') ? num('trial', 0) : null, poll: num('poll', location.protocol === 'https:' ? 60 : 10), lines: num('lines', 540), capture: Q.get('capture') === '1',
   feed: Q.get('feed') || 'feed/snapshot.json', fresh: Q.get('fresh') === '1', ghost: Q.get('ghost') === '1', colorway: num('ink', 0),
 };
 const PINNED_SURROGATE = 'fbd0d6e8e48caf165e0d5317717cb426cfd6baf0e5df7d98ee50638679c80cb2';
@@ -274,7 +274,7 @@ function denoms(ns) {
   return `<div class="denom">${f(c.known_targets, 'known targets')}${f(c.metadata_verified, 'metadata verified')}${f(c.content_acquired, 'content acquired')}
     ${f(`${fmt(c.pages_extracted)}/${fmt(c.pages_in_acquired_files)}`, 'pages extracted / in acquired files')}${f(c.claims, 'claims extracted')}
     ${f(c.claims_reviewed, 'claims reviewed')}${f((el['eligible-candidate'] || 0) + (el['eligible-science'] || 0), 'eligible for a model')}${f(c.claims_in_approved_baseline, 'in approved baseline')}</div>
-    <div class="aside">${['metadata_only', 'retry_wait', 'failed', 'duplicate', 'corrupt', 'unsupported', 'blocked_rights'].map(k => `${k.replace('_', '-')} <b>${c.by_state[k] || 0}</b>`).join(' · ')}
+    <div class="aside">metadata reachable-only (size/type not recorded) <b>${c.metadata_reachable_only ?? 0}</b> · ${['metadata_only', 'retry_wait', 'failed', 'duplicate', 'corrupt', 'unsupported', 'blocked_rights'].map(k => `${k.replace('_', '-')} <b>${c.by_state[k] || 0}</b>`).join(' · ')}
     · conflicts <b>${c.conflicts}</b> · acquisition retries logged <b>${feed.snap.namespaces[ns].acquire_failures_logged}</b></div>`;
 }
 function eventList(n = 12) {
