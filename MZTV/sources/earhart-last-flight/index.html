@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1c22">
+  <meta name="description" content="MZTV THE LAST FLIGHT — a 48-hour, evidence-labelled experimental reconstruction of Earhart's final flight. Not a wreck-location claim.">
+  <title>MZTV / THE LAST FLIGHT</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root">
+    <header class="masthead">
+      <div class="brand"><span class="mark">MZ<span>TV</span></span><span class="brand-divider"></span><span class="edition">MZ WORLDS <span class="sep">/</span> HISTORICAL INFERENCE 001</span></div>
+      <div class="header-status"><span class="on-air"><span class="pulse"></span> EXPERIMENT RUNNING</span><span class="issue" id="run-number">SEED / 19370702</span><button class="menu-button" id="menu-toggle" aria-label="Open switchboard">✳ <span>SWITCHBOARD</span></button></div>
+    </header>
+
+    <div class="top-title">
+      <div><div class="kicker">AN OPEN INVESTIGATION IN MOTION <span class="slash">/</span> 02 JUL 1937</div><h1>THE LAST <em>FLIGHT</em><span class="endmark">_</span></h1><div class="subtitle">A simulated Electra. An uncertain course. No predetermined ending.</div></div>
+      <div class="counter-block"><span class="micro">TRANSMISSION / 48 HOURS</span><div class="clock" id="clock">00<span>:</span>00<span>:</span>00</div><div class="progress-line"><span id="progress-fill"></span></div><div class="epoch" id="epoch-label">SCENARIO 01 / 24</div></div>
+    </div>
+
+    <div class="warning" role="note"><span class="warning-label">MODEL STATUS / V0.1</span><span>Experimental kinematic surrogate with hypothetical inputs. NOT a validated Lockheed 10E flight model, historical reenactment, probability of wreck location, or live search-data feed.</span><a href="research.html">METHOD + SOURCES ↗</a></div>
+
+    <main class="dashboard">
+      <section class="map-column">
+        <div class="section-bar"><span>01 <b>/</b> FLIGHT FIELD</span><div class="bar-tabs" role="tablist" aria-label="Map layers"><button class="tab active" data-scene="field" aria-pressed="true">TRAJECTORY</button><button class="tab" data-scene="density" aria-pressed="false">OUTCOMES</button><button class="tab" data-scene="instrument" aria-pressed="false">INSTRUMENTS</button></div></div>
+        <div class="map-holder"><canvas id="field" aria-label="Simulated flight map from Lae to Howland across the Pacific"></canvas><div class="map-corner top-left">SCHEMATIC PACIFIC FIELD<br><span>WGS84 WAYPOINT REFERENCE / NOT SURVEY GEOMETRY</span></div><div class="map-corner top-right" id="map-view">VIEW / TRAJECTORY</div><div class="map-corner bottom-left"><span class="square accent"></span>ACTIVE SIMULATION <span class="square ghost"></span>COUNTERFACTUAL <span class="square pale"></span>ENSEMBLE</div><div class="map-corner bottom-right" id="field-coordinates">LAT — / LON —</div></div>
+        <div class="under-map"><div><span class="micro">DOCUMENTED REFERENCE ROUTE</span><strong>LAE, NEW GUINEA <span class="direction">→</span> HOWLAND ISLAND</strong><small>2,556 mi / approximately 18 h planned · Smithsonian NASM</small></div><div class="spine"><span class="micro">CURRENT EPOCH</span><strong id="flight-phase">EN ROUTE</strong><small id="flight-description">A hypothetical navigation trial is underway.</small></div></div>
+        <div class="narrative"><span class="micro">MZCAM / FIELD OBSERVATION</span><p id="narrative">A seeded experiment is building trajectories. Historical observations and simulated events are kept separate.</p></div>
+      </section>
+
+      <aside class="right-column">
+        <div class="section-bar"><span>02 <b>/</b> AIRCRAFT TELEMETRY</span><span class="section-right">SYNTHETIC FEED</span></div>
+        <div class="telemetry-grid">
+          <div class="telemetry"><span>FLIGHT ELAPSED</span><strong id="airtime">00:00</strong><small>HRS : MINS</small></div>
+          <div class="telemetry"><span>REMAINING FUEL</span><strong id="fuel">—</strong><small>US GAL / HYPOTHETICAL</small></div>
+          <div class="telemetry"><span>GROUND SPEED</span><strong id="groundspeed">—</strong><small>KNOTS / SIMULATED</small></div>
+          <div class="telemetry"><span>DIST TO HOWLAND</span><strong id="distance">—</strong><small>NM / GEODESIC EST.</small></div>
+        </div>
+        <div class="section-bar"><span>03 <b>/</b> MODEL ASSUMPTIONS</span><span class="section-right">EDITABLE / NOT FACTS</span></div>
+        <div class="params" id="params">
+          <label><span>AIR SPEED <output id="airspeed-out">124 KT</output></span><input aria-label="Air speed" id="airspeed" type="range" min="110" max="150" step="1" value="124"></label>
+          <label><span>FUEL AT DEPARTURE <output id="fuelStart-out">1070 GAL</output></span><input aria-label="Fuel at departure" id="fuelStart" type="range" min="750" max="1151" step="1" value="1070"></label>
+          <label><span>FUEL BURN <output id="burn-out">49 GAL/H</output></span><input aria-label="Fuel burn" id="burn" type="range" min="35" max="62" step="1" value="49"></label>
+          <label><span>NORTHERLY WIND COMPONENT <output id="wind-out">+0 KT</output></span><input aria-label="Wind northward component" id="wind" type="range" min="-25" max="25" step="1" value="0"></label>
+          <label><span>NAVIGATION UNCERTAINTY <output id="nav-out">3.0°</output></span><input aria-label="Navigation uncertainty" id="nav" type="range" min="0" max="10" step="0.5" value="3"></label>
+          <div class="param-actions"><button id="run-branch" class="button outlined">RUN COUNTERFACTUAL ↗</button><button id="reset-params" class="button flat">RESET INPUTS</button></div>
+          <div id="branch-status" class="branch-status">Editable values affect only a separate experimental branch. Baseline broadcast stays unchanged.</div>
+        </div>
+      </aside>
+    </main>
+
+    <div class="bottom-row">
+      <section class="results"><div class="section-bar"><span>04 <b>/</b> ENSEMBLE REGISTER</span><span class="section-right" id="samples-label">8 / 192 TRIALS RELEASED</span></div><div class="results-inner"><div class="count-group"><div><span class="stat-label">TRIALS COMPUTED</span><strong id="samples">0</strong></div><div><span class="stat-label">WITHIN 25 KM OF HOWLAND¹</span><strong id="near">—</strong></div><div><span class="stat-label">ENDPOINT WITHIN 50 KM OF NIKUMARORO¹</span><strong id="niku">—</strong></div></div><div class="result-footnote">¹ Geometric classifications of hypothetical trials, not calibrated likelihoods or claims of landing, survival, or wreckage. All locations remain unverified.</div><button id="export" class="button export-btn">EXPORT EVIDENCE-LABELLED CSV ↓</button></div></section>
+      <section class="controls"><div class="section-bar"><span>05 <b>/</b> BROADCAST CONTROLS</span><span class="section-right">LOCAL CLIENT</span></div><div class="controls-inner"><div class="buttons"><button class="button primary" id="audio">♪ ENABLE AUDIO</button><button class="button outlined" id="advance">+ 2H PREVIEW</button><button class="button outlined" id="share">COPY RUN URL</button><button class="button flat" id="restart">NEW SESSION</button></div><div class="meta"><span id="time-source">CLOCK / REAL TIME</span><span>OBS MODE: <code>?obs=1</code></span></div></div></section>
+    </div>
+
+    <footer><span>HARIL STUDIO <b>/</b> CAIR: COLLECT · ANALYZE · INTERPRET · RETURN</span><span>MZ WORLDS / RESEARCH PROTOTYPE / 001</span><a href="research.html">RESEARCH MANIFEST ↗</a></footer>
+  </div>
+
+  <div id="switchboard" class="switchboard hidden" role="dialog" aria-modal="true" aria-label="MZTV experimental switchboard" tabindex="-1"><div class="switch-head"><span>✳ MZTV / PRIVATE SWITCHBOARD</span><button id="close-menu" aria-label="Close switchboard">×</button></div><div class="switch-body"><div class="switch-id">CONNECTED TO THE FIELD</div><p>The underlying broadcast continues. Changes below create a separate experiment; historical evidence cannot be modified.</p><div class="switch-options"><button data-key="1"><b>1</b> ALTER WIND <span>+10 KT NORTH</span></button><button data-key="2"><b>2</b> ALTER NAVIGATION <span>+2° UNCERTAINTY</span></button><button data-key="3"><b>3</b> ALTER FUEL <span>−100 US GAL</span></button><button data-key="4"><b>4</b> READ TELEMETRY <span>LOCAL DISPLAY</span></button><button data-key="0"><b>0</b> LEAVE SWITCHBOARD <span>RETURN TO FIELD</span></button></div><div class="switch-note">KEYBOARD: * OPENS / 0 CLOSES. This is a browser preview, not a telephone line or shared multi-caller interface.</div></div></div>
+  <div id="toast" aria-live="polite" role="status"></div>
+  <script src="model.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
