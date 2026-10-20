@@ -64,6 +64,16 @@
     const length=ctx.sampleRate*2,data=ctx.createBuffer(1,length,ctx.sampleRate),channel=data.getChannelData(0);let rng=M.seedRng(run.seed);for(let i=0;i<length;i++)channel[i]=(rng()*2-1)*.2;const noise=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),ng=ctx.createGain();noise.buffer=data;noise.loop=true;filter.type='bandpass';filter.frequency.value=1400;filter.Q.value=.35;ng.gain.value=.03;noise.connect(filter).connect(ng).connect(volume);noise.start();audioState={ctx,volume,osc1,osc2,noise};$('audio').textContent='■ STOP AUDIO';flash('GENERATED ENGINE + RADIO TEXTURE / NOT ARCHIVAL AUDIO');
   }catch(e){flash('AUDIO UNAVAILABLE IN THIS BROWSER')}}
   $('audio').addEventListener('click',()=>{if(audioState){audioState.ctx.close();audioState=null;$('audio').textContent='♪ ENABLE AUDIO';}else audioStart()});
+  // OBS Browser Sources may permit autoplay. Ordinary browsers may block it until a click.
+  if(obs&&p.get('audio')==='1')setTimeout(()=>{if(!audioState)audioStart();audioState?.ctx.resume().catch(()=>{});},650);
+  let lastVoiceEpoch=-1;
+  function occasionalPrompt(hours){
+    if(!audioState||hours<2/3||!('speechSynthesis' in window))return;
+    const slot=Math.floor(hours/(2/3));
+    if(slot===lastVoiceEpoch)return;
+    lastVoiceEpoch=slot;
+    try{const msg=new SpeechSynthesisUtterance('press star for a list of interaction options.');msg.rate=.88;msg.volume=.55;window.speechSynthesis.speak(msg)}catch(_e){}
+  }
 
   const canvas=$('field'),ctx=canvas.getContext('2d',{alpha:false});
   function resize(){const rect=canvas.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);if(rect.width===0||rect.height===0)return;const w=Math.round(rect.width*dpr),h=Math.round(rect.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}viewSize={w:rect.width,h:rect.height,dpr};ctx.setTransform(dpr,0,0,dpr,0,0)}
@@ -108,6 +118,7 @@
     $('field-coordinates').textContent=`LAT ${Math.abs(st.lat).toFixed(2)}°${st.lat>=0?'N':'S'} / LON ${(st.lon>180?360-st.lon:st.lon).toFixed(2)}°${st.lon>180?'W':'E'}`;
     $('narrative').textContent=done?`Scenario ${fmt(currentEpoch+1)} reached modeled fuel exhaustion at T+${selected.end.t.toFixed(1)} hours. Endpoint ${Math.round(M.distKm(selected.end,M.HOWLAND))} km from Howland. This is a synthetic location, NOT wreckage evidence.`:live>=18?`Scenario ${fmt(currentEpoch+1)} entered an illustrative search along a 157°/337° line. The crew's actual decisions and route after the final radio messages remain unknown.`:`Scenario ${fmt(currentEpoch+1)} is flying an open-loop reference bearing of ${selected.cruiseBearing.toFixed(1)}°, altered by assumed wind and synthetic navigation error. This is not a recorded Earhart trajectory.`;
     if(currentEpoch!==lastEpoch){lastEpoch=currentEpoch;const s=M.stats(limited);lastStats=s;$('samples').textContent=s.trials;$('near').textContent=s.nearHowland;$('niku').textContent=s.nearNiku;$('samples-label').textContent=`${s.trials} / 192 TRIALS RELEASED`;}
+    occasionalPrompt(tHours);
     if(audioState){const f=st.fuel>0?1:.14;audioState.osc1.frequency.setTargetAtTime(64*f, audioState.ctx.currentTime,.2);audioState.osc2.frequency.setTargetAtTime(96*f,audioState.ctx.currentTime,.2);audioState.volume.gain.setTargetAtTime(st.fuel>0?.1:.018,audioState.ctx.currentTime,.3);}
     requestAnimationFrame(draw);
   }

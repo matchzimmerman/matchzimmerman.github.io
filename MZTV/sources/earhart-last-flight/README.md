@@ -22,12 +22,12 @@ Path when deployed: `https://matchzimmerman.github.io/MZTV/sources/earhart-last-
 For OBS, use a Browser Source with this URL (change `start` to your desired UTC launch time):
 
 ```text
-https://matchzimmerman.github.io/MZTV/sources/earhart-last-flight/?obs=1&seed=19370702&start=2026-10-20T20%3A00%3A00Z
+https://matchzimmerman.github.io/MZTV/sources/earhart-last-flight/?obs=1&audio=1&seed=19370702&start=2026-10-20T20%3A00%3A00Z
 ```
 
 Set 1920×1080 in OBS; the `obs` parameter hides interface chrome and uses a full-bleed canvas. This OBS source is **not itself a Twitch broadcast**: OBS/Twitch streaming requires an explicitly configured output and an ongoing host session. The `start` parameter shares a deterministic UTC timeline across clients; their actual clocks should be synchronized. Nothing is stored server-side. The default (without `start`) starts/persists a **local** run via `localStorage`.
 
-A browser page must remain loaded for a continuous feed. GitHub Pages does **not** execute a server-side 48-hour job; the image is produced by the client's browser. Hardware and browser sleep policies affect playback. Configure the OBS machine for continuous operation. The local `+ 2H PREVIEW` is a simulation-time offset; it does not alter a shared URL.
+`audio=1` attempts WebAudio autoplay for OBS; browser restrictions may still require activation. When audio is active, browser speech synthesis occasionally overlays the precise switchboard prompt without stopping the engine sound. A browser page must remain loaded for a continuous feed. GitHub Pages does **not** execute a server-side 48-hour job; the image is produced by the client's browser. Hardware and browser sleep policies affect playback. Configure the OBS machine for continuous operation. The local `+ 2H PREVIEW` is a simulation-time offset; it does not alter a shared URL.
 
 ## Interactive functions
 
