@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tuned to 3105</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* the student's own radio room: plotting table (left) · receiver, sky and log (right). Nothing is drawn for you. */
+:root{
+  --paper:#f3f4ef; --sheet:#fbfbf8; --grid:#a9bccb; --grid2:#dbe3e9; --ink:#1c2833; --muted:#5d6b77;
+  --lop:#b0176a; --sun:#d9690b; --ring:#2f6f8f; --rule:#cfd7dc; --panel:#eceee8; --ok:#2e7d4f;
+  --type:'Courier Prime','Courier New',Courier,monospace;
+  --label:'Barlow Semi Condensed','Arial Narrow',Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0c0606; --sheet:#110808; --grid:#4a1a17; --grid2:#2a0f0d; --ink:#f0b3a6; --muted:#a8675d;
+  --lop:#ff5a4a; --sun:#ffb24a; --ring:#d9776a; --rule:#3a1714; --panel:#170b0a; --ok:#e9a17a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0c0606; --sheet:#110808; --grid:#4a1a17; --grid2:#2a0f0d; --ink:#f0b3a6; --muted:#a8675d;
+  --lop:#ff5a4a; --sun:#ffb24a; --ring:#d9776a; --rule:#3a1714; --panel:#170b0a; --ok:#e9a17a; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 var(--label);overflow:hidden}
+[hidden]{display:none!important}
+button,select,textarea{font:inherit;color:inherit}
+.btn{font:600 12.5px var(--label);letter-spacing:.12em;text-transform:uppercase;background:var(--sheet);color:var(--ink);border:1px solid var(--ink);
+  padding:6px 12px;min-height:34px;cursor:pointer}
+.btn:hover{background:var(--ink);color:var(--sheet)}
+.btn[aria-pressed="true"],.btn[aria-current="page"]{background:var(--ink);color:var(--sheet)}
+.btn.quiet{border-color:var(--rule);font-weight:500}
+:focus-visible{outline:2px solid var(--lop);outline-offset:2px}
+.top{height:54px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);background:var(--sheet);
+  padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+.brand{font:700 14px var(--label);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap}
+.clock{font:700 20px var(--type);font-variant-numeric:tabular-nums;margin-left:auto;white-space:nowrap}
+.clock small{font:500 12px var(--label);color:var(--muted);margin-left:6px}
+.app{height:calc(100% - 54px);display:grid;grid-template-columns:minmax(0,1fr) minmax(330px,390px)}
+.table{position:relative;min-width:0;min-height:0;background:var(--sheet);border-right:1px solid var(--rule)}
+#plot{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.tools{position:absolute;left:12px;top:12px;display:flex;flex-wrap:wrap;gap:4px;max-width:calc(100% - 24px)}
+.tools .btn{background:var(--sheet)}
+.tools .btn[aria-pressed="true"]{background:var(--ink);color:var(--sheet)}
+.hint{position:absolute;left:12px;bottom:12px;right:12px;font-size:13px;color:var(--muted);pointer-events:none}
+.side{min-height:0;display:flex;flex-direction:column;background:var(--paper)}
+.box{border-bottom:1px solid var(--rule);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.box h2{margin:0;font:700 11.5px var(--label);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.radio{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+#knob{width:84px;height:84px;border-radius:50%;border:2px solid var(--ink);background:var(--sheet);position:relative;cursor:grab;touch-action:none}
+#knob:active{cursor:grabbing}
+#knob i{position:absolute;left:50%;top:6px;width:3px;height:20px;margin-left:-1.5px;background:var(--ink);transform-origin:50% 36px}
+#dial{width:100%;height:46px;display:block}
+.freq{font:700 18px var(--type);font-variant-numeric:tabular-nums}
+.meter{height:6px;background:var(--rule);position:relative}
+.meter i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ok);transition:width .15s}
+.tape{font:400 15px/1.4 var(--type);min-height:2.8em;white-space:pre-wrap;overflow-wrap:anywhere}
+#sky{width:100%;height:84px;display:block;touch-action:none;cursor:ew-resize}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.small{font-size:12.5px;color:var(--muted)}
+.log{flex:1;min-height:0;overflow:auto;padding:12px 14px 18px;display:flex;flex-direction:column;gap:12px}
+.entry{border-top:1px solid var(--rule);padding-top:8px;display:flex;flex-direction:column;gap:5px}
+.entry .when{font:700 13px var(--type);font-variant-numeric:tabular-nums}
+.entry .when span{font:500 11.5px var(--label);color:var(--muted);margin-left:6px}
+.entry .heard{font:400 14.5px/1.4 var(--type)}
+.entry .ask{font-size:13px;color:var(--lop)}
+.entry textarea{width:100%;min-height:52px;resize:vertical;background:var(--sheet);border:1px solid var(--rule);padding:6px 8px;font:14px/1.4 var(--label)}
+.sys{font-size:13px;color:var(--muted);font-style:italic}
+.intro{position:absolute;inset:0;background:color-mix(in srgb,var(--paper) 88%,transparent);display:flex;align-items:center;justify-content:center;padding:20px;z-index:5}
+.card{max-width:560px;background:var(--sheet);border:1px solid var(--ink);padding:24px;display:flex;flex-direction:column;gap:12px}
+.card h1{margin:0;font:700 26px/1.1 var(--label);letter-spacing:.04em}
+.card p{margin:0}
+.card .orders{font:400 14.5px/1.45 var(--type);border-left:2px solid var(--lop);padding-left:12px}
+.record{grid-column:1/-1;overflow:auto;padding:24px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.doc{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.doc h2{margin:0 0 6px;font:700 13px var(--label);letter-spacing:.18em;text-transform:uppercase;color:var(--lop)}
+.doc p{margin:0 0 8px;max-width:68ch}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px}
+.pair > div{border-top:2px solid var(--ink);padding-top:8px;min-width:0}
+.pair b{display:block;font:600 11.5px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.pair .q{font:400 15px/1.45 var(--type)}
+.mark{background:none;border:none;padding:0;cursor:pointer;font:inherit;color:inherit;border-bottom:1px dotted var(--muted)}
+.mark.on{background:var(--lop);color:var(--sheet)}
+.report{white-space:pre-wrap;font:400 13.5px/1.45 var(--type);background:var(--sheet);border:1px solid var(--rule);padding:12px;max-height:340px;overflow:auto}
+@media (max-width:860px){
+  body{overflow:auto}
+  .app{grid-template-columns:1fr;height:auto}
+  .table{height:62vh;border-right:none;border-bottom:1px solid var(--rule)}
+  .side{min-height:auto}.log{overflow:visible}
+  .top{flex-wrap:wrap;height:auto;padding-block:8px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Tuned to 3105</div>
+  <button class="btn" id="tab-room" type="button" aria-current="page">Radio room</button>
+  <button class="btn quiet" id="tab-rec" type="button">The record</button>
+  <div class="clock" id="clock">06:05<small>Howland · 1735 GCT</small></div>
+  <button class="btn" id="play" type="button">Pause</button>
+  <button class="btn quiet" id="spd" type="button" title="How fast time passes">×10</button>
+</header>
+
+<div class="app" id="room">
+  <section class="table" aria-label="Plotting table">
+    <canvas id="plot" aria-label="Your plotting sheet around Howland Island. Use the tools to draw circles, lines and marks."></canvas>
+    <div class="tools" role="toolbar" aria-label="Plotting tools">
+      <button class="btn" type="button" data-tool="hand" aria-pressed="true" title="Move the chart">Hand</button>
+      <button class="btn" type="button" data-tool="circle" aria-pressed="false" title="Drag from a point to draw a distance circle">Circle</button>
+      <button class="btn" type="button" data-tool="line" aria-pressed="false" title="Drag from a point to draw a line at a bearing">Line</button>
+      <button class="btn" type="button" data-tool="mark" aria-pressed="false" title="Mark a spot">Mark</button>
+      <button class="btn" type="button" data-tool="erase" aria-pressed="false" title="Remove a drawing">Erase</button>
+      <button class="btn" type="button" data-tool="search" aria-pressed="false" id="tool-search" hidden title="Place a day of search">Search</button>
+      <button class="btn quiet" type="button" id="zin" aria-label="Zoom in">+</button>
+      <button class="btn quiet" type="button" id="zout" aria-label="Zoom out">−</button>
+    </div>
+    <div class="hint" id="hint">Hand: drag to move the chart. Nothing here is drawn for you.</div>
+    <div class="intro" id="intro">
+      <div class="card">
+        <h1>Tuned to 3105</h1>
+        <p>US Coast Guard cutter Itasca, off Howland Island in the middle of the Pacific. 2 July 1937, a few minutes after six in the morning. You are on radio watch.</p>
+        <p class="orders">An airplane flown by Amelia Earhart, with Fred Noonan navigating, left New Guinea 18 hours ago for this island. She carries a radio for 500, 3105 and 6210 kilocycles. Keep the receiver tuned. Log everything you hear, exactly as you hear it.</p>
+        <p class="small">You have a receiver, a plotting sheet, the sky to the east and a logbook. Work in pairs, with sound on. Time runs ten times faster than real time; you can pause it.</p>
+        <button class="btn" id="begin" type="button">Begin the watch</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="box" aria-label="Receiver">
+      <h2><span>Receiver</span><span id="sigTxt">static</span></h2>
+      <div class="radio">
+        <div id="knob" role="slider" tabindex="0" aria-label="Tuning" aria-valuemin="2000" aria-valuemax="8000" aria-valuenow="4400"><i></i></div>
+        <div>
+          <div class="freq" id="freq">4400 kc</div>
+          <canvas id="dial" aria-hidden="true"></canvas>
+          <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+        </div>
+      </div>
+      <div class="tape" id="tape" aria-live="polite"></div>
+      <div class="small">Turn the knob: drag it, scroll on it, or use the arrow keys.</div>
+    </section>
+    <section class="box" aria-label="The sky to the east">
+      <h2><span>East from the bridge</span><span id="skyTxt"></span></h2>
+      <canvas id="sky" aria-label="The eastern horizon. Drag to aim the sighting line."></canvas>
+      <div class="row"><button class="btn quiet" id="sight" type="button">Take a sight</button><span class="small" id="aim">Drag across the sky to aim.</span></div>
+    </section>
+    <section class="log" id="log" aria-label="Logbook">
+      <div class="box" style="padding:0;border:none"><h2><span>Logbook</span><button class="btn quiet" id="addNote" type="button">+ Note</button></h2></div>
+    </section>
+  </aside>
+
+  <section class="record" id="record" hidden>
+    <article class="doc">
+      <div>
+        <h2>The record</h2>
+        <p>What you heard is one thing. What survives is a US Navy report written in July 1937 after the search: <i>Report of Earhart Search by U.S. Navy and U.S. Coast Guard, July 2–18, 1937</i>, now in the National Archives. It summarizes the airplane's messages twice, in two different sections. Compare them to each other, and to your own log. Click any words that differ to add them to your notes.</p>
+      </div>
+      <div id="pairs" style="display:flex;flex-direction:column;gap:18px"></div>
+      <div>
+        <h2>Other things the Navy wrote down</h2>
+        <p class="q" style="font:400 15px/1.5 var(--type)">"That the strength of radio signals in Itasca was greatest at 1928."<br>"GCT sunrise, Howland, on 2 July was 1745."<br>"That morning of 2 July Itasca was laying a heavy smoke screen which hung for hours."<br>"This was the last authentic message received from the airplane."</p>
+        <p class="small">Known Facts items 22, 23, 21 (report p. 2) and §13 (p. 4). Pages stamped NW 90261; quotes checked against the page images.</p>
+      </div>
+      <div>
+        <h2>Your field report</h2>
+        <p>Everything from your watch, ready to hand in. Copy it into your class document.</p>
+        <div class="report" id="report"></div>
+        <div class="row" style="margin-top:8px"><button class="btn" id="copy" type="button">Copy report</button><span class="small" id="copied"></span></div>
+      </div>
+      <div>
+        <h2>Notes for teachers</h2>
+        <p class="small">About 40 minutes, students in pairs, sound on, no logins. Nothing is explained up front and nothing is scored; the questions arrive in the logbook as the morning unfolds. The messages are as the Navy report summarizes them (§13), not the Itasca's own radio log; the record tab shows the second version. The sun is computed for Howland on 2 July 1937 (rises 17:46 GCT on a bearing of 66.9°; the report gives 1745). In the search, nothing is ever found, because nothing was. The Lexington's aircraft searched 151,556 square miles from 13 to 18 July 1937 (report p. 14). Progress saves in this browser only.</p>
+      </div>
+    </article>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const D2R = Math.PI / 180;
+const m = hhmm => Math.floor(hhmm / 100) * 60 + hhmm % 100;
+const fmt = g => { const h = Math.floor(g / 60) % 24, mm = Math.floor(g % 60); return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); };
+const local = g => fmt(g - 690 + 1440);
+const HOW = { lat: 48 / 60, lon: -(176 + 38 / 60) };
+const PLACES = [{ n: 'HOWLAND', x: 0, y: 0 }, { n: 'BAKER', x: (-(176 + 29 / 60) - HOW.lon) * 60, y: (12 / 60 - HOW.lat) * 60 }, { n: 'ITASCA', x: 1.4, y: 1.2, ship: true }];
+const ON_FREQ = 3105;
+/* messages: words as the Navy report §13 summarizes them; the airplane's strongest signal at 1928 (Known Facts 22) */
+const MSG = [
+  { t: m(1745), s: 0.45, text: 'TWO HUNDRED MILES OUT AND NO LAND FALL', ask: 'What could you draw from this? What can\'t you know from it?' },
+  { t: m(1816), s: 0.6, text: 'APPROXIMATELY 100 MILES FROM ITASCA POSITION DOUBTFUL', ask: 'Draw what this allows. "Position doubtful": whose doubt, and about what?' },
+  { t: m(1912), s: 0.75, text: '30 MINUTES GAS REMAINING NO LAND FALL POSITION DOUBTFUL', ask: 'If that is right, when does the gas run out? Write the time down, and keep listening.' },
+  { t: m(1928), s: 1.0, text: 'CIRCLING TRYING TO PICK UP ISLAND', ask: 'This is the loudest signal of the morning. What might that tell you? Why can\'t she see the island?' },
+  { t: m(2013), s: 0.8, text: 'ON A POSITION LINE 157 337 DEGREES', ask: 'Look at the clock and at your last answer. Then look at your sun sight. What does a line of position tell you, and what doesn\'t it?' },
+  { t: m(2025), s: 0.8, text: 'HEADING NORTH AND SOUTH', ask: 'North or south along which line? What would you need to know?' },
+];
+const ONAIR = 3.2;   // story minutes each message is on the air
+const SYS = [
+  { t: m(1746), text: 'The sun has cleared the horizon. You can take a sight now.' },
+  { t: m(1942), text: '08:12 Howland. Half an hour since "30 minutes gas remaining".' },
+  { t: m(2045), text: 'Nothing more on 3105. The Itasca begins to plan a search. The Search tool is now on your plotting table: you have three days of planes. Place them, then fly the search.' },
+];
+/* ---------- state (saved in this browser only) ---------- */
+const KEY = 'tuned-to-3105-v1';
+let S = { t: m(1735), playing: false, speed: 10, f: 4400, rx: MSG.map(x => x.text.split('').map(() => 0)), done: [], sys: [], notes: {}, free: [], draw: [], sights: [], marks: [], flown: false, view: { cx: 0, cy: -20, span: 520 }, begun: false };
+try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o && o.rx) S = Object.assign(S, o, { playing: false }); } catch (e) {}
+let saveT = 0; const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 300); };
+
+/* ---------- sun ---------- */
+function sunAt(min) {
+  const ms = Date.UTC(1937, 6, 2) + min * 60000, n = ms / 86400000 + 2440587.5 - 2451545;
+  const L = ((280.460 + 0.9856474 * n) % 360 + 360) % 360, g = (((357.528 + 0.9856003 * n) % 360 + 360) % 360) * D2R;
+  const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, eps = (23.439 - 0.0000004 * n) * D2R;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)), dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+  const gm = ((280.46061837 + 360.98564736629 * n) % 360 + 360) % 360, ha = (gm + HOW.lon) * D2R - ra, la = HOW.lat * D2R;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+  return { az: (az / D2R + 360) % 360, el: el / D2R };
+}
+
+/* ---------- sound: the receiver ---------- */
+const A = { ctx: null };
+function audioStart() {
+  if (A.ctx) { A.ctx.resume(); return; }
+  const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+  const c = A.ctx = new C(), len = c.sampleRate * 7.3, b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const n = c.createBufferSource(); n.buffer = b; n.loop = true;
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1200; bp.Q.value = 0.6;
+  A.noise = c.createGain(); A.noise.gain.value = 0;
+  A.osc = c.createOscillator(); A.osc.frequency.value = 310.5;
+  const am = c.createOscillator(); am.frequency.value = 6.5; const amg = c.createGain(); amg.gain.value = 0.3; const mod = c.createGain(); mod.gain.value = 0.7;
+  am.connect(amg); amg.connect(mod.gain); A.osc.connect(mod); A.tone = c.createGain(); A.tone.gain.value = 0; mod.connect(A.tone);
+  const out = c.createGain(); out.gain.value = 0.8;
+  n.connect(bp); bp.connect(A.noise); A.noise.connect(out); A.tone.connect(out); out.connect(c.destination);
+  n.start(); A.osc.start(); am.start();
+}
+function audioSet(noise, tone, pitch) {
+  if (!A.ctx) return; const t = A.ctx.currentTime;
+  A.noise.gain.setTargetAtTime(noise, t, 0.12); A.tone.gain.setTargetAtTime(tone, t, 0.08); A.osc.frequency.setTargetAtTime(pitch, t, 0.05);
+}
+
+/* ---------- receiver ---------- */
+const knob = $('knob'), dial = $('dial'), dg = dial.getContext('2d');
+function setF(f) { S.f = Math.max(2000, Math.min(8000, Math.round(f))); knob.firstElementChild.style.transform = `rotate(${(S.f - 2000) / 6000 * 300 - 150}deg)`; knob.setAttribute('aria-valuenow', S.f); $('freq').textContent = S.f + ' kc'; drawDial(); save(); }
+let kdrag = null;
+knob.addEventListener('pointerdown', e => { kdrag = { y: e.clientY, x: e.clientX, f: S.f }; knob.setPointerCapture(e.pointerId); });
+knob.addEventListener('pointermove', e => { if (!kdrag) return; const d = (e.clientX - kdrag.x) - (e.clientY - kdrag.y); setF(kdrag.f + d * (e.shiftKey ? 1 : 6)); });
+knob.addEventListener('pointerup', () => kdrag = null);
+knob.addEventListener('wheel', e => { e.preventDefault(); setF(S.f - Math.sign(e.deltaY) * (e.shiftKey ? 2 : 10)); }, { passive: false });
+knob.addEventListener('keydown', e => { const k = { ArrowUp: 10, ArrowRight: 10, ArrowDown: -10, ArrowLeft: -10, PageUp: 200, PageDown: -200 }[e.key]; if (k) { e.preventDefault(); setF(S.f + (e.shiftKey ? Math.sign(k) : k)); } });
+function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawDial() {
+  const r = dial.getBoundingClientRect(), p = Math.min(2, devicePixelRatio || 1); dial.width = r.width * p; dial.height = r.height * p; dg.setTransform(p, 0, 0, p, 0, 0);
+  const W = r.width, H = r.height, X = f => 6 + (f - 2000) / 6000 * (W - 12);
+  dg.clearRect(0, 0, W, H); dg.strokeStyle = css('--ink'); dg.fillStyle = css('--muted'); dg.lineWidth = 1; dg.font = '500 10px "Barlow Semi Condensed", sans-serif'; dg.textAlign = 'center';
+  for (let f = 2000; f <= 8000; f += 100) { const x = X(f), big = f % 1000 === 0; dg.beginPath(); dg.moveTo(x, 20); dg.lineTo(x, big ? 32 : 26); dg.stroke(); if (big) dg.fillText(f / 1000 + 'k', x, 43); }
+  dg.strokeStyle = css('--lop'); dg.lineWidth = 2; const x = X(S.f); dg.beginPath(); dg.moveTo(x, 4); dg.lineTo(x, 36); dg.stroke();
+}
+function quality() { const d = Math.abs(S.f - ON_FREQ); return d <= 8 ? 1 : d <= 70 ? 1 - (d - 8) / 62 : 0; }
+
+/* ---------- time ---------- */
+let lastNow = performance.now(), rxAcc = MSG.map(() => 0);
+function step(now) {
+  const dt = Math.min(0.25, (now - lastNow) / 1000); lastNow = now;
+  if (S.playing) S.t += dt * S.speed / 60;
+  const q = quality();
+  let onAir = null;
+  MSG.forEach((msg, i) => {
+    if (S.t >= msg.t && S.t < msg.t + ONAIR) {
+      onAir = { msg, i };
+      if (S.playing) {   // characters arrive while you're tuned; partly tuned, some are lost
+        rxAcc[i] += dt * S.speed / 60 / (ONAIR * 0.85) * msg.text.length;
+        while (rxAcc[i] >= 1) { rxAcc[i] -= 1; const k = S.rx[i].findIndex(v => v === 0); if (k < 0) break; S.rx[i][k] = q > 0.05 && Math.random() < (q >= 0.95 ? 0.85 + 0.15 * msg.s : q * (0.5 + 0.5 * msg.s)) ? 1 : -1; }
+      }
+    }
+    if (S.t >= msg.t + ONAIR && !S.done.includes(i)) { S.done.push(i); S.rx[i] = S.rx[i].map(v => v === 0 ? -1 : v); logMsg(i); save(); }
+  });
+  SYS.forEach((s, i) => { if (S.t >= s.t && !S.sys.includes(i)) { S.sys.push(i); logSys(i); if (i === 2) $('tool-search').hidden = false; save(); } });
+  if (S.t >= m(2045)) $('tool-search').hidden = false;
+  // receiver output
+  const strength = onAir ? onAir.msg.s * q : 0;
+  $('meter').style.width = (strength * 100) + '%';
+  $('sigTxt').textContent = onAir && q > 0.05 ? (q > 0.9 ? 'carrier: tuned' : 'carrier: off tune') : q > 0.9 ? 'tuned, nothing on the air' : 'static';
+  $('tape').textContent = onAir ? heard(onAir.i) : '';
+  audioSet(S.playing ? 0.05 * (1 - 0.45 * strength) : 0.0, S.playing && onAir ? 0.12 * strength : 0, 310.5 + (S.f - ON_FREQ) * 3);
+  $('clock').innerHTML = local(S.t) + '<small>Howland · ' + fmt(S.t) + ' GCT</small>';
+  drawSky();
+  if (flying) drawPlot();
+  requestAnimationFrame(step);
+}
+const heard = i => MSG[i].text.split('').map((ch, k) => S.rx[i][k] === 1 ? ch : S.rx[i][k] === -1 ? (ch === ' ' ? ' ' : '·') : '').join('');
+
+/* ---------- logbook ---------- */
+const logEl = $('log');
+function noteBox(key, ph) {
+  const ta = document.createElement('textarea'); ta.id = 'note-' + key; ta.placeholder = ph || 'Your note'; ta.value = S.notes[key] || '';
+  ta.addEventListener('input', () => { S.notes[key] = ta.value; save(); }); return ta;
+}
+function entry(html, key, ask) {
+  const d = document.createElement('div'); d.className = 'entry'; d.innerHTML = html;
+  if (ask) { const a = document.createElement('div'); a.className = 'ask'; a.textContent = ask; d.appendChild(a); }
+  if (key) d.appendChild(noteBox(key, 'Your answer, in your own words'));
+  logEl.appendChild(d); d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function logMsg(i) {
+  const got = S.rx[i].filter(v => v === 1).length, n = MSG[i].text.replace(/ /g, '').length, txt = heard(i);
+  const qual = got === 0 ? 'missed: you heard only static' : got >= MSG[i].text.length * 0.98 ? 'received in full' : 'partly received';
+  entry(`<div class="when">${local(MSG[i].t)}<span>${fmt(MSG[i].t)} GCT · 3105 kc · ${qual}</span></div><div class="heard">${txt || '· · ·'}</div>`, 'm' + i, MSG[i].ask);
+}
+function logSys(i) { entry(`<div class="when">${local(SYS[i].t)}<span>${fmt(SYS[i].t)} GCT</span></div><div class="sys">${SYS[i].text}</div>`); }
+$('addNote').addEventListener('click', () => { const k = 'f' + S.free.length; S.free.push({ t: S.t }); entry(`<div class="when">${local(S.t)}<span>your note</span></div>`, k); save(); });
+
+/* ---------- sky & sight ---------- */
+const sky = $('sky'), sg = sky.getContext('2d'); let aimAz = 90;
+function drawSky() {
+  const r = sky.getBoundingClientRect(), p = Math.min(2, devicePixelRatio || 1); if (sky.width !== Math.round(r.width * p)) { sky.width = r.width * p; sky.height = r.height * p; }
+  sg.setTransform(p, 0, 0, p, 0, 0); const W = r.width, H = r.height, X = az => (az - 25) / 110 * W, hz = H * 0.72;
+  const s = sunAt(S.t);
+  sg.fillStyle = css('--sheet'); sg.fillRect(0, 0, W, H);
+  sg.strokeStyle = css('--grid'); sg.lineWidth = 1; sg.beginPath(); sg.moveTo(0, hz); sg.lineTo(W, hz); sg.stroke();
+  sg.fillStyle = css('--muted'); sg.font = '500 10px "Barlow Semi Condensed", sans-serif'; sg.textAlign = 'center';
+  for (let a = 30; a <= 130; a += 10) { const x = X(a); sg.beginPath(); sg.moveTo(x, hz); sg.lineTo(x, hz + (a % 30 === 0 ? 7 : 4)); sg.stroke(); sg.fillText(a === 90 ? 'E 90°' : a + '°', x, H - 3); }
+  // the glow before the sun, then the sun itself
+  if (s.el > -12) { const gl = sg.createRadialGradient(X(s.az), hz, 2, X(s.az), hz, 70); gl.addColorStop(0, css('--sun')); gl.addColorStop(1, 'transparent'); sg.globalAlpha = Math.max(0, Math.min(0.45, (s.el + 12) / 14)); sg.fillStyle = gl; sg.fillRect(0, 0, W, hz); sg.globalAlpha = 1; }
+  const sy = hz - s.el * (hz - 6) / 40;
+  if (s.el > -0.9 && s.az > 25 && s.az < 135) { sg.fillStyle = css('--sun'); sg.beginPath(); sg.arc(X(s.az), Math.min(sy, hz + 1), 6, Math.PI, s.el < 0.3 ? 0 : 3 * Math.PI); sg.fill(); }
+  // smoke from the Itasca, low on the water (Known Facts item 21)
+  sg.fillStyle = css('--muted'); sg.globalAlpha = 0.18; for (let i = 0; i < 14; i++) { sg.beginPath(); sg.ellipse(X(40 + i * 3), hz - 2 - i * 0.6, 10 + i, 2.4, 0, 0, 7); sg.fill(); } sg.globalAlpha = 1;
+  // your aim
+  sg.strokeStyle = css('--lop'); sg.lineWidth = 1.5; sg.beginPath(); sg.moveTo(X(aimAz), 2); sg.lineTo(X(aimAz), hz + 8); sg.stroke();
+  $('skyTxt').textContent = s.el < -0.9 ? 'before sunrise' : 'sun ' + s.el.toFixed(0) + '° up';
+  $('aim').textContent = 'Your aim: ' + aimAz.toFixed(1) + '°';
+  sky._X = X; sky._W = W;
+}
+let sdrag = false;
+const aimFrom = e => { const r = sky.getBoundingClientRect(); aimAz = Math.max(25, Math.min(135, 25 + (e.clientX - r.left) / r.width * 110)); };
+sky.addEventListener('pointerdown', e => { sdrag = true; sky.setPointerCapture(e.pointerId); aimFrom(e); });
+sky.addEventListener('pointermove', e => { if (sdrag) aimFrom(e); });
+sky.addEventListener('pointerup', () => sdrag = false);
+sky.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') aimAz -= 0.5; if (e.key === 'ArrowRight') aimAz += 0.5; });
+sky.tabIndex = 0;
+$('sight').addEventListener('click', () => {
+  const s = sunAt(S.t);
+  if (s.el < -0.9) { entry(`<div class="when">${local(S.t)}<span>sight</span></div><div class="sys">No sun yet. Nothing to sight on.</div>`); return; }
+  const off = Math.abs(aimAz - s.az);
+  S.sights.push({ t: S.t, az: +aimAz.toFixed(1), off: +off.toFixed(1) }); save();
+  entry(`<div class="when">${local(S.t)}<span>${fmt(S.t)} GCT · your sun sight</span></div><div class="heard">Sun bearing ${aimAz.toFixed(1)}°${off > 3 ? ' (your aim was ' + off.toFixed(0) + '° from the sun; try again)' : ''}</div>`, 's' + (S.sights.length - 1),
+    'Navigators turn a sun sight into a line of position at right angles to the sun\'s bearing. What bearing would that line run on? Try drawing it.');
+});
+
+/* ---------- plotting table ---------- */
+const cv = $('plot'), g = cv.getContext('2d'); let W = 0, H = 0, tool = 'hand', drag = null, flying = null;
+const scale = () => Math.min(W, H) / S.view.span;
+const toScr = (x, y) => [W / 2 + (x - S.view.cx) * scale(), H / 2 - (y - S.view.cy) * scale()];
+const toNm = (px, py) => [S.view.cx + (px - W / 2) / scale(), S.view.cy - (py - H / 2) / scale()];
+function snap(px, py) { for (const p of PLACES) { const [x, y] = toScr(p.x, p.y); if (Math.hypot(px - x, py - y) < 12) return [p.x, p.y, p.n]; } const [x, y] = toNm(px, py); return [x, y, null]; }
+function resize() { const r = cv.getBoundingClientRect(), p = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height; cv.width = W * p; cv.height = H * p; g.setTransform(p, 0, 0, p, 0, 0); drawPlot(); drawDial(); }
+new ResizeObserver(resize).observe(cv);
+const brg = (dx, dy) => (Math.atan2(dx, dy) / D2R + 360) % 360;
+function drawPlot() {
+  if (!W) return;
+  const k = scale();
+  g.fillStyle = css('--sheet'); g.fillRect(0, 0, W, H);
+  // grid every 10 minutes of arc (10 nm), labels every degree
+  const [x0, y1] = toNm(0, 0), [x1, y0] = toNm(W, H);
+  g.lineWidth = 1;
+  const latOf = y => HOW.lat + y / 60, yOfLat = la => (la - HOW.lat) * 60, xOfLon = lo => (lo - HOW.lon) * 60;
+  for (let la = Math.floor(latOf(y0) * 6) / 6; la <= latOf(y1); la += 1 / 6) { const major = Math.abs(la - Math.round(la)) < 1e-6; if (!major && k * 10 < 7) continue; const [, sy] = toScr(0, yOfLat(la)); g.strokeStyle = major ? css('--grid') : css('--grid2'); g.beginPath(); g.moveTo(0, sy); g.lineTo(W, sy); g.stroke(); if (major) { g.fillStyle = css('--muted'); g.font = '500 11px "Barlow Semi Condensed", sans-serif'; g.textAlign = 'left'; g.fillText(Math.round(la) === 0 ? 'EQUATOR' : Math.abs(Math.round(la)) + '°' + (la > 0 ? 'N' : 'S'), 8, sy - 4); } }
+  const lon0 = HOW.lon + x0 / 60, lon1 = HOW.lon + x1 / 60;
+  for (let lo = Math.floor(lon0 * 6) / 6; lo <= lon1; lo += 1 / 6) { const major = Math.abs(lo - Math.round(lo)) < 1e-6; if (!major && k * 10 < 7) continue; const [sx] = toScr(xOfLon(lo), 0); g.strokeStyle = major ? css('--grid') : css('--grid2'); g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx, H); g.stroke(); if (major) { g.fillStyle = css('--muted'); g.textAlign = 'left'; g.fillText(Math.abs(Math.round(lo)) + '°W', sx + 4, H - 34); } }
+  // scale bar
+  { const nm = [10, 25, 50, 100, 200].find(n => n * k > 70) || 200, bx = W - 20 - nm * k, by = H - 40; g.strokeStyle = css('--ink'); g.lineWidth = 2; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + nm * k, by); g.stroke(); g.fillStyle = css('--ink'); g.textAlign = 'right'; g.font = '600 11px "Barlow Semi Condensed", sans-serif'; g.fillText(nm + ' nautical miles', W - 20, by - 6); }
+  // north arrow
+  g.fillStyle = css('--ink'); g.textAlign = 'center'; g.font = '700 12px "Barlow Semi Condensed", sans-serif'; g.fillText('N ↑', W - 30, 70);
+  // student drawings
+  for (const d of S.draw) drawItem(d, false);
+  if (drag && drag.preview) drawItem(drag.preview, true);
+  // places
+  for (const p of PLACES) { const [x, y] = toScr(p.x, p.y); g.fillStyle = css('--ink'); if (p.ship) { g.strokeStyle = css('--ink'); g.lineWidth = 1.2; g.beginPath(); g.moveTo(x - 5, y + 2); g.lineTo(x + 5, y + 2); g.lineTo(x + 3, y - 1); g.lineTo(x - 3, y - 1); g.closePath(); g.stroke(); if (k > 3) { g.font = '500 11px "Barlow Semi Condensed", sans-serif'; g.textAlign = 'left'; g.fillStyle = css('--muted'); g.fillText('ITASCA (you)', x + 8, y - 6); } } else { g.beginPath(); g.arc(x, y, 3.2, 0, 7); g.fill(); g.font = '600 12px "Barlow Semi Condensed", sans-serif'; g.textAlign = p.n === 'HOWLAND' ? 'right' : 'left'; g.fillText(p.n, x + (p.n === 'HOWLAND' ? -8 : 8), y + 4); } }
+  // the search being flown
+  if (flying) {
+    const f = Math.min(1, (performance.now() - flying.t0) / 9000);
+    g.fillStyle = css('--ok'); g.globalAlpha = 0.18;
+    for (const d of S.draw.filter(d => d.k === 'search')) { const c = corners(d); g.beginPath(); c.forEach(([x, y], j) => { const [sx, sy] = toScr(x, y); j ? g.lineTo(sx, sy) : g.moveTo(sx, sy); }); g.closePath(); g.save(); g.clip(); const [ax] = toScr(d.x - 150, 0); g.fillRect(0, 0, ax + f * (W + 400), H); g.restore(); }
+    g.globalAlpha = 1;
+    if (f >= 1 && !flying.done) { flying.done = true; flying = null; S.flown = true; save(); afterSearch(); }
+  }
+}
+function corners(d) { const a = d.a * D2R, ux = Math.sin(a), uy = Math.cos(a), px = uy, py = -ux, L = d.len / 2, Wd = d.w / 2; return [[d.x - ux * L - px * Wd, d.y - uy * L - py * Wd], [d.x + ux * L - px * Wd, d.y + uy * L - py * Wd], [d.x + ux * L + px * Wd, d.y + uy * L + py * Wd], [d.x - ux * L + px * Wd, d.y - uy * L + py * Wd]]; }
+function drawItem(d, ghost) {
+  const k = scale(); g.save(); g.globalAlpha = ghost ? 0.6 : 1;
+  g.font = '400 12.5px "Courier Prime", monospace';
+  if (d.k === 'circle') { const [x, y] = toScr(d.x, d.y); g.strokeStyle = css('--ring'); g.lineWidth = 1.6; g.setLineDash([3, 4]); g.beginPath(); g.arc(x, y, d.r * k, 0, 7); g.stroke(); g.setLineDash([]); g.fillStyle = css('--ring'); g.textAlign = 'left'; g.fillText(Math.round(d.r) + ' nm', x + d.r * k * 0.71 + 4, y - d.r * k * 0.71 - 4); }
+  if (d.k === 'line') { const a = d.b * D2R, ux = Math.sin(a), uy = -Math.cos(a), [x, y] = toScr(d.x, d.y), L = Math.hypot(W, H) * 2; g.strokeStyle = css('--lop'); g.lineWidth = 1.8; g.beginPath(); g.moveTo(x - ux * L, y - uy * L); g.lineTo(x + ux * L, y + uy * L); g.stroke(); g.fillStyle = css('--lop'); g.textAlign = 'left'; const b1 = Math.round(d.b) % 360, b2 = (b1 + 180) % 360; g.fillText(b1 + '° / ' + b2 + '°', x + ux * 60 + 8, y + uy * 60); }
+  if (d.k === 'mark') { const [x, y] = toScr(d.x, d.y); g.strokeStyle = css('--ink'); g.lineWidth = 2; g.beginPath(); g.moveTo(x - 6, y - 6); g.lineTo(x + 6, y + 6); g.moveTo(x + 6, y - 6); g.lineTo(x - 6, y + 6); g.stroke(); }
+  if (d.k === 'search') { g.strokeStyle = css('--ok'); g.lineWidth = 1.5; g.fillStyle = css('--ok'); g.globalAlpha = ghost ? 0.25 : 0.12; const c = corners(d); g.beginPath(); c.forEach(([x, y], j) => { const [sx, sy] = toScr(x, y); j ? g.lineTo(sx, sy) : g.moveTo(sx, sy); }); g.closePath(); g.fill(); g.globalAlpha = ghost ? 0.6 : 1; g.stroke(); const [cx, cy] = toScr(d.x, d.y); g.fillStyle = css('--ok'); g.textAlign = 'center'; g.font = '600 12px "Barlow Semi Condensed", sans-serif'; g.fillText('DAY ' + d.day, cx, cy + 4); }
+  g.restore();
+}
+const HINTS = {
+  hand: 'Hand: drag to move the chart. Nothing here is drawn for you.',
+  circle: 'Circle: press on a point (it snaps to Howland, Baker or the Itasca) and drag out to a distance.',
+  line: 'Line: press on a point and drag toward a bearing. The line runs both ways, forever.',
+  mark: 'Mark: put an X where you think something is. Then ask yourself which words put it there.',
+  erase: 'Erase: click a drawing to remove it.',
+  search: 'Search: each day of planes covers a box 200 by 100 nautical miles. Drag to place and aim it. Three days.',
+};
+document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => { tool = b.dataset.tool; document.querySelectorAll('[data-tool]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); $('hint').textContent = HINTS[tool]; }));
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; cv.setPointerCapture(e.pointerId);
+  if (tool === 'hand') drag = { px, py, cx: S.view.cx, cy: S.view.cy };
+  else if (tool === 'erase') {
+    let best = null, bd = 14;
+    S.draw.forEach((d, i) => { let dd = 1e9; const [x, y] = toScr(d.x, d.y);
+      if (d.k === 'circle') dd = Math.abs(Math.hypot(px - x, py - y) - d.r * scale());
+      else if (d.k === 'line') { const a = d.b * D2R, ux = Math.sin(a), uy = -Math.cos(a); dd = Math.abs((px - x) * uy - (py - y) * ux); }
+      else dd = Math.hypot(px - x, py - y) - (d.k === 'search' ? 30 : 0);
+      if (dd < bd) { bd = dd; best = i; } });
+    if (best !== null) { S.draw.splice(best, 1); save(); drawPlot(); }
+  } else {
+    const [x, y] = snap(px, py);
+    if (tool === 'mark') { S.draw.push({ k: 'mark', x, y, t: S.t }); save(); drawPlot(); return; }
+    if (tool === 'search' && S.draw.filter(d => d.k === 'search').length >= 3) { $('hint').textContent = 'You have used all three days. Erase one to move it, or fly the search.'; return; }
+    drag = { x, y, tool };
+  }
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag) return; const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  if (tool === 'hand') { S.view.cx = drag.cx - (px - drag.px) / scale(); S.view.cy = drag.cy + (py - drag.py) / scale(); drawPlot(); return; }
+  const [x, y] = toNm(px, py), dx = x - drag.x, dy = y - drag.y;
+  if (drag.tool === 'circle') { drag.preview = { k: 'circle', x: drag.x, y: drag.y, r: Math.max(1, Math.round(Math.hypot(dx, dy))) }; $('hint').textContent = 'Radius ' + drag.preview.r + ' nautical miles'; }
+  if (drag.tool === 'line') { const b = Math.round(brg(dx, dy)); drag.preview = { k: 'line', x: drag.x, y: drag.y, b }; $('hint').textContent = 'Bearing ' + b + '° / ' + ((b + 180) % 360) + '°'; }
+  if (drag.tool === 'search') { const day = S.draw.filter(d => d.k === 'search').length + 1; drag.preview = { k: 'search', x: drag.x, y: drag.y, a: Math.round(brg(dx, dy)) || 0, len: 200, w: 100, day }; }
+  drawPlot();
+});
+cv.addEventListener('pointerup', () => { if (drag && drag.preview) { S.draw.push(Object.assign(drag.preview, { t: S.t })); save(); if (drag.tool === 'search') searchReady(); } drag = null; $('hint').textContent = HINTS[tool]; drawPlot(); });
+cv.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15); }, { passive: false });
+const zoom = f => { S.view.span = Math.max(40, Math.min(1600, S.view.span * f)); save(); drawPlot(); };
+$('zin').addEventListener('click', () => zoom(1 / 1.3)); $('zout').addEventListener('click', () => zoom(1.3));
+
+/* ---------- the search ---------- */
+function searchReady() {
+  const n = S.draw.filter(d => d.k === 'search').length;
+  if (n === 3 && !S.flown && !$('fly')) { const b = document.createElement('button'); b.className = 'btn'; b.id = 'fly'; b.type = 'button'; b.textContent = 'Fly the search'; b.addEventListener('click', () => { b.remove(); flying = { t0: performance.now() }; }); $('hint').textContent = 'Three days placed. Fly the search when you are ready.'; document.querySelector('.tools').appendChild(b); }
+}
+function afterSearch() {
+  entry(`<div class="when">Three days later<span>the search</span></div><div class="sys">Your planes flew every box. Nothing was seen.</div>`, 'search',
+    'Does that mean she is not inside your boxes? What would have to be true for "we saw nothing" to mean "nothing is there"?');
+  entry(`<div class="when">What happened</div><div class="sys">The real search lasted more than two weeks. The aircraft carrier Lexington's planes alone searched 151,556 square miles between 13 and 18 July 1937. Nothing was found. Nobody knows where the airplane went. Open "The record" to compare your log with what the Navy wrote, and to build your field report.</div>`);
+}
+
+/* ---------- the record ---------- */
+const NAVY = [
+  { t: '06:15', a: '"Two hundred miles out and no land fall"', b: '"200 miles out;"', i: 0 },
+  { t: '06:46', a: '"Approximately 100 miles from ITASCA, position doubtful"', b: '"100 miles out, coming up (fast)."', i: 1 },
+  { t: '07:42', a: '"30 minutes gas remaining, no land fall, position doubtful"', b: '"one-half hour fuel and no landfall (position doubtful)."', i: 2 },
+  { t: '07:58', a: '"Circling, trying to pick up Island"', b: '"Circling trying to pick up Island."', i: 3 },
+  { t: '08:43', a: '"On a position line 157 - 337 degrees"', b: '"Line of position 157-337" (no reference point given).', i: 4 },
+  { t: '08:55', a: '"Heading north and south", giving the same position as above.', b: '"157-337 heading north and south."', i: 5 },
+];
+S.picked = S.picked || [];
+function words(str, key) { return str.split(/(\s+)/).map((w, j) => /\s+/.test(w) ? w : `<button type="button" class="mark${S.picked.includes(key + ':' + j) ? ' on' : ''}" data-k="${key}:${j}" data-w="${w.replace(/"/g, '&quot;')}">${w}</button>`).join(''); }
+function renderRecord() {
+  $('pairs').innerHTML = NAVY.map((r, n) => `<div><h2 style="color:var(--muted)">${r.t} Howland</h2><div class="pair">
+    <div><b>Your log</b><div class="q">${S.done.includes(r.i) ? (heard(r.i) || '· · · (missed)') : '(not yet heard)'}</div></div>
+    <div><b>Navy report §13, pp. 3–4</b><div class="q">${words(r.a, 'a' + n)}</div></div>
+    <div><b>Navy report, Known Facts 17, p. 2</b><div class="q">${words(r.b, 'b' + n)}</div></div></div></div>`).join('');
+  $('pairs').querySelectorAll('.mark').forEach(b => b.addEventListener('click', () => { const k = b.dataset.k, i = S.picked.indexOf(k); if (i < 0) S.picked.push(k); else S.picked.splice(i, 1); b.classList.toggle('on'); save(); renderReport(); }));
+  renderReport();
+}
+function renderReport() {
+  const L = [];
+  L.push('FIELD REPORT · Tuned to 3105 · Itasca radio room, Howland Island, 2 July 1937', '');
+  L.push('MESSAGES I RECEIVED (3105 kc)');
+  MSG.forEach((msg, i) => { if (!S.done.includes(i)) return; L.push(`${local(msg.t)} Howland: ${heard(i) || '(missed)'}`); if (S.notes['m' + i]) L.push('   My answer: ' + S.notes['m' + i]); });
+  if (S.sights.length) { L.push('', 'MY SUN SIGHTS'); S.sights.forEach((s, j) => { L.push(`${local(s.t)} Howland: sun bearing ${s.az}°`); if (S.notes['s' + j]) L.push('   ' + S.notes['s' + j]); }); }
+  const draws = S.draw.filter(d => d.k !== 'search');
+  if (draws.length) { L.push('', 'WHAT I PLOTTED'); draws.forEach(d => L.push(d.k === 'circle' ? `Circle of ${Math.round(d.r)} nm` + (Math.hypot(d.x, d.y) < 1 ? ' around Howland' : '') : d.k === 'line' ? `Line ${Math.round(d.b) % 360}° / ${(Math.round(d.b) + 180) % 360}°` + (Math.hypot(d.x, d.y) < 1 ? ' through Howland' : ' through a point I chose') : 'A mark (X)')); }
+  if (S.picked.length) { L.push('', 'WORDS THAT DIFFER BETWEEN THE NAVY\'S TWO VERSIONS (my picks)'); S.picked.forEach(k => { const [key, j] = k.split(':'), n = +key.slice(1), src = key[0] === 'a' ? NAVY[n].a : NAVY[n].b; L.push(`${NAVY[n].t}: "${src.split(/(\s+)/)[+j]}" (${key[0] === 'a' ? '§13' : 'Known Facts'})`); }); }
+  if (S.free.length) { L.push('', 'OTHER NOTES'); S.free.forEach((f, j) => S.notes['f' + j] && L.push(`${local(f.t)}: ${S.notes['f' + j]}`)); }
+  if (S.flown) { L.push('', 'THE SEARCH', 'I searched three boxes of 200 × 100 nm. Nothing was seen.'); if (S.notes.search) L.push('My answer: ' + S.notes.search); }
+  L.push('', 'Source: US Navy, Report of Earhart Search by U.S. Navy and U.S. Coast Guard, July 2–18, 1937 (National Archives).');
+  $('report').textContent = L.join('\n');
+}
+$('copy').addEventListener('click', () => {
+  const t = $('report').textContent;
+  navigator.clipboard.writeText(t).then(() => $('copied').textContent = 'Copied.', () => { const r = document.createRange(); r.selectNodeContents($('report')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('copied').textContent = 'Selected: press Ctrl+C to copy.'; });
+});
+
+/* ---------- chrome ---------- */
+function tab(rec) {
+  $('record').hidden = !rec; document.querySelector('.table').hidden = rec; document.querySelector('.side').hidden = rec;
+  $('tab-rec').setAttribute('aria-current', rec ? 'page' : 'false'); $('tab-room').setAttribute('aria-current', rec ? 'false' : 'page');
+  $('tab-rec').classList.toggle('quiet', !rec); $('tab-room').classList.toggle('quiet', rec);
+  if (rec) renderRecord(); else resize();
+}
+$('tab-room').addEventListener('click', () => tab(false)); $('tab-rec').addEventListener('click', () => tab(true));
+const playBtn = () => { $('play').textContent = S.playing ? 'Pause' : 'Play'; };
+$('play').addEventListener('click', () => { S.playing = !S.playing; if (S.playing) audioStart(); playBtn(); save(); });
+$('spd').addEventListener('click', () => { S.speed = S.speed === 10 ? 30 : S.speed === 30 ? 1 : 10; $('spd').textContent = S.speed === 1 ? 'Real time' : '×' + S.speed; save(); });
+$('begin').addEventListener('click', () => { $('intro').hidden = true; S.begun = true; S.playing = true; audioStart(); playBtn(); save(); knob.focus(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { drawPlot(); drawDial(); });
+
+// restore an earlier watch on this device
+if (S.begun) { $('intro').hidden = true; }
+MSG.forEach((_, i) => { if (S.done.includes(i)) logMsg(i); });
+SYS.forEach((_, i) => { if (S.sys.includes(i)) logSys(i); });
+S.sights.forEach((s, j) => entry(`<div class="when">${local(s.t)}<span>${fmt(s.t)} GCT · your sun sight</span></div><div class="heard">Sun bearing ${s.az}°</div>`, 's' + j));
+S.free.forEach((f, j) => entry(`<div class="when">${local(f.t)}<span>your note</span></div>`, 'f' + j));
+if (S.flown) afterSearch();
+if (S.t >= m(2045)) $('tool-search').hidden = false;
+setF(S.f); playBtn(); $('spd').textContent = S.speed === 1 ? 'Real time' : '×' + S.speed;
+requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
