@@ -149,6 +149,12 @@ def cmd_demo_review(a):
 
 
 def cmd_propose(a):
+    # the system is about to update itself: freeze the outgoing AIR edition first (no-op if already frozen)
+    try:
+        import archive_build
+        archive_build.freeze(note="frozen automatically before a model proposal")
+    except SystemExit as e:
+        print("archive:", e)
     L = open_ledger()
     for ns in ([a.ns] if a.ns else ["real", "demo"]):
         P.classify_claims(L, ns)

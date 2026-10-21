@@ -26,6 +26,10 @@ A world that changes as a research apparatus learns to distinguish what it has r
 
 OBS: `air.html?obs=1&audio=1` · test params `t=H` (start hour) `cam=` `rate=` `fresh=1` `info=0` (no caption).
 
+## Versioning rule (MZ.Human, 2026-10-20)
+
+Every update keeps a playable copy of what it replaces. An **edition** = the AIR build (`BUILD` in `air.js`) × the model version it flies. Before any change to the piece, and automatically before every model proposal, `engine/archive_build.py` freezes the outgoing edition into `archive/<BUILD>_<model>/`: its own code, surrogate and a slim frozen feed, with SHA-256 hashes in `archive/manifest.json`. A frozen edition is immutable; changing the code without bumping `BUILD` is refused. `archive/index.html` lists every edition, newest first; the live page links to it.
+
 ## Run
 
 ```bash

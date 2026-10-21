@@ -23,7 +23,9 @@ const P = {
   poll: num('poll', location.protocol === 'https:' ? 120 : 15), lines: num('lines', 540), capture: Q.get('capture') === '1',
   feed: Q.get('feed') || 'feed/snapshot.json', fresh: Q.get('fresh') === '1',
 };
-const KEY = 'mztv-lastflight-air-v1';
+const BUILD = 'AIR-001';                       // the experience build; bump on every change (the outgoing edition is archived first)
+const ARCHIVED = window.LF_ARCHIVED || null;     // set only inside a frozen archive copy
+const KEY = 'mztv-lastflight-air-v1' + (ARCHIVED ? '-' + ARCHIVED : '');
 const DEP_MS = Date.UTC(1937, 6, 2, 0, 0, 0);          // US Navy 'Known Facts' item 1: 0000 GCT 2 July 1937
 const D2R = Math.PI / 180;
 const $ = id => document.getElementById(id);
@@ -171,7 +173,7 @@ addEventListener('resize', resize); resize();
 function caption() {
   if (!flying) return;
   const what = flying.status === 'candidate' ? 'candidate model, not validated' : flying.status === 'approved' ? 'approved model, not historically validated' : 'exploratory model, not validated';
-  $('cap').textContent = `THE LAST FLIGHT · a simulated flight on 2 July 1937 · ${flying.id} (${what}) · not a claim about where she went`;
+  $('cap').textContent = `THE LAST FLIGHT · ${ARCHIVED ? 'ARCHIVE · ' + ARCHIVED : BUILD + ' · ' + flying.id} · a simulated flight on 2 July 1937 (${what}) · not a claim about where she went`;
 }
 $('cap').hidden = !P.info;
 
@@ -239,7 +241,7 @@ window.MZ = {
   snapshot() {
     const L = window.__last; if (!L) return null;
     return { entity: 'world_snapshot', mode: 'AIR', flying_model: flying.id, model_status: flying.status, latest_model: latest && latest.id,
-      versions_flown: store.versions.slice(), colourway: world.colorway.name, trial_index: L.ck.idx, seed: L.ck.seed, flight_hour: L.ck.hour,
+      versions_flown: store.versions.slice(), build: BUILD, archived: ARCHIVED, edition: BUILD + '_' + flying.id.replace(/\//g, '-'), colourway: world.colorway.name, trial_index: L.ck.idx, seed: L.ck.seed, flight_hour: L.ck.hour,
       scenario_clock_utc: new Date(L.s.scenarioMs).toISOString(), position: { lat: L.s.lat, lon: L.s.lon }, ended: L.s.ended,
       camera: L.shot, sun: world.sun, moon: world.moon, weather_provenance: 'SYNTHETIC (model seeded wind)', look: 'AUTHORED' };
   },
