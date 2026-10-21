@@ -20,6 +20,12 @@ A world that changes as a research apparatus learns to distinguish what it has r
 | `tests/` | Engine acceptance tests, browser QA, live propagation, audio analysis + their logs |
 | `captures/` | Frames from the real renderer (quantized to 16 colours for repo size) |
 
+## AIR · the experience
+
+`air.html` is the piece with the research out of sight: one full-bleed world, one caption line, controls that appear only when you move. It flies the newest real model version that has passed its deterministic tests (otherwise the approved baseline). When the engine rolls a new version the change waits for the next flight, never mid-air, and the print re-inks over about 45 s to mark it. Cameras: chase, port wing, cockpit, into-the-sun silhouette (when the computed sun is low), flyby (Doppler), long lens, and a drifting horizon after the modelled fuel runs out. Sound follows the lens: distance falloff, air absorption, panning, Doppler, engines starving at the end.
+
+OBS: `air.html?obs=1&audio=1` · test params `t=H` (start hour) `cam=` `rate=` `fresh=1` `info=0` (no caption).
+
 ## Run
 
 ```bash

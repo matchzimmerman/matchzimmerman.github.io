@@ -113,7 +113,9 @@ void main(){
   vec3 R=reflect(-Vd,n); float spec=pow(max(dot(R,uKeyD),0.),90.)*uKeyUp;
   float sh=uAmb*0.75+uDiff*0.3*lam+0.12*uSkyB+0.42*fres*uSkyB+spec*1.6;
   float id=2.;
-  if(spec>0.55){ id=3.; }
+  // sun glitter: broken into sparkles by fine chop, never a solid disc
+  float glit=vn(vW.xz*0.9+vec2(uTime*0.7,-uTime*0.45))*vn(vW.xz*2.3-vec2(uTime*1.1,uTime*0.6));
+  if(spec*glit>0.32){ id=3.; } else if(spec>0.55){ sh=min(sh,0.82); }
   float crest=smoothstep(0.55,0.9,vCrest)*(1.-smoothstep(300.,1500.,dist));
   if(crest>0.5){ id=3.; sh=0.6+0.3*lam; }
   vec3 T=normalize(vec3(-uW[0].y,0.,uW[0].x)+0.6*vec3(n.x,0.,n.z));
@@ -136,7 +138,10 @@ void main(){
   float id=0.;
   vec3 L=uDay>0.15?uSunD:(uMoonUp>0.5?uMoonD:vec3(0.,1.,0.));
   vec3 T=L-d*dot(d,L); T=length(T)>1e-3?normalize(T):vec3(1.,0.,0.);   // great-circle tangent toward the light: lines radiate from the real sun
-  if(band>0.55){ id=11.; sh=0.3+0.5*band+0.2*sg; }
+  // horizon glow: a ragged, dithered band (printed, not a slab), strongest under the sun
+  float gN=vn(vec2(atan(d.z,d.x)*40.,el*260.))*0.35+hash(floor(gl_FragCoord.xy*0.5))*0.25;
+  float gB=band*(0.55+0.45*sg)+gN-0.3;
+  if(gB>0.62&&el<0.09){ id=11.; sh=0.32+0.45*band+0.25*sg; }
   // stars (night only)
   if(uDay<0.25&&el>0.02){ vec2 sp=vec2(atan(d.z,d.x)*180., asin(el)*180.); float h=hash(floor(sp));
     if(h>0.996){ id=12.; sh=0.95*(1.-uDay*4.); } }
@@ -355,9 +360,24 @@ export class World {
     canvas.addEventListener('webglcontextrestored', () => { this.lost = false; });
   }
   setColorway(i) {
-    this.colorway = COLORWAYS[i % COLORWAYS.length];
+    this.cwIndex = ((i % COLORWAYS.length) + COLORWAYS.length) % COLORWAYS.length;
+    this.colorway = COLORWAYS[this.cwIndex];
     this.colorway.c.forEach((h, k) => this.PU.uPal.value[k].copy(hexV(h)));
+    this.inkBlend = null;
   }
+  // re-ink slowly (no flashing): each ink eases from its current colour to the new colourway over `sec` seconds
+  blendColorway(i, sec = 40) {
+    this.cwIndex = ((i % COLORWAYS.length) + COLORWAYS.length) % COLORWAYS.length;
+    this.colorway = COLORWAYS[this.cwIndex];
+    this.inkBlend = { from: this.PU.uPal.value.map(v => v.clone()), to: this.colorway.c.map(hexV), t0: performance.now(), dur: sec * 1000 };
+  }
+  stepInk() {
+    const b = this.inkBlend; if (!b) return;
+    let k = Math.min(1, (performance.now() - b.t0) / b.dur); k = k * k * (3 - 2 * k);
+    this.PU.uPal.value.forEach((v, j) => v.copy(b.from[j]).lerp(b.to[j], k));
+    if (k >= 1) this.inkBlend = null;
+  }
+  inks() { return this.PU.uPal.value.map(v => '#' + [v.x, v.y, v.z].map(c => Math.round(Math.max(0, Math.min(1, c)) * 255).toString(16).padStart(2, '0')).join('')); }
   material(frag, vert, extra = {}) {
     return new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: frag, uniforms: Object.assign({}, this.SH, extra), side: THREE.DoubleSide });
   }
@@ -443,6 +463,7 @@ export class World {
     S.uFogShade.value = 0.24 + 0.48 * day;
     S.uFogD.value = 45000 + 25000 * day;
     S.uTime.value = t;
+    this.stepInk();
     const wind = new THREE.Vector2(state.windE, -state.windN).multiplyScalar(0.514);  // m/s, +x east, -z north
     S.uWind.value.copy(wind).multiplyScalar(1 / 40);
     // ---- camera (aircraft at origin x/z, altitude y)

@@ -56,7 +56,7 @@ export class Sound {
       const sg = c.createGain(); sg.gain.value = 0.55;
       o.connect(lpf); sub.connect(sg); sg.connect(lpf); lpf.connect(g); g.connect(p); p.connect(master);
       o.start(t); sub.start(t);
-      this.eng.push({ o, sub, lpf, g });
+      this.eng.push({ o, sub, lpf, g, p, base: f, side: pan });
     }
     const noise = await this.noiseNode();
     const split = c.createChannelSplitter(2); noise.connect(split);
@@ -95,6 +95,42 @@ export class Sound {
     set('sea', this.sea.gain, s.cam === 'DISTANT' ? 0.05 : 0.012, 2);
     const q = (s.minute % 30) < 2 ? 0.02 : 0.004;        // a slightly louder static band twice an hour (authored)
     set('radio', this.radio.gain, q, 2);
+    set('master', this.master.gain, this.muted ? 0 : 0.8, 0.3);
+  }
+  /* AIR: the lens is the microphone.
+     d     distance camera → aircraft (m)      vr  radial velocity (m/s, + = receding)
+     pan   -1..1 aircraft position across the frame      onboard: camera rides the aircraft
+     ended modelled fuel exhausted (engines spool down)   day 0..1   minute: scenario minute */
+  updateAir(s) {
+    if (!this.ctx || !this.ok) return;
+    const now = performance.now();
+    if (now - this.lastTick < 100) return;
+    this.lastTick = now;
+    const t = this.ctx.currentTime, set = (k, param, v, tc = 0.4) => {
+      if (!Number.isFinite(v)) return;
+      if (this.last[k] !== undefined && Math.abs(this.last[k] - v) < 1e-4) return;
+      this.last[k] = v; param.setTargetAtTime(v, t, tc);
+    };
+    const run = s.ended ? 0 : 1;
+    const d = Math.max(1, s.d || 1);
+    const close = Math.min(1, 18 / (d + 6));                       // 1 aboard, ~0.55 chase, ~0.25 at a close flyby
+    const dop = Math.max(0.8, Math.min(1.25, 343 / (343 + (s.onboard ? 0 : (s.vr || 0)))));
+    const air = Math.max(0, Math.min(1, s.onboard ? 1 : 0));
+    // distant lenses: lowpass closes with distance (air absorbs the highs), level never quite reaches silence
+    const far = Math.min(1, Math.log10(1 + d / 40) / 2);
+    this.eng.forEach((e, i) => {
+      const spool = run ? 1 : 0.82;                                 // pitch sags as the engines starve
+      set('eg' + i, e.g.gain, 0.13 * run * Math.max(close, 0.035), run ? 0.6 : 5);
+      set('ef' + i, e.lpf.frequency, (300 + 320 * close) * (1 - 0.45 * far), 0.6);
+      const wob = 1 + 0.002 * Math.sin(now / 3100 + i * 2);
+      set('eo' + i, e.o.frequency, e.base * wob * dop * spool, s.onboard ? 1.2 : 0.25);
+      set('es' + i, e.sub.frequency, e.base * 0.444 * wob * dop * spool, s.onboard ? 1.2 : 0.25);
+      const spread = e.side * Math.min(1, close * 1.6);
+      set('ep' + i, e.p.pan, Math.max(-1, Math.min(1, (s.pan || 0) * 0.75 + spread)), 0.15);
+    });
+    set('air', this.air.gain, (0.035 + 0.11 * air) * (run ? 1 : 0.4), 1.5);
+    set('sea', this.sea.gain, s.onboard ? 0.008 : 0.03 + 0.03 * (1 - (s.day ?? 1)), 3);
+    set('radio', this.radio.gain, s.onboard ? ((s.minute % 30) < 2 ? 0.018 : 0.004) : 0.0005, 2);
     set('master', this.master.gain, this.muted ? 0 : 0.8, 0.3);
   }
   mute(m) { this.muted = m; if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.2); }

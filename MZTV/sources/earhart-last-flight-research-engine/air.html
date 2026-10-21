@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f3a">
+<title>The Last Flight</title>
+<meta name="description" content="MZTV THE LAST FLIGHT: a simulated Electra over the Pacific under the computed light of 2 July 1937. Not a reconstruction of where she went.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* one full-bleed world; a single caption line; controls only when the viewer moves */
+:root{color-scheme:dark;--ink:#1b1f3a;--paper:#efe6cf;--glow:#f2c14e;--veil:rgba(27,31,58,.72);--rule:rgba(239,230,207,.22);
+  --f:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--paper);font-family:var(--f);overflow:hidden}
+#world{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+#cap{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);
+  font-size:10.5px;letter-spacing:.06em;line-height:1.5;background:var(--veil);padding:3px 8px;opacity:.62;pointer-events:none}
+#ctl{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));top:calc(14px + env(safe-area-inset-top,0px));display:flex;gap:4px;
+  opacity:0;transition:opacity .6s;pointer-events:none}
+body.awake #ctl{opacity:1;pointer-events:auto}
+body.obs #ctl{display:none}
+#ctl button{background:var(--veil);color:var(--paper);border:1px solid var(--rule);font:600 10.5px var(--f);letter-spacing:.08em;padding:7px 10px;cursor:pointer;min-height:32px}
+#ctl button:hover{border-color:var(--paper)}
+#ctl button:focus-visible{outline:2px solid var(--glow);outline-offset:1px}
+#ctl button[aria-pressed="true"]{background:var(--glow);color:var(--ink);border-color:var(--glow)}
+body.obs,body:not(.awake){cursor:none}
+@media (max-width:600px){#cap{font-size:9.5px}}
+</style>
+</head>
+<body class="awake">
+<canvas id="world" aria-label="A simulated Lockheed Electra over the Pacific, printed in six inks"></canvas>
+<div id="cap"></div>
+<nav id="ctl" aria-label="Viewer controls">
+  <button type="button" id="b-cam" title="Next camera (C)">CAM ▸</button>
+  <button type="button" id="b-time" title="Jump the flight ahead two hours">+2 H</button>
+  <button type="button" id="b-snd" aria-pressed="false" title="Sound (A)">♪ SOUND</button>
+</nav>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script src="../earhart-last-flight/model.js"></script>
+<script type="module" src="air.js"></script>
+</body>
+</html>
