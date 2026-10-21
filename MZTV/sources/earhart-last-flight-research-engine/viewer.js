@@ -201,7 +201,7 @@ const camSmooth = { pos: null, look: null };
 let scene = SCENES.includes((P.scene || '').toUpperCase()) ? P.scene.toUpperCase() : 'WORLD';
 let pinned = !!P.scene, autoUntil = 0, autoReason = '', dirty = true, evSel = null;
 function setScene(n, why) {
-  scene = n; dirty = true;
+  scene = n; dirty = true; try { syncCtl(); } catch (e) {}
   $('app').classList.toggle('split', n !== 'WORLD');
   if (why) { banner(why); }
   setTimeout(resize, 950); resize();
@@ -233,6 +233,27 @@ addEventListener('resize', resize);
 async function audioOn() { try { await sound.start(); $('tap').style.display = 'none'; } catch (e) { errors.push('audio: ' + e.message); } }
 if (P.audio) audioOn().then(() => { if (!sound.ctx || sound.ctx.state !== 'running') $('tap').style.display = 'block'; });
 $('tap').onclick = audioOn;
+/* on-screen controls (hidden with ?obs=1): same actions as the keys */
+document.querySelectorAll('#ctl [data-lens]').forEach(b => b.onclick = () => {
+  const n = b.dataset.lens;
+  if (n === 'WORLD') { pinned = false; setScene('WORLD', 'lens: WORLD · auto switching on logged events'); }
+  else { pinned = true; setScene(n, 'lens: ' + n); }
+  syncCtl();
+});
+$('b-cam').onclick = () => { const n = Object.keys(SHOTS); setCam(n[(n.indexOf(director.cur) + 1) % n.length]); banner('camera: ' + SHOTS[director.cur].label); };
+$('b-time').onclick = () => { if (P.t !== null) P.t = (P.t + 2) % 24; else manualAdvance += 7200; lastHour = null; banner('flight clock +2 h (preview only; does not change the model)'); };
+$('b-snd').onclick = async () => {
+  if (!sound.ctx || sound.ctx.state !== 'running') { await audioOn(); sound.mute(false); }
+  else sound.mute(!sound.muted);
+  syncCtl();
+};
+$('b-info').onclick = () => { $('info').classList.toggle('on'); syncCtl(); };
+function syncCtl() {
+  document.querySelectorAll('#ctl [data-lens]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lens === scene)));
+  $('b-snd').setAttribute('aria-pressed', String(!!(sound.ctx && sound.ctx.state === 'running' && !sound.muted)));
+  $('b-info').setAttribute('aria-pressed', String($('info').classList.contains('on')));
+}
+setInterval(syncCtl, 1000);
 if (P.obs) document.body.classList.add('obs');
 
 /* ------------------------------------------------------------------ keys */
@@ -338,7 +359,7 @@ function panelEvidence() {
     <div class="row"><span>state · pages</span><span>${esc(src.ingestion_state)} · ${fmt(src.pages_extracted)}/${fmt(src.page_count)} · attempts ${fmt(src.attempts)}</span></div>
     ${src.error ? `<div class="row"><span>error</span><span class="no">${esc(src.error)}</span></div>` : ''}
     <div class="row"><span>used as model input</span><span>${inBase ? '<b class="ok">approved baseline</b>' : 'not in approved baseline'} · ${used.length ? '<b>candidate ' + used.map(u => esc(u.proposed_model)).join(', ') + '</b>' : 'no candidate'}</span></div>
-    <div class="k" style="margin-top:6px">← → cycle sources (${L.findIndex(x => x.source_id === src.source_id) + 1}/${L.length})</div></div>
+    <div style="margin-top:6px;display:flex;gap:6px;align-items:center"><button type="button" class="mini" id="ev-prev" aria-label="Previous source">‹ PREV</button><button type="button" class="mini" id="ev-next" aria-label="Next source">NEXT ›</button><span class="k">source ${L.findIndex(x => x.source_id === src.source_id) + 1} of ${L.length}</span></div></div>
     ${mapped.filter(c => used.some(u => u.evidence_claim_ids.includes(c.claim_id))).slice(0, 2).map(c => `<div class="sec"><h4>LINEAGE</h4>${lineageFor(c)}</div>`).join('')}
     <div class="sec"><h4>PARAMETER-MAPPED CLAIMS (${mapped.length})</h4><table><tr><th>LOC</th><th>QUANTITY</th><th>PARAM</th><th>BAND</th><th>REVIEW</th><th>ELIGIBILITY</th></tr>${mapped.slice(0, 14).map(row).join('')}</table></div>
     <div class="sec"><h4>CONTEXT OBSERVATIONS (${ctx.length}) · display-only</h4><table>${ctx.slice(0, 10).map(c => `<tr><td>${esc(c.locator)}</td><td>${esc(c.quantity)}</td><td>${esc(c.param_key || 'context')}</td><td>${esc(c.excerpt ? c.excerpt.slice(0, 70) : c.excerpt_policy).slice(0, 80)}</td></tr>`).join('')}</table></div>`;
@@ -427,11 +448,15 @@ function feedAge() {
   const age = (Date.now() - Date.parse(feed.snap.generated_at)) / 60000;
   return `generated ${esc(feed.snap.generated_at.slice(0, 16))}Z (${age < 90 ? age.toFixed(0) + ' min' : (age / 60).toFixed(1) + ' h'} ago) · polled every ${P.poll} s · ${location.protocol === 'https:' ? 'static host: changes only when a new feed is published' : 'local'}`;
 }
+let lastPanelHtml = '';
 function renderPanel() {
   if (!feed.snap || !base) { $('panelBody').innerHTML = `<div class="sec"><h4>FEED</h4>${feedAge()}</div>`; return; }
   const html = scene === 'INTAKE' ? panelIntake() : scene === 'EVIDENCE' ? panelEvidence() : scene === 'MODEL' ? panelModel() : scene === 'STATUS' ? panelStatus() : '';
+  if (html === lastPanelHtml) return;     // unchanged: keep scroll, hover and focus intact
+  lastPanelHtml = html;
   $('panelBody').innerHTML = html;
   if (scene === 'MODEL') drawMap();
+  if (scene === 'EVIDENCE') { const a = $('ev-prev'), b = $('ev-next'); if (a) a.onclick = () => cycleEvidence(-1); if (b) b.onclick = () => cycleEvidence(1); }
 }
 
 /* ------------------------------------------------------------------ HUD */
@@ -466,8 +491,8 @@ function hud(st, ck, gh) {
 $('info').innerHTML = `<h4>THE LAST FLIGHT · RESEARCH ENGINE</h4>
   <div>A living Pacific world beside a research apparatus that learns to distinguish what it has received, what it can defend, and what it may allow to influence a model. New information is not automatically truth.</div>
   <div class="k" style="margin-top:6px">The Electra flies the exploratory surrogate (unchanged original prototype) on one seeded trial per 24 h. Sun and moon are computed for 2 July 1937 at its position. Wind is the model's synthetic wind; clouds, altitude and look are authored. The renderer never changes the model.</div>
-  <div style="margin-top:6px">keys · <b>1</b> world <b>2</b> intake <b>3</b> evidence <b>4</b> model <b>5</b> status <b>0</b> auto · <b>C</b> camera · <b>← →</b> sources · <b>A</b> sound · <b>M</b> mute · <b>I</b> this box</div>`;
-if (P.info && !P.obs) $('info').classList.add('on');
+  <div style="margin-top:6px">buttons bottom-right, or keys · <b>1</b> world <b>2</b> intake <b>3</b> evidence <b>4</b> model <b>5</b> status <b>0</b> auto · <b>C</b> camera · <b>← →</b> sources · <b>A</b> sound · <b>M</b> mute · <b>I</b> this box</div>`;
+if (P.info && !P.obs && innerWidth > 760) $('info').classList.add('on');   // phones: open with ?
 
 /* ------------------------------------------------------------------ loop */
 let lastT = performance.now() / 1000, panelT = 0, ghostOn = false;
