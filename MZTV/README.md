@@ -272,6 +272,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-031-headland/`
 
+### BIT FIELD 032 — MZ WORLD · CROSSING
+A cable ferry on a tidal river through Maryland salt marsh, printed through HEADLAND's linocut OBAS pass, under the real Eastern Shore sun, moon and live weather, with a modelled tide that raises and lowers the whole river. The ferry hauls itself along a cable and crosses only when someone is aboard or waiting on the other side. Cars and walkers arrive at both landings with morning and evening peaks; after hours they come to a dark landing and turn back. A ferryman works the day and ties up at night. Herons stalk the shallows and lift when the ferry comes close, and ospreys dive. The crossing remembers which landing is busy at which hour, and the ferryman crosses empty to wait there. Seven observational cameras cut on the 16th note. The tide sets the tempo, the ferry's position walks the bass, the sheave knocks, and wake slaps thump on the pilings. Rarely, the river is alive: an ink-dark second ferry crosses at dusk and sinks, the herons all turn to watch, the river breathes at slack water, and the church bell tolls with nobody inside. Tension ends in a still river and a rupture into new inks, line grammar and harmonic centre. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-032-crossing/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-032-crossing/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 
