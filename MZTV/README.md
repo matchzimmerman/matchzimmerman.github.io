@@ -281,6 +281,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-032-crossing/`
 
+### BIT FIELD 033 — MZ WORLD · SRUTHÁN
+A stream at the back of a field in Inverin, filmed through a macro lens and printed through HEADLAND's linocut OBAS pass, with a printed depth of field: each operator racks focus, and out-of-focus areas print as softer, wider lines. The stream comes through holes at the foot of drystone walls, drops down a cascade and over a slab fall into a pool with eddies, then runs over pebbles under an old ash leaning across the water. Moss cushions with sporophytes grow on the stones and the wall copes. It is always day: the sun circles the sky once a day. Live Galway rain soaks into a store that drains over hours and sets the flow, so the level, current, foam, falls, roar and tempo all remember the weather. Leaves fall, float, spin in the eddies, go over the falls and collect on the banks, and that litter persists. A grey wagtail bobs on the stones. Each feature of the water is its own voice in the lens-microphone mix; drips and landing leaves make tuned plinks. Rarely, the stream runs backwards or the stones breathe; tension ends with the stream holding still and a rupture into new inks, line grammar and harmonic centre. v1 (first sketch) is kept as `v1.html`. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-033-sruthan/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-033-sruthan/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 
