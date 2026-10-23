@@ -51,3 +51,31 @@ Open the entry in desktop Chrome or Edge. Enter with sound; traverse the cottage
 3. Stop walking: speed goes to zero, independent of movement in the sea and the print. Walk toward a coastline boundary and look for EDGE · REPOSITION.
 4. Toggle INK LIGHT / INK ORIGINAL and compare moving over featureless ground; switch to OBSERVE and back to confirm the six-ink camera view persists without modifying the stream.
 5. Rotate portrait/landscape and verify controls and survey do not obscure the main scene.
+
+## Keeper / SEALS integration — Study 002 (2026-10-23)
+
+**Status:** implemented in HEADLAND / WALK, browser playtest pending.
+
+- The player **is the original black-veiled keeper**, not an extra character. The existing keeper mesh and original wind-responsive veil/dress shaders remain intact. Its normal autonomous walking routine is replaced only in this private WALK instance by movement sent from the player.
+- Third-person camera floats about 7.4 world units behind the keeper with damped following and a slightly raised view. Non-inverted camera orbit on touch and desktop stays in place. The keeper rotates in the actual travel direction; forward control remains camera-relative.
+- Regular pace is 2.85 world units per second, Shift increases it to 5.4. Camera orbit can continue while standing still.
+- HEADLAND's boat, gulls, seal, wind, waves, live weather, audio, rare events and print palette continue independently. Observe restores the original seven-camera director while the same keeper remains in the world.
+- WALK fetches the unchanged canonical `../index.html` at runtime and inserts two carefully anchored keeper API extensions into its in-memory source; the iframe uses `srcdoc`. Nothing is committed to the broadcast engine itself. The source transform fails with a clear message if an upstream anchor changes.
+- `seals-scenes.js` adds eight linked memory locations inspired by **TO SEE WHAT SEALS SEE**:
+  1. Gravesite on the hill (no invented gravestone inscriptions)
+  2. Old apple tree
+  3. Dry-stone farm walls
+  4. Painted green gate with concrete pillars
+  5. Turf stacked to dry on the bog
+  6. Haystacks in the coastal fields by the beach
+  7. Green hay barn with raised hay floor
+  8. Old black bicycle leaning against a tree
+- Memory places are navigable in the world, listed under PLACES, and marked on the field survey. Materials use HEADLAND's existing six OBAS inks and share its light and atmosphere. No new generated images or borrowed external assets.
+- The original GPS-based SEALS world manifest describes distinct real sites separated by up to kilometers. **This first integration is intentionally a condensed, interpretive arrangement within HEADLAND's existing terrain**—not an assertion of accurate coordinate reconstruction or a replacement for that manifest.
+- Scene geometry batches by material into a small number of static meshes to avoid hundreds of extra per-frame draw calls on phones.
+
+### Verification still required
+Inline WALK JavaScript and the standalone SEALS geometry injection were syntax checked, the GitHub commit verified and GitHub Pages workflow checked. A graphical mobile playtest is still needed for correct source transformation, HEADLAND module startup, camera follow, live audio, movement, keeper mesh visibility, and cross-device frame rate. If scene boot fails, inspect browser console and the WORLD COULD NOT LOAD overlay.
+
+### Original stream protection
+`MZTV/sources/bit-field-031-headland/index.html` remains unchanged. The WALK instance stores its own seeded headland state, separate from the broadcast; it is neither the same clock frame nor a multiplayer-linked counterpart.
