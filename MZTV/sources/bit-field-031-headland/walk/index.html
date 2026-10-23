@@ -325,7 +325,13 @@ hit.addEventListener("pointerdown",e=>{
  if(e.pointerType==="touch"){
    if(e.clientX<innerWidth*.5 && joyTouch===null){
      joyTouch=e.pointerId;touchStart.x=e.clientX;touchStart.y=e.clientY;
-     joyX=0;joyY=0;
+      const stick=$("stick"),r=stick.getBoundingClientRect();
+      const cx=clamp(e.clientX,r.width/2+8,Math.max(r.width/2+8,innerWidth/2-8));
+      const cy=clamp(e.clientY,r.height/2+8,Math.max(r.height/2+8,innerHeight-r.height/2-62));
+      stick.style.left=(cx-r.width/2)+"px";stick.style.top=(cy-r.height/2)+"px";
+      stick.style.bottom="auto";stick.classList.add("active");
+      touchStart.x=cx;touchStart.y=cy;
+      joyX=0;joyY=0;
    }else if(lookTouch===null){lookTouch=e.pointerId;touchStart["lx"]=e.clientX;touchStart["ly"]=e.clientY;}
    hit.setPointerCapture(e.pointerId);
    e.preventDefault();
@@ -337,10 +343,10 @@ hit.addEventListener("pointermove",e=>{
  if(!entered||mode!=="walk"||!help.hidden)return;
  if(e.pointerType==="touch"){
    if(e.pointerId===joyTouch){
-     joyX=clamp((e.clientX-touchStart.x)/50,-1,1);
-     joyY=clamp((e.clientY-touchStart.y)/50,-1,1);
+     joyX=clamp((e.clientX-touchStart.x)/54,-1,1);
+      joyY=clamp((e.clientY-touchStart.y)/54,-1,1);
      const mag=Math.max(1,Math.hypot(joyX,joyY));joyX/=mag;joyY/=mag;
-     $("nub").style.transform="translate("+(joyX*31)+"px,"+(joyY*31)+"px)";
+     $("nub").style.transform="translate("+(joyX*34)+"px,"+(joyY*34)+"px)";
    }else if(e.pointerId===lookTouch){
      const dx=e.clientX-touchStart.lx,dy=e.clientY-touchStart.ly;
      yaw+=dx*.004;pitch=clamp(pitch-dy*.003,-1.38,1.38);
@@ -351,7 +357,7 @@ hit.addEventListener("pointermove",e=>{
  }
 });
 function endPointer(e){
- if(e.pointerId===joyTouch){joyTouch=null;joyX=joyY=0;$("nub").style.transform="translate(0,0)";}
+ if(e.pointerId===joyTouch){joyTouch=null;joyX=joyY=0;$("nub").style.transform="translate(0,0)";$("stick").classList.remove("active");}
  if(e.pointerId===lookTouch)lookTouch=null;
 }
 hit.addEventListener("pointerup",endPointer);hit.addEventListener("pointercancel",endPointer);
@@ -371,7 +377,8 @@ window.addEventListener("keydown",e=>{
  else if((k==="h"||k==="?")&&!e.repeat){if(help.hidden)showHelp();else help.hidden=true;}
 });
 window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
-window.addEventListener("blur",()=>keys.clear());
+window.addEventListener("blur",()=>{keys.clear();joyTouch=lookTouch=null;joyX=joyY=0;
+ $("nub").style.transform="translate(0,0)";$("stick").classList.remove("active");});
 function updateMovement(dt){
  if(!entered||!api||mode!=="walk"||!help.hidden)return;
  const f=(keys.has("w")||keys.has("arrowup")?1:0)-(keys.has("s")||keys.has("arrowdown")?1:0)-joyY;
