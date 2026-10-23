@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HEADLAND / TRUE OVERHEAD EXPORT</title>
+<style>
+:root{color-scheme:dark;--bg:#141c2a;--ink:#efe8d6;--accent:#e9c06f;--red:#c75c42}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:ui-monospace,Consolas,Menlo,monospace;color:var(--ink)}
+main{padding:clamp(16px,3vw,40px);max-width:1350px;margin:auto}
+h1{font-size:clamp(28px,5vw,55px);letter-spacing:-.06em;margin:8px 0 5px}
+p{max-width:72ch;line-height:1.65;font-size:13px}
+.kicker{font-weight:bold;letter-spacing:.18em;color:var(--accent);font-size:10px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,320px);gap:28px;align-items:start}
+#preview{width:100%;height:auto;min-height:340px;max-height:79vh;object-fit:contain;background:#212a34;border:1px solid #64717c}
+.side{background:#252d3a;border:1px solid #51606c;padding:20px}
+button{width:100%;font:700 12px ui-monospace,monospace;cursor:pointer;border:1px solid var(--ink);padding:13px 10px;color:var(--ink);background:transparent;margin:8px 0}
+button.primary{color:#1a2431;background:var(--accent);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:wait}
+label{font-size:11px;display:flex;gap:8px;align-items:center;line-height:1.5;margin:18px 0 8px}
+#message{font-size:11px;color:var(--accent);line-height:1.6;min-height:45px}
+#points{font-size:10px;line-height:1.8;max-height:50vh;overflow:auto;margin-top:14px;color:#c6d0d5}
+.legend{color:#c6d0d5;font-size:10px}
+#world{position:fixed;width:640px;height:360px;left:-2000px;top:0;opacity:0;pointer-events:none;border:0}
+@media(max-width:720px){.layout{grid-template-columns:1fr}main{padding:16px}#preview{max-height:62vh;min-height:260px}.side{padding:15px}#points{max-height:200px}}
+</style>
+</head>
+<body>
+<main>
+<div class="kicker">MZTV / BIT FIELD 031 / HEADLAND / FIELD SURVEY</div>
+<h1>TRUE OVERHEAD EXPORT</h1>
+<p>These pixels come from the <b>actual HEADLAND WebGL scene</b>, including the walk-only SEALS scenery. An orthographic camera looks straight down at the meshes. Export a grid and numbered landmark version or a clean image to draw over.</p>
+<div class="layout">
+<div><img id="preview" alt="Top-down orthographic scene captured from HEADLAND WebGL world"/><p class="legend">World X runs left to right; Z runs top to bottom, negative Z seaward. Grid cells = 50 world units. This separate simulation instance is not synchronized to the Twitch stream.</p></div>
+<aside class="side">
+<div id="message" role="status">LOADING HEADLAND ENGINE AND MEMORY GEOMETRY…</div>
+<label><input id="showPins" type="checkbox" checked> Coordinate grid and numbered landmarks</label>
+<button type="button" id="render" class="primary" disabled>RENDER OVERHEAD FROM WORLD</button>
+<button type="button" id="download" disabled>DOWNLOAD PNG</button>
+<div id="points">Scene coordinates will appear here.</div>
+</aside>
+</div>
+</main>
+<iframe id="world" title="Source HEADLAND scene" aria-hidden="true"></iframe>
+<script>
+(async function(){
+"use strict";
+const $=id=>document.getElementById(id),puts=t=>{$("message").textContent=t;};
+let engine=null,lastCapture=null,downloadName="HEADLAND_overhead_source.png";
+try{
+ const [r,scenes,api]=await Promise.all([
+  fetch("../../index.html",{cache:"no-cache"}),
+  fetch("../seals-scenes.js",{cache:"no-cache"}),
+  fetch("./map-api.js",{cache:"no-cache"})
+ ]);
+ if(!r.ok||!scenes.ok||!api.ok)throw Error("HEADLAND source, SEALS scenery, or capture API unavailable");
+ let world=await r.text(),memory=await scenes.text(),capture=await api.text();
+ const edits=[
+  ["const Q = new URLSearchParams(location.search);","const Q = new URLSearchParams('?info=0&seed=31081&lines=560&audio=0');"],
+  ["const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 40000);","let camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 40000);"],
+  ["/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */",memory+"\n/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */"],
+  ["window.MZ = {","window.MZ = {\n"+capture]
+ ];
+ for(const [from,to] of edits){
+  if(world.split(from).length!==2)throw Error("Original HEADLAND code no longer matches: "+from);
+  world=world.replace(from,to);
+ }
+ $("world").srcdoc=world;
+}catch(e){puts("LOAD ERROR: "+e.message);console.error(e);return;}
+function project(x,z,shot){
+ return [(x-shot.cx)/shot.spanX*shot.w+shot.w/2,(z-shot.cz)/shot.spanZ*shot.h+shot.h/2];
+}
+async function renderMap(){
+ if(!engine)return;
+ const btn=$("render");btn.disabled=true;puts("RENDERING THE ORIGINAL WEBGL SCENE…");
+ try{
+  const mobile=matchMedia("(pointer:coarse)").matches;
+  const w=mobile?900:1280,h=mobile?1200:1690;
+  const shot=engine.mapShot(w,h);
+  if(!shot||!shot.png)throw Error("HEADLAND returned no framebuffer pixels");
+  const img=new Image();img.src=shot.png;await img.decode();
+  const c=document.createElement("canvas");c.width=w;c.height=h;
+  const ctx=c.getContext("2d");ctx.drawImage(img,0,0);
+  if($("showPins").checked){
+   ctx.strokeStyle="rgba(250,248,231,.5)";ctx.lineWidth=Math.max(1,w/1100);
+   ctx.font="bold "+Math.round(w/78)+"px monospace";
+   for(let x=-200;x<=200;x+=50){
+    const px=project(x,0,shot)[0];ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();
+    ctx.fillStyle="#192c3c";ctx.fillText("X "+x,px+5,22);
+   }
+   for(let z=-250;z<=250;z+=50){
+    const py=project(0,z,shot)[1];ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke();
+    ctx.fillStyle="#192c3c";ctx.fillText("Z "+z,8,py-6);
+   }
+   shot.locations.forEach((p,i)=>{
+    const [px,py]=project(p.x,p.z,shot);
+    if(px<10||px>w-10||py<10||py>h-10)return;
+    const radius=9*w/960;
+    ctx.fillStyle=p.type==="SEALS"?"#d86646":"#20395b";
+    ctx.strokeStyle="#fff8e8";ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(px,py,radius,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle="white";ctx.font="bold "+Math.round(12*w/960)+"px monospace";
+    ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(i+1),px,py+.3);
+    ctx.textAlign="start";ctx.textBaseline="alphabetic";
+   });
+  }
+  lastCapture=c.toDataURL("image/png");$("preview").src=lastCapture;
+  downloadName="HEADLAND_TRUE_OVERHEAD_"+($("showPins").checked?"ANNOTATED":"CLEAN")+".png";
+  $("download").disabled=false;
+  $("points").innerHTML="<b>WORLD X / Z COORDINATES</b>"+shot.locations.map((p,i)=>"<div>"+String(i+1).padStart(2,"0")+" · "+p.name+" · ("+p.x.toFixed(1)+", "+p.z.toFixed(1)+")</div>").join("");
+  puts("PIXELS CAPTURED · "+w+" × "+h+" · DOWNLOAD READY");
+ }catch(e){puts("CAPTURE ERROR: "+e.message);console.error(e);}
+ finally{btn.disabled=false;}
+}
+$("render").addEventListener("click",renderMap);
+$("showPins").addEventListener("change",()=>{if(engine)renderMap()});
+$("download").addEventListener("click",()=>{
+ if(!lastCapture)return;
+ const a=document.createElement("a");a.href=lastCapture;a.download=downloadName;
+ document.body.append(a);a.click();a.remove();
+});
+const poll=setInterval(()=>{
+ try{
+  const api=$("world").contentWindow?.MZ;
+  if(!api||typeof api.mapShot!=="function")return;
+  clearInterval(poll);engine=api;$("render").disabled=false;
+  puts("ORIGINAL WORLD READY · GENERATING OVERHEAD");
+  renderMap();
+ }catch(e){clearInterval(poll);puts("ENGINE ACCESS ERROR: "+e.message);}
+},350);
+setTimeout(()=>{if(!engine)puts("STILL LOADING · WEBGL 2 AND NETWORK ACCESS REQUIRED");},22000);
+})();
+</script>
+</body>
+</html>
