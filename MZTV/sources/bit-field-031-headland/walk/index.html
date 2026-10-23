@@ -125,7 +125,7 @@ td:first-child{font-weight:700;width:43%}
    <button type="button" class="control" id="sound" aria-pressed="false">SOUND OFF</button>
     <button type="button" class="control" id="print" aria-pressed="true">INK LIGHT</button>
    <button type="button" class="control" id="viewMode">OBSERVE [V]</button>
-   <button type="button" class="control" id="places">GO TO [1–4]</button>
+   <button type="button" class="control" id="places">PLACES</button>
    <button type="button" class="control" id="helpButton">CONTROLS [?]</button>
   </div>
  </div>
@@ -395,11 +395,11 @@ hit.addEventListener("pointermove",e=>{
      $("nub").style.transform="translate("+(joyX*34)+"px,"+(joyY*34)+"px)";
    }else if(e.pointerId===lookTouch){
      const dx=e.clientX-touchStart.lx,dy=e.clientY-touchStart.ly;
-     yaw+=dx*.004;pitch=clamp(pitch-dy*.003,-1.38,1.38);
+     yaw+=dx*.004;pitch=clamp(pitch-dy*.003,-.48,.82);
      touchStart.lx=e.clientX;touchStart.ly=e.clientY;
    }
  }else if(document.pointerLockElement===hit){
-   yaw+=e.movementX*.002;pitch=clamp(pitch-e.movementY*.002,-1.38,1.38);
+   yaw+=e.movementX*.002;pitch=clamp(pitch-e.movementY*.002,-.48,.82);
  }
 });
 function endPointer(e){
@@ -456,19 +456,23 @@ function updateMovement(dt){
 function drawSurvey(){
  if(!api||!entered||mode!=="walk")return;
  const c=$("survey"),p=c.getContext("2d"),w=c.width,h=c.height;
- const X=x=>(x+95)/220*w,Z=z=>(z+115)/320*h;
+ const X=x=>(x+175)/340*w,Z=z=>(z+150)/450*h;
  p.clearRect(0,0,w,h);p.fillStyle="rgba(63,154,166,.28)";p.fillRect(0,0,w,h);
  p.fillStyle="rgba(239,230,207,.16)";p.beginPath();p.moveTo(0,h);p.lineTo(w,h);
- for(let x=125;x>=-95;x-=3)p.lineTo(X(x),Z(api.coast(x)));
+ for(let x=165;x>=-175;x-=3)p.lineTo(X(x),Z(api.coast(x)));
  p.closePath();p.fill();
  p.strokeStyle="rgba(239,230,207,.7)";p.lineWidth=1.5;p.beginPath();
- for(let x=-95;x<=125;x+=3){if(x===-95)p.moveTo(X(x),Z(api.coast(x)));else p.lineTo(X(x),Z(api.coast(x)));}p.stroke();
+ for(let x=-175;x<=165;x+=3){if(x===-175)p.moveTo(X(x),Z(api.coast(x)));else p.lineTo(X(x),Z(api.coast(x)));}p.stroke();
  const g=api.geo;
  const stops=[[g.HOUSE[0],g.HOUSE[2]-9],[52,128],[36,98],[-4,api.coast(-4)+12],[g.PIER_X,g.zT+3],[g.PIER_X,g.zL],[g.PIER_X,g.PIER_END_Z+2]];
  p.setLineDash([7,7]);p.strokeStyle="rgba(242,193,78,.8)";p.lineWidth=2;p.beginPath();
  stops.forEach((pt,i)=>{if(i)p.lineTo(X(pt[0]),Z(pt[1]));else p.moveTo(X(pt[0]),Z(pt[1]));});p.stroke();p.setLineDash([]);
  p.fillStyle="#efe6cf";
  for(const pt of [stops[0],stops[3],stops[6]]){p.beginPath();p.arc(X(pt[0]),Z(pt[1]),4,0,Math.PI*2);p.fill();}
+ for(const place of api.memoryPlaces){
+   p.fillStyle="#f2c14e";p.strokeStyle="#1b1f3a";p.lineWidth=2;
+   p.beginPath();p.arc(X(place.x),Z(place.z),4,0,Math.PI*2);p.stroke();p.fill();
+ }
  const x=X(pos.x),y=Z(pos.z),dx=Math.sin(yaw),dy=-Math.cos(yaw);
  p.fillStyle="#f0603f";p.strokeStyle="#1b1f3a";p.lineWidth=3;p.beginPath();
  p.moveTo(x+dx*12,y+dy*12);p.lineTo(x-dx*7-dy*6,y-dy*7+dx*6);p.lineTo(x-dx*7+dy*6,y-dy*7-dx*6);p.closePath();p.stroke();p.fill();
@@ -486,7 +490,11 @@ function updateReadout(){
  else if(isPier(pos.x,pos.z))label="THE PIER";
  else if(near(g.PIER_X,g.zT,18))label="GULLY STAIR";
  else if(near(-4,api.coast(-4)+12,24))label="CLIFF PATH";
- $("where").textContent=label+" · "+(mode==="walk"?"ON FOOT":"OBSERVING");
+const nearest=api.memoryPlaces
+   .map(p=>({...p,d:Math.hypot(pos.x-p.x,pos.z-p.z)}))
+   .sort((a,b)=>a.d-b.d)[0];
+ if(nearest&&nearest.d<nearest.range)label=nearest.title;
+ $("where").textContent=label+" · "+(mode==="walk"?"THE KEEPER":"OBSERVING");
  try{
    const state=api.state,wx=state.WX;
    const swell=Number.isFinite(wx.swellH)?wx.swellH.toFixed(1):"—";
