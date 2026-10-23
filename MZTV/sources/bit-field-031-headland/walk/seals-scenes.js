@@ -6,9 +6,10 @@ const SEALS_SCENES = [];
 {
   const AT=(x,z,dy=0)=>V(x,terrainH(x,z)+dy,z);
   const MT=Array.from({length:16},(_,i)=>objMat(i));
+  const staticMeshes=Array.from({length:16},()=>[]);
   const add=(geo,id,x,y,z,ry=0,rz=0)=>{
     const m=new THREE.Mesh(geo,MT[id]);m.position.set(x,y,z);m.rotation.y=ry;m.rotation.z=rz;
-    scene.add(m);return m;
+    staticMeshes[id].push(m);return m;
   };
   const cube=(x,y,z,w,h,d,id=4,ry=0,rz=0)=>add(new THREE.BoxGeometry(w,h,d),id,x,y,z,ry,rz);
   const tube=(ax,ay,az,bx,by,bz,r,id=6)=>{
@@ -155,4 +156,21 @@ const SEALS_SCENES = [];
     }
   }
   marker("gravesite","GRAVESITE ON THE HILL",-108,139,24);
+  // Batch hundreds of static stones, peats, trees, hay and barn boards into
+  // sixteen or fewer original-ink draw calls for mobile GPU performance.
+  staticMeshes.forEach((meshes,id)=>{
+    if(!meshes.length)return;
+    const parts=[];
+    for(const mesh of meshes){
+      mesh.updateMatrix();
+      const geo=mesh.geometry.clone();
+      geo.applyMatrix4(mesh.matrix);
+      parts.push(geo.index?geo.toNonIndexed():geo);
+      geo.dispose();
+    }
+    const merged=mergeGeometries(parts,false);
+    parts.forEach(g=>g.dispose());
+    if(!merged)throw new Error("SEALS static geometry merge failed for ink "+id);
+    scene.add(new THREE.Mesh(merged,MT[id]));
+  });
 }
