@@ -137,25 +137,33 @@ const SEALS_SCENES = [];
   }
   marker("turf","TURF STACKS ON THE BOG",-50,202,24);
 
-  // Gravesite on the hill, kept without invented names or text inscriptions.
+  // TASK 01.a–d / GRAVESITE 12: western cliff promontory.
+  // Inferred from the supplied Illustrator red-circle markup, not georeferenced survey data.
+  // One assembly, same HEADLAND six-ink geometry and no invented inscriptions.
+  const GRAVESITE_ANCHOR={x:-136,z:-124}; // +/- a few world units pending photo reference
   {
-    const gx=-108,gz=139,y=terrainH(gx,gz);
-    // Low grave enclosure, narrow drystone boundaries and a hill path.
-    wall(-117,132,-101,132,2);wall(-117,132,-117,151,2);wall(-117,151,-101,151,2);
+    const gx=GRAVESITE_ANCHOR.x,gz=GRAVESITE_ANCHOR.z;
+    // Preserve the original three-sided dry-stone perimeter.
+    // The open eastern side faces inland, with the western wall facing the sea.
+    wall(gx-9,gz-7,gx+7,gz-7,2);
+    wall(gx-9,gz-7,gx-9,gz+12,2);
+    wall(gx-9,gz+12,gx+7,gz+12,2);
+    // Preserve the same three unscripted headstones and ground slabs;
+    // every component samples the actual local cliff height.
     for(const [dx,dz] of [[-5,0],[0,4],[4,-2]]){
       const x=gx+dx,z=gz+dz,b=terrainH(x,z);
       cube(x,b+.78,z,.85,1.55,.35,9,.06*Math.sin(dx));
       add(new THREE.SphereGeometry(.48,10,7),9,x,b+1.5,z);
       cube(x,b+.08,z,1.1,.16,2.2,4);
     }
-    // Wind-shaped rough rock at the hill's edge.
+    // Retain the original weather-shaped rocks, moved with the enclosure.
     for(let i=0;i<4;i++){
       const x=gx-11+i*5,z=gz+12;
       const m=add(new THREE.IcosahedronGeometry(1.3+.35*Math.cos(i),0),4,x,terrainH(x,z)+.5,z);
       m.scale.set(1.4,.65,1);
     }
   }
-  marker("gravesite","GRAVESITE ON THE HILL",-108,139,24);
+  marker("gravesite","GRAVESITE ON WEST CLIFF",GRAVESITE_ANCHOR.x,GRAVESITE_ANCHOR.z,24);
   // Batch hundreds of static stones, peats, trees, hay and barn boards into
   // sixteen or fewer original-ink draw calls for mobile GPU performance.
   staticMeshes.forEach((meshes,id)=>{
