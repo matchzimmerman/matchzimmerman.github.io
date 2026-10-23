@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1b1f3a">
 <meta name="description" content="Enter MZTV BIT FIELD 031 — HEADLAND. A walkable view into the actual living world.">
-<title>HEADLAND / WALK — MZTV</title>
+<title>HEADLAND / KEEPER — MZTV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap">
 <style>
@@ -115,10 +115,10 @@ td:first-child{font-weight:700;width:43%}
 <div id="fade"></div>
 <div id="view">
  <div id="top">
-  <div id="branding"><div class="micro">MZTV / BIT FIELD 031</div><strong>HEADLAND / WALK</strong><div class="micro">GALWAY BAY · INTERACTIVE STUDY 001</div></div>
+  <div id="branding"><div class="micro">MZTV / BIT FIELD 031</div><strong>HEADLAND / KEEPER</strong><div class="micro">GALWAY BAY · INTERACTIVE STUDY 001</div></div>
   <div id="status"><b id="modeLabel">CONNECTING</b><div id="lockLabel">THE WORLD IS LOADING</div></div>
  </div>
- <aside id="navigator" aria-label="World coordinates and movement"><div id="navhead"><span>FIELD SURVEY</span><span id="heading">000°</span></div><canvas id="survey" width="320" height="255" aria-label="Map of the coast and walker"></canvas><div id="motion" data-moving="no">STATIONARY · 0 M/S</div></aside><div id="crosshair" class="hidden"></div><div id="reticle-caption" class="hidden">LOOK · WALK · OBSERVE</div>
+ <aside id="navigator" aria-label="World coordinates and movement"><div id="navhead"><span>FIELD SURVEY</span><span id="heading">000°</span></div><canvas id="survey" width="320" height="255" aria-label="Map of the coast and walker"></canvas><div id="motion" data-moving="no">STATIONARY · 0 M/S</div></aside><div id="crosshair" class="hidden"></div><div id="reticle-caption" class="hidden">THE KEEPER · WALK · OBSERVE</div>
  <div id="bottom">
   <div id="readout"><div id="where">HEADLAND · INVERIN</div><div id="conditions">INITIALIZING WEATHER AND INHABITANTS</div></div>
   <div id="controls">
@@ -130,13 +130,13 @@ td:first-child{font-weight:700;width:43%}
   </div>
  </div>
 </div>
-<div id="mobile" aria-hidden="true"><div id="stick"><div id="nub"></div></div><div id="lookTip">DRAG RIGHT SIDE<br>TO LOOK</div></div>
+<div id="mobile" aria-hidden="true"><div id="stick"><div id="nub"></div></div><div id="lookTip">DRAG RIGHT SIDE<br>TO ORBIT</div></div>
 <div id="gate">
  <section class="panel">
   <div class="eyebrow">MATCH ZIMMERMAN CREATIVE MEDIA GROUP / MZ WORLD</div>
   <h1>HEAD<br>LAND</h1>
-  <p>Not a reconstruction. This is the actual living <b>BIT FIELD 031</b> world, with its original carved-ink renderer, changing Atlantic weather, autonomous inhabitants and sounds. The visitor can now walk through it.</p>
-  <p class="fine">The landscape continues its own life. The visitor does not control the keeper, weather or uncanny events.</p>
+  <p>Not a reconstruction. This is the actual living <b>BIT FIELD 031</b> world, with its original carved-ink renderer, changing Atlantic weather, autonomous inhabitants and sounds. Now walk as the black-veiled keeper.</p>
+  <p class="fine">You are the only keeper in this world. The boat, gulls, sea, weather and uncanny events remain autonomous.</p>
   <div class="actions">
    <button class="action" id="enter" type="button" disabled>ENTER THE HEADLAND</button>
    <button class="action secondary" id="observe" type="button" disabled>WATCH THE CAMERAS</button>
@@ -147,7 +147,7 @@ td:first-child{font-weight:700;width:43%}
 <div id="help" hidden>
  <section class="panel">
   <div class="eyebrow">HEADLAND / FIELD NOTES</div>
-  <h2>Walking the world</h2>
+  <h2>Be the keeper</h2>
   <table>
     <tr><td>W A S D / ARROWS</td><td>Move around the coast</td></tr>
     <tr><td>MOUSE / DRAG</td><td>Look around</td></tr>
@@ -159,7 +159,7 @@ td:first-child{font-weight:700;width:43%}
     <tr><td>ESC</td><td>Release pointer</td></tr>
     <tr><td>? / H</td><td>Show this guide</td></tr>
   </table>
-  <p class="fine">The coast and pier have simple safety boundaries; this is a camera-walk study, not a full physics game. On touchscreens: left thumb moves, right thumb looks. Dragging right pans right (not inverted). WALK uses lighter hatching so movement is easier to see; original ink can be toggled back on.</p>
+  <p class="fine">The camera floats behind the keeper with gentle inertia; this is an embodied study, not a rigid-body physics game. On touchscreens: left thumb moves, right thumb looks. Dragging right pans right (not inverted). WALK uses lighter hatching so movement is easier to see; original ink can be toggled back on.</p>
   <div class="smallcap" id="destinations">QUICK JUMPS TO LANDMARKS</div>
   <div class="actions" id="jumps"><button class="action secondary" type="button" data-jump="1">1 · COTTAGE</button><button class="action secondary" type="button" data-jump="2">2 · CLIFF</button><button class="action secondary" type="button" data-jump="3">3 · STAIR</button><button class="action secondary" type="button" data-jump="4">4 · PIER</button></div>
   <div class="actions"><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
@@ -171,13 +171,31 @@ td:first-child{font-weight:700;width:43%}
 const $ = id => document.getElementById(id);
 const frame=$("headland"), hit=$("hit"), gate=$("gate"), help=$("help");
 const mobile=matchMedia("(pointer:coarse)").matches;
-frame.src="../?info=0&seed=31081&lines="+(mobile?(innerWidth>innerHeight?440:420):720);
+
+async function bootKeeperWorld(){
+ try{
+  const [r,places]=await Promise.all([fetch("../index.html",{cache:"no-cache"}),fetch("./seals-scenes.js",{cache:"no-cache"})]);
+  if(!r.ok||!places.ok)throw new Error("HEADLAND source or SEALS scene data not found");
+  let html=await r.text(),scenes=await places.text();
+  const edits=[
+   ["const Q = new URLSearchParams(location.search);","const Q = new URLSearchParams('?info=0&seed=31081&lines="+(mobile?(innerWidth>innerHeight?440:420):720)+"');"],
+   ["function keeperTick(dt) {","/* The visitor controls HEADLAND's existing single keeper mesh; no duplicate figure. */\nconst WALK_POSE={active:false,pos:V(62,0,156),heading:0,speed:0};\nfunction keeperPlayerTick(dt){\n if(!WALK_POSE.active)return false;\n const k=keeper,p=WALK_POSE;\n k.visible=true;k.pos.copy(p.pos);k.dir.set(Math.sin(p.heading),0,-Math.cos(p.heading));\n k.state=p.speed>0.14?'walk':'dwell';\n k.still=p.speed>0.14?0:(k.still||0)+dt;\n k.walked+=p.speed*dt;\n const m=k.mesh;m.visible=true;m.position.copy(k.pos);m.rotation.y=Math.atan2(k.dir.x,k.dir.z);\n k.move=lerp(k.move||0,Math.min(1,p.speed/2.6),1-Math.exp(-dt*3));\n const wt=fromBearingTravel(WX.windDir);\n const wl=V(wt.x,0,wt.y).multiplyScalar(clamp(WX.wind/12,0,1.4)).applyAxisAngle(V(0,1,0),-m.rotation.y);\n m.position.y+=0.03*Math.sin(k.walked*3.4)*k.move;\n m.userData.mats.forEach(mt=>{mt.uniforms.uWalk.value=k.walked;mt.uniforms.uMove.value=k.move;mt.uniforms.uWindL.value.copy(wl);});\n return true;\n}\nfunction keeperTick(dt) { if(keeperPlayerTick(dt))return;"],
+   ["window.MZ = {","window.MZ = {\n claimKeeper(){WALK_POSE.active=true;WALK_POSE.pos.copy(keeper.pos);WALK_POSE.speed=0;keeperPlayerTick(0);},\n driveKeeper(x,y,z,heading,speed){\n  if(!WALK_POSE.active||![x,y,z,heading,speed].every(Number.isFinite))return;\n  WALK_POSE.pos.set(x,y,z);WALK_POSE.heading=heading;WALK_POSE.speed=clamp(speed,0,9);keeperPlayerTick(0);\n },\n get playerKeeper(){return WALK_POSE.active;},\n get memoryPlaces(){return SEALS_SCENES.map(({key,title,x,z,range})=>({key,title,x,z,range}));},"],
+   ["/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */",scenes+"\\n/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */"]
+  ];
+  for(const [from,to] of edits){if(html.split(from).length!==2)throw new Error("HEADLAND changed: "+from);html=html.replace(from,to);}
+  frame.srcdoc=html;
+ }catch(e){$("loadstate").textContent="FAILED TO LOAD: "+e.message;$("modeLabel").textContent="LOAD ERROR";console.error(e);}
+}
+bootKeeperWorld();
 const keys=new Set();
 let api=null,entered=false,mode="walk",soundOn=false,ready=false,lookTouch=null,joyTouch=null,joyX=0,joyY=0;
 let last=performance.now(),lastLabel=0,walkDistance=0;
 let clearInk=true,baselineInk=null,inkEpoch=null,currentSpeed=0,blocked=false;
 const pos={x:62,y:25,z:153};
-let yaw=0,pitch=-0.065,ground=23,velX=0,velZ=0;
+let keeperHeading=0;
+const chase={x:62,y:35,z:170};
+let yaw=0,pitch=.16,ground=23,velX=0,velZ=0;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const touchStart={x:0,y:0};
 function groundAt(x,z){
@@ -204,10 +222,14 @@ function facing(){
  const c=Math.cos(pitch);
  return [Math.sin(yaw)*c,Math.sin(pitch),-Math.cos(yaw)*c];
 }
-function setLook(){
- if(!api || mode!=="walk" || !entered)return;
- const d=facing();
- api.look([pos.x,pos.y,pos.z],[pos.x+d[0]*100,pos.y+d[1]*100,pos.z+d[2]*100],76);
+function setLook(dt=1/60,snap=false){
+ if(!api||mode!=="walk"||!entered)return;
+ const dist=7.4,height=3.3+pitch*3.8;
+ const tx=pos.x-Math.sin(yaw)*dist,tz=pos.z+Math.cos(yaw)*dist;
+ const ty=Math.max(pos.y+height,api.h(tx,tz)+1.5);
+ const t=snap?1:1-Math.exp(-Math.max(.001,Math.min(dt,.08))*3.6);
+ chase.x+=(tx-chase.x)*t;chase.y+=(ty-chase.y)*t;chase.z+=(tz-chase.z)*t;
+ api.look([chase.x,chase.y,chase.z],[pos.x+Math.sin(yaw)*1.3,pos.y+1.35,pos.z-Math.cos(yaw)*1.3],63);
 }
 function teleport(dest){
  if(!api)return;
@@ -217,12 +239,13 @@ function teleport(dest){
  else if(dest==="2" || dest==="CLIFF"){x=-4;z=api.coast(-4)+12;name="CLIFF PATH"}
  else if(dest==="3" || dest==="STAIR"){x=g.PIER_X;z=g.zT+3;name="GULLY STAIR"}
  else {x=g.PIER_X;z=g.zL-17;name="THE PIER"}
- pos.x=x;pos.z=z;ground=groundAt(x,z);pos.y=ground+1.72;currentSpeed=0;blocked=false;
- yaw=0;pitch=-.045;velX=velZ=0;
+ pos.x=x;pos.z=z;ground=groundAt(x,z);pos.y=ground;currentSpeed=0;blocked=false;keeperHeading=0;
+ yaw=0;pitch=.16;velX=velZ=0;
+ if(api.playerKeeper)api.driveKeeper(pos.x,pos.y,pos.z,keeperHeading,0);
  $("where").textContent=name+" / GALWAY BAY";
  $("fade").classList.add("flash");
  setTimeout(()=> $("fade").classList.remove("flash"),180);
- setLook();
+ setLook(1/60,true);
 }
 function applyInk(){
  if(!api||!baselineInk)return;
@@ -239,7 +262,7 @@ function setMode(m){
  if(m!=="walk"){velX=velZ=currentSpeed=0;blocked=false;joyX=joyY=0;}
  $("navigator").hidden=m!=="walk";
  applyInk();
- $("modeLabel").textContent=m==="walk"?"WALKING":"OBSERVING";
+ $("modeLabel").textContent=m==="walk"?"THE KEEPER":"OBSERVING";
  $("viewMode").textContent=m==="walk"?"OBSERVE [V]":"WALK [V]";
  $("crosshair").classList.toggle("hidden",m!=="walk");
  $("reticle-caption").classList.toggle("hidden",m!=="walk");
@@ -267,6 +290,7 @@ function begin(m){
  if(!api)return;
  entered=true;
  gate.hidden=true;
+ api.claimKeeper();
  setMode(m);
  if(m==="walk")teleport("HOUSE");
  setSound(true);
@@ -281,7 +305,7 @@ function readyCheck(){
    $("loadstate").textContent="The HEADLAND source must be on the same website origin.";
    return;
  }
- if(!inside || typeof inside.h!=="function" || typeof inside.look!=="function" || !inside.geo)return;
+ if(!inside || typeof inside.h!=="function" || typeof inside.look!=="function" || typeof inside.claimKeeper!=="function" || typeof inside.driveKeeper!=="function" || !inside.geo)return;
  api=inside;ready=true;
  baselineInk={...api.state.S.grammar};inkEpoch=api.state.S.epoch;
  clearInterval(poll);
@@ -383,7 +407,7 @@ function updateMovement(dt){
  if(!entered||!api||mode!=="walk"||!help.hidden)return;
  const f=(keys.has("w")||keys.has("arrowup")?1:0)-(keys.has("s")||keys.has("arrowdown")?1:0)-joyY;
  const r=(keys.has("d")||keys.has("arrowright")?1:0)-(keys.has("a")||keys.has("arrowleft")?1:0)+joyX;
- const mag=Math.hypot(f,r),speed=keys.has("shift")?9.0:5.5;
+ const mag=Math.hypot(f,r),speed=keys.has("shift")?5.4:2.85;
  const norm=mag>1?1/mag:1;
  const tx=(r*Math.cos(yaw)+f*Math.sin(yaw))*norm*speed;
  const tz=(r*Math.sin(yaw)-f*Math.cos(yaw))*norm*speed;
@@ -398,9 +422,14 @@ function updateMovement(dt){
  const wantGround=groundAt(pos.x,pos.z);
  ground+=(wantGround-ground)*(1-Math.exp(-dt*12));
  walkDistance+=actualStep;
- const bob=Math.min(.028,currentSpeed*.005)*Math.sin(walkDistance*2.0);
- pos.y=ground+1.72+bob;
- setLook();
+ pos.y=ground;
+ if(currentSpeed>.15){
+  const target=Math.atan2(pos.x-ox,-(pos.z-oz));
+  const delta=Math.atan2(Math.sin(target-keeperHeading),Math.cos(target-keeperHeading));
+  keeperHeading+=delta*(1-Math.exp(-dt*11));
+ }
+ api.driveKeeper(pos.x,pos.y,pos.z,keeperHeading,currentSpeed);
+ setLook(dt);
 }
 function drawSurvey(){
  if(!api||!entered||mode!=="walk")return;
