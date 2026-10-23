@@ -83,7 +83,7 @@ td:first-child{font-weight:700;width:43%}
 </style>
 </head>
 <body>
-<div id="scene"><iframe id="headland" src="../?info=0&amp;seed=31081&amp;lines=720" title="Original HEADLAND world engine" allow="autoplay"></iframe></div>
+<div id="scene"><iframe id="headland" title="Original HEADLAND world engine" allow="autoplay"></iframe></div>
 <div id="hit" tabindex="0" aria-label="Walkable HEADLAND viewport; click to look around"></div>
 <div id="fade"></div>
 <div id="view">
@@ -96,6 +96,7 @@ td:first-child{font-weight:700;width:43%}
   <div id="readout"><div id="where">HEADLAND · INVERIN</div><div id="conditions">INITIALIZING WEATHER AND INHABITANTS</div></div>
   <div id="controls">
    <button type="button" class="control" id="sound" aria-pressed="false">SOUND OFF</button>
+    <button type="button" class="control" id="print" aria-pressed="true">INK LIGHT</button>
    <button type="button" class="control" id="viewMode">OBSERVE [V]</button>
    <button type="button" class="control" id="places">GO TO [1–4]</button>
    <button type="button" class="control" id="helpButton">CONTROLS [?]</button>
@@ -124,13 +125,14 @@ td:first-child{font-weight:700;width:43%}
     <tr><td>W A S D / ARROWS</td><td>Move around the coast</td></tr>
     <tr><td>MOUSE / DRAG</td><td>Look around</td></tr>
     <tr><td>SHIFT</td><td>Move faster</td></tr>
+    <tr><td>INK LIGHT</td><td>Reduce screen-locked print hatching while walking</td></tr>
     <tr><td>1 / 2 / 3 / 4</td><td>Cottage / cliff / stair / pier</td></tr>
     <tr><td>V</td><td>Walking / original camera crew</td></tr>
     <tr><td>M</td><td>Toggle HEADLAND sound</td></tr>
     <tr><td>ESC</td><td>Release pointer</td></tr>
     <tr><td>? / H</td><td>Show this guide</td></tr>
   </table>
-  <p class="fine">The coast and pier have simple safety boundaries; this is a camera-walk study, not a full physics game. On touchscreens: left thumb moves, right thumb looks.</p>
+  <p class="fine">The coast and pier have simple safety boundaries; this is a camera-walk study, not a full physics game. On touchscreens: left thumb moves, right thumb looks. Dragging right pans right (not inverted). WALK uses lighter hatching so movement is easier to see; original ink can be toggled back on.</p>
   <div class="smallcap" id="destinations">QUICK JUMPS TO LANDMARKS</div>
   <div class="actions" id="jumps"><button class="action secondary" type="button" data-jump="1">1 · COTTAGE</button><button class="action secondary" type="button" data-jump="2">2 · CLIFF</button><button class="action secondary" type="button" data-jump="3">3 · STAIR</button><button class="action secondary" type="button" data-jump="4">4 · PIER</button></div>
   <div class="actions"><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
@@ -142,9 +144,11 @@ td:first-child{font-weight:700;width:43%}
 const $ = id => document.getElementById(id);
 const frame=$("headland"), hit=$("hit"), gate=$("gate"), help=$("help");
 const mobile=matchMedia("(pointer:coarse)").matches;
+frame.src="../?info=0&seed=31081&lines="+(mobile?(innerWidth>innerHeight?440:420):720);
 const keys=new Set();
 let api=null,entered=false,mode="walk",soundOn=false,ready=false,lookTouch=null,joyTouch=null,joyX=0,joyY=0;
 let last=performance.now(),lastLabel=0,walkDistance=0;
+let clearInk=true,baselineInk=null,inkEpoch=null,currentSpeed=0,blocked=false;
 const pos={x:62,y:25,z:153};
 let yaw=0,pitch=-0.065,ground=23,velX=0,velZ=0;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -186,16 +190,27 @@ function teleport(dest){
  else if(dest==="2" || dest==="CLIFF"){x=-4;z=api.coast(-4)+12;name="CLIFF PATH"}
  else if(dest==="3" || dest==="STAIR"){x=g.PIER_X;z=g.zT+3;name="GULLY STAIR"}
  else {x=g.PIER_X;z=g.zL-17;name="THE PIER"}
- pos.x=x;pos.z=z;ground=groundAt(x,z);pos.y=ground+1.72;
+ pos.x=x;pos.z=z;ground=groundAt(x,z);pos.y=ground+1.72;currentSpeed=0;blocked=false;
  yaw=0;pitch=-.045;velX=velZ=0;
  $("where").textContent=name+" / GALWAY BAY";
  $("fade").classList.add("flash");
  setTimeout(()=> $("fade").classList.remove("flash"),180);
  setLook();
 }
+function applyInk(){
+ if(!api||!baselineInk)return;
+ const st=api.state.S;
+ if(st.epoch!==inkEpoch){baselineInk={...st.grammar};inkEpoch=st.epoch;}
+ if(mode==="walk"&&clearInk)api.grammar({...baselineInk,hatch:Math.min(baselineInk.hatch,.28),dith:Math.min(baselineInk.dith,.025),wob:Math.min(baselineInk.wob,1.3),period:Math.max(baselineInk.period,10),outline:1});
+ else api.grammar({...baselineInk});
+ $("print").textContent=clearInk?"INK LIGHT":"INK ORIGINAL";
+ $("print").setAttribute("aria-pressed",String(clearInk));
+}
 function setMode(m){
  if(!api)return;
  mode=m;
+ if(m!=="walk"){velX=velZ=currentSpeed=0;blocked=false;joyX=joyY=0;}
+ applyInk();
  $("modeLabel").textContent=m==="walk"?"WALKING":"OBSERVING";
  $("viewMode").textContent=m==="walk"?"OBSERVE [V]":"WALK [V]";
  $("crosshair").classList.toggle("hidden",m!=="walk");
@@ -240,6 +255,7 @@ function readyCheck(){
  }
  if(!inside || typeof inside.h!=="function" || typeof inside.look!=="function" || !inside.geo)return;
  api=inside;ready=true;
+ baselineInk={...api.state.S.grammar};inkEpoch=api.state.S.epoch;
  clearInterval(poll);
  $("enter").disabled=false;$("observe").disabled=false;
  $("loadstate").textContent="LIVE ENGINE CONNECTED · READY TO ENTER";
@@ -255,6 +271,7 @@ setTimeout(()=>{if(!ready)$("loadstate").textContent="STILL LOADING. WEBGL 2 AND
 $("enter").addEventListener("click",()=>begin("walk"));
 $("observe").addEventListener("click",()=>begin("observe"));
 $("sound").addEventListener("click",()=>setSound(!soundOn));
+$("print").addEventListener("click",()=>{clearInk=!clearInk;applyInk();});
 $("viewMode").addEventListener("click",()=>{
  const m=mode==="walk"?"observe":"walk";
  setMode(m);
@@ -298,11 +315,11 @@ hit.addEventListener("pointermove",e=>{
      $("nub").style.transform="translate("+(joyX*31)+"px,"+(joyY*31)+"px)";
    }else if(e.pointerId===lookTouch){
      const dx=e.clientX-touchStart.lx,dy=e.clientY-touchStart.ly;
-     yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-1.38,1.38);
+     yaw+=dx*.004;pitch=clamp(pitch-dy*.003,-1.38,1.38);
      touchStart.lx=e.clientX;touchStart.ly=e.clientY;
    }
  }else if(document.pointerLockElement===hit){
-   yaw-=e.movementX*.002;pitch=clamp(pitch-e.movementY*.002,-1.38,1.38);
+   yaw+=e.movementX*.002;pitch=clamp(pitch-e.movementY*.002,-1.38,1.38);
  }
 });
 function endPointer(e){
@@ -337,18 +354,22 @@ function updateMovement(dt){
  const tz=(r*Math.sin(yaw)-f*Math.cos(yaw))*norm*speed;
  const rate=1-Math.exp(-dt*11);
  velX+=(tx-velX)*rate;velZ+=(tz-velZ)*rate;
- const nx=pos.x+velX*dt,nz=pos.z+velZ*dt;
+ const ox=pos.x,oz=pos.z,nx=ox+velX*dt,nz=oz+velZ*dt;
  if(canStep(nx,pos.z,pos.x,pos.z))pos.x=nx;else velX=0;
  if(canStep(pos.x,nz,pos.x,pos.z))pos.z=nz;else velZ=0;
+ const actualStep=Math.hypot(pos.x-ox,pos.z-oz);
+ currentSpeed=dt>0?actualStep/dt:0;
+ blocked=mag>.2&&currentSpeed<.1;
  const wantGround=groundAt(pos.x,pos.z);
  ground+=(wantGround-ground)*(1-Math.exp(-dt*12));
- walkDistance+=Math.hypot(velX,velZ)*dt;
- const bob=Math.min(0.035,mag*.024)*Math.sin(walkDistance*2.0);
+ walkDistance+=actualStep;
+ const bob=Math.min(.028,currentSpeed*.005)*Math.sin(walkDistance*2.0);
  pos.y=ground+1.72+bob;
  setLook();
 }
 function updateReadout(){
  if(!api||!entered)return;
+ applyInk();
  let label="HEADLAND / GALWAY BAY";
  const g=api.geo,near=(x,z,r)=>Math.hypot(pos.x-x,pos.z-z)<r;
  if(near(g.HOUSE[0],g.HOUSE[2],25))label="KEEPER'S COTTAGE";
@@ -366,7 +387,7 @@ function updateReadout(){
 }
 function loop(now){
  const dt=clamp((now-last)/1000,0,.045);last=now;
- if(api&&entered){updateMovement(dt);if(now-lastLabel>500){updateReadout();lastLabel=now;}}
+ if(api&&entered){updateMovement(dt);if(now-lastLabel>180){updateReadout();lastLabel=now;}}
  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
