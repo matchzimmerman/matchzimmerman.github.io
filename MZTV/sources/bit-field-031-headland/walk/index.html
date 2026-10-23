@@ -80,6 +80,33 @@ td:first-child{font-weight:700;width:43%}
  #reticle-caption{display:none}
 }
 @media (prefers-reduced-motion:reduce){#fade{transition:none}}
+
+#navigator{position:fixed;top:118px;right:20px;z-index:4;background:rgba(27,31,58,.9);border:1px solid rgba(239,230,207,.65);padding:8px;color:var(--paper);width:177px;pointer-events:none}
+#navigator[hidden]{display:none}
+#navhead{display:flex;justify-content:space-between;color:var(--glow);font-size:10px;letter-spacing:.1em;font-weight:700}
+#survey{width:158px;height:126px;display:block;margin:4px auto}
+#motion{padding:5px 0 0;border-top:1px solid rgba(239,230,207,.35);white-space:nowrap;font-size:9px;font-variant-numeric:tabular-nums}
+#motion[data-moving="yes"]{color:var(--glow)}
+#motion[data-moving="blocked"]{color:var(--hot)}
+@media(pointer:coarse){#stick.active{border-color:var(--glow);background:rgba(27,31,58,.6)}#view{padding:calc(10px + env(safe-area-inset-top,0px)) calc(10px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(10px + env(safe-area-inset-left,0px))}}
+@media(max-width:680px){
+ #navigator{top:calc(86px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));width:142px;padding:6px}
+ #survey{width:128px;height:101px}#navhead,#motion{font-size:8px}
+ #readout{padding:6px 9px}#conditions{font-size:9px;margin-top:2px}
+ #controls{max-width:100%;width:100%;gap:3px;flex-wrap:nowrap;justify-content:space-between}
+ .control{font-size:8px;letter-spacing:0;padding:7px 3px;min-height:37px;flex:1}
+ #bottom{gap:5px}#lookTip{bottom:175px}
+ #stick{width:112px;height:112px;left:14px;bottom:140px}#nub{left:35px;top:35px}
+ #gate,#help{padding:10px}
+ .panel{max-height:calc(100dvh - 24px);overflow:auto;padding:18px}
+ .panel h1{font-size:54px}.panel p{font-size:11px;line-height:1.55}
+}
+@media(max-height:540px) and (pointer:coarse){
+ #navigator{top:calc(8px + env(safe-area-inset-top,0px));width:130px}#survey{width:116px;height:86px}
+ #status{display:none}#stick{bottom:85px}#lookTip{bottom:102px}
+ #bottom{flex-direction:row;align-items:flex-end}#readout{max-width:48vw}#controls{max-width:52vw;flex-wrap:wrap;justify-content:flex-end}
+ #controls .control{flex:0 1 auto}
+}
 </style>
 </head>
 <body>
@@ -91,7 +118,7 @@ td:first-child{font-weight:700;width:43%}
   <div id="branding"><div class="micro">MZTV / BIT FIELD 031</div><strong>HEADLAND / WALK</strong><div class="micro">GALWAY BAY · INTERACTIVE STUDY 001</div></div>
   <div id="status"><b id="modeLabel">CONNECTING</b><div id="lockLabel">THE WORLD IS LOADING</div></div>
  </div>
- <div id="crosshair" class="hidden"></div><div id="reticle-caption" class="hidden">LOOK · WALK · OBSERVE</div>
+ <aside id="navigator" aria-label="World coordinates and movement"><div id="navhead"><span>FIELD SURVEY</span><span id="heading">000°</span></div><canvas id="survey" width="320" height="255" aria-label="Map of the coast and walker"></canvas><div id="motion" data-moving="no">STATIONARY · 0 M/S</div></aside><div id="crosshair" class="hidden"></div><div id="reticle-caption" class="hidden">LOOK · WALK · OBSERVE</div>
  <div id="bottom">
   <div id="readout"><div id="where">HEADLAND · INVERIN</div><div id="conditions">INITIALIZING WEATHER AND INHABITANTS</div></div>
   <div id="controls">
@@ -210,6 +237,7 @@ function setMode(m){
  if(!api)return;
  mode=m;
  if(m!=="walk"){velX=velZ=currentSpeed=0;blocked=false;joyX=joyY=0;}
+ $("navigator").hidden=m!=="walk";
  applyInk();
  $("modeLabel").textContent=m==="walk"?"WALKING":"OBSERVING";
  $("viewMode").textContent=m==="walk"?"OBSERVE [V]":"WALK [V]";
@@ -367,9 +395,33 @@ function updateMovement(dt){
  pos.y=ground+1.72+bob;
  setLook();
 }
+function drawSurvey(){
+ if(!api||!entered||mode!=="walk")return;
+ const c=$("survey"),p=c.getContext("2d"),w=c.width,h=c.height;
+ const X=x=>(x+95)/220*w,Z=z=>(z+115)/320*h;
+ p.clearRect(0,0,w,h);p.fillStyle="rgba(63,154,166,.28)";p.fillRect(0,0,w,h);
+ p.fillStyle="rgba(239,230,207,.16)";p.beginPath();p.moveTo(0,h);p.lineTo(w,h);
+ for(let x=125;x>=-95;x-=3)p.lineTo(X(x),Z(api.coast(x)));
+ p.closePath();p.fill();
+ p.strokeStyle="rgba(239,230,207,.7)";p.lineWidth=1.5;p.beginPath();
+ for(let x=-95;x<=125;x+=3){if(x===-95)p.moveTo(X(x),Z(api.coast(x)));else p.lineTo(X(x),Z(api.coast(x)));}p.stroke();
+ const g=api.geo;
+ const stops=[[g.HOUSE[0],g.HOUSE[2]-9],[52,128],[36,98],[-4,api.coast(-4)+12],[g.PIER_X,g.zT+3],[g.PIER_X,g.zL],[g.PIER_X,g.PIER_END_Z+2]];
+ p.setLineDash([7,7]);p.strokeStyle="rgba(242,193,78,.8)";p.lineWidth=2;p.beginPath();
+ stops.forEach((pt,i)=>{if(i)p.lineTo(X(pt[0]),Z(pt[1]));else p.moveTo(X(pt[0]),Z(pt[1]));});p.stroke();p.setLineDash([]);
+ p.fillStyle="#efe6cf";
+ for(const pt of [stops[0],stops[3],stops[6]]){p.beginPath();p.arc(X(pt[0]),Z(pt[1]),4,0,Math.PI*2);p.fill();}
+ const x=X(pos.x),y=Z(pos.z),dx=Math.sin(yaw),dy=-Math.cos(yaw);
+ p.fillStyle="#f0603f";p.strokeStyle="#1b1f3a";p.lineWidth=3;p.beginPath();
+ p.moveTo(x+dx*12,y+dy*12);p.lineTo(x-dx*7-dy*6,y-dy*7+dx*6);p.lineTo(x-dx*7+dy*6,y-dy*7-dx*6);p.closePath();p.stroke();p.fill();
+ $("heading").textContent=String(Math.round(((yaw*180/Math.PI)%360+360)%360)).padStart(3,"0")+"°";
+ const text=blocked?"EDGE · REPOSITION":currentSpeed>.16?"MOVING "+currentSpeed.toFixed(1)+" M/S":"STATIONARY · 0 M/S";
+ $("motion").textContent=text+" · "+Math.round(walkDistance)+" M";
+ $("motion").dataset.moving=blocked?"blocked":currentSpeed>.16?"yes":"no";
+}
 function updateReadout(){
  if(!api||!entered)return;
- applyInk();
+ applyInk();drawSurvey();
  let label="HEADLAND / GALWAY BAY";
  const g=api.geo,near=(x,z,r)=>Math.hypot(pos.x-x,pos.z-z)<r;
  if(near(g.HOUSE[0],g.HOUSE[2],25))label="KEEPER'S COTTAGE";
