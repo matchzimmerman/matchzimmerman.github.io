@@ -161,7 +161,9 @@ function isPier(x,z){
 }
 function canStep(x,z,fromX,fromZ){
  if(x < -190 || x>176 || z < -235 || z>270) return false;
- if(!isPier(x,z) && z < api.coast(x)+2.2) return false;
+ const g=api.geo;
+ const onStair=Math.abs(x-g.PIER_X)<1.55 && z>=g.zL && z<=g.zT+3;
+ if(!isPier(x,z) && !onStair && z < api.coast(x)+2.2) return false;
  const h=groundAt(x,z),old=groundAt(fromX,fromZ);
  if(!Number.isFinite(h))return false;
  const dist=Math.hypot(x-fromX,z-fromZ);
