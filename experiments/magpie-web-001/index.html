@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f100e">
+  <title>THE SLIVER — MAGPIE Web Study 001</title>
+  <meta name="description" content="A self-contained playable WebAssembly / WebGL 2 field study from FIELD STATION: MAGPIE.">
+  <style>
+    :root{--black:#0c0e0c;--bone:#f3ead8;--dim:#aaa08f;--orange:#eb632a;--line:rgba(243,234,216,.28)}
+    *{box-sizing:border-box} html,body{padding:0;margin:0;width:100%;height:100%;overflow:hidden;background:var(--black);color:var(--bone);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+    #stage{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 76%,#553326 0%,#211d18 32%,#0a0d0e 82%)}
+    canvas#field{width:100%;height:100%;display:block;touch-action:none}
+    .grain{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.16;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.87' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E")}
+    .hud{position:fixed;inset:0;pointer-events:none;z-index:4;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(18px,3vw,45px)}
+    .topline,.bottomline{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+    .brand{display:flex;gap:14px;align-items:start}.stamp{width:35px;height:35px;border:2px solid var(--orange);border-radius:50%;display:grid;place-items:center;flex:none;font-size:24px;line-height:1;color:var(--orange)}
+    .kicker{font-size:10px;letter-spacing:.22em;color:var(--orange);font-weight:700}.series{margin-top:8px;font-size:12px;letter-spacing:.14em;font-weight:700}.small{font-size:10px;letter-spacing:.14em;color:var(--dim);line-height:1.8}.right{text-align:right}
+    .readout{display:grid;grid-template-columns:auto auto;gap:5px 24px;text-align:left;border-top:1px solid var(--line);padding-top:11px;margin-top:14px}
+    .readout b{font-size:11px;letter-spacing:.04em;font-weight:500;color:var(--bone)}
+    .bottomline{align-items:flex-end}.leftline{max-width:390px}.instruction{font-size:11px;line-height:1.9;color:var(--dim);letter-spacing:.07em}.instruction strong{color:var(--bone);font-weight:600}
+    .mode-line{font-size:10px;color:var(--orange);letter-spacing:.17em;margin-bottom:12px}.nearest{font-size:11px;letter-spacing:.1em;color:var(--bone);margin-bottom:4px}
+    .wave{height:27px;display:flex;align-items:center;justify-content:flex-end;gap:3px;margin-top:6px}.wave span{width:2px;min-height:2px;background:var(--orange);height:5px;transition:height .12s}
+    .controls{display:flex;gap:11px;margin-top:18px;pointer-events:auto}.control{appearance:none;background:transparent;border:1px solid rgba(243,234,216,.32);padding:10px 13px;color:var(--bone);font:inherit;font-size:10px;letter-spacing:.12em;cursor:pointer}.control:hover,.control:focus-visible{background:var(--orange);border-color:var(--orange);color:var(--black)}
+    #center-note{position:fixed;z-index:5;top:51%;left:50%;transform:translate(-50%,-50%);min-width:220px;text-align:center;pointer-events:none;opacity:0;transition:opacity .2s;font-size:12px;letter-spacing:.2em;text-shadow:0 2px 18px #000;background:rgba(10,11,10,.55);padding:16px}
+    #reticle{position:fixed;z-index:4;left:50%;top:50%;width:15px;height:15px;margin:-7px 0 0 -7px;pointer-events:none;opacity:.58}#reticle:before,#reticle:after{content:"";position:absolute;background:var(--bone)}#reticle:before{height:1px;width:15px;top:7px}#reticle:after{width:1px;height:15px;left:7px}
+    #intro{z-index:10;position:fixed;inset:0;background:linear-gradient(108deg,rgba(8,10,9,.96) 0%,rgba(8,10,9,.87) 42%,rgba(8,10,9,.14) 100%);display:flex;align-items:center;padding:clamp(24px,9vw,140px)}
+    #intro.hidden{display:none}.intro-inner{max-width:620px}.intro-number{font-size:11px;color:var(--orange);letter-spacing:.32em}.intro-title{font-size:clamp(74px,11.5vw,175px);font-family:Georgia,'Times New Roman',serif;letter-spacing:-.085em;line-height:.86;font-weight:400;margin:22px 0 31px}.intro-title span{font-style:italic;color:var(--orange)}
+    .intro-rule{height:1px;width:190px;background:var(--orange);margin:33px 0}.intro-subtitle{font-size:12px;letter-spacing:.1em;line-height:1.9;color:var(--dim);max-width:390px}.intro-subtitle strong{color:var(--bone)}
+    #enter{background:var(--orange);color:var(--black);border:1px solid var(--orange);font:inherit;font-size:11px;letter-spacing:.2em;font-weight:700;padding:18px 29px;cursor:pointer;margin-top:28px}#enter:hover{background:var(--bone);border-color:var(--bone)}
+    #intro .under{font-size:10px;letter-spacing:.12em;color:var(--dim);margin-top:17px}.footmark{position:absolute;bottom:34px;font-size:10px;letter-spacing:.24em;color:var(--dim)}
+    body.grid-mode{--orange:#fa8f24}.hidden-desktop{display:none}
+    @media(max-width:650px){.hud{padding:16px}.series{font-size:10px}.small{font-size:9px}.right{display:none}.bottomline{gap:14px}.instruction{font-size:10px}.nearest{font-size:10px}.bottomline>div:last-child{max-width:145px}.intro-title{font-size:77px}#intro{padding:24px}.footmark{bottom:20px}.controls{flex-wrap:wrap}.control{padding:9px}}
+    @media(prefers-reduced-motion:reduce){.grain{display:none}}
+  </style>
+</head>
+<body>
+  <div id="stage"><canvas id="field" aria-label="Interactive 3D field with nine signal pylons"></canvas></div>
+  <div class="grain"></div>
+  <div id="reticle"></div>
+  <div class="hud">
+    <div class="topline">
+      <div class="brand"><div class="stamp" aria-hidden="true">✳</div><div><div class="kicker">FIELD STATION / MAGPIE</div><div class="series">THE SLIVER — WEB STUDY 001</div></div></div>
+      <div class="right"><div class="small">A NAVIGABLE SIGNAL STUDY<br>NOT THE CANONICAL GAME BUILD</div><div class="readout"><span class="small">WORLD</span><b id="mode-name">THE FIELD</b><span class="small">SOURCES</span><b id="sources">00 / 09</b><span class="small">ENGINE</span><b id="engine">INITIALIZING</b><span class="small">FRAME</span><b id="fps">—</b></div></div>
+    </div>
+    <div class="bottomline">
+      <div class="leftline"><div class="mode-line">SURVEY UNIT / 12 &nbsp;—&nbsp; FIELD ACTIVE</div><div class="instruction"><strong>W A S D</strong> to move &nbsp;·&nbsp; <strong>MOUSE / ARROWS</strong> to look<br><strong>E</strong> to receive a nearby signal &nbsp;·&nbsp; <strong>G</strong> to switch Field / Grid<br><strong>ESC</strong> releases the pointer</div><div class="controls"><button class="control" id="audio" type="button">SOUND : OFF</button><button class="control" id="capture" type="button">CAPTURE LOOK</button></div></div>
+      <div class="right" style="display:block"><div class="small" id="wind-label">WIND / CALCULATING</div><div class="nearest" id="nearby">SEARCHING THE FIELD</div><div class="small" id="distance">MOVE TOWARD A PYLON</div><div class="wave" id="wave" aria-hidden="true"></div></div>
+    </div>
+  </div>
+  <div id="center-note" role="status" aria-live="polite"></div>
+  <div id="intro">
+    <div class="intro-inner"><div class="intro-number">MAGPIE / EXPERIMENT 001</div><h1 class="intro-title">The<br><span>Sliver.</span></h1><div class="intro-rule"></div><div class="intro-subtitle"><strong>Enter a wind-driven field of nine transmitters.</strong><br>Move through the terrain. Approach a signal. Listen for what changes. A small, independent WebAssembly + WebGL 2 experiment.</div><button id="enter" type="button">ENTER THE FIELD &nbsp;↗</button><div class="under">DESKTOP · CHROME / EDGE / FIREFOX · HEADPHONES OPTIONAL</div></div>
+    <div class="footmark">FIELD STATION: MAGPIE &nbsp; / &nbsp; MZCMG &nbsp; / &nbsp; 2026</div>
+  </div>
+  <script>window.FIELD_WASM_BASE64="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";</script>
+  <script>(() => {
+'use strict';
+const canvas=document.getElementById('field'), gl=canvas.getContext('webgl2',{antialias:false,alpha:true,powerPreference:'high-performance'});
+const ui=id=>document.getElementById(id);
+if(!gl){ui('intro').querySelector('.intro-subtitle').innerHTML='This study needs WebGL 2. Try current Chrome, Edge, or Firefox on a desktop.';ui('enter').disabled=true;ui('engine').textContent='NO WEBGL 2';return;}
+const pylons=[]; for(let j=0;j<3;j++)for(let i=0;i<3;i++)pylons.push({x:(i-1)*55,z:(j-1)*55,index:j*3+i,received:false});
+const keys=new Set();let program,vao,indexCount,wasm=null,gameStarted=false,fieldMode=0,activeMask=0,nearest=null,nearestDistance=0,noteTimer=0,aim={x:0,z:86,yaw:0,pitch:-.065},time=0,previous=0,frameCount=0,fpsClock=0,fpsText='—',audio=null;
+const vertexSource=`#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPosition;
+layout(location=1) in vec3 aNormal;
+layout(location=2) in vec4 aMeta;
+uniform mat4 uProjection,uView;
+uniform float uTime;
+uniform vec2 uWind;
+out vec3 vNormal,vWorld;
+out vec4 vMeta;
+void main(){
+ vec3 p=aPosition;
+ if(aMeta.x>2.5 && aMeta.x<3.5){float sway=sin(uTime*1.55 + p.x*.31 + p.z*.23)*.37+uWind.x*.38;p.x+=sway*aMeta.z;p.z+=(uWind.y*.65+cos(uTime*1.13+p.z*.17)*.22)*aMeta.z;}
+ vWorld=p;vNormal=aNormal;vMeta=aMeta;
+ gl_Position=uProjection*uView*vec4(p,1.0);
+}`;
+const fragmentSource=`#version 300 es
+precision highp float;
+in vec3 vNormal,vWorld;
+in vec4 vMeta;
+out vec4 outColor;
+uniform float uTime,uMode,uFocus;
+uniform int uActiveMask;
+uniform vec3 uEye;
+float rand(vec2 p){return fract(sin(dot(p,vec2(13.134,71.912)))*43758.5453);}
+void main(){
+ float type=vMeta.x,idx=vMeta.y;
+ vec3 n=normalize(vNormal);
+ float sun=clamp(dot(n,normalize(vec3(-.52,.86,-.43))),0.0,1.0);
+ float bump=rand(floor(vWorld.xz*1.6));
+ vec3 c;
+ if(type<.5){
+  c=mix(vec3(.099,.100,.083),vec3(.29,.245,.174),clamp((vWorld.y+1.4)*.17,0.0,1.0));
+  c*=.70+sun*.46;
+  float contour=abs(fract(vWorld.y*.66+.07)-.5);
+  c=mix(c,vec3(.53,.34,.21),1.-smoothstep(.018,.065,contour));
+  c+=vec3(.024,.016,.009)*(bump-.5);
+ }else if(type<1.5){
+  c=vec3(.050,.057,.051)*(.58+sun*.69);
+ }else if(type<2.5){
+  float lit=float((uActiveMask & (1<<int(idx+.5)))!=0);
+  c=mix(vec3(.66,.19,.075),vec3(.98,.54,.11),lit);
+  c*=.57+sun*.52;
+  c+=vec3(.22,.07,.025)*(.5+.5*sin(uTime*2.8+idx*1.7))*lit;
+ }else if(type<3.5){
+  c=mix(vec3(.10,.12,.075),vec3(.53,.34,.16),vMeta.z)*(.43+sun*.55);
+ }else{
+  c=vec3(.15,.14,.12)*(.54+sun*.5);
+ }
+ if(uMode>.5){
+  float stripe=step(.77,fract(vWorld.x*.17+vWorld.z*.17));
+  c=mix(c,vec3(dot(c,vec3(.33,.4,.27))*.92, dot(c,vec3(.33,.4,.27))*.64, dot(c,vec3(.33,.4,.27))*.31),.58);
+  if(type<.5)c+=vec3(.15,.064,.013)*stripe;
+ }
+ float dotGrid=length(fract(gl_FragCoord.xy/3.7)-.5);
+ c*=mix(.81,1.16,1.-smoothstep(.25,.55,dotGrid));
+ float d=distance(vWorld,uEye);
+ float fog=clamp((d-83.)/155.,0.,.86);
+ c=mix(c,vec3(.14,.106,.086),fog);
+ outColor=vec4(c,1.0);
+}`;
+function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+function compile(){program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vertexSource));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragmentSource));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);return ['uProjection','uView','uTime','uWind','uEye','uMode','uFocus','uActiveMask'].reduce((o,k)=>(o[k]=gl.getUniformLocation(program,k),o),{});}
+let uniforms;
+function fract(x){return x-Math.floor(x)}
+function hash(x,z){let h=(Math.imul(x,374761393)+Math.imul(z,668265263))>>>0;h=Math.imul(h^(h>>>13),1274126177)>>>0;return ((h^(h>>>16))>>>0)/4294967295;}
+function noise(x,z){let ix=Math.floor(x),iz=Math.floor(z),u=fract(x),v=fract(z);u=u*u*(3-2*u);v=v*v*(3-2*v);let mx=(a,b,t)=>a+(b-a)*t;return mx(mx(hash(ix,iz),hash(ix+1,iz),u),mx(hash(ix,iz+1),hash(ix+1,iz+1),u),v);}
+function jsHeight(x,z){return -2.6+noise(x*.038,z*.038)*7+noise(x*.092,z*.092)*1.7+(2-2*noise(x*.029+71,z*.029-8))*.6;}
+const height=(x,z)=>wasm?wasm.terrain_height(x,z):jsHeight(x,z);
+function generate(){
+ let verts=[],indices=[];function vertex(pos,n,kind,id=0,aux=0,extra=0){let out=verts.length/10;verts.push(...pos,...n,kind,id,aux,extra);return out;}
+ function tri(a,b,c,kind,id=0,aux=0,extra=0){const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];let n=[uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx];let d=Math.hypot(...n)||1;n=n.map(x=>x/d);let i=vertex(a,n,kind,id,aux,extra),j=vertex(b,n,kind,id,aux,extra),k=vertex(c,n,kind,id,aux,extra);indices.push(i,j,k);}
+ const cells=130,extent=148,base=verts.length/10;
+ for(let z=0;z<=cells;z++)for(let x=0;x<=cells;x++){
+   let xx=(x/cells*2-1)*extent,zz=(z/cells*2-1)*extent,y=height(xx,zz),d=.7;
+   let n=[height(xx-d,zz)-height(xx+d,zz),2*d,height(xx,zz-d)-height(xx,zz+d)],l=Math.hypot(...n);vertex([xx,y,zz],n.map(v=>v/l),0);
+ }
+ for(let z=0;z<cells;z++)for(let x=0;x<cells;x++){let a=base+z*(cells+1)+x,b=a+1,c=a+cells+1,d=c+1;indices.push(a,c,b,b,c,d);}
+ function box(x,y,z,w,h,d,kind,id){let X=x+w/2,Y=y+h/2,Z=z+d/2;let faces=[[[x-w/2,y-h/2,z-d/2],[x+w/2,y-h/2,z-d/2],[x+w/2,y+h/2,z-d/2],[x-w/2,y+h/2,z-d/2]],[[x+w/2,y-h/2,z+d/2],[x-w/2,y-h/2,z+d/2],[x-w/2,y+h/2,z+d/2],[x+w/2,y+h/2,z+d/2]],[[x-w/2,y-h/2,z+d/2],[x-w/2,y-h/2,z-d/2],[x-w/2,y+h/2,z-d/2],[x-w/2,y+h/2,z+d/2]],[[x+w/2,y-h/2,z-d/2],[x+w/2,y-h/2,z+d/2],[x+w/2,y+h/2,z+d/2],[x+w/2,y+h/2,z-d/2]],[[x-w/2,y+h/2,z-d/2],[x+w/2,y+h/2,z-d/2],[x+w/2,y+h/2,z+d/2],[x-w/2,y+h/2,z+d/2]],[[x-w/2,y-h/2,z+d/2],[x+w/2,y-h/2,z+d/2],[x+w/2,y-h/2,z-d/2],[x-w/2,y-h/2,z-d/2]]];
+  faces.forEach(f=>{tri(f[0],f[1],f[2],kind,id);tri(f[0],f[2],f[3],kind,id)});
+ }
+ function beam(a,b,r,kind,id){let dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],len=Math.hypot(dx,dy,dz),u=[dx/len,dy/len,dz/len],s=Math.hypot(u[0],u[2])||1,v=[u[2]/s,0,-u[0]/s],w=[-u[1]*v[2],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];let start=[],end=[];
+  for(let n=0;n<4;n++){let sx=n===0||n===3?-1:1,sy=n<2?-1:1;start.push(a.map((q,k)=>q+r*(sx*v[k]+sy*w[k])));end.push(b.map((q,k)=>q+r*(sx*v[k]+sy*w[k])));}
+  for(let i=0;i<4;i++){let j=(i+1)%4;tri(start[i],start[j],end[j],kind,id);tri(start[i],end[j],end[i],kind,id);}
+ }
+ pylons.forEach(p=>{
+  const ground=height(p.x,p.z),h=15.5+p.index%3*1.1;
+  box(p.x,ground-.07,p.z,7,.5,7,1,p.index);
+  for(let dx of [-1,1])for(let dz of [-1,1])beam([p.x+dx*2.75,ground,p.z+dz*2.75],[p.x+dx*.85,ground+h,p.z+dz*.85],.23,1,p.index);
+  for(let k=0;k<3;k++){let y=ground+4.5+k*4.5,spread=2.3-k*.55;
+   beam([p.x-spread,y,p.z-spread],[p.x+spread,y,p.z-spread],.21,1,p.index);
+   beam([p.x-spread,y,p.z+spread],[p.x+spread,y,p.z+spread],.21,1,p.index);
+   beam([p.x-spread,y,p.z-spread],[p.x-spread,y,p.z+spread],.21,1,p.index);
+   beam([p.x+spread,y,p.z-spread],[p.x+spread,y,p.z+spread],.21,1,p.index);
+  }
+  box(p.x,ground+h+.8,p.z,3.4,2,.4,2,p.index);
+  box(p.x,ground+h+1.5,p.z,3.5,.22,3.5,2,p.index);
+  beam([p.x,ground+h+1.5,p.z],[p.x,ground+h+5.5,p.z],.12,2,p.index);
+  box(p.x,ground+h+5.6,p.z,1,.4,1,2,p.index);
+  for(let k=0;k<4;k++){const a=k*Math.PI/2,r=5;box(p.x+Math.sin(a)*r,ground+.2,p.z+Math.cos(a)*r,1.4,.35,1.4,2,p.index);}
+ });
+ let seed=7441;function rng(){seed=(Math.imul(seed,1664525)+1013904223)|0;return (seed>>>0)/4294967296;}
+ for(let k=0;k<1700;k++){
+   let x=(rng()*2-1)*138,z=(rng()*2-1)*138,y=height(x,z),len=.6+rng()*2.2,w=.065+rng()*.07;
+   let a=[x-w,y,z],b=[x+w,y,z],c=[x,y+len,z];tri(a,b,c,3,0,0,0);
+   // Only the top vertex receives wind displacement.
+   const last=verts.length;verts[last-2]=1;
+ }
+ for(let k=0;k<140;k++){let x=(rng()*2-1)*136,z=(rng()*2-1)*136,y=height(x,z),s=.3+rng()*.8;box(x,y+s*.18,z,s,s*.37,s,4,0);}
+ const raw=new Float32Array(verts),order=new Uint32Array(indices);
+ vao=gl.createVertexArray();gl.bindVertexArray(vao);let vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,raw,gl.STATIC_DRAW);let ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,order,gl.STATIC_DRAW);
+ for(let i=0;i<3;i++){gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,i===2?4:3,gl.FLOAT,false,40,(i===0?0:i===1?12:24));}
+ gl.bindVertexArray(null);indexCount=order.length;
+}
+function persp(fovy,aspect,near,far){const f=1/Math.tan(fovy/2),r=1/(near-far);return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*r,-1,0,0,2*far*near*r,0]);}
+function view(pos,yaw,pitch){let f=[Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)],r=[Math.cos(yaw),0,Math.sin(yaw)],u=[-Math.sin(yaw)*Math.sin(pitch),Math.cos(pitch),Math.cos(yaw)*Math.sin(pitch)];return new Float32Array([r[0],u[0],-f[0],0,r[1],u[1],-f[1],0,r[2],u[2],-f[2],0,-(r[0]*pos[0]+r[1]*pos[1]+r[2]*pos[2]),-(u[0]*pos[0]+u[1]*pos[1]+u[2]*pos[2]),f[0]*pos[0]+f[1]*pos[1]+f[2]*pos[2],1]);}
+function resize(){let dpr=Math.min(window.devicePixelRatio||1,1.5),quality=window.innerWidth<750?.68:.86,w=Math.floor(innerWidth*dpr*quality),h=Math.floor(innerHeight*dpr*quality);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}}
+function note(text){const e=ui('center-note');e.textContent=text;e.style.opacity='1';clearTimeout(noteTimer);noteTimer=setTimeout(()=>e.style.opacity='0',1600);}
+function listen(){if(!nearest||nearestDistance>16){note('SIGNAL TOO DISTANT');return;}if(!nearest.received){nearest.received=true;activeMask|=1<<nearest.index;ui('sources').textContent=String(pylons.filter(p=>p.received).length).padStart(2,'0')+' / 09';note('SIGNAL '+String(nearest.index+1).padStart(2,'0')+' / RECEIVED');if(audio)chirp();}else note('SIGNAL '+String(nearest.index+1).padStart(2,'0')+' / ALREADY HELD');}
+function toggleMode(){fieldMode=1-fieldMode;document.body.classList.toggle('grid-mode',!!fieldMode);ui('mode-name').textContent=fieldMode?'THE GRID':'THE FIELD';note(fieldMode?'THE GRID / OBSERVE':'THE FIELD / LISTEN');}
+function capture(){if(!document.pointerLockElement)canvas.requestPointerLock?.();else document.exitPointerLock?.();}
+document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();keys.add(k);if(!e.repeat&&gameStarted){if(k==='e')listen();if(k==='g')toggleMode();}});
+document.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));document.addEventListener('blur',()=>keys.clear());
+document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&gameStarted){aim.yaw+=e.movementX*.0025;aim.pitch=Math.max(-1.22,Math.min(1.22,aim.pitch-e.movementY*.0022));}});
+canvas.addEventListener('click',()=>{if(gameStarted&&!document.pointerLockElement)capture();});ui('capture').addEventListener('click',capture);
+ui('enter').addEventListener('click',()=>{gameStarted=true;ui('intro').classList.add('hidden');capture();});
+window.addEventListener('resize',resize);
+function audioStart(){const ctx=new (window.AudioContext||window.webkitAudioContext)();let master=ctx.createGain();master.gain.value=.0001;master.connect(ctx.destination);let osc=ctx.createOscillator(),osc2=ctx.createOscillator(),g1=ctx.createGain(),g2=ctx.createGain();osc.type='sine';osc2.type='triangle';g1.gain.value=.045;g2.gain.value=.015;osc.connect(g1).connect(master);osc2.connect(g2).connect(master);osc.start();osc2.start();master.gain.setTargetAtTime(.37,ctx.currentTime,.4);return{ctx,master,osc,osc2};}
+function chirp(){if(!audio)return;let{ctx}=audio;let o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(380,ctx.currentTime);o.frequency.exponentialRampToValueAtTime(130,ctx.currentTime+.24);g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.045,ctx.currentTime+.015);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.3);o.connect(g).connect(audio.master);o.start();o.stop(ctx.currentTime+.31);}
+ui('audio').addEventListener('click',async()=>{if(audio){let a=audio;audio=null;a.master.gain.setTargetAtTime(.0001,a.ctx.currentTime,.15);setTimeout(()=>a.ctx.close(),800);ui('audio').textContent='SOUND : OFF';}else{audio=audioStart();await audio.ctx.resume();ui('audio').textContent='SOUND : ON';}});
+for(let i=0;i<27;i++){let s=document.createElement('span');ui('wave').appendChild(s);}const waveNodes=[...ui('wave').children];
+function render(now){requestAnimationFrame(render);if(!vao)return;resize();let dt=Math.min((now-previous)/1000||.016,.05);previous=now;if(!gameStarted)dt=0;time+=dt;
+ if(gameStarted){let speed=(keys.has('shift')?14:8)*dt,front=(keys.has('w')||keys.has('arrowup')?1:0)-(keys.has('s')||keys.has('arrowdown')?1:0),side=(keys.has('d')?1:0)-(keys.has('a')?1:0);if(keys.has('arrowleft'))aim.yaw-=dt*1.1;if(keys.has('arrowright'))aim.yaw+=dt*1.1;let len=Math.max(1,Math.hypot(front,side));aim.x+=speed*(Math.sin(aim.yaw)*front+Math.cos(aim.yaw)*side)/len;aim.z+=speed*(-Math.cos(aim.yaw)*front+Math.sin(aim.yaw)*side)/len;aim.x=Math.max(-132,Math.min(132,aim.x));aim.z=Math.max(-132,Math.min(132,aim.z));}
+ const ground=height(aim.x,aim.z);const y=ground+3.35+(gameStarted?.036*Math.sin(time*8):0),eye=[aim.x,y,aim.z];nearest=null;nearestDistance=Infinity;
+ for(let p of pylons){let d=Math.hypot(aim.x-p.x,aim.z-p.z);if(d<nearestDistance){nearest=p;nearestDistance=d;}}
+ let windX=wasm?wasm.wind_x(time,aim.x,aim.z):.55,windZ=wasm?wasm.wind_z(time,aim.x,aim.z):-.25,signal=nearest?Math.min(1,Math.pow(Math.max(0,1-nearestDistance/57),1.7)):0;
+ if(gameStarted){ui('nearby').textContent='PYLON '+String(nearest.index+1).padStart(2,'0')+(nearest.received?' / RECEIVED':' / UNREAD');ui('distance').textContent=Math.floor(nearestDistance)+' M &nbsp;'.replace('&nbsp;',' ') + (nearestDistance<16?'— PRESS E TO RECEIVE':'— APPROACH TO RECEIVE');ui('wind-label').textContent='WIND / '+Math.round(Math.hypot(windX,windZ)*14)+' KTS';}
+ for(let i=0;i<waveNodes.length;i++){let v=(.12+signal*.9)*(.3+.7*Math.abs(Math.sin(i*.84+time*5.3)*Math.cos(i*.35-time*1.8)));waveNodes[i].style.height=(3+v*24).toFixed(0)+'px';}
+ if(audio){let at=audio.ctx.currentTime;audio.osc.frequency.setTargetAtTime(47+signal*80+Math.sin(time*.6)*4,at,.12);audio.osc2.frequency.setTargetAtTime(93+signal*132,at,.12);audio.master.gain.setTargetAtTime(.15+signal*.45,at,.22);}
+ gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.useProgram(program);gl.bindVertexArray(vao);
+ gl.uniformMatrix4fv(uniforms.uProjection,false,persp(70*Math.PI/180,canvas.width/canvas.height,.17,375));gl.uniformMatrix4fv(uniforms.uView,false,view(eye,aim.yaw,aim.pitch));gl.uniform1f(uniforms.uTime,time);gl.uniform2f(uniforms.uWind,windX,windZ);gl.uniform3fv(uniforms.uEye,new Float32Array(eye));gl.uniform1f(uniforms.uMode,fieldMode);gl.uniform1f(uniforms.uFocus,nearest?nearest.index:-1);gl.uniform1i(uniforms.uActiveMask,activeMask);gl.drawElements(gl.TRIANGLES,indexCount,gl.UNSIGNED_INT,0);
+ frameCount++;fpsClock+=dt;if(fpsClock>.95){fpsText=Math.round(frameCount/fpsClock)+' FPS';ui('fps').textContent=fpsText;fpsClock=0;frameCount=0;}
+}
+async function initialize(){
+ try{let bytes;if(window.FIELD_WASM_BASE64){let bin=atob(window.FIELD_WASM_BASE64);bytes=Uint8Array.from(bin,c=>c.charCodeAt(0)).buffer;}else{let r=await fetch('./field.wasm');if(!r.ok)throw Error('WASM HTTP '+r.status);bytes=await r.arrayBuffer();}let m=await WebAssembly.instantiate(bytes,{});wasm=m.instance.exports;ui('engine').textContent='WASM / WEBGL 2';}
+ catch(e){console.warn('WebAssembly failed, using JS fallback',e);ui('engine').textContent='JS / WEBGL 2';}
+ try{uniforms=compile();generate();resize();requestAnimationFrame(render);}catch(e){console.error(e);ui('engine').textContent='RENDER ERROR';ui('intro').querySelector('.intro-subtitle').textContent='Unable to initialize the 3D field: '+e.message;ui('enter').disabled=true;}
+}
+initialize();
+})();
+</script>
+</body>
+</html>
