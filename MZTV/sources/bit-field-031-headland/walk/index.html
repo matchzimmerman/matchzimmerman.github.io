@@ -53,7 +53,7 @@ button:focus-visible{outline:2px solid var(--glow);outline-offset:3px}
 .action:not(:disabled):hover{background:var(--hot);color:var(--ink)}
 #loadstate{margin:14px 0 0;color:var(--deep);font-weight:700;letter-spacing:.07em}
 #help{z-index:12;background:rgba(27,31,58,.75)}
-#help .panel{max-width:520px}
+#help .panel{max-width:520px;max-height:calc(100dvh - 40px);overflow:auto}
 table{width:100%;border-collapse:collapse;font-size:11px}
 td{padding:7px 5px;border-bottom:1px solid #b6b0a5}
 td:first-child{font-weight:700;width:43%}
@@ -131,7 +131,8 @@ td:first-child{font-weight:700;width:43%}
     <tr><td>? / H</td><td>Show this guide</td></tr>
   </table>
   <p class="fine">The coast and pier have simple safety boundaries; this is a camera-walk study, not a full physics game. On touchscreens: left thumb moves, right thumb looks.</p>
-  <div class="smallcap" id="destinations">QUICK JUMPS: 1 COTTAGE / 2 CLIFF / 3 STAIR / 4 PIER</div>
+  <div class="smallcap" id="destinations">QUICK JUMPS TO LANDMARKS</div>
+  <div class="actions" id="jumps"><button class="action secondary" type="button" data-jump="1">1 · COTTAGE</button><button class="action secondary" type="button" data-jump="2">2 · CLIFF</button><button class="action secondary" type="button" data-jump="3">3 · STAIR</button><button class="action secondary" type="button" data-jump="4">4 · PIER</button></div>
   <div class="actions"><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
  </section>
 </div>
@@ -263,10 +264,15 @@ $("closeHelp").addEventListener("click",()=>{help.hidden=true;if(!mobile&&mode==
 function showPlaces(){
  if(!entered||!api)return;
  help.hidden=false;
- $("destinations").textContent="CHOOSE 1–4 TO JUMP BETWEEN LANDMARKS";
+ $("destinations").textContent="CHOOSE A LANDMARK";
  if(document.pointerLockElement)document.exitPointerLock();
 }
 $("places").addEventListener("click",showPlaces);
+$("jumps").addEventListener("click",e=>{
+ const btn=e.target.closest("[data-jump]");if(!btn||!api)return;
+ setMode("walk");teleport(btn.dataset.jump);help.hidden=true;
+ if(!mobile)try{hit.requestPointerLock();}catch(err){}
+});
 hit.addEventListener("pointerdown",e=>{
  if(!entered||!api||mode!=="walk"||!help.hidden)return;
  if(e.pointerType==="touch"){
@@ -312,7 +318,7 @@ window.addEventListener("keydown",e=>{
    keys.add(k); if(entered)e.preventDefault();
  }
  if(!entered || !api)return;
- if(["1","2","3","4"].includes(k)){teleport(k);help.hidden=true;e.preventDefault();}
+ if(["1","2","3","4"].includes(k)){setMode("walk");teleport(k);help.hidden=true;e.preventDefault();}
  else if(k==="v"&&!e.repeat){setMode(mode==="walk"?"observe":"walk");}
  else if(k==="m"&&!e.repeat){setSound(!soundOn);}
  else if((k==="h"||k==="?")&&!e.repeat){if(help.hidden)showHelp();else help.hidden=true;}
