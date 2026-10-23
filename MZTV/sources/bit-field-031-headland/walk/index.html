@@ -160,7 +160,10 @@ td:first-child{font-weight:700;width:43%}
     <tr><td>? / H</td><td>Show this guide</td></tr>
   </table>
   <p class="fine">The camera floats behind the keeper with gentle inertia; this is an embodied study, not a rigid-body physics game. On touchscreens: left thumb moves, right thumb looks. Dragging right pans right (not inverted). WALK uses lighter hatching so movement is easier to see; original ink can be toggled back on.</p>
-  <div class="smallcap" id="destinations">QUICK JUMPS TO LANDMARKS</div>
+  <div class="smallcap">TO SEE WHAT SEALS SEE · MEMORY PLACES</div>
+  <p class="fine">Interpretive objects inspired by Galway memories, placed within HEADLAND's geography rather than surveyed GPS reconstructions.</p>
+  <div class="smallcap" id="destinations">HEADLAND LANDMARKS</div>
+  <div class="actions" id="memoryJumps" aria-label="Memory places"></div>
   <div class="actions" id="jumps"><button class="action secondary" type="button" data-jump="1">1 · COTTAGE</button><button class="action secondary" type="button" data-jump="2">2 · CLIFF</button><button class="action secondary" type="button" data-jump="3">3 · STAIR</button><button class="action secondary" type="button" data-jump="4">4 · PIER</button></div>
   <div class="actions"><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
  </section>
@@ -181,7 +184,7 @@ async function bootKeeperWorld(){
    ["const Q = new URLSearchParams(location.search);","const Q = new URLSearchParams('?info=0&seed=31081&lines="+(mobile?(innerWidth>innerHeight?440:420):720)+"');"],
    ["function keeperTick(dt) {","/* The visitor controls HEADLAND's existing single keeper mesh; no duplicate figure. */\nconst WALK_POSE={active:false,pos:V(62,0,156),heading:0,speed:0};\nfunction keeperPlayerTick(dt){\n if(!WALK_POSE.active)return false;\n const k=keeper,p=WALK_POSE;\n k.visible=true;k.pos.copy(p.pos);k.dir.set(Math.sin(p.heading),0,-Math.cos(p.heading));\n k.state=p.speed>0.14?'walk':'dwell';\n k.still=p.speed>0.14?0:(k.still||0)+dt;\n k.walked+=p.speed*dt;\n const m=k.mesh;m.visible=true;m.position.copy(k.pos);m.rotation.y=Math.atan2(k.dir.x,k.dir.z);\n k.move=lerp(k.move||0,Math.min(1,p.speed/2.6),1-Math.exp(-dt*3));\n const wt=fromBearingTravel(WX.windDir);\n const wl=V(wt.x,0,wt.y).multiplyScalar(clamp(WX.wind/12,0,1.4)).applyAxisAngle(V(0,1,0),-m.rotation.y);\n m.position.y+=0.03*Math.sin(k.walked*3.4)*k.move;\n m.userData.mats.forEach(mt=>{mt.uniforms.uWalk.value=k.walked;mt.uniforms.uMove.value=k.move;mt.uniforms.uWindL.value.copy(wl);});\n return true;\n}\nfunction keeperTick(dt) { if(keeperPlayerTick(dt))return;"],
    ["window.MZ = {","window.MZ = {\n claimKeeper(){WALK_POSE.active=true;WALK_POSE.pos.copy(keeper.pos);WALK_POSE.speed=0;keeperPlayerTick(0);},\n driveKeeper(x,y,z,heading,speed){\n  if(!WALK_POSE.active||![x,y,z,heading,speed].every(Number.isFinite))return;\n  WALK_POSE.pos.set(x,y,z);WALK_POSE.heading=heading;WALK_POSE.speed=clamp(speed,0,9);keeperPlayerTick(0);\n },\n get playerKeeper(){return WALK_POSE.active;},\n get memoryPlaces(){return SEALS_SCENES.map(({key,title,x,z,range})=>({key,title,x,z,range}));},"],
-   ["/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */",scenes+"\\n/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */"]
+   ["/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */",scenes+"\n/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */"]
   ];
   for(const [from,to] of edits){if(html.split(from).length!==2)throw new Error("HEADLAND changed: "+from);html=html.replace(from,to);}
   frame.srcdoc=html;
@@ -235,7 +238,12 @@ function teleport(dest){
  if(!api)return;
  const g=api.geo;
  let x,z,name;
- if(dest==="1" || dest==="HOUSE"){x=g.HOUSE[0];z=g.HOUSE[2]-9;name="KEEPER'S COTTAGE"}
+ const memory=api.memoryPlaces.find(p=>p.key===dest);
+ if(memory){
+   const offset={walls:[-3,4],apple:[-3,-8],bicycle:[0,-7],gate:[0,-7],barn:[0,-11],hay:[2,8],turf:[-1,7],gravesite:[-2,20]}[memory.key]||[0,6];
+   x=memory.x+offset[0];z=memory.z+offset[1];name=memory.title;
+ }
+ else if(dest==="1" || dest==="HOUSE"){x=g.HOUSE[0];z=g.HOUSE[2]-9;name="KEEPER'S COTTAGE"}
  else if(dest==="2" || dest==="CLIFF"){x=-4;z=api.coast(-4)+12;name="CLIFF PATH"}
  else if(dest==="3" || dest==="STAIR"){x=g.PIER_X;z=g.zT+3;name="GULLY STAIR"}
  else {x=g.PIER_X;z=g.zL-17;name="THE PIER"}
@@ -308,6 +316,15 @@ function readyCheck(){
  if(!inside || typeof inside.h!=="function" || typeof inside.look!=="function" || typeof inside.claimKeeper!=="function" || typeof inside.driveKeeper!=="function" || !inside.geo)return;
  api=inside;ready=true;
  baselineInk={...api.state.S.grammar};inkEpoch=api.state.S.epoch;
+ if(api.memoryPlaces?.length){
+   const target=$("memoryJumps");
+   for(const place of api.memoryPlaces){
+     const btn=document.createElement("button");
+     btn.className="action secondary";btn.type="button";
+     btn.dataset.jump=place.key;btn.textContent=place.title;
+     target.append(btn);
+   }
+ }
  clearInterval(poll);
  $("enter").disabled=false;$("observe").disabled=false;
  $("loadstate").textContent="LIVE ENGINE CONNECTED · READY TO ENTER";
@@ -339,6 +356,11 @@ function showPlaces(){
  if(document.pointerLockElement)document.exitPointerLock();
 }
 $("places").addEventListener("click",showPlaces);
+$("memoryJumps").addEventListener("click",e=>{
+ const btn=e.target.closest("[data-jump]");if(!btn||!api)return;
+ setMode("walk");teleport(btn.dataset.jump);help.hidden=true;
+ if(!mobile)try{hit.requestPointerLock();}catch(e){}
+});
 $("jumps").addEventListener("click",e=>{
  const btn=e.target.closest("[data-jump]");if(!btn||!api)return;
  setMode("walk");teleport(btn.dataset.jump);help.hidden=true;
