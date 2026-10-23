@@ -55,7 +55,7 @@ try{
  if(!r.ok||!scenes.ok||!api.ok)throw Error("HEADLAND source, SEALS scenery, or capture API unavailable");
  let world=await r.text(),memory=await scenes.text(),capture=await api.text();
  const edits=[
-  ["const Q = new URLSearchParams(location.search);","const Q = new URLSearchParams('?info=0&seed=31081&lines=560&audio=0');"],
+  ["const Q = new URLSearchParams(location.search);","const Q = new URLSearchParams('?info=0&seed=31081&lines=560&audio=0&capture=1&live=0&hour=14');"],
   ["const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 40000);","let camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 40000);"],
   ["/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */",memory+"\n/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */"],
   ["window.MZ = {","window.MZ = {\n"+capture]
@@ -107,7 +107,7 @@ async function renderMap(){
   downloadName="HEADLAND_TRUE_OVERHEAD_"+($("showPins").checked?"ANNOTATED":"CLEAN")+".png";
   $("download").disabled=false;
   $("points").innerHTML="<b>WORLD X / Z COORDINATES</b>"+shot.locations.map((p,i)=>"<div>"+String(i+1).padStart(2,"0")+" · "+p.name+" · ("+p.x.toFixed(1)+", "+p.z.toFixed(1)+")</div>").join("");
-  puts("PIXELS CAPTURED · "+w+" × "+h+" · DOWNLOAD READY");
+  puts("SOURCE WORLD FRAMEBUFFER CAPTURED · "+w+" × "+h+" · PNG READY");
  }catch(e){puts("CAPTURE ERROR: "+e.message);console.error(e);}
  finally{btn.disabled=false;}
 }
