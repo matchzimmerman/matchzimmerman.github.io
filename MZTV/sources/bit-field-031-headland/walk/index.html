@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1f3a">
+<meta name="description" content="Enter MZTV BIT FIELD 031 — HEADLAND. A walkable view into the actual living world.">
+<title>HEADLAND / WALK — MZTV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+:root{--ink:#1b1f3a;--deep:#2c3e7a;--sea:#3f9aa6;--hot:#f0603f;--glow:#f2c14e;--paper:#efe6cf;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font:11px/1.55 var(--mono)}
+button{font:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible{outline:2px solid var(--glow);outline-offset:3px}
+#scene,#scene iframe,#hit{position:fixed;inset:0;width:100%;height:100%}
+#scene iframe{border:0;background:var(--ink);pointer-events:none}
+#hit{z-index:2;cursor:crosshair;touch-action:none;outline:none}
+#view{position:fixed;inset:0;z-index:4;pointer-events:none;padding:clamp(13px,2.2vw,28px);display:flex;flex-direction:column;justify-content:space-between}
+#top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+#branding{background:var(--paper);border:2px solid var(--ink);color:var(--ink);padding:9px 12px;max-width:min(76vw,380px);box-shadow:4px 4px 0 var(--hot)}
+#branding strong{display:block;font-size:16px;letter-spacing:.02em;line-height:1.2}
+#branding .micro{font-size:9px;letter-spacing:.17em;color:var(--deep);font-weight:700}
+#status{background:var(--ink);border:1px solid var(--paper);padding:8px 10px;font-size:10px;letter-spacing:.06em;text-align:right;max-width:45vw}
+#status b{color:var(--glow)}
+#bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+#readout{background:color-mix(in srgb,var(--ink) 92%,transparent);color:var(--paper);border-left:3px solid var(--hot);padding:10px 13px;max-width:min(500px,82vw)}
+#where{font-weight:700;color:var(--glow);letter-spacing:.13em}
+#conditions{font-size:10px;color:var(--paper);opacity:.87;margin-top:5px}
+#controls{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end;max-width:49vw;pointer-events:auto}
+.control{border:1px solid var(--paper);color:var(--paper);background:var(--ink);padding:9px 11px;letter-spacing:.06em;font-weight:600}
+.control:hover,.control[aria-pressed="true"]{background:var(--paper);color:var(--ink)}
+#crosshair{position:absolute;top:50%;left:50%;width:13px;height:13px;transform:translate(-50%,-50%);opacity:.85}
+#crosshair:before,#crosshair:after{content:"";position:absolute;background:var(--paper)}
+#crosshair:before{width:13px;height:1px;top:6px;left:0}
+#crosshair:after{height:13px;width:1px;left:6px;top:0}
+#crosshair.hidden{display:none}
+#reticle-caption{position:absolute;top:calc(50% + 17px);left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:.16em;text-shadow:0 1px 2px var(--ink);white-space:nowrap}
+#reticle-caption.hidden{display:none}
+#gate,#help{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:22px;background:rgba(27,31,58,.78)}
+#gate[hidden],#help[hidden]{display:none}
+.panel{background:var(--paper);color:var(--ink);border:3px solid var(--ink);box-shadow:9px 9px 0 var(--hot);width:min(590px,100%);padding:clamp(20px,4vw,34px)}
+.panel .eyebrow{font-size:10px;color:var(--hot);font-weight:700;letter-spacing:.14em}
+.panel h1{font-size:clamp(38px,8vw,74px);line-height:.9;margin:16px 0 10px;letter-spacing:-.06em}
+.panel h2{font-size:24px;line-height:1.1;margin:12px 0 16px}
+.panel p{font-size:12px;line-height:1.8;max-width:49ch}
+.panel .fine{font-size:10px;color:var(--deep)}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}
+.action{border:2px solid var(--ink);background:var(--ink);color:var(--paper);padding:12px 16px;font-size:11px;font-weight:700}
+.action.secondary{background:transparent;color:var(--ink)}
+.action:disabled{cursor:wait;opacity:.48}
+.action:not(:disabled):hover{background:var(--hot);color:var(--ink)}
+#loadstate{margin:14px 0 0;color:var(--deep);font-weight:700;letter-spacing:.07em}
+#help{z-index:12;background:rgba(27,31,58,.75)}
+#help .panel{max-width:520px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+td{padding:7px 5px;border-bottom:1px solid #b6b0a5}
+td:first-child{font-weight:700;width:43%}
+.smallcap{font-weight:700;color:var(--hot);font-size:10px;letter-spacing:.12em}
+#mobile{display:none}
+#fade{position:fixed;inset:0;z-index:3;background:var(--ink);opacity:0;pointer-events:none;transition:opacity .22s}
+#fade.flash{opacity:.65}
+@media (pointer:coarse){
+  #mobile{display:block;position:fixed;inset:0;pointer-events:none;z-index:5}
+  #stick{position:absolute;width:105px;height:105px;left:24px;bottom:120px;border:1px solid rgba(239,230,207,.7);border-radius:50%;background:rgba(27,31,58,.32)}
+  #nub{position:absolute;width:42px;height:42px;left:31px;top:31px;background:rgba(239,230,207,.75);border:2px solid var(--ink);border-radius:50%;transform:translate(0,0)}
+  #lookTip{position:absolute;right:22px;bottom:132px;color:var(--paper);text-shadow:0 2px 3px var(--ink);letter-spacing:.16em;font-size:10px;text-align:right}
+  #hit{cursor:default}
+}
+@media (max-width:680px){
+ #branding strong{font-size:14px}
+ #branding{padding:7px 9px}
+ #status{font-size:9px;max-width:44vw}
+ #bottom{align-items:stretch;flex-direction:column;gap:7px}
+ #readout{max-width:100%}
+ #controls{max-width:100%;justify-content:flex-start}
+ .control{font-size:9px;padding:8px}
+ #view{padding:12px}
+ #reticle-caption{display:none}
+}
+@media (prefers-reduced-motion:reduce){#fade{transition:none}}
+</style>
+</head>
+<body>
+<div id="scene"><iframe id="headland" src="../?info=0&amp;seed=31081&amp;lines=720" title="Original HEADLAND world engine" allow="autoplay"></iframe></div>
+<div id="hit" tabindex="0" aria-label="Walkable HEADLAND viewport; click to look around"></div>
+<div id="fade"></div>
+<div id="view">
+ <div id="top">
+  <div id="branding"><div class="micro">MZTV / BIT FIELD 031</div><strong>HEADLAND / WALK</strong><div class="micro">GALWAY BAY · INTERACTIVE STUDY 001</div></div>
+  <div id="status"><b id="modeLabel">CONNECTING</b><div id="lockLabel">THE WORLD IS LOADING</div></div>
+ </div>
+ <div id="crosshair" class="hidden"></div><div id="reticle-caption" class="hidden">LOOK · WALK · OBSERVE</div>
+ <div id="bottom">
+  <div id="readout"><div id="where">HEADLAND · INVERIN</div><div id="conditions">INITIALIZING WEATHER AND INHABITANTS</div></div>
+  <div id="controls">
+   <button type="button" class="control" id="sound" aria-pressed="false">SOUND OFF</button>
+   <button type="button" class="control" id="viewMode">OBSERVE [V]</button>
+   <button type="button" class="control" id="places">GO TO [1–4]</button>
+   <button type="button" class="control" id="helpButton">CONTROLS [?]</button>
+  </div>
+ </div>
+</div>
+<div id="mobile" aria-hidden="true"><div id="stick"><div id="nub"></div></div><div id="lookTip">DRAG RIGHT SIDE<br>TO LOOK</div></div>
+<div id="gate">
+ <section class="panel">
+  <div class="eyebrow">MATCH ZIMMERMAN CREATIVE MEDIA GROUP / MZ WORLD</div>
+  <h1>HEAD<br>LAND</h1>
+  <p>Not a reconstruction. This is the actual living <b>BIT FIELD 031</b> world, with its original carved-ink renderer, changing Atlantic weather, autonomous inhabitants and sounds. The visitor can now walk through it.</p>
+  <p class="fine">The landscape continues its own life. The visitor does not control the keeper, weather or uncanny events.</p>
+  <div class="actions">
+   <button class="action" id="enter" type="button" disabled>ENTER THE HEADLAND</button>
+   <button class="action secondary" id="observe" type="button" disabled>WATCH THE CAMERAS</button>
+  </div>
+  <div id="loadstate" role="status">CONNECTING TO THE ORIGINAL WORLD…</div>
+ </section>
+</div>
+<div id="help" hidden>
+ <section class="panel">
+  <div class="eyebrow">HEADLAND / FIELD NOTES</div>
+  <h2>Walking the world</h2>
+  <table>
+    <tr><td>W A S D / ARROWS</td><td>Move around the coast</td></tr>
+    <tr><td>MOUSE / DRAG</td><td>Look around</td></tr>
+    <tr><td>SHIFT</td><td>Move faster</td></tr>
+    <tr><td>1 / 2 / 3 / 4</td><td>Cottage / cliff / stair / pier</td></tr>
+    <tr><td>V</td><td>Walking / original camera crew</td></tr>
+    <tr><td>M</td><td>Toggle HEADLAND sound</td></tr>
+    <tr><td>ESC</td><td>Release pointer</td></tr>
+    <tr><td>? / H</td><td>Show this guide</td></tr>
+  </table>
+  <p class="fine">The coast and pier have simple safety boundaries; this is a camera-walk study, not a full physics game. On touchscreens: left thumb moves, right thumb looks.</p>
+  <div class="smallcap" id="destinations">QUICK JUMPS: 1 COTTAGE / 2 CLIFF / 3 STAIR / 4 PIER</div>
+  <div class="actions"><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
+ </section>
+</div>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const frame=$("headland"), hit=$("hit"), gate=$("gate"), help=$("help");
+const mobile=matchMedia("(pointer:coarse)").matches;
+const keys=new Set();
+let api=null,entered=false,mode="walk",soundOn=false,ready=false,lookTouch=null,joyTouch=null,joyX=0,joyY=0;
+let last=performance.now(),lastLabel=0,walkDistance=0;
+const pos={x:62,y:25,z:153};
+let yaw=0,pitch=-0.065,ground=23,velX=0,velZ=0;
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const touchStart={x:0,y:0};
+function groundAt(x,z){
+ const g=api.geo;
+ const h=api.h(x,z);
+ if(Math.abs(x-g.PIER_X)<1.7 && z<=g.zL && z>=g.PIER_END_Z+1.5) return Math.max(h,g.DECK);
+ return h;
+}
+function isPier(x,z){
+ const g=api.geo;
+ return Math.abs(x-g.PIER_X)<1.65 && z<=g.zL && z>=g.PIER_END_Z+1.5;
+}
+function canStep(x,z,fromX,fromZ){
+ if(x < -190 || x>176 || z < -235 || z>270) return false;
+ if(!isPier(x,z) && z < api.coast(x)+2.2) return false;
+ const h=groundAt(x,z),old=groundAt(fromX,fromZ);
+ if(!Number.isFinite(h))return false;
+ const dist=Math.hypot(x-fromX,z-fromZ);
+ return Math.abs(h-old)<=Math.max(0.9,dist*2.2) || isPier(x,z);
+}
+function facing(){
+ const c=Math.cos(pitch);
+ return [Math.sin(yaw)*c,Math.sin(pitch),-Math.cos(yaw)*c];
+}
+function setLook(){
+ if(!api || mode!=="walk" || !entered)return;
+ const d=facing();
+ api.look([pos.x,pos.y,pos.z],[pos.x+d[0]*100,pos.y+d[1]*100,pos.z+d[2]*100],76);
+}
+function teleport(dest){
+ if(!api)return;
+ const g=api.geo;
+ let x,z,name;
+ if(dest==="1" || dest==="HOUSE"){x=g.HOUSE[0];z=g.HOUSE[2]-9;name="KEEPER'S COTTAGE"}
+ else if(dest==="2" || dest==="CLIFF"){x=-4;z=api.coast(-4)+12;name="CLIFF PATH"}
+ else if(dest==="3" || dest==="STAIR"){x=g.PIER_X;z=g.zT+3;name="GULLY STAIR"}
+ else {x=g.PIER_X;z=g.zL-17;name="THE PIER"}
+ pos.x=x;pos.z=z;ground=groundAt(x,z);pos.y=ground+1.72;
+ yaw=0;pitch=-.045;velX=velZ=0;
+ $("where").textContent=name+" / GALWAY BAY";
+ $("fade").classList.add("flash");
+ setTimeout(()=> $("fade").classList.remove("flash"),180);
+ setLook();
+}
+function setMode(m){
+ if(!api)return;
+ mode=m;
+ $("modeLabel").textContent=m==="walk"?"WALKING":"OBSERVING";
+ $("viewMode").textContent=m==="walk"?"OBSERVE [V]":"WALK [V]";
+ $("crosshair").classList.toggle("hidden",m!=="walk");
+ $("reticle-caption").classList.toggle("hidden",m!=="walk");
+ $("viewMode").setAttribute("aria-pressed",String(m==="observe"));
+ if(m==="observe"){
+   api.look(null);
+   if(document.pointerLockElement)document.exitPointerLock();
+   $("lockLabel").textContent="AUTONOMOUS CAMERA CREW";
+ } else {
+   setLook();
+   $("lockLabel").textContent=mobile?"LEFT MOVE · RIGHT LOOK":"CLICK TO LOOK · WASD MOVE";
+ }
+}
+function setSound(next){
+ if(!api)return;
+ if(Boolean(next)!==soundOn){
+   api.audio.mute();
+   soundOn=Boolean(next);
+ }
+ if(soundOn)api.audio.start();
+ $("sound").textContent=soundOn?"SOUND ON":"SOUND OFF";
+ $("sound").setAttribute("aria-pressed",String(soundOn));
+}
+function begin(m){
+ if(!api)return;
+ entered=true;
+ gate.hidden=true;
+ setMode(m);
+ if(m==="walk")teleport("HOUSE");
+ setSound(true);
+ if(!mobile && m==="walk") {
+   try{hit.requestPointerLock();}catch(e){}
+ }
+ $("hit").focus({preventScroll:true});
+}
+function readyCheck(){
+ let inside;
+ try{inside=frame.contentWindow && frame.contentWindow.MZ;}catch(e){
+   $("loadstate").textContent="The HEADLAND source must be on the same website origin.";
+   return;
+ }
+ if(!inside || typeof inside.h!=="function" || typeof inside.look!=="function" || !inside.geo)return;
+ api=inside;ready=true;
+ clearInterval(poll);
+ $("enter").disabled=false;$("observe").disabled=false;
+ $("loadstate").textContent="LIVE ENGINE CONNECTED · READY TO ENTER";
+ $("modeLabel").textContent="READY";
+ $("lockLabel").textContent="ORIGINAL MZTV WORLD";
+ // The original world's sound starts only on an explicit visitor gesture.
+ if(!api.audio.muted)api.audio.mute();
+ soundOn=false;
+}
+const poll=setInterval(readyCheck,200);
+frame.addEventListener("load",readyCheck);
+setTimeout(()=>{if(!ready)$("loadstate").textContent="STILL LOADING. WEBGL 2 AND NETWORK ACCESS ARE REQUIRED.";},18000);
+$("enter").addEventListener("click",()=>begin("walk"));
+$("observe").addEventListener("click",()=>begin("observe"));
+$("sound").addEventListener("click",()=>setSound(!soundOn));
+$("viewMode").addEventListener("click",()=>{
+ const m=mode==="walk"?"observe":"walk";
+ setMode(m);
+ if(m==="walk" && !mobile)try{hit.requestPointerLock();}catch(e){}
+});
+function showHelp(){help.hidden=false;if(document.pointerLockElement)document.exitPointerLock();}
+$("helpButton").addEventListener("click",showHelp);
+$("closeHelp").addEventListener("click",()=>{help.hidden=true;if(!mobile&&mode==="walk")try{hit.requestPointerLock();}catch(e){}});
+function showPlaces(){
+ if(!entered||!api)return;
+ help.hidden=false;
+ $("destinations").textContent="CHOOSE 1–4 TO JUMP BETWEEN LANDMARKS";
+ if(document.pointerLockElement)document.exitPointerLock();
+}
+$("places").addEventListener("click",showPlaces);
+hit.addEventListener("pointerdown",e=>{
+ if(!entered||!api||mode!=="walk"||!help.hidden)return;
+ if(e.pointerType==="touch"){
+   if(e.clientX<innerWidth*.5 && joyTouch===null){
+     joyTouch=e.pointerId;touchStart.x=e.clientX;touchStart.y=e.clientY;
+     joyX=0;joyY=0;
+   }else if(lookTouch===null){lookTouch=e.pointerId;touchStart["lx"]=e.clientX;touchStart["ly"]=e.clientY;}
+   hit.setPointerCapture(e.pointerId);
+   e.preventDefault();
+ }else{
+   if(!document.pointerLockElement)try{hit.requestPointerLock()}catch(err){}
+ }
+});
+hit.addEventListener("pointermove",e=>{
+ if(!entered||mode!=="walk"||!help.hidden)return;
+ if(e.pointerType==="touch"){
+   if(e.pointerId===joyTouch){
+     joyX=clamp((e.clientX-touchStart.x)/50,-1,1);
+     joyY=clamp((e.clientY-touchStart.y)/50,-1,1);
+     const mag=Math.max(1,Math.hypot(joyX,joyY));joyX/=mag;joyY/=mag;
+     $("nub").style.transform="translate("+(joyX*31)+"px,"+(joyY*31)+"px)";
+   }else if(e.pointerId===lookTouch){
+     const dx=e.clientX-touchStart.lx,dy=e.clientY-touchStart.ly;
+     yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-1.38,1.38);
+     touchStart.lx=e.clientX;touchStart.ly=e.clientY;
+   }
+ }else if(document.pointerLockElement===hit){
+   yaw-=e.movementX*.002;pitch=clamp(pitch-e.movementY*.002,-1.38,1.38);
+ }
+});
+function endPointer(e){
+ if(e.pointerId===joyTouch){joyTouch=null;joyX=joyY=0;$("nub").style.transform="translate(0,0)";}
+ if(e.pointerId===lookTouch)lookTouch=null;
+}
+hit.addEventListener("pointerup",endPointer);hit.addEventListener("pointercancel",endPointer);
+document.addEventListener("pointerlockchange",()=>{
+ if(!entered||mode!=="walk")return;
+ $("lockLabel").textContent=document.pointerLockElement===hit?"MOUSE CAPTURED · ESC RELEASES":"CLICK TO LOOK · WASD MOVE";
+});
+window.addEventListener("keydown",e=>{
+ const k=e.key.toLowerCase();
+ if(["w","a","s","d","arrowup","arrowleft","arrowdown","arrowright","shift"," "].includes(k)){
+   keys.add(k); if(entered)e.preventDefault();
+ }
+ if(!entered || !api)return;
+ if(["1","2","3","4"].includes(k)){teleport(k);help.hidden=true;e.preventDefault();}
+ else if(k==="v"&&!e.repeat){setMode(mode==="walk"?"observe":"walk");}
+ else if(k==="m"&&!e.repeat){setSound(!soundOn);}
+ else if((k==="h"||k==="?")&&!e.repeat){if(help.hidden)showHelp();else help.hidden=true;}
+});
+window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
+window.addEventListener("blur",()=>keys.clear());
+function updateMovement(dt){
+ if(!entered||!api||mode!=="walk"||!help.hidden)return;
+ const f=(keys.has("w")||keys.has("arrowup")?1:0)-(keys.has("s")||keys.has("arrowdown")?1:0)-joyY;
+ const r=(keys.has("d")||keys.has("arrowright")?1:0)-(keys.has("a")||keys.has("arrowleft")?1:0)+joyX;
+ const mag=Math.hypot(f,r),speed=keys.has("shift")?9.0:5.5;
+ const norm=mag>1?1/mag:1;
+ const tx=(r*Math.cos(yaw)+f*Math.sin(yaw))*norm*speed;
+ const tz=(r*Math.sin(yaw)-f*Math.cos(yaw))*norm*speed;
+ const rate=1-Math.exp(-dt*11);
+ velX+=(tx-velX)*rate;velZ+=(tz-velZ)*rate;
+ const nx=pos.x+velX*dt,nz=pos.z+velZ*dt;
+ if(canStep(nx,pos.z,pos.x,pos.z))pos.x=nx;else velX=0;
+ if(canStep(pos.x,nz,pos.x,pos.z))pos.z=nz;else velZ=0;
+ const wantGround=groundAt(pos.x,pos.z);
+ ground+=(wantGround-ground)*(1-Math.exp(-dt*12));
+ walkDistance+=Math.hypot(velX,velZ)*dt;
+ const bob=Math.min(0.035,mag*.024)*Math.sin(walkDistance*2.0);
+ pos.y=ground+1.72+bob;
+ setLook();
+}
+function updateReadout(){
+ if(!api||!entered)return;
+ let label="HEADLAND / GALWAY BAY";
+ const g=api.geo,near=(x,z,r)=>Math.hypot(pos.x-x,pos.z-z)<r;
+ if(near(g.HOUSE[0],g.HOUSE[2],25))label="KEEPER'S COTTAGE";
+ else if(isPier(pos.x,pos.z))label="THE PIER";
+ else if(near(g.PIER_X,g.zT,18))label="GULLY STAIR";
+ else if(near(-4,api.coast(-4)+12,24))label="CLIFF PATH";
+ $("where").textContent=label+" · "+(mode==="walk"?"ON FOOT":"OBSERVING");
+ try{
+   const state=api.state,wx=state.WX;
+   const swell=Number.isFinite(wx.swellH)?wx.swellH.toFixed(1):"—";
+   const wind=Number.isFinite(wx.wind)?wx.wind.toFixed(1):"—";
+   const ev=state.live.ev?" · EVENT: "+state.live.ev.toUpperCase():"";
+   $("conditions").textContent="SWELL "+swell+" M · WIND "+wind+" M/S · "+(wx.live?"LIVE":"SIMULATED")+" WEATHER"+ev;
+ }catch(e){}
+}
+function loop(now){
+ const dt=clamp((now-last)/1000,0,.045);last=now;
+ if(api&&entered){updateMovement(dt);if(now-lastLabel>500){updateReadout();lastLabel=now;}}
+ requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
