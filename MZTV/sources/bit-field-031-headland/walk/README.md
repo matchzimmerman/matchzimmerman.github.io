@@ -79,3 +79,16 @@ Inline WALK JavaScript and the standalone SEALS geometry injection were syntax c
 
 ### Original stream protection
 `MZTV/sources/bit-field-031-headland/index.html` remains unchanged. The WALK instance stores its own seeded headland state, separate from the broadcast; it is neither the same clock frame nor a multiplayer-linked counterpart.
+
+## TASK01 — Relocate GRAVESITE 12 to western headland (2026-10-23)
+
+Illustrator markup: `image.png`, panels 01.a–01.d. The circled destination is the narrow western headland looking seaward, not the previous inland hill. Interpreted placement (pending photographic refinement):
+
+- **Old location:** X -108, Z 139.
+- **New location:** X -136, Z -124 (approximately 40 world units inland from the western coastline at X -136). Procedural cliff surface height is about 49 world units here.
+- **Source implementation:** `walk/seals-scenes.js`, `GRAVESITE_ANCHOR`. The *existing* three-sided drystone enclosure, three headstones with uninscribed caps and ground slabs, and nearby rough stones move as one assembly. Original material/ink IDs, dimensions, local offsets and terrain-following stone placement are preserved.
+- **Visitor navigation:** existing gravesite place button and dynamic map pin automatically follow the new `memoryPlaces` coordinates. The destination offset remains inland of the plot.
+- **Scope:** WALK-only SEALS scene geometry. The original MZTV broadcast source was not edited; the old inland gravesite is removed (not duplicated).
+- **Status:** source change and syntax verified. Actual visual rendering, exact relationship to the cliff edge and user-supplied photographic reference still require experiential check.
+
+Follow-up photo may refine exact world-unit placement, orientation and masonry/stone details; the initial interpretation intentionally avoids adding new narrative or inscriptions.
