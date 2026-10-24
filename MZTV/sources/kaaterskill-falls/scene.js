@@ -136,9 +136,11 @@ function waterSheet(fall,idx){
  const geo=new THREE.PlaneGeometry(idx===0?15:11,fall.span,46,72);
  geo.rotateY(Math.PI); // face the lower viewing side
  const vertex=`
- uniform float uTime;uniform float uFlow;varying vec2 vUv;
+ uniform float uTime;uniform float uFlow;uniform float uBend;varying vec2 vUv;
  void main(){
  vUv=uv;vec3 p=position;
+ // The sheet hugs the descending rock face rather than cutting through it.
+ p.z -= (1.0-vUv.y)*uBend;
  p.x+=sin(vUv.x*46.0+uTime*1.2+vUv.y*22.0)*0.14+
        sin(vUv.x*17.0-uTime*1.9+vUv.y*9.0)*.26;
  p.z+=sin(vUv.x*31.0+vUv.y*43.0-uTime*4.0)*.34;
@@ -157,7 +159,7 @@ function waterSheet(fall,idx){
  float a=clamp(.67+.35*uFlow+.09*streak,0.,1.);
  gl_FragColor=vec4(c,a);
  }`;
- const material=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uFlow:{value:1}},
+ const material=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uFlow:{value:1},uBend:{value:idx===0?14:11}},
  vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,transparent:true,depthWrite:false});
  const o=new THREE.Mesh(geo,material);
  o.position.set(fall.x,(fall.top+fall.bottom)/2,fall.z);o.renderOrder=3;
