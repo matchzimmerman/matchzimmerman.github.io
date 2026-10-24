@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Line of Position</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* a classroom conductor: RUN (projector + teacher cue strip) and PLAN (the lesson).
+   day = chart paper; "night room" = the chart room under red light, for a darkened classroom */
+:root{
+  --paper:#f3f4ef; --sheet:#fbfbf8; --grid:#a9bccb; --grid2:#d9e2e8; --ink:#1c2833; --muted:#5d6b77;
+  --lop:#b0176a; --sun:#d9690b; --ring:#2f6f8f; --rule:#cfd7dc; --cue:#e9ece6;
+  --type:'Courier Prime','Courier New',Courier,monospace;
+  --label:'Barlow Semi Condensed','Arial Narrow',Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0c0606; --sheet:#110808; --grid:#4a1a17; --grid2:#2a0f0d; --ink:#f0b3a6; --muted:#a8675d;
+  --lop:#ff5a4a; --sun:#ffb24a; --ring:#d9776a; --rule:#3a1714; --cue:#180a09; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0c0606; --sheet:#110808; --grid:#4a1a17; --grid2:#2a0f0d; --ink:#f0b3a6; --muted:#a8675d;
+  --lop:#ff5a4a; --sun:#ffb24a; --ring:#d9776a; --rule:#3a1714; --cue:#180a09; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--label)}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding-block:10px;border-bottom:1px solid var(--rule);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--sheet)}
+.brand{font:700 14px var(--label);letter-spacing:.22em;text-transform:uppercase;margin-right:auto}
+.brand span{color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:none;margin-left:8px}
+.btn{font:600 13px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--ink);background:var(--sheet);
+  border:1px solid var(--ink);padding:7px 14px;cursor:pointer;min-height:38px;text-decoration:none;display:inline-flex;align-items:center}
+.btn:hover{background:var(--ink);color:var(--sheet)}
+.btn[aria-pressed="true"],.btn[aria-current="page"]{background:var(--ink);color:var(--sheet)}
+.btn.quiet{border-color:var(--rule);font-weight:500}
+.btn:focus-visible,select:focus-visible{outline:2px solid var(--lop);outline-offset:2px}
+select{font:500 14px var(--label);color:var(--ink);background:var(--sheet);border:1px solid var(--rule);min-height:38px;padding:4px 8px}
+[hidden]{display:none!important}
+
+/* RUN */
+#run{height:calc(100% - 59px);display:grid;grid-template-rows:minmax(0,1fr) auto}
+.stage{position:relative;min-height:0;overflow:hidden;background:var(--sheet)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.proj{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:2.2vh;
+  padding-left:max(5vw,env(safe-area-inset-left,0px));padding-right:max(5vw,env(safe-area-inset-right,0px));padding-block:3vh}
+.proj.hide{display:none}
+.proj>*{flex-shrink:0}
+.proj{overflow:auto}
+.proj{background:linear-gradient(90deg,var(--sheet) 0 46%,transparent 74%)}
+@media (max-width:700px){.proj{background:linear-gradient(180deg,var(--sheet) 0 70%,transparent 100%)}}
+.clock{font:700 clamp(28px,5.2vw,84px)/1 var(--type);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.clock small{display:block;font:500 clamp(14px,1.6vw,24px)/1.4 var(--label);color:var(--muted);letter-spacing:.06em;margin-top:.6vh}
+.msg{font:400 clamp(22px,3.6vw,58px)/1.25 var(--type);max-width:26ch;text-wrap:balance;min-height:1.25em}
+.msg.alt{font-size:clamp(16px,1.8vw,28px);color:var(--muted);max-width:44ch}
+.act{font:700 clamp(20px,2.8vw,46px)/1.15 var(--label);letter-spacing:.06em;text-transform:uppercase;color:var(--lop);max-width:28ch;text-wrap:balance}
+.fuel{font:700 clamp(40px,9vw,150px)/1 var(--type);font-variant-numeric:tabular-nums;color:var(--sun)}
+.fuel small{display:block;font:500 clamp(14px,1.5vw,22px) var(--label);color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.twocol{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,24ch),1fr));gap:2.5vw;max-width:110ch}
+.twocol div{border-top:2px solid var(--ink);padding-top:1vh;font:400 clamp(16px,1.8vw,28px)/1.35 var(--type)}
+.twocol b{display:block;font:600 clamp(12px,1.1vw,16px) var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.6vh}
+.cue{background:var(--cue);border-top:1px solid var(--rule);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 18px;align-items:center;
+  padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.cue.hide{display:none}
+.cue .n{font:600 12px var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.cue .say{font-size:15px;max-width:90ch}
+.cue .ctrl{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.prog{grid-column:1/-1;height:4px;background:var(--rule);position:relative}
+.prog i{position:absolute;left:0;top:0;bottom:0;background:var(--lop);width:0}
+
+/* PLAN */
+#plan{overflow:auto;height:calc(100% - 59px);padding-block:28px 60px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.doc{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+.doc h1{margin:0;font:700 34px/1.1 var(--label);letter-spacing:.04em;text-wrap:balance}
+.doc h2{margin:0 0 8px;font:700 14px var(--label);letter-spacing:.18em;text-transform:uppercase;color:var(--lop)}
+.doc p,.doc li{max-width:68ch}
+.doc p{margin:0 0 10px}
+.lede{font-size:19px}
+.doc ul,.doc ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
+.q{font:400 15.5px/1.45 var(--type)}
+.tablewrap{overflow-x:auto;border-top:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14.5px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px 8px 0;border-bottom:1px solid var(--rule)}
+th{font:600 12px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+td.t{font:700 14px var(--type);white-space:nowrap;font-variant-numeric:tabular-nums}
+.scale{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.scale div{border:1px solid var(--rule);padding:12px;background:var(--sheet)}
+.scale b{display:block;font:700 13px var(--label);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
+.note{border-left:2px solid var(--sun);padding-left:12px}
+.small{font-size:13.5px;color:var(--muted)}
+@media (max-width:700px){.cue{grid-template-columns:1fr}.cue .ctrl{justify-content:flex-start}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Line of Position <span>a radio-room lesson · Howland Island, 2 July 1937</span></div>
+  <a class="btn" id="tab-run" href="#run" aria-current="page">Run</a>
+  <a class="btn" id="tab-plan" href="#plan">Lesson plan</a>
+  <label class="small" for="mode">Period</label>
+  <select id="mode"><option value="50">50 min · real half hour</option><option value="90">Block (90) · + search</option><option value="demo">Demo · 6× faster</option></select>
+  <button class="btn quiet" id="night" type="button" aria-pressed="false" title="Red night-room palette for a darkened room">Night room</button>
+</header>
+
+<main id="run">
+  <section class="stage" aria-live="polite">
+    <canvas id="chart" aria-label="Plotting sheet: Howland and Baker, the distance rings, and the 157–337 lines of position"></canvas>
+    <div class="proj" id="proj">
+      <div class="clock" id="clock">06:00<small>Howland time · 1730 GCT · 2 July 1937</small></div>
+      <div class="msg" id="msg"></div>
+      <div class="msg alt" id="alt"></div>
+      <div class="fuel" id="fuel" hidden></div>
+      <div class="twocol" id="two" hidden></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+  <section class="cue" id="cue" aria-label="Teacher cue">
+    <div>
+      <div class="n" id="cueN">Cue 1 of 12 · Before you start</div>
+      <div class="say" id="cueSay"></div>
+    </div>
+    <div class="ctrl">
+      <button class="btn quiet" id="back" type="button">◂ Back</button>
+      <button class="btn" id="go" type="button">Start</button>
+      <button class="btn quiet" id="hideCue" type="button" title="Hide this strip from the projector (T)">Hide cue</button>
+    </div>
+    <div class="prog" aria-hidden="true"><i id="bar"></i></div>
+  </section>
+</main>
+
+<main id="plan" hidden>
+  <article class="doc">
+    <div>
+      <h1>Line of Position</h1>
+      <p class="lede">Students become the radio room of the US Coast Guard cutter Itasca at Howland Island on the morning of 2 July 1937, waiting for Amelia Earhart and Fred Noonan. Every message that arrives is acted out in the room with their bodies. They learn what a piece of evidence can tell you, and what it can't, by standing inside it.</p>
+      <p class="small">One class period, ages 14–18. Uses one projector and speaker, the students' phone compass apps, masking tape and a rope. No logins. Everything quoted is from a 1937 US Navy report; everything computed is labelled.</p>
+    </div>
+
+    <section>
+      <h2>What students should come away with</h2>
+      <ul>
+        <li>A distance with no bearing is a circle. A bearing with no reference point is a line. Neither is a place.</li>
+        <li>The same event can be recorded twice by the same institution in different words, and both can be primary sources.</li>
+        <li>A navigator's line of position comes from the sun's direction. They can check it: a sunrise sun sight at Howland that morning gives exactly the reported 157–337.</li>
+        <li>Not finding something does not mean it isn't there.</li>
+      </ul>
+      <p class="small">Aligned to the C3 Framework for Social Studies: D2.His.10.9-12 (limitations of evidence), D2.His.11.9-12 (critiquing sources by maker, date and purpose), D2.His.16.9-12 (integrating evidence into a reasoned argument).</p>
+    </section>
+
+    <section>
+      <h2>Set up the room (10 minutes before class)</h2>
+      <ol>
+        <li><b>Howland.</b> Put a tape X at the centre of the open floor. That's Howland Island.</li>
+        <li><b>North.</b> Open a phone compass app, set it to true north (iPhone: Settings › Compass › Use True North), and tape an arrow on the floor at the X pointing north. Label it N.</li>
+        <li><b>Sunrise.</b> With the compass, tape a second arrow from the X toward 67°, and label it SUNRISE 67°. That's where the sun came up at Howland that morning.</li>
+        <li><b>The rope.</b> Lay a rope circle around the X at the "100 miles" radius for your room (see scale). The walls are the 200-mile circle.</li>
+        <li><b>Sound.</b> Connect the projector's speaker. The static is quiet on purpose; set it so it's just audible at the back of the room.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Scale</h2>
+      <div class="scale">
+        <div><b>Classroom</b>About 8 × 9 m. The walls are 200 miles out, about 4 m from the X. 1 m is about 50 miles. Rope circle: 2 m radius.</div>
+        <div><b>Gym</b>About 25 m across. Mark a 200-mile circle 12 m from the X with cones. 1 m is about 16 miles. Rope: 6 m radius.</div>
+        <div><b>Field</b>Use 1 m = 4 miles. The 200-mile circle is 50 m out, and the walk along the line in cue 10 can last the whole minute.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Run of show (50 minutes)</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Clock</th><th>Message or moment</th><th>The room does</th></tr></thead>
+        <tbody id="runOfShow"></tbody>
+      </table></div>
+      <p class="small">The heart of the lesson is cue 6: "30 minutes gas remaining" starts a 30-minute countdown that runs in real time while the class works. The next messages arrive after it reaches zero. Let that be felt; don't explain it in advance.</p>
+    </section>
+
+    <section>
+      <h2>Questions for the end</h2>
+      <ol>
+        <li>Stand where you were when the last message came. Could anyone in the room prove they were in the wrong place?</li>
+        <li>The Navy wrote the 7:42 message as "30 minutes gas remaining" and also as "one-half hour fuel". What else changed between the two versions? Why might the same office write it down twice?</li>
+        <li>Messages kept arriving for 43 minutes after the half hour ran out. What does that tell you about the fuel estimate, or about the messages?</li>
+        <li>The Navy said the line "presumably passed through Howland Island". What would you need to know to check that presumption?</li>
+        <li>If you had planes for three days, where would you search, and what would it mean if you found nothing?</li>
+      </ol>
+      <p><b>Exit ticket.</b> One sentence each: something the evidence shows, something it can't show, and one source you'd want next.</p>
+    </section>
+
+    <section>
+      <h2>Block period: the search (40 more minutes)</h2>
+      <ol>
+        <li>While students are out, hide a coin somewhere on the floor within the 200-mile circle.</li>
+        <li>Lights off. Teams of three get one flashlight and three minutes. The flashlight must point straight down from waist height: that's their sweep width.</li>
+        <li>Each team marks the strip it searched on a floor sketch. Most teams will miss the coin even inside their strip.</li>
+        <li>Afterwards, ask whether a strip searched without finding anything is a strip where the coin isn't. In 1937 the Lexington's aircraft alone searched 151,556 square miles between 13 and 18 July (report, Summary of Operations, p. 14). Nothing was found.</li>
+      </ol>
+    </section>
+
+    <section class="note">
+      <h2>Sources, and what is real</h2>
+      <p class="small"><b>Quoted.</b> US Navy, <i>Report of Earhart Search by U.S. Navy and U.S. Coast Guard, July 2–18, 1937</i>, in the National Archives' Earhart release (file 080_PC31-22_146_07, pages stamped NW 90261): "Estimate and Decisions", Known Facts items 17, 20–23 (p. 2), and §13 (pp. 3–4). Quotes were checked against the page images. These are the Navy's summaries of what the Itasca received, not the Itasca's own radio log.</p>
+      <p class="small"><b>Computed.</b> Sun positions use a standard low-precision solar ephemeris (about 0.1°). For Howland on 2 July 1937 it gives sunrise at 17:46 GCT on a bearing of 66.9°. The report gives sunrise as 1745. A line of position from that sun sight runs 156.9°/336.9°.</p>
+      <p class="small"><b>Authored.</b> The static and the tone (310.5 Hz, which is 3105 kilocycles scaled down ten thousand times) are designed sound, not recordings. No voices are used. The room scale is a teaching approximation; the report doesn't say which "miles" the messages meant.</p>
+      <p class="small"><b>Not claimed.</b> Nothing here says where the plane went. Students should leave knowing why no one can.</p>
+    </section>
+  </article>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const D2R = Math.PI / 180;
+const HOW = { lat: 48 / 60, lon: -(176 + 38 / 60) }, BAK = { lat: 12 / 60, lon: -(176 + 29 / 60) };
+const SRC = { a: '§13, report p. 3–4', b: 'Known Facts 17, report p. 2' };
+/* ---------- the cues: story time (GCT minutes), real duration (s), what the projector shows, what the room does ---------- */
+const m = hhmm => Math.floor(hhmm / 100) * 60 + hhmm % 100;
+const CUES = [
+  { g: m(1730), dur: 180, title: 'Before you start',
+    act: 'You are the radio room of the Coast Guard cutter Itasca, anchored off Howland Island.',
+    teach: 'Read out: "It is six in the morning, 2 July 1937. Amelia Earhart and Fred Noonan left New Guinea 17 hours ago, flying to this island. You are the radio room waiting for them. Each message that arrives, we\'ll act out." Then press Next.' },
+  { g: m(1745), dur: 150, msg: '"Two hundred miles out and no land fall"', alt: 'Also recorded as: "200 miles out;"', ring: 200, burst: 0.06,
+    act: 'Everyone: stand against a wall. You are 200 miles out. Which wall?',
+    teach: 'Let them choose walls. Ask: is anyone wrong? The message gives a distance and no direction, so it\'s a circle. (Cue 3 is sunrise; it follows in 2½ minutes.)' },
+  { g: m(1746), dur: 150, sunrise: true,
+    act: 'The sun is rising. Phones out: find 67°. Turn and face the sunrise.',
+    teach: 'Point at the SUNRISE 67° tape. The sun rose at Howland at 17:46 GCT (the Navy report says 1745). Remember this direction; it matters later.' },
+  { g: m(1816), dur: 180, msg: '"Approximately 100 miles from ITASCA, position doubtful"', alt: 'Also recorded as: "100 miles out, coming up (fast)."', ring: 100, burst: 0.06,
+    act: 'Step in from the wall to the rope. You are 100 miles out. Still no direction.',
+    teach: 'Ask: the two records of this message say different things. One says "position doubtful", the other "coming up (fast)". Which would you trust, and why?' },
+  { g: m(1850), dur: 90, quiet: true,
+    act: 'Sit where you are. Listen.',
+    teach: 'Silence on purpose: 56 minutes of real waiting is compressed here into 90 seconds. The next message starts a real half hour.' },
+  { g: m(1912), dur: 960, msg: '"30 minutes gas remaining, no land fall, position doubtful"', alt: 'Also recorded as: "one-half hour fuel and no landfall (position doubtful)."', fuel: true, burst: 0.07,
+    act: 'The half hour starts now. It runs in real time.',
+    teach: 'The countdown is real. In 16 minutes the next message arrives on its own. Meanwhile project the two records (the next screen comes up automatically after 2 minutes) and have pairs list every difference.' },
+  { g: m(1914), dur: 0, two: true, inFuel: true,
+    act: 'Same minutes, recorded twice. In pairs: list every difference.',
+    teach: 'Prompt: who wrote each version, and when? Why would one report contain both? Is either one "the original"?' },
+  { g: m(1928), dur: 0, msg: '"Circling, trying to pick up Island"', alt: 'Also recorded as: "Circling trying to pick up Island." The Itasca logged its strongest signal at this time.', burst: 0.17, inFuel: true,
+    act: 'Stand up. Walk a slow circle where you are. She was close; this was the strongest signal of the morning.',
+    teach: 'Let them circle for a minute, then sit. The countdown keeps running. 14 minutes remain.' },
+  { g: m(1942), dur: 75, fuelOut: true,
+    act: 'The half hour is over.',
+    teach: 'Say nothing. Let the silence run until the next cue arrives on its own.' },
+  { g: m(2013), dur: 150, msg: '"On a position line 157 - 337 degrees"', alt: 'Also recorded as: "Line of position 157-337" (no reference point given).', lop: true, burst: 0.085,
+    act: 'Face the sunrise, 67°. Stretch out both arms. Your arms are the line: 157 one way, 337 the other.',
+    teach: 'This arrived 31 minutes after the half hour ran out. Everyone, wherever they stand, is now a valid line of position. Ask: which of you is she on? The Navy wrote that the line "presumably passed through Howland Island".' },
+  { g: m(2025), dur: 60, msg: '"Heading north and south"', alt: 'Also recorded as: "157-337 heading north and south." The last authentic message.', walk: true, burst: 0.085,
+    act: 'Walk along your line. Some of you north, some of you south. Keep going.',
+    teach: 'Let them walk until the cue ends, then call stop.' },
+  { g: m(2030), dur: 0, end: true, reveal: true,
+    act: 'Stop. Stay exactly where you are.',
+    teach: 'The Navy: "This was the last authentic message received from the airplane." Press Next for the plotting sheet, then use the questions in the lesson plan.' },
+  { g: m(2030), dur: 0, end: true, reveal: true, sheet: true,
+    act: '',
+    teach: 'The sheet shows the rings, the sun line and its parallels, and the Phoenix Islands to the south-east. Ask question 1: could anyone prove they were in the wrong place?' },
+];
+const SEARCH = { g: m(2030), dur: 180, end: true, reveal: true, search: true,
+  act: 'The search. Team 1, lights out. Three minutes.', teach: 'Repeat for each team (press Back, then Next, to restart the timer). See the lesson plan for the debrief.' };
+
+/* ---------- state ---------- */
+let idx = 0, startedAt = null, running = false, rate = 1, mode = '50';
+const cues = () => mode === '90' ? CUES.concat([SEARCH]) : CUES;
+const fmt = gct => { const h = Math.floor(gct / 60) % 24, mm = Math.floor(gct % 60); return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); };
+const local = gct => fmt(gct - 11 * 60 - 30 + 24 * 60);
+// the fuel window: story time runs at real time from 1912 to 1942 (rate is 6× only in demo mode)
+let fuelStart = null;
+
+/* ---------- sound ---------- */
+const radio = {
+  ctx: null,
+  start() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    const c = this.ctx = new A(), len = c.sampleRate * 7.3, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 0.7;
+    this.bed = c.createGain(); this.bed.gain.value = 0;
+    this.master = c.createGain(); this.master.gain.value = 0.9;
+    src.connect(bp); bp.connect(this.bed); this.bed.connect(this.master); this.master.connect(c.destination); src.start();
+  },
+  bedTo(v, tc = 1.2) { if (this.ctx) this.bed.gain.setTargetAtTime(v, this.ctx.currentTime, tc); },
+  burst(amp, hold = 4.5) {
+    if (!this.ctx) return;
+    const c = this.ctx, now = c.currentTime, o = c.createOscillator(); o.frequency.value = 310.5;
+    const am = c.createOscillator(); am.frequency.value = 6.5; const amg = c.createGain(); amg.gain.value = 0.35;
+    const g1 = c.createGain(); g1.gain.value = 0; const g2 = c.createGain(); g2.gain.value = 0.65;
+    am.connect(amg); amg.connect(g2.gain); o.connect(g2); g2.connect(g1); g1.connect(this.master);
+    g1.gain.setValueAtTime(0, now); g1.gain.linearRampToValueAtTime(amp, now + 0.35); g1.gain.setValueAtTime(amp, now + hold); g1.gain.linearRampToValueAtTime(0, now + hold + 1.4);
+    o.start(now); am.start(now); o.stop(now + hold + 1.6); am.stop(now + hold + 1.6);
+    o.onended = () => { [o, am, g1, g2, amg].forEach(n => n.disconnect()); };
+  },
+};
+
+/* ---------- show a cue ---------- */
+function show(i, fromAuto) {
+  const L = cues(); idx = Math.max(0, Math.min(L.length - 1, i)); const c = L[idx];
+  startedAt = performance.now();
+  $('cueN').textContent = `Cue ${idx + 1} of ${L.length} · ${c.title || (c.msg ? local(c.g) + ' Howland · ' + fmt(c.g) + ' GCT' : c.sunrise ? 'Sunrise' : c.fuelOut ? 'The half hour is over' : c.two ? 'The two records' : c.end ? 'After the last message' : 'Waiting')}`;
+  $('cueSay').textContent = c.teach || '';
+  $('msg').textContent = c.msg || (c.end && !c.sheet && !c.search ? '"This was the last authentic message received from the airplane."' : '');
+  $('alt').textContent = c.alt || (c.end && !c.sheet && !c.search ? 'US Navy report, §13, p. 4' : '');
+  $('act').textContent = c.act || '';
+  $('two').hidden = !c.two;
+  if (c.two) $('two').innerHTML = TWO.map(r => `<div><b>${r.t} Howland</b>${r.a}<br><br>${r.b}</div>`).join('');
+  if (c.two) { $('msg').textContent = ''; $('alt').textContent = ''; }
+  if (c.fuel) fuelStart = performance.now();
+  if (idx < L.findIndex(x => x.fuel)) fuelStart = null;
+  $('proj').classList.toggle('hide', !!c.sheet);
+  $('go').textContent = idx === 0 && !running ? 'Start' : idx >= L.length - 1 ? 'End' : 'Next ▸';
+  if (running) {
+    if (c.burst) radio.burst(c.burst, c.burst > 0.12 ? 7 : 4.5);
+    if (c.fuelOut || c.end) radio.bedTo(0, c.end ? 6 : 0.8);
+    else if (c.quiet) radio.bedTo(0.012);
+    else radio.bedTo(0.022);
+  }
+  sheetState = { rings: L.slice(0, idx + 1).filter(x => x.ring).map(x => x.ring), sun: L.slice(0, idx + 1).some(x => x.sunrise), lop: L.slice(0, idx + 1).some(x => x.lop), walk: L.slice(0, idx + 1).some(x => x.walk), full: !!c.sheet };
+  draw();
+}
+const TWO = [
+  { t: '06:15', a: '"Two hundred miles out and no land fall"', b: '"200 miles out;"' },
+  { t: '06:46', a: '"Approximately 100 miles from ITASCA, position doubtful"', b: '"100 miles out, coming up (fast)."' },
+  { t: '07:42', a: '"30 minutes gas remaining, no land fall, position doubtful"', b: '"one-half hour fuel and no landfall (position doubtful)."' },
+];
+
+/* ---------- clock + auto-advance ---------- */
+function fuelWindow() {
+  const L = cues(), fi = L.findIndex(x => x.fuel), fo = L.findIndex(x => x.fuelOut);
+  return fuelStart !== null && idx >= fi && idx < fo;
+}
+function storyNow() {
+  if (fuelWindow()) return m(1912) + (performance.now() - fuelStart) / 60000 * rate;   // real time inside the half hour
+  return cues()[idx].g;
+}
+function tick() {
+  const L = cues(), c = L[idx];
+  const story = storyNow();
+  $('clock').innerHTML = local(story) + '<small>Howland time · ' + fmt(story) + ' GCT · 2 July 1937</small>';
+  const inFuel = fuelWindow();
+  $('fuel').hidden = !inFuel;
+  if (inFuel) {
+    const left = Math.max(0, 30 * 60 - (performance.now() - fuelStart) / 1000 * rate);
+    $('fuel').innerHTML = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}<small>of the half hour she reported, left</small>`;
+  }
+  // auto-advance: inside the fuel window cues fire at their story times; elsewhere at each cue's planned duration
+  if (running) {
+    const next = L[idx + 1];
+    if (inFuel && next) {
+      const elapsedStory = (performance.now() - fuelStart) / 1000 / 60 * rate;
+      if (next.inFuel && elapsedStory >= next.g - m(1912) - (next.two ? 0 : 0)) show(idx + 1, true);
+      else if (next.fuelOut && elapsedStory >= 30) show(idx + 1, true);
+    } else if (c.dur && next && !c.inFuel) {
+      const d = c.dur / (mode === 'demo' ? 6 : 1);
+      if ((performance.now() - startedAt) / 1000 >= d) show(idx + 1, true);
+    }
+    const d = inFuel ? 30 * 60 / rate : (c.dur || 0) / (mode === 'demo' ? 6 : 1);
+    const el = inFuel ? (performance.now() - fuelStart) / 1000 : (performance.now() - startedAt) / 1000;
+    $('bar').style.width = d ? Math.min(100, el / d * 100) + '%' : '0%';
+  } else $('bar').style.width = '0%';
+  if (sheetState.walk || sheetState.full) draw();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- plotting sheet (behind the projector text; full at the end) ---------- */
+let sheetState = { rings: [], sun: false, lop: false, walk: false, full: false };
+const cv = $('chart'), g = cv.getContext('2d'); let W = 0, H = 0;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function sunAt(min, lat, lon) {
+  const ms = Date.UTC(1937, 6, 2, 0, 0) + min * 60000, n = ms / 86400000 + 2440587.5 - 2451545;
+  const L = ((280.460 + 0.9856474 * n) % 360 + 360) % 360, gg = (((357.528 + 0.9856003 * n) % 360 + 360) % 360) * D2R;
+  const lam = (L + 1.915 * Math.sin(gg) + 0.020 * Math.sin(2 * gg)) * D2R, eps = (23.439 - 0.0000004 * n) * D2R;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)), dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+  const gmst = ((280.46061837 + 360.98564736629 * n) % 360 + 360) % 360, ha = (gmst + lon) * D2R - ra, la = lat * D2R;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+  return { az: (az / D2R + 360) % 360, el: el / D2R };
+}
+let RISE = null; for (let t = m(1730); t < m(1900); t += 0.25) if (sunAt(t, HOW.lat, HOW.lon).el > -0.833) { RISE = t; break; }
+const RISE_AZ = sunAt(RISE, HOW.lat, HOW.lon).az, LOP = (RISE_AZ + 90) % 360;
+const PHX = [['GARDNER', -4.667, -174.533], ['McKEAN', -3.594, -174.118], ['HULL', -4.5, -172.167], ['SYDNEY', -4.45, -171.25], ['CANTON', -2.817, -171.683], ['ENDERBURY', -3.133, -171.083], ['BIRNIE', -3.583, -171.517], ['PHOENIX', -3.717, -170.717]];
+function resize() { const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); }
+new ResizeObserver(resize).observe(cv);
+function draw() {
+  if (!W) return;
+  const C = { sheet: css('--sheet'), grid: css('--grid'), grid2: css('--grid2'), ink: css('--ink'), muted: css('--muted'), lop: css('--lop'), sun: css('--sun'), ring: css('--ring') };
+  const full = sheetState.full, lat0 = full ? -1.9 : HOW.lat, lon0 = full ? -174.2 : HOW.lon, span = full ? 720 : 480;
+  const s = Math.min(W, H * 1.1) / span, cx0 = full ? W / 2 : W * 0.74, cy0 = H * 0.5;
+  const P = (la, lo) => [cx0 + (lo - lon0) * 60 * s, cy0 - (la - lat0) * 60 * s];
+  g.clearRect(0, 0, W, H); g.fillStyle = C.sheet; g.fillRect(0, 0, W, H);
+  g.globalAlpha = full ? 1 : 0.55;
+  const step = full ? 1 : 0.5;
+  for (let la = Math.floor(lat0 - 8); la <= lat0 + 8; la += step) { const [, y] = P(la, lon0); g.strokeStyle = Number.isInteger(la) ? C.grid : C.grid2; g.lineWidth = la === 0 ? 1.6 : 1; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  for (let lo = Math.floor(lon0 - 12); lo <= lon0 + 12; lo += step) { const [x] = P(lat0, lo); g.strokeStyle = Number.isInteger(lo) ? C.grid : C.grid2; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  const [hx, hy] = P(HOW.lat, HOW.lon);
+  g.font = '500 13px "Courier Prime", monospace';
+  for (const r of sheetState.rings) { g.strokeStyle = C.ring; g.setLineDash([2, 5]); g.lineWidth = 1.4; g.beginPath(); g.arc(hx, hy, r * s, 0, 7); g.stroke(); g.setLineDash([]); g.fillStyle = C.ring; g.fillText(r + ' miles out', hx + r * s * 0.62 + 6, hy - r * s * 0.78); }
+  if (sheetState.sun) {
+    const d = LOP * D2R, ux = Math.sin(d), uy = -Math.cos(d), px = -uy, py = ux, L = Math.hypot(W, H) * 1.3, sp = 10 * s;
+    g.strokeStyle = C.lop;
+    for (let i = -80; i <= 80; i++) { g.globalAlpha = (sheetState.lop ? 0.32 : 0.1) * (full ? 1 : 0.8); g.lineWidth = 1; const ox = hx + px * i * sp, oy = hy + py * i * sp; g.beginPath(); g.moveTo(ox - ux * L, oy - uy * L); g.lineTo(ox + ux * L, oy + uy * L); g.stroke(); }
+    g.globalAlpha = 1;
+    if (sheetState.lop) { g.lineWidth = 1.8; g.setLineDash([10, 6]); g.beginPath(); g.moveTo(hx - ux * L, hy - uy * L); g.lineTo(hx + ux * L, hy + uy * L); g.stroke(); g.setLineDash([]); }
+    if (sheetState.walk) { g.fillStyle = C.lop; g.globalAlpha = 0.6; const ph = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : (performance.now() / 4000) % 1;
+      for (let i = -40; i <= 40; i += 2) for (let j = -8; j <= 8; j++) { const a = (j + (i % 4 === 0 ? ph : -ph)) * sp * 3, x = hx + px * i * sp + ux * a, y = hy + py * i * sp + uy * a; if (x > -5 && y > -5 && x < W + 5 && y < H + 5) g.fillRect(x - 1, y - 1, 2.4, 2.4); } g.globalAlpha = 1; }
+    // sun bearing from Howland
+    g.strokeStyle = C.sun; g.lineWidth = 2; const sa = RISE_AZ * D2R; g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx + Math.sin(sa) * 70, hy - Math.cos(sa) * 70); g.stroke();
+    g.fillStyle = C.sun; g.font = '600 13px "Barlow Semi Condensed", sans-serif'; g.fillText('SUNRISE ' + RISE_AZ.toFixed(1) + '°', hx + Math.sin(sa) * 76, hy - Math.cos(sa) * 76);
+  }
+  g.globalAlpha = 1;
+  const isl = (o, name) => { const [x, y] = P(o.lat, o.lon); g.fillStyle = C.ink; g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); g.font = '600 13px "Barlow Semi Condensed", sans-serif'; g.fillText(name, x + 7, y + 4); };
+  isl(HOW, 'HOWLAND'); isl(BAK, 'BAKER');
+  if (full) for (const [n, la, lo] of PHX) { const [x, y] = P(la, lo); g.fillStyle = C.ink; g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill(); g.fillStyle = C.muted; g.font = '500 12px "Barlow Semi Condensed", sans-serif'; g.fillText(n, x + 6, y + 4); }
+  if (full) { g.fillStyle = C.ink; g.font = '700 15px "Barlow Semi Condensed", sans-serif'; g.fillText('THE SUN LINE GIVES A DIRECTION, NOT A PLACE.', 20, 30); g.fillStyle = C.muted; g.font = '500 13px "Barlow Semi Condensed", sans-serif'; g.fillText('Every magenta line fits the message equally. The dashed line is the Navy\'s presumption: through Howland.', 20, 50); }
+}
+
+/* ---------- run of show table (plan) ---------- */
+$('runOfShow').innerHTML = CUES.filter(c => !c.sheet).map(c => `<tr><td class="t">${local(c.g)}</td><td>${c.msg ? '<span class="q">' + c.msg + '</span>' : (c.title || (c.sunrise ? 'Sunrise (computed 17:46 GCT, bearing 66.9°)' : c.fuelOut ? 'The half hour is over' : c.two ? 'The two records' : c.end ? 'After the last message' : 'Waiting'))}</td><td>${c.act || ''}</td></tr>`).join('');
+
+/* ---------- controls ---------- */
+$('go').addEventListener('click', () => {
+  if (!running) { running = true; radio.start(); show(idx); return; }
+  if (idx < cues().length - 1) show(idx + 1);
+});
+$('back').addEventListener('click', () => show(idx - 1));
+const toggleCue = () => { const h = $('cue').classList.toggle('hide'); $('hideCue').textContent = h ? 'Show cue' : 'Hide cue'; resize(); };
+$('hideCue').addEventListener('click', toggleCue);
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); $('go').click(); }
+  else if (e.key === 'ArrowLeft') show(idx - 1);
+  else if (e.key.toLowerCase() === 't') { if ($('cue').classList.contains('hide')) toggleCue(); else toggleCue(); }
+});
+$('mode').addEventListener('change', e => { mode = e.target.value; rate = mode === 'demo' ? 6 : 1; show(Math.min(idx, cues().length - 1)); });
+$('night').addEventListener('click', () => {
+  const on = document.documentElement.getAttribute('data-theme') !== 'dark';
+  document.documentElement.setAttribute('data-theme', on ? 'dark' : 'light'); $('night').setAttribute('aria-pressed', String(on)); draw();
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+function route() {
+  const plan = location.hash === '#plan';
+  $('run').hidden = plan; $('plan').hidden = !plan;
+  $('tab-run').setAttribute('aria-current', plan ? 'false' : 'page'); $('tab-plan').setAttribute('aria-current', plan ? 'page' : 'false');
+  if (!plan) resize();
+}
+addEventListener('hashchange', route);
+route(); show(0); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

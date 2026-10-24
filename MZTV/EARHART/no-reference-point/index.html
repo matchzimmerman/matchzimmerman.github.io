@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>No Reference Point</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* layout: a navigator's plotting sheet (canvas) beside the typed log; stacked on phones.
+   light = chart paper by day; dark = the chart room under red night light */
+:root{
+  --paper:#f3f4ef; --sheet:#fbfbf8; --grid:#a9bccb; --grid2:#d6e0e7; --ink:#1c2833; --muted:#5d6b77;
+  --lop:#b0176a; --sun:#d9690b; --ring:#2f6f8f; --rule:#cfd7dc;
+  --type:'Courier Prime','Courier New',Courier,monospace;
+  --label:'Barlow Semi Condensed','Arial Narrow',Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0c0606; --sheet:#110808; --grid:#4a1a17; --grid2:#2a0f0d; --ink:#f0b3a6; --muted:#a8675d;
+  --lop:#ff5a4a; --sun:#ffb24a; --ring:#d9776a; --rule:#3a1714; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0c0606; --sheet:#110808; --grid:#4a1a17; --grid2:#2a0f0d; --ink:#f0b3a6; --muted:#a8675d;
+  --lop:#ff5a4a; --sun:#ffb24a; --ring:#d9776a; --rule:#3a1714; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--label);margin:0;overflow:hidden}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,400px);
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+.chart{position:relative;min-width:0;min-height:0;background:var(--sheet);border-right:1px solid var(--rule);display:flex;flex-direction:column}
+.stage{position:relative;flex:1;min-height:0}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.head{position:absolute;left:20px;top:16px;pointer-events:none;display:flex;flex-direction:column;gap:2px;max-width:70%}
+h1{margin:0;font:600 15px/1.2 var(--label);letter-spacing:.22em;text-transform:uppercase;text-wrap:balance}
+.sub{font-size:13px;color:var(--muted);letter-spacing:.04em}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 16px;border-top:1px solid var(--rule);background:var(--sheet)}
+.btn{font:600 13px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--ink);background:var(--sheet);
+  border:1px solid var(--ink);padding:7px 14px;cursor:pointer;min-height:36px}
+.btn:hover{background:var(--ink);color:var(--sheet)}
+.btn:focus-visible,input:focus-visible,.entry:focus-visible{outline:2px solid var(--lop);outline-offset:2px}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--sheet)}
+.btn.quiet{border-color:var(--rule);font-weight:500}
+.clock{font:700 17px var(--type);font-variant-numeric:tabular-nums;letter-spacing:.02em;min-width:9.5ch}
+.clock small{display:block;font:500 11.5px var(--label);color:var(--muted);letter-spacing:.06em}
+#scrub{flex:1 1 220px;min-width:160px;accent-color:var(--lop)}
+.log{overflow:auto;min-height:0;padding:22px 22px 28px;display:flex;flex-direction:column;gap:18px;background:var(--paper)}
+.log h2{margin:0;font:600 12px var(--label);letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.intro{margin:0;font-size:14px;color:var(--muted);max-width:60ch}
+.entries{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--rule)}
+.entry{padding:12px 0;border-bottom:1px solid var(--rule);display:grid;grid-template-columns:5.4ch 1fr;gap:4px 12px;opacity:.38;transition:opacity .5s;cursor:pointer}
+.entry.on{opacity:1}
+.entry.now .t{color:var(--lop)}
+.t{font:700 15px var(--type);font-variant-numeric:tabular-nums}
+.t small{display:block;font:500 11px var(--label);color:var(--muted);letter-spacing:.04em}
+.q{font:400 14.5px/1.45 var(--type);min-width:0}
+.q .src{display:block;font:500 11px var(--label);color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+.q + .q{grid-column:2}
+.note{grid-column:2;font-size:13px;color:var(--lop)}
+.end{font:400 15px/1.5 var(--type);margin:0;opacity:.3;transition:opacity .8s}
+.end.on{opacity:1}
+.finding{border-left:2px solid var(--sun);padding-left:12px;font-size:14px;max-width:62ch}
+.finding b{font-weight:600}
+.sources{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:6px;max-width:62ch}
+.sources a{color:inherit}
+@media (max-width:820px){
+  body{overflow:auto}
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto;min-height:100%}
+  .stage{height:56vh;flex:none}
+  .chart{border-right:none;border-bottom:1px solid var(--rule)}
+  .log{overflow:visible;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .head{left:16px;max-width:90%}
+  .bar{padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .clock{font-size:15px}
+}
+@media (prefers-reduced-motion: reduce){.entry,.end{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="chart" aria-label="Plotting sheet around Howland Island">
+    <div class="stage">
+    <canvas id="c" role="img" aria-label="Plotting sheet: Howland and Baker Islands, latitude and longitude grid, compass rose, the sun's computed bearing, distance rings and lines of position drawn as each logged message arrives"></canvas>
+    <div class="head">
+      <h1>No Reference Point</h1>
+      <div class="sub">Howland Island · 2 July 1937 · 1730–2100 GCT</div>
+    </div>
+    </div>
+    <div class="bar">
+      <button class="btn" id="play" type="button" aria-pressed="false">Play</button>
+      <div class="clock" id="clock" aria-live="off">17:30 GCT<small>06:00 Howland</small></div>
+      <input id="scrub" type="range" min="1050" max="1260" step="0.5" value="1050" aria-label="Time, Greenwich civil time">
+      <button class="btn quiet" id="speed" type="button" title="Story pace">1 min / s</button>
+      <button class="btn quiet" id="snd" type="button" aria-pressed="false">Sound</button>
+    </div>
+  </section>
+
+  <aside class="log">
+    <h2>Received by the Itasca, as the Navy wrote it down twice</h2>
+    <p class="intro">The US Navy's report on the search summarizes the plane's last messages in two places, in different words. Both are typed below at the minute they arrived. Click an entry to go to it.</p>
+    <div class="entries" id="entries"></div>
+    <p class="end" id="end">"This was the last authentic message received from the airplane."<br><span style="font:500 11px var(--label);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Report §13, p. 4</span></p>
+    <div class="finding">
+      <b>Why 157–337.</b> The report itself gives sunrise at Howland that morning as 1745 GCT. Computed for 0°48′N 176°38′W, the sun clears the horizon at 17:46 on a bearing of 66.9°. A line of position from a sun sight runs at right angles to the sun's bearing: 156.9° and 336.9°. So a sunrise sun line matches the reported line to within a tenth of a degree. The same calculation at 2013 gives 153–333. A sun line tells you the direction you are on, not where along it you are. Every magenta line on the sheet is equally consistent with the message.
+    </div>
+    <div class="sources">
+      <span><b style="color:var(--ink);font-weight:600">Source.</b> US Navy, <i>Report of Earhart Search by U.S. Navy and U.S. Coast Guard, July 2–18, 1937</i>, file 080_PC31-22_146_07 in the National Archives' Earhart release, pages stamped NW 90261: "Estimate and Decisions", Known Facts items 17, 20–23 (p. 2), and §13 (pp. 3–4). Quotes were checked against the page images. These are the Navy's summaries, not the Itasca's radio log itself.</span>
+      <span><b style="color:var(--ink);font-weight:600">Computed.</b> Sun positions use a standard low-precision solar ephemeris (about 0.1° accuracy) for each minute at Howland. Island positions are rounded to the nearest minute of arc. The Itasca's mark is approximate: the report says only "immediately to northeastward of Howland".</span>
+      <span><b style="color:var(--ink);font-weight:600">Not here.</b> The airplane is never drawn, because no message gives a place. Distance rings are drawn around Howland because "out" names no bearing; the reports don't say which miles. Sound: radio static and a tone at 310.5 Hz, which is 3105 kilocycles scaled down ten thousand times. No voice.</span>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+'use strict';
+const D2R = Math.PI / 180;
+const HOWLAND = { lat: 0 + 48 / 60, lon: -(176 + 38 / 60), name: 'HOWLAND' };
+const BAKER = { lat: 0 + 12 / 60, lon: -(176 + 29 / 60), name: 'BAKER' };
+const ITASCA = { lat: HOWLAND.lat + 1.2 / 60, lon: HOWLAND.lon + 1.4 / 60 };   // "immediately to northeastward" (approx.)
+const PHOENIX = [ // geography only, for the last view; positions rounded
+  ['GARDNER', -4.667, -174.533], ['McKEAN', -3.594, -174.118], ['HULL', -4.500, -172.167], ['SYDNEY', -4.450, -171.250],
+  ['CANTON', -2.817, -171.683], ['ENDERBURY', -3.133, -171.083], ['BIRNIE', -3.583, -171.517], ['PHOENIX', -3.717, -170.717]];
+const T0 = 17 * 60 + 30, T1 = 21 * 60;
+const LOG = [
+  { t: 1745, ring: 200,
+    a: '"Two hundred miles out and no land fall"', as: '§13, p. 3',
+    b: '"200 miles out;"', bs: 'Known Facts 17, p. 2' },
+  { t: 1816, ring: 100,
+    a: '"Approximately 100 miles from ITASCA, position doubtful"', as: '§13, p. 3',
+    b: '"100 miles out, coming up (fast)."', bs: 'Known Facts 17, p. 2' },
+  { t: 1912, fuel: true,
+    a: '"30 minutes gas remaining, no land fall, position doubtful"', as: '§13, p. 3',
+    b: '"one-half hour fuel and no landfall (position doubtful)."', bs: 'Known Facts 17, p. 2' },
+  { t: 1928, strongest: true,
+    a: '"Circling, trying to pick up Island"', as: '§13, p. 3',
+    b: '"Circling trying to pick up Island."', bs: 'Known Facts 17, p. 2',
+    note: 'Signals at the Itasca were of greatest strength at this time.' },
+  { t: 2013, lop: true,
+    a: '"On a position line 157 - 337 degrees"', as: '§13, p. 4',
+    b: '"Line of position 157-337" (no reference point given).', bs: 'Known Facts 17, p. 2' },
+  { t: 2025, last: true,
+    a: '"Heading north and south", giving the same position as above.', as: '§13, p. 4',
+    b: '"157-337 heading north and south."', bs: 'Known Facts 17, p. 2' },
+];
+const mins = hhmm => Math.floor(hhmm / 100) * 60 + hhmm % 100;
+LOG.forEach(e => e.m = mins(e.t));
+const SUNRISE_REPORT = mins(1745);
+const fmtT = m => { const h = Math.floor(m / 60) % 24, mm = Math.floor(m % 60); return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); };
+const howlandT = m => fmtT(m - 11 * 60 - 30 + 24 * 60);
+
+/* ---------- sun (standard low-precision ephemeris) ---------- */
+function sun(min, lat, lon) {
+  const ms = Date.UTC(1937, 6, 2, 0, 0) + min * 60000, n = ms / 86400000 + 2440587.5 - 2451545;
+  const L = ((280.460 + 0.9856474 * n) % 360 + 360) % 360, g = (((357.528 + 0.9856003 * n) % 360 + 360) % 360) * D2R;
+  const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, eps = (23.439 - 0.0000004 * n) * D2R;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)), dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+  const gmst = ((280.46061837 + 360.98564736629 * n) % 360 + 360) % 360, ha = (gmst + lon) * D2R - ra, la = lat * D2R;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+  return { az: (az / D2R + 360) % 360, el: el / D2R };
+}
+let SUNRISE = null;
+for (let m = T0; m < T1; m += 0.25) if (sun(m, HOWLAND.lat, HOWLAND.lon).el > -0.833) { SUNRISE = m; break; }
+const SUNRISE_AZ = sun(SUNRISE, HOWLAND.lat, HOWLAND.lon).az;
+const LOP_DIR = (SUNRISE_AZ + 90) % 360;          // ≈156.9
+
+/* ---------- state ---------- */
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let t = T0, playing = false, rate = 1, last = performance.now();
+const $ = id => document.getElementById(id);
+const cv = $('c'), g = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let C = {};
+function colors() { C = { sheet: css('--sheet'), grid: css('--grid'), grid2: css('--grid2'), ink: css('--ink'), muted: css('--muted'), lop: css('--lop'), sun: css('--sun'), ring: css('--ring') }; }
+colors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { colors(); draw(); });
+new MutationObserver(() => { colors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function resize() {
+  const r = cv.getBoundingClientRect(); DPR = Math.min(2, devicePixelRatio || 1);
+  W = r.width; H = r.height; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); draw();
+}
+new ResizeObserver(resize).observe(cv);
+
+/* ---------- view: close on Howland, opening to the Phoenix Islands after the last message ---------- */
+const ease = k => k * k * (3 - 2 * k);
+function view() {
+  const k = reduce ? (t >= mins(2040) ? 1 : 0) : ease(Math.max(0, Math.min(1, (t - mins(2032)) / 24)));
+  const lat0 = HOWLAND.lat + (-1.95 - HOWLAND.lat) * k, lon0 = HOWLAND.lon + (-174.0 - HOWLAND.lon) * k;
+  const span = 430 + (720 - 430) * k;                 // nautical miles across the shorter side of the chart area
+  const s = Math.min(W, H * 1.05) / span;            // px per nm
+  return { lat0, lon0, s, k };
+}
+const P = (v, lat, lon) => [W / 2 + (lon - v.lon0) * 60 * Math.cos(v.lat0 * D2R) * v.s, H * 0.47 - (lat - v.lat0) * 60 * v.s];
+const nm = (v, n) => n * v.s;
+
+/* ---------- drawing ---------- */
+function line(x1, y1, x2, y2) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+function label(txt, x, y, opt = {}) {
+  g.font = (opt.weight || 500) + ' ' + (opt.size || 12) + 'px "Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
+  g.fillStyle = opt.color || C.ink; g.textAlign = opt.align || 'left'; g.textBaseline = opt.base || 'middle';
+  if (opt.track) { try { g.letterSpacing = opt.track; } catch (e) {} }
+  g.fillText(txt, x, y); try { g.letterSpacing = '0px'; } catch (e) {}
+}
+function typed(txt, x, y, opt = {}) {
+  g.font = (opt.weight || 400) + ' ' + (opt.size || 13) + 'px "Courier Prime", "Courier New", monospace';
+  g.fillStyle = opt.color || C.ink; g.textAlign = opt.align || 'left'; g.textBaseline = 'middle'; g.fillText(txt, x, y);
+}
+function draw() {
+  if (!W) return;
+  const v = view();
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = C.sheet; g.fillRect(0, 0, W, H);
+  // graticule: degrees heavy, 10′ light
+  const latMin = v.lat0 - H / v.s / 60, latMax = v.lat0 + H / v.s / 60;
+  const cosl = Math.cos(v.lat0 * D2R), lonMin = v.lon0 - W / v.s / 60 / cosl, lonMax = v.lon0 + W / v.s / 60 / cosl;
+  const minor = v.s * 10 > 14 ? 10 / 60 : 0.5;
+  g.lineWidth = 1;
+  for (let la = Math.floor(latMin / minor) * minor; la <= latMax; la += minor) {
+    const major = Math.abs(la - Math.round(la)) < 1e-6; g.strokeStyle = major ? C.grid : C.grid2;
+    const [, y] = P(v, la, v.lon0); line(0, Math.round(y) + .5, W, Math.round(y) + .5);
+    if (major) label((la === 0 ? '0°' : Math.abs(Math.round(la)) + '°' + (la > 0 ? 'N' : 'S')), 6, y - 8, { size: 11, color: C.muted });
+  }
+  for (let lo = Math.floor(lonMin / minor) * minor; lo <= lonMax; lo += minor) {
+    const major = Math.abs(lo - Math.round(lo)) < 1e-6; g.strokeStyle = major ? C.grid : C.grid2;
+    const [x] = P(v, v.lat0, lo); line(Math.round(x) + .5, 0, Math.round(x) + .5, H);
+    if (major) label(Math.abs(Math.round(lo)) + '°W', x + 4, H - 52, { size: 11, color: C.muted });
+  }
+  // equator gets a slightly firmer line
+  { const [, y] = P(v, 0, v.lon0); g.strokeStyle = C.grid; g.lineWidth = 1.6; line(0, y, W, y); g.lineWidth = 1; label('EQUATOR', W - 8, y - 8, { size: 10.5, color: C.muted, align: 'right', track: '2px' }); }
+
+  const [hx, hy] = P(v, HOWLAND.lat, HOWLAND.lon);
+  // distance rings: "out" names no bearing, so each claim is a circle
+  for (const e of LOG) if (e.ring && t >= e.m) {
+    const age = LOG.find(x => x.ring && x.m > e.m && t >= x.m) ? 0.35 : 1;
+    g.save(); g.globalAlpha = age * (1 - 0.6 * v.k); g.strokeStyle = C.ring; g.setLineDash([2, 5]); g.lineWidth = 1.3;
+    g.beginPath(); g.arc(hx, hy, nm(v, e.ring), 0, Math.PI * 2); g.stroke(); g.restore();
+    g.save(); g.globalAlpha = age * (1 - 0.6 * v.k);
+    typed(e.ring + ' miles out', hx + nm(v, e.ring) * Math.cos(-0.9) + 6, hy + nm(v, e.ring) * Math.sin(-0.9), { size: 12, color: C.ring });
+    g.restore();
+  }
+  // the sun line: a direction without a place
+  const s = sun(t, HOWLAND.lat, HOWLAND.lon);
+  if (t >= SUNRISE) {
+    const lopNow = t >= mins(2013), grow = Math.min(1, (t - SUNRISE) / 8);
+    const dir = LOP_DIR * D2R, ux = Math.sin(dir), uy = -Math.cos(dir), px = -uy, py = ux;  // along / across (screen)
+    const L = Math.hypot(W, H) * 1.2, spacing = nm(v, 10);
+    g.save(); g.strokeStyle = C.lop;
+    const n = Math.ceil(L / spacing);
+    for (let i = -n; i <= n; i++) {
+      const ox = hx + px * i * spacing, oy = hy + py * i * spacing;
+      g.globalAlpha = (lopNow ? 0.34 : 0.12) * grow; g.lineWidth = 1;
+      line(ox - ux * L * grow, oy - uy * L * grow, ox + ux * L * grow, oy + uy * L * grow);
+    }
+    // the Navy's presumption: through Howland
+    if (lopNow) {
+      g.globalAlpha = 1; g.lineWidth = 1.6; g.setLineDash([10, 6]);
+      line(hx - ux * L, hy - uy * L, hx + ux * L, hy + uy * L); g.setLineDash([]);
+      const lx = hx + ux * nm(v, v.k > 0.5 ? 230 : 70), ly = hy + uy * nm(v, v.k > 0.5 ? 230 : 70);
+      typed('157–337, "presumably passed through Howland"', lx + 10, ly, { size: 12.5, color: C.lop });
+    }
+    // "heading north and south": slow marks travelling both ways along every line
+    if (t >= mins(2025)) {
+      g.globalAlpha = 0.55; g.fillStyle = C.lop;
+      const ph = reduce ? 0 : (performance.now() / 4000) % 1;
+      for (let i = -n; i <= n; i += 2) for (let j = -6; j <= 6; j++) {
+        const along = (j + (i % 4 === 0 ? ph : -ph)) * spacing * 3;
+        const x = hx + px * i * spacing + ux * along, y = hy + py * i * spacing + uy * along;
+        if (x < -10 || y < -10 || x > W + 10 || y > H + 10) continue;
+        g.fillRect(x - 1, y - 1, 2.2, 2.2);
+      }
+    }
+    g.restore();
+  }
+  // the Itasca's smoke ("a heavy smoke screen which hung for hours") drifting downwind of the forecast ENE wind
+  if (t >= T0) {
+    const [ix, iy] = P(v, ITASCA.lat, ITASCA.lon);
+    g.save(); g.fillStyle = C.muted;
+    const wd = (247 + 180) * D2R;                               // drift toward ~247° (from ENE)
+    for (let i = 0; i < 70; i++) {
+      const d = nm(v, i * 0.22 + ((t * 0.7 + i * 7.3) % 1) * 0.2), wob = Math.sin(i * 1.7 + t * 0.05) * nm(v, 0.05 + i * 0.012);
+      const x = ix + Math.sin(wd + Math.PI) * d + Math.cos(wd) * wob, y = iy - Math.cos(wd + Math.PI) * d + Math.sin(wd) * wob;
+      g.globalAlpha = Math.max(0, 0.12 - i * 0.0016) * (1 - v.k); g.beginPath(); g.arc(x, y, 1 + i * 0.07, 0, 7); g.fill();
+    }
+    g.restore();
+  }
+  // islands
+  const isl = (o, r, name, dx, dy, align) => { const [x, y] = P(v, o.lat, o.lon); g.fillStyle = C.ink; g.beginPath(); g.ellipse(x, y, Math.max(2.2, r * v.s), Math.max(1.6, r * 0.55 * v.s), -0.3, 0, 7); g.fill(); label(name, x + dx, y + dy, { size: 12, weight: 600, track: '2px', align: align || 'left' }); };
+  isl(HOWLAND, 0.6, 'HOWLAND', -8, -10, 'right'); isl(BAKER, 0.45, 'BAKER', 8, 8);
+  { const [x, y] = P(v, ITASCA.lat, ITASCA.lon); if (v.k < 0.5) { g.strokeStyle = C.ink; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x - 5, y + 2); g.lineTo(x + 5, y + 2); g.lineTo(x + 3, y - 1); g.lineTo(x - 3, y - 1); g.closePath(); g.stroke(); label('ITASCA (approx.)', x + 9, y - 9, { size: 11, color: C.muted }); } }
+  if (v.k > 0.05) { g.save(); g.globalAlpha = v.k; for (const [n, la, lo] of PHOENIX) { const [x, y] = P(v, la, lo); g.fillStyle = C.ink; g.beginPath(); g.arc(x, y, 2.2, 0, 7); g.fill(); label(n, x + 6, y + 1, { size: 10.5, color: C.muted, track: '1.5px' }); } label('PHOENIX ISLANDS', ...P(v, -2.35, -172.2), { size: 11, color: C.muted, track: '3px', align: 'center' }); g.restore(); }
+  // compass rose with the sun's computed bearing
+  const R = Math.max(42, Math.min(70, Math.min(W, H) * 0.09)), cx = W - R - 26, cy = R + 64;
+  g.save(); g.strokeStyle = C.ink; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke();
+  for (let a = 0; a < 360; a += 5) { const r1 = a % 30 === 0 ? R - 8 : R - 4, rr = a * D2R; line(cx + Math.sin(rr) * r1, cy - Math.cos(rr) * r1, cx + Math.sin(rr) * R, cy - Math.cos(rr) * R); }
+  for (const [a, n] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']]) label(n, cx + Math.sin(a * D2R) * (R - 16), cy - Math.cos(a * D2R) * (R - 16), { size: 11, weight: 600, align: 'center' });
+  const sa = s.az * D2R, up = s.el > -0.833;
+  g.strokeStyle = C.sun; g.lineWidth = 2; if (!up) g.setLineDash([3, 3]);
+  line(cx, cy, cx + Math.sin(sa) * (R + 10), cy - Math.cos(sa) * (R + 10)); g.setLineDash([]);
+  g.fillStyle = C.sun; g.beginPath(); g.arc(cx + Math.sin(sa) * (R + 16), cy - Math.cos(sa) * (R + 16), up ? 5 : 3, 0, 7); up ? g.fill() : (g.strokeStyle = C.sun, g.stroke());
+  if (t >= SUNRISE) { g.strokeStyle = C.lop; g.lineWidth = 1.6; const d = LOP_DIR * D2R; line(cx - Math.sin(d) * (R - 2), cy + Math.cos(d) * (R - 2), cx + Math.sin(d) * (R - 2), cy - Math.cos(d) * (R - 2)); }
+  label('SUN ' + s.az.toFixed(1) + '° · ' + (s.el >= 0 ? '+' : '') + s.el.toFixed(1) + '°', cx, cy + R + 16, { size: 11, color: C.sun, align: 'center', weight: 600 });
+  if (t >= SUNRISE) label('LINE 156.9–336.9°', cx, cy + R + 30, { size: 11, color: C.lop, align: 'center', weight: 600 });
+  g.restore();
+  // time band: the morning as a strip, with the half hour of fuel the plane reported at 1912
+  const bx = 16, bw = W - 32, by = H - 32, X = m => bx + (m - T0) / (T1 - T0) * bw;
+  g.strokeStyle = C.grid; g.lineWidth = 1; line(bx, by, bx + bw, by);
+  for (let m = T0; m <= T1; m += 30) { line(X(m), by - 3, X(m), by + 3); }
+  g.strokeStyle = C.sun; line(X(SUNRISE), by - 7, X(SUNRISE), by + 7); label('sunrise', X(SUNRISE) + 4, by - 9, { size: 10.5, color: C.sun });
+  for (const e of LOG) { g.fillStyle = t >= e.m ? C.lop : C.grid; g.fillRect(X(e.m) - 1.5, by - 6, 3, 12); }
+  if (t >= mins(1912)) {
+    const a = X(mins(1912)), b = X(Math.min(t, mins(1942)));
+    g.fillStyle = C.ink; g.globalAlpha = 0.85; g.fillRect(a, by + 9, b - a, 3); g.globalAlpha = 1;
+    label('"30 minutes gas remaining"', a, by + 22, { size: 10.5, color: C.muted });
+    if (t > mins(1942)) {
+      const c = X(Math.min(t, mins(2025))); g.strokeStyle = C.ink; g.setLineDash([2, 3]); line(X(mins(1942)), by + 10.5, c, by + 10.5); g.setLineDash([]);
+      const over = Math.round(Math.min(t, mins(2025)) - mins(1942));
+      if (t >= mins(2013)) label('messages continue ' + over + ' min past the half hour', X(mins(1942)) + 4, by + 34, { size: 10.5, color: C.muted });
+    }
+  }
+  g.strokeStyle = C.ink; g.lineWidth = 1.5; line(X(t), by - 10, X(t), by + 10);
+}
+
+/* ---------- log column ---------- */
+const box = $('entries');
+LOG.forEach((e, i) => {
+  const el = document.createElement('div'); el.className = 'entry'; el.tabIndex = 0; el.id = 'e' + i;
+  el.innerHTML = `<div class="t">${fmtT(e.m)}<small>${howlandT(e.m)} H</small></div>
+    <div class="q">${e.a}<span class="src">${e.as}</span></div><div class="q">${e.b}<span class="src">${e.bs}</span></div>${e.note ? `<div class="note">${e.note}</div>` : ''}`;
+  const go = () => { t = e.m + 0.01; playing = false; syncUI(true); };
+  el.addEventListener('click', go); el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+  box.appendChild(el);
+});
+let lastNow = -1;
+function syncUI(force) {
+  $('clock').innerHTML = fmtT(t) + ' GCT<small>' + howlandT(t) + ' Howland</small>';
+  if (force || document.activeElement !== $('scrub')) $('scrub').value = t;
+  $('play').textContent = playing ? 'Pause' : (t >= T1 ? 'Again' : 'Play'); $('play').setAttribute('aria-pressed', String(playing));
+  let now = -1; LOG.forEach((e, i) => { const on = t >= e.m; document.getElementById('e' + i).classList.toggle('on', on); if (on) now = i; });
+  LOG.forEach((e, i) => document.getElementById('e' + i).classList.toggle('now', i === now));
+  if (now !== lastNow) { if (now >= 0 && playing) radio.burst(LOG[now]); lastNow = now; }
+  $('end').classList.toggle('on', t >= mins(2025) + 2);
+  draw();
+}
+
+/* ---------- sound: static, and a carrier at 3105 kc ÷ 10,000 ---------- */
+const radio = {
+  ctx: null, on: false,
+  start() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    const c = this.ctx = new A(), len = c.sampleRate * 7.3, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 0.7;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+    this.bed = c.createGain(); this.bed.gain.value = 0;
+    this.master = c.createGain(); this.master.gain.value = 0.9;
+    src.connect(bp); bp.connect(lp); lp.connect(this.bed); this.bed.connect(this.master); this.master.connect(c.destination); src.start();
+  },
+  set(v) { if (this.ctx) this.bed.gain.setTargetAtTime(v, this.ctx.currentTime, 0.8); },
+  burst(e) {
+    if (!this.on || !this.ctx) return;
+    const c = this.ctx, now = c.currentTime, amp = e.strongest ? 0.16 : e.lop || e.last ? 0.085 : 0.06;
+    const o = c.createOscillator(); o.frequency.value = 310.5;
+    const am = c.createOscillator(); am.frequency.value = 6.5; const amg = c.createGain(); amg.gain.value = 0.35;
+    const g1 = c.createGain(); g1.gain.value = 0; const g2 = c.createGain(); g2.gain.value = 0.65;
+    am.connect(amg); amg.connect(g2.gain); o.connect(g2); g2.connect(g1); g1.connect(this.master);
+    const hold = e.strongest ? 6 : 4;
+    g1.gain.setValueAtTime(0, now); g1.gain.linearRampToValueAtTime(amp, now + 0.35);
+    g1.gain.setValueAtTime(amp, now + hold); g1.gain.linearRampToValueAtTime(0, now + hold + 1.4);
+    o.start(now); am.start(now); o.stop(now + hold + 1.6); am.stop(now + hold + 1.6);
+    o.onended = () => { o.disconnect(); am.disconnect(); g1.disconnect(); g2.disconnect(); amg.disconnect(); };
+  },
+};
+$('snd').addEventListener('click', () => {
+  radio.on = !radio.on; if (radio.on) radio.start(); else radio.set(0);
+  $('snd').setAttribute('aria-pressed', String(radio.on));
+});
+
+/* ---------- controls + loop ---------- */
+$('play').addEventListener('click', () => { if (t >= T1) { t = T0; lastNow = -1; } playing = !playing; last = performance.now(); syncUI(true); });
+$('scrub').addEventListener('input', e => { t = +e.target.value; syncUI(false); });
+$('speed').addEventListener('click', () => { rate = rate === 1 ? 1 / 60 : 1; $('speed').textContent = rate === 1 ? '1 min / s' : 'Real time'; });
+addEventListener('keydown', e => { if (e.key === ' ' && e.target === document.body) { e.preventDefault(); $('play').click(); } });
+function loop(now) {
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (playing) { t += dt * rate; if (t >= T1) { t = T1; playing = false; } }
+  // static: present across the morning, closing down after the last message
+  if (radio.on) radio.set(t < mins(2025) ? 0.022 : Math.max(0, 0.022 * (1 - (t - mins(2025)) / 25)));
+  if (playing || (t >= mins(2025) && !reduce)) syncUI(false);
+  requestAnimationFrame(loop);
+}
+syncUI(true); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

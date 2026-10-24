@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>North and South</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* one window onto the Pacific from the cockpit; almost nothing else. A single dark look by design. */
+:root{color-scheme:dark;--night:#05070b;--panel:#0d0f12;--dim:#7d8590;--text:#d9dde2;--amber:#f2b552;--hot:#ff6a3d;
+  --type:'Courier Prime','Courier New',Courier,monospace;--label:'Barlow Semi Condensed','Arial Narrow',Arial,sans-serif}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--night);color:var(--text);font:15px/1.5 var(--label);overflow:hidden;user-select:none;-webkit-user-select:none}
+[hidden]{display:none!important}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.veil{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,7,11,.82);z-index:5;transition:opacity 1.6s}
+.veil.fade{opacity:0;pointer-events:none}
+.card{max-width:520px;display:flex;flex-direction:column;gap:14px}
+.card h1{margin:0;font:600 13px var(--label);letter-spacing:.32em;text-transform:uppercase;color:var(--dim)}
+.card p{margin:0;font:400 17px/1.55 var(--type)}
+.card .small{font:500 13px/1.5 var(--label);color:var(--dim)}
+.btn{align-self:flex-start;font:600 13px var(--label);letter-spacing:.2em;text-transform:uppercase;color:var(--text);background:transparent;border:1px solid var(--text);padding:10px 18px;cursor:pointer}
+.btn:hover{background:var(--text);color:var(--night)}
+.btn:focus-visible,#key:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+#key{position:fixed;right:calc(22px + env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:3;width:92px;height:92px;border-radius:50%;
+  border:2px solid #3a3f46;background:#14171b;color:var(--dim);font:600 11px/1.2 var(--label);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;touch-action:none;transition:border-color .4s,color .4s}
+#key.ready{border-color:var(--amber);color:var(--amber);animation:breathe 2.4s ease-in-out infinite}
+#key.on{background:var(--amber);color:#14171b;border-color:var(--amber);animation:none}
+@keyframes breathe{50%{box-shadow:0 0 0 8px rgba(242,181,82,.12)}}
+#said{position:fixed;left:50%;bottom:calc(25vh + 14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:3;max-width:min(760px,86vw);text-align:center;
+  font:400 clamp(16px,2vw,22px)/1.45 var(--type);color:var(--amber);text-shadow:0 1px 6px #000;pointer-events:none;min-height:1.5em}
+#real{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));z-index:4;background:none;border:none;color:#4b525b;font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;padding:6px}
+#real:hover{color:var(--dim)}
+.drawer{position:fixed;left:0;top:0;bottom:0;width:min(440px,100%);z-index:6;background:#0b0d10;border-right:1px solid #22262c;overflow:auto;
+  padding:52px max(22px,env(safe-area-inset-left,0px)) 40px 22px;font-size:14px;color:#b7bdc4;display:flex;flex-direction:column;gap:12px}
+.drawer h2{margin:0;font:600 12px var(--label);letter-spacing:.24em;text-transform:uppercase;color:var(--amber)}
+.drawer p{margin:0}
+.drawer .x{position:absolute;right:14px;top:12px}
+@media (prefers-reduced-motion: reduce){#key.ready{animation:none}.veil{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="The view from the cockpit: the Pacific at dawn, 2 July 1937. Drag to look around; arrow keys or A and D to turn."></canvas>
+<div id="said" aria-live="polite"></div>
+<button id="key" type="button" aria-label="Transmit (hold)">Transmit</button>
+<button id="real" type="button">What's real</button>
+
+<div class="veil" id="intro">
+  <div class="card">
+    <h1>North and South</h1>
+    <p>Lockheed Electra NR16020, over the Pacific.<br>2 July 1937, 6:10 in the morning, Howland time.</p>
+    <p>You left New Guinea nineteen hours ago. Howland Island is somewhere ahead: a strip of sand two kilometres long, a few metres above the sea. A Coast Guard cutter is waiting there with its radio.</p>
+    <p class="small">Sound on. Drag to look around. Turn with the arrow keys, A and D, or by dragging near the bottom of the window. Hold Transmit when it lights up.</p>
+    <button class="btn" id="go" type="button">Fly</button>
+  </div>
+</div>
+
+<div class="veil" id="outro" hidden>
+  <div class="card">
+    <h1 id="outT">08:55 Howland</h1>
+    <p id="outP">"This was the last authentic message received from the airplane."</p>
+    <p class="small" id="outS">US Navy, report of the search, July 1937. Nobody knows what happened next.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" id="keep" type="button">Keep flying</button><button class="btn" id="again" type="button">Fly again</button></div>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer" hidden aria-label="What's real">
+  <button class="btn x" id="close" type="button">Close</button>
+  <h2>What's real</h2>
+  <p><b>The words.</b> Everything you transmit is what the plane sent, at the minute it sent it, as written down in the US Navy's 1937 report of the search (National Archives; §13 and Known Facts 17, pages stamped NW 90261). The cutter heard her. She did not hear answers: the report notes "no answers to questions put to Earhart."</p>
+  <p><b>The sky.</b> The sun is computed for this place and morning. It rises at 06:16 Howland time on a bearing of 67°, about 11° left of a course to Howland, so you fly into it.</p>
+  <p><b>The island.</b> Howland and Baker are where they are, at their real size. You see Howland from about 15 nautical miles in good light, less into the glare.</p>
+  <p><b>Not known.</b> Where the plane really was. Each flight starts you somewhere different, 180–220 nautical miles out, believing you are on course. Most flights never see the island. If yours does, it was luck the record doesn't give her.</p>
+  <p><b>Made up for this.</b> Clouds and their shadows, the sea, the engine sound, the speed of time (six times real time), the cockpit. Your altitude, 1,000 feet, is an assumption. Nothing here shows how the flight ended, because nobody knows.</p>
+  <p class="small" style="color:#6f767e">The forecast she carried (Known Facts 16): "175° E to Howland; ENE 15 and squalls to be detoured."</p>
+</aside>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const D2R = Math.PI / 180, NM = 1852;
+const cv = $('c'), g = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); g.setTransform(DPR, 0, 0, DPR, 0, 0); }
+addEventListener('resize', resize); resize();
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- the morning ---------- */
+const m = hhmm => Math.floor(hhmm / 100) * 60 + hhmm % 100;
+const HOW = { lat: 48 / 60, lon: -(176 + 38 / 60) };
+const local = g0 => { const t = g0 - 690 + 1440, h = Math.floor(t / 60) % 24, mm = Math.floor(t % 60); return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); };
+const SAYS = [   // US Navy report §13 (words), times GCT
+  { t: m(1745), w: 'Two hundred miles out and no land fall' },
+  { t: m(1816), w: 'Approximately 100 miles from ITASCA, position doubtful' },
+  { t: m(1912), w: '30 minutes gas remaining, no land fall, position doubtful' },
+  { t: m(1928), w: 'Circling, trying to pick up Island' },
+  { t: m(2013), w: 'On a position line 157 - 337 degrees' },
+  { t: m(2025), w: 'Heading north and south' },
+];
+function sunAt(min) {
+  const ms = Date.UTC(1937, 6, 2) + min * 60000, n = ms / 86400000 + 2440587.5 - 2451545;
+  const L = ((280.460 + 0.9856474 * n) % 360 + 360) % 360, q = (((357.528 + 0.9856003 * n) % 360 + 360) % 360) * D2R;
+  const lam = (L + 1.915 * Math.sin(q) + 0.020 * Math.sin(2 * q)) * D2R, eps = (23.439 - 0.0000004 * n) * D2R;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)), dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+  const gm = ((280.46061837 + 360.98564736629 * n) % 360 + 360) % 360, ha = (gm + HOW.lon) * D2R - ra, la = HOW.lat * D2R;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+  return { az: (az / D2R + 360) % 360, el: el / D2R };
+}
+
+/* ---------- the flight: position in nm east/north of Howland ---------- */
+const TIME = 6;                       // story seconds per real second
+const KT = 130, ALT_FT = 1000;
+let P, t, heading, bank, look, said, sent, keyDown, ended, keepFlying, foundAt;
+function start() {
+  const r = 180 + Math.random() * 40, from = 245 + Math.random() * 30;          // somewhere out to the west-southwest
+  P = { x: Math.sin(from * D2R) * r, y: Math.cos(from * D2R) * r };
+  const toHow = (Math.atan2(-P.x, -P.y) / D2R + 360) % 360;
+  heading = toHow + (Math.random() * 2 - 1) * 9;                              // believing you are on course
+  t = m(1740); bank = 0; look = 0; said = ''; sent = SAYS.map(() => 0); keyDown = false; ended = false; keepFlying = false; foundAt = null;
+  clouds = makeClouds();
+}
+/* clouds: authored trade-wind cumulus, fixed to the sea, drifting with an ENE wind */
+let clouds = [];
+function makeClouds() {
+  let s = Math.floor(Math.random() * 1e9); const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const out = [];
+  for (let i = 0; i < 420; i++) out.push({ x: (rnd() - 0.5) * 520 + P.x * 0.5, y: (rnd() - 0.5) * 520 + P.y * 0.5, r: 0.25 + rnd() * 0.9, h: 2400 + rnd() * 1800, k: rnd(), dense: rnd() < 0.18 });
+  return out;
+}
+
+/* ---------- input ---------- */
+const keys = {};
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key === ' ' && document.activeElement === document.body) { e.preventDefault(); key(true); } });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key === ' ') key(false); });
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, look, steer: e.clientY > H * 0.78 }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (!drag) return; if (drag.steer) drag.dx = (e.clientX - drag.x) / (W * 0.25); else look = Math.max(-150, Math.min(150, drag.look - (e.clientX - drag.x) / W * 120)); });
+cv.addEventListener('pointerup', () => { drag = null; });
+const keyBtn = $('key');
+keyBtn.addEventListener('pointerdown', e => { e.preventDefault(); keyBtn.setPointerCapture(e.pointerId); key(true); });
+keyBtn.addEventListener('pointerup', () => key(false));
+keyBtn.addEventListener('pointercancel', () => key(false));
+function due() { for (let i = 0; i < SAYS.length; i++) if (t >= SAYS[i].t && sent[i] < 1) return i; return -1; }
+function key(on) {
+  if (ended && !keepFlying) return;
+  keyDown = on; keyBtn.classList.toggle('on', on);
+  if (on) audio.tx(true); else audio.tx(false);
+}
+
+/* ---------- sound: two radials, the air, the radio ---------- */
+const audio = {
+  c: null,
+  init() {
+    if (this.c) { this.c.resume(); return; }
+    const A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    const c = this.c = new A(), out = c.createGain(); out.gain.value = 0.9; out.connect(c.destination);
+    const len = c.sampleRate * 9.1, b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0); let lp = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; lp = lp * 0.97 + w * 0.03; d[i] = w * 0.5 + lp * 4; }
+    const noise = () => { const s = c.createBufferSource(); s.buffer = b; s.loop = true; s.start(0, Math.random() * 9); return s; };
+    // engines: 9-cylinder radials near 1900 rpm, slightly out of sync so they beat
+    this.eng = [142, 143.3].map((f, i) => {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const sub = c.createOscillator(); sub.type = 'triangle'; sub.frequency.value = f / 2.25;
+      const lpf = c.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 340; lpf.Q.value = 0.8;
+      const gn = c.createGain(); gn.gain.value = 0; const pn = c.createStereoPanner(); pn.pan.value = i ? 0.45 : -0.45;
+      o.connect(lpf); sub.connect(lpf); lpf.connect(gn); gn.connect(pn); pn.connect(out); o.start(); sub.start();
+      return { o, sub, gn, f };
+    });
+    const air = noise(), af = c.createBiquadFilter(); af.type = 'lowpass'; af.frequency.value = 520; this.air = c.createGain(); this.air.gain.value = 0;
+    air.connect(af); af.connect(this.air); this.air.connect(out);
+    const st = noise(), sf = c.createBiquadFilter(); sf.type = 'bandpass'; sf.frequency.value = 1500; sf.Q.value = 0.9; this.stat = c.createGain(); this.stat.gain.value = 0;
+    st.connect(sf); sf.connect(this.stat); this.stat.connect(out);
+    this.side = c.createOscillator(); this.side.frequency.value = 620; this.sideG = c.createGain(); this.sideG.gain.value = 0; this.side.connect(this.sideG); this.sideG.connect(out); this.side.start();
+    const now = c.currentTime; this.eng.forEach(e => e.gn.gain.setTargetAtTime(0.085, now, 2.5)); this.air.gain.setTargetAtTime(0.05, now, 3); this.stat.gain.setTargetAtTime(0.012, now, 3);
+  },
+  tx(on) { if (!this.c) return; const n = this.c.currentTime; this.sideG.gain.setTargetAtTime(on ? 0.035 : 0, n, 0.03); this.stat.gain.setTargetAtTime(on ? 0.002 : 0.016, n, 0.15); },
+  frame(bankAmt) { if (!this.c) return; const n = this.c.currentTime; this.eng.forEach((e, i) => e.o.frequency.setTargetAtTime(e.f * (1 + bankAmt * 0.004 * (i ? 1 : -1)), n, 0.5)); },
+};
+
+/* ---------- drawing ---------- */
+const FOV = 74;
+function proj(bearing, elevDeg) {           // bearing (deg true), angle above horizon → screen, before bank rotation
+  let d = ((bearing - (heading + look) + 540) % 360) - 180;
+  const f = (W / 2) / Math.tan(FOV / 2 * D2R);
+  if (Math.abs(d) > 89) return null;
+  return [W / 2 + Math.tan(d * D2R) * f, horizonY() - Math.tan(elevDeg * D2R) * f / Math.cos(d * D2R)];
+}
+const horizonY = () => H * 0.46;
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+function skyColors(el) {
+  const night = [[6, 9, 16], [10, 14, 24]], dawn = [[40, 52, 84], [236, 148, 92]], day = [[78, 132, 196], [196, 214, 226]];
+  if (el < -8) return night;
+  if (el < 2) { const k = (el + 8) / 10; return [mix(night[0], dawn[0], k), mix(night[1], dawn[1], k)]; }
+  const k = Math.min(1, (el - 2) / 18); return [mix(dawn[0], day[0], k), mix(dawn[1], day[1], k)];
+}
+let starSeed = []; for (let i = 0; i < 260; i++) starSeed.push([Math.random() * 360, Math.random() * 60 + 2, Math.random()]);
+function draw(sun) {
+  const hz = horizonY(), [top, low] = skyColors(sun.el), dayK = Math.max(0, Math.min(1, (sun.el + 6) / 20));
+  g.save();
+  g.translate(W / 2, hz); g.rotate(-bank * D2R * 0.85); g.translate(-W / 2, -hz);
+  const big = Math.hypot(W, H);
+  // sky
+  let gr = g.createLinearGradient(0, hz - H * 0.6, 0, hz); gr.addColorStop(0, rgb(top)); gr.addColorStop(1, rgb(low));
+  g.fillStyle = gr; g.fillRect(-big, hz - big, W + big * 2, big);
+  if (sun.el < -3) { g.fillStyle = '#ffffff'; for (const [az, el, b] of starSeed) { const p = proj(az, el); if (!p) continue; g.globalAlpha = (0.25 + b * 0.6) * Math.min(1, (-3 - sun.el) / 6) * (0.6 + 0.4 * Math.sin(performance.now() / 700 + b * 9)); g.fillRect(p[0], p[1], 1.4, 1.4); } g.globalAlpha = 1; }
+  // the sun and its glare
+  const sp = proj(sun.az, sun.el);
+  if (sp && sun.el > -4) {
+    const glare = Math.max(0, 1 - Math.max(0, sun.el) / 25);
+    const R = (W / 2) / Math.tan(FOV / 2 * D2R) * Math.tan(0.27 * D2R);
+    let rg = g.createRadialGradient(sp[0], sp[1], 0, sp[0], sp[1], W * (0.25 + 0.35 * glare));
+    rg.addColorStop(0, `rgba(255,236,200,${0.85 * Math.min(1, (sun.el + 4) / 4)})`); rg.addColorStop(0.15, `rgba(255,190,120,${0.35 * glare + 0.15})`); rg.addColorStop(1, 'rgba(255,170,100,0)');
+    g.fillStyle = rg; g.fillRect(-big, hz - big, W + big * 2, big * 2);
+    if (sun.el > -0.9) { g.fillStyle = '#fff6e6'; g.beginPath(); g.arc(sp[0], sp[1], Math.max(3, R), 0, 7); g.fill(); }
+  }
+  // clouds (above the horizon) — farthest first
+  const vis = [];
+  for (const c of clouds) {
+    const dx = c.x - P.x, dy = c.y - P.y, d = Math.hypot(dx, dy); if (d > 60 || d < 0.3) continue;
+    const b = (Math.atan2(dx, dy) / D2R + 360) % 360; vis.push({ c, d, b });
+  }
+  vis.sort((a, b) => b.d - a.d);
+  // sea
+  gr = g.createLinearGradient(0, hz, 0, H + 200);
+  const seaFar = mix([18, 26, 40], mix([96, 118, 140], [70, 110, 140], dayK), Math.max(0, Math.min(1, (sun.el + 8) / 10))), seaNear = mix([4, 8, 14], [16, 52, 78], dayK);
+  gr.addColorStop(0, rgb(seaFar)); gr.addColorStop(1, rgb(seaNear)); g.fillStyle = gr; g.fillRect(-big, hz, W + big * 2, big);
+  // swell lines, moving under you
+  const f = (W / 2) / Math.tan(FOV / 2 * D2R), altNm = ALT_FT * 0.3048 / NM;
+  g.strokeStyle = `rgba(255,255,255,${0.03 + 0.05 * dayK})`; g.lineWidth = 1;
+  const along = (P.x * Math.sin(heading * D2R) + P.y * Math.cos(heading * D2R)) * 60;
+  for (let i = 1; i < 90; i++) { const dist = (i - (along % 1)) * 0.06 * (1 + i * 0.08); const y = hz + altNm / dist * f; if (y > H + 40) continue; g.globalAlpha = Math.min(1, 6 / i); g.beginPath(); g.moveTo(-big, y); g.lineTo(W + big, y); g.stroke(); }
+  g.globalAlpha = 1;
+  // the sun's path on the water: a band of glitter under the sun
+  if (sp && sun.el > -1) {
+    const n = 220; g.fillStyle = `rgba(255,236,200,${0.5 + 0.3 * (1 - Math.min(1, sun.el / 30))})`;
+    const now = performance.now() / 1000;
+    for (let i = 0; i < n; i++) { const k = (i * 0.618 + now * 0.07) % 1, y = hz + 2 + Math.pow(k, 1.7) * (H - hz); const w = (8 + k * 120) * (1 + Math.max(0, 10 - sun.el) / 10); const x = sp[0] + (Math.sin(i * 12.9898 + now * (0.6 + (i % 5) * 0.2)) * w); if (Math.sin(i * 3.1 + now * 3.7) > 0.55) g.fillRect(x, y, 2 + k * 6, 1 + k * 1.5); }
+  }
+  // cloud shadows on the sea: dark patches that can look like land
+  if (sun.el > 3) for (const v of vis) {
+    const off = v.c.h * 0.3048 / NM / Math.tan(Math.max(5, sun.el) * D2R);
+    const sx = v.c.x - Math.sin(sun.az * D2R) * off - P.x, sy = v.c.y - Math.cos(sun.az * D2R) * off - P.y, sd = Math.hypot(sx, sy); if (sd < 0.4 || sd > 40) continue;
+    const p = proj((Math.atan2(sx, sy) / D2R + 360) % 360, -Math.atan(altNm / sd) / D2R); if (!p) continue;
+    const rw = Math.atan(v.c.r / sd) * f, rh = rw * Math.min(0.5, altNm / sd * 8 + 0.02);
+    g.fillStyle = `rgba(4,14,24,${0.32 * dayK})`; g.beginPath(); g.ellipse(p[0], p[1], rw, Math.max(0.8, rh), 0, 0, 7); g.fill();
+  }
+  // islands: real size, seen only within range; less into the glare
+  for (const isl of [{ x: 0, y: 0, len: 1.35, name: 'h' }, { x: (-(176 + 29 / 60) - HOW.lon) * 60, y: (12 / 60 - HOW.lat) * 60, len: 0.85 }]) {
+    const dx = isl.x - P.x, dy = isl.y - P.y, d = Math.hypot(dx, dy); const b = (Math.atan2(dx, dy) / D2R + 360) % 360;
+    const into = Math.abs(((b - sun.az + 540) % 360) - 180), glareCut = sun.el > -1 && sun.el < 25 && into < 20 ? 0.45 : 1;
+    const range = 15 * glareCut * Math.min(1, 0.4 + dayK);
+    if (d > range) continue;
+    const p = proj(b, -Math.atan(altNm / d) / D2R + 0.002); if (!p) continue;
+    const half = Math.atan(isl.len / 2 / d) * f, a = Math.min(1, (range - d) / 3);
+    g.globalAlpha = a; g.fillStyle = 'rgba(232,220,190,1)'; g.fillRect(p[0] - half, p[1] - Math.max(1, half * 0.04), half * 2, Math.max(1.2, half * 0.06));
+    g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(p[0] - half * 1.05, p[1] + Math.max(1, half * 0.05), half * 2.1, Math.max(0.8, half * 0.025)); g.globalAlpha = 1;
+    if (isl.name === 'h' && d < 3 && foundAt === null) foundAt = t;
+  }
+  // clouds: trade-wind cumulus, flat bases, tops lit by the low sun
+  for (const v of vis) {
+    const above = (v.c.h - ALT_FT) * 0.3048 / NM, el = Math.atan(above / v.d) / D2R, p = proj(v.b, el); if (!p) continue;
+    const rw = Math.atan(v.c.r / v.d) * f * 1.25, haze = Math.min(1, v.d / 55), fog = mix(seaFar, low, 0.55);
+    const warm = Math.max(0, 1 - Math.max(0, sun.el) / 18) * Math.min(1, (sun.el + 6) / 6);
+    const topC = mix(mix([120, 126, 140], [250, 246, 240], dayK), [255, 196, 150], warm * 0.6), baseC = mix([34, 38, 50], [150, 158, 174], dayK);
+    const into = Math.abs(((v.b - sun.az + 540) % 360) - 180) < 35 && sun.el < 20;
+    const n = 7 + Math.floor(v.c.k * 5), baseY = p[1];
+    g.save(); g.beginPath(); g.rect(p[0] - rw * 3, baseY - rw * 4, rw * 6, rw * 4); g.clip();     // flat base
+    for (let j = 0; j < n; j++) {
+      const u = j / (n - 1) - 0.5, hump = 1 - Math.abs(u) * 1.4;
+      const ox = u * rw * 2.4 + Math.sin(v.c.k * 40 + j * 2.3) * rw * 0.12;
+      const rr = rw * (0.32 + 0.3 * Math.max(0.15, hump) + 0.08 * Math.sin(v.c.k * 9 + j));
+      const oy = -rr * 0.55 - Math.max(0, hump) * rw * (v.c.dense ? 0.9 : 0.45);
+      const lx = -Math.sin((sun.az - v.b) * D2R) * rr * 0.4;
+      const cg = g.createRadialGradient(p[0] + ox + lx, p[1] + oy - rr * 0.45, rr * 0.05, p[0] + ox, p[1] + oy, rr * 1.05);
+      cg.addColorStop(0, rgb(mix(into ? mix(topC, baseC, 0.55) : topC, fog, haze * 0.75)));
+      cg.addColorStop(0.7, rgb(mix(mix(topC, baseC, 0.45), fog, haze * 0.75)));
+      cg.addColorStop(1, rgb(mix(baseC, fog, haze * 0.75)));
+      g.globalAlpha = Math.min(1, (sun.el + 10) / 6 + 0.25) * (1 - haze * 0.35);
+      g.fillStyle = cg; g.beginPath(); g.arc(p[0] + ox, p[1] + oy, rr, 0, 7); g.fill();
+    }
+    g.restore();
+    if (into && dayK > 0.15) { g.globalAlpha = 0.55 * (1 - haze); g.strokeStyle = 'rgba(255,224,190,1)'; g.lineWidth = 1.4; g.beginPath(); g.ellipse(p[0], p[1] - rw * 0.55, rw * 1.2, rw * 0.6, 0, Math.PI * 1.08, Math.PI * 1.92); g.stroke(); }
+    g.globalAlpha = 1;
+  }
+  g.restore();
+  cockpit(sun);
+}
+function cockpit(sun) {
+  const night = Math.max(0, Math.min(1, (2 - sun.el) / 10));
+  g.fillStyle = '#07080a';
+  // window frame and centre post (the Electra's split windscreen)
+  const postX = W / 2 - look / FOV * W * 0.9;
+  g.fillRect(postX - 9, 0, 18, H * 0.78);
+  g.fillRect(0, 0, W, Math.max(18, H * 0.06));
+  g.beginPath(); g.moveTo(0, H * 0.06); g.lineTo(W * 0.05, H * 0.06); g.lineTo(0, H * 0.4); g.fill();
+  g.beginPath(); g.moveTo(W, H * 0.06); g.lineTo(W * 0.95, H * 0.06); g.lineTo(W, H * 0.4); g.fill();
+  // panel
+  const py = H * 0.78; g.fillStyle = '#0b0c0e'; g.beginPath(); g.moveTo(0, py + 10); g.quadraticCurveTo(W / 2, py - 18, W, py + 10); g.lineTo(W, H); g.lineTo(0, H); g.fill();
+  const lamp = night > 0.3 ? 'rgba(242,181,82,0.9)' : 'rgba(217,221,226,0.85)';
+  const gauge = (x, label, fn) => { const r = Math.min(46, H * 0.06); g.strokeStyle = '#2b2f35'; g.lineWidth = 2; g.beginPath(); g.arc(x, py + r + 22, r, 0, 7); g.stroke(); fn(x, py + r + 22, r); g.fillStyle = '#4b525b'; g.font = '500 10px "Barlow Semi Condensed", sans-serif'; g.textAlign = 'center'; g.fillText(label, x, py + r * 2 + 36); };
+  g.textAlign = 'center';
+  gauge(W * 0.36, 'CLOCK · HOWLAND', (x, y, r) => { const tl = t - 690; const hh = (tl / 60) % 12, mm = tl % 60; g.strokeStyle = lamp; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(hh / 12 * 2 * Math.PI) * r * 0.5, y - Math.cos(hh / 12 * 2 * Math.PI) * r * 0.5); g.stroke(); g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(mm / 60 * 2 * Math.PI) * r * 0.8, y - Math.cos(mm / 60 * 2 * Math.PI) * r * 0.8); g.stroke(); for (let i = 0; i < 12; i++) { const a = i / 12 * 2 * Math.PI; g.fillStyle = '#3a3f46'; g.fillRect(x + Math.sin(a) * r * 0.86 - 1, y - Math.cos(a) * r * 0.86 - 1, 2, 2); } });
+  gauge(W * 0.5, 'COMPASS', (x, y, r) => { g.fillStyle = lamp; g.font = '700 ' + Math.round(r * 0.5) + 'px "Courier Prime", monospace'; g.fillText(String(Math.round((heading + 360) % 360)).padStart(3, '0') + '°', x, y + r * 0.18); });
+  gauge(W * 0.64, 'TURN', (x, y, r) => { g.strokeStyle = lamp; g.lineWidth = 2; g.save(); g.translate(x, y); g.rotate(bank * D2R); g.beginPath(); g.moveTo(-r * 0.7, 0); g.lineTo(r * 0.7, 0); g.stroke(); g.restore(); });
+}
+
+/* ---------- loop ---------- */
+let last = performance.now(), running = false, tsay = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (running && (!ended || keepFlying)) {
+    const steer = (keys['arrowleft'] || keys['a'] ? -1 : 0) + (keys['arrowright'] || keys['d'] ? 1 : 0) + (drag && drag.steer ? Math.max(-1, Math.min(1, drag.dx || 0)) : 0);
+    bank += ((steer * 22) - bank) * Math.min(1, dt * 1.8);
+    heading = (heading + bank / 22 * 3 * dt * TIME + 360) % 360;      // standard-rate turn at full bank
+    const dist = KT / 3600 * dt * TIME;
+    P.x += Math.sin(heading * D2R) * dist; P.y += Math.cos(heading * D2R) * dist;
+    t += dt * TIME / 60;
+    if (!drag || drag.steer) look *= Math.pow(0.4, dt);                  // your head drifts back to the windscreen
+    const i = due();
+    keyBtn.classList.toggle('ready', i >= 0 && !keyDown);
+    keyBtn.textContent = i >= 0 ? 'Transmit' : 'Transmit';
+    if (keyDown && i >= 0) { sent[i] = Math.min(1, sent[i] + dt / (SAYS[i].w.length * 0.075)); said = SAYS[i].w.slice(0, Math.ceil(sent[i] * SAYS[i].w.length)); tsay = now; }
+    else if (keyDown && i < 0 && !said) { said = '·'; tsay = now; }        // keying with nothing to send: just the carrier
+    if (!keyDown && now - tsay > 5000) said = '';
+    const done = SAYS.some(x => x.w === said);
+    $('said').textContent = said && said !== '·' ? '“' + said + (done ? '”' : '') : '';
+    audio.frame(bank / 22);
+    if (!ended && t > m(2025) + 9 && sent[5] >= 1) finish();
+    if (!ended && t > m(2045)) finish();                                  // even if you never sent it, the record ends here
+  }
+  const sun = sunAt(t);
+  draw(sun);
+  if (foundAt !== null && !shownFound) { shownFound = true; showFound(); }
+  requestAnimationFrame(frame);
+}
+let shownFound = false;
+function showFound() {
+  $('outT').textContent = local(foundAt) + ' Howland';
+  $('outP').textContent = 'That is Howland Island. On 2 July 1937, she did not see it.';
+  $('outS').textContent = 'Your flight started somewhere different from hers, and nobody knows where hers was.';
+  $('outro').hidden = false; $('outro').classList.remove('fade'); $('keep').textContent = 'Keep flying';
+}
+function finish() {
+  ended = true; keyBtn.classList.remove('ready');
+  $('outT').textContent = local(m(2025)) + ' Howland';
+  $('outP').textContent = '“This was the last authentic message received from the airplane.”';
+  $('outS').textContent = 'US Navy, report of the search, July 1937. The search lasted more than two weeks. Nothing was found. Nobody knows what happened next.';
+  $('outro').hidden = false; $('outro').classList.remove('fade');
+}
+$('go').addEventListener('click', () => { audio.init(); running = true; $('intro').classList.add('fade'); setTimeout(() => $('intro').hidden = true, 1700); });
+$('keep').addEventListener('click', () => { keepFlying = true; $('outro').classList.add('fade'); setTimeout(() => $('outro').hidden = true, 1700); });
+$('again').addEventListener('click', () => { start(); shownFound = false; running = true; $('outro').classList.add('fade'); setTimeout(() => $('outro').hidden = true, 1700); });
+$('real').addEventListener('click', () => { $('drawer').hidden = false; $('close').focus(); });
+$('close').addEventListener('click', () => { $('drawer').hidden = true; $('real').focus(); });
+start(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
