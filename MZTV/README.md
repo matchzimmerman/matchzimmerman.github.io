@@ -6,8 +6,15 @@ Canonical source library for MZTV broadcast experiments, OBS control scripts, li
 
 - `obs/` — OBS Lua/Python control and director scripts
 - `sources/` — browser-rendered visual sources for OBS
+- `cinema/` — self-performing short films assembled from autonomous source worlds and MZ SONIC
 - `lib/` — shared modules pieces load (e.g. `mzcam.js`, the drone camera crew from 48 PLANT)
 - future directories may include `overlays/`, `idents/`, `archive/`, and `audio/`
+
+## MZ CINEMA · Film 001 (2026-10-23)
+
+**THE WATER KEEPS** — a 15-minute, five-movement procedural short performed by three MZ WORLDS (HEADLAND, SRUTHÁN and LOCH RAVEN). Timed cinematic transitions, inherited three-note score, autonomous MZCAM camera views, intentional WARREN BELOW at 08:55, and a stereo monitoring mix of a custom 8-main/2-sub logical bus engine. The score is live code, not stock audio. Browser player: [THE WATER KEEPS](cinema/short-001-the-water-keeps/) · [implementation notes](cinema/short-001-the-water-keeps/README.md).
+
+**Edition boundary:** This is a web-film prototype, not an exported MP4 or finished 8.2 multichannel WAV master. No MZ WORLD broadcast source was changed.
 
 ## Working lineages
 
