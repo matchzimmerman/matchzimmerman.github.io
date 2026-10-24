@@ -863,145 +863,72 @@ function chooseShot(){
 }
 
 /* ====================================================================== sim */
-let SUNM = sunMoon(simMs), SUND = V(), MOOND = V(), WREATH_C = V();
-const PROBES = []; for (let x = -190; x <= 290; x += 30) { const z = coastZ(x) - 3; PROBES.push({ p: V(x, 0, z), prev: 0, rising: false, cool: 0 }); }
-STACKS.slice(0, 3).forEach(s => PROBES.push({ p: V(s.p.x, 0, s.p.z - s.r * 0.9), prev: 0, rising: false, cool: 0 }));
-let lastWxRebuild = -999, cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
-
-function keeperTick(dt) {
-  const sunEl = SUNM.sun.el / D2R; const evening = galwayParts(simMs).hour > 14;
-  if (keeper.state === 'dwell') {
-    keeper.dwell -= dt; keeper.still += dt;
-    if (keeper.dwell <= 0) {
-      let tgt, dw;
-      if (sunEl < -5) { tgt = 'HOUSE'; dw = rr(20, 50) * 60; }
-      else if (WX.precip > 1.5) { tgt = 'HOUSE'; dw = rr(15, 35) * 60; }
-      else if (evening && sunEl > -2 && sunEl < 10) { tgt = 'PIER_END'; dw = rr(6, 14) * 60; }
-      else { const opts = [['CLIFF', 2], ['LANDING', 1.6], ['PIER_MID', 1], ['PIER_END', 2], ['STAIR_TOP', 0.8], ['HOUSE', 2]].filter(o => o[0] !== keeper.target);
-        let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; tgt = opts[0][0]; for (const o of opts) { r -= o[1]; if (r <= 0) { tgt = o[0]; break; } }
-        dw = tgt === 'HOUSE' ? rr(6, 22) * 60 : rr(1, 6) * 60; }
-      if (tgt !== keeper.target) { keeper.target = tgt; keeper.state = 'walk'; keeper.nextDwell = dw; keeper.visible = true;
-        if (keeper.s === 0) logEv(`the keeper left the house for ${STOPS[tgt].name}`); }
-      else keeper.dwell = dw;
-    }
-  } else {
-    const goal = STOPS[keeper.target].s; const here = trailAt(keeper.s);
-    const sp = (here.kind === 'stair' ? 0.65 : 1.25) * (WX.precip > 1.5 ? 1.4 : 1); const dir = Math.sign(goal - keeper.s);
-    keeper.s += dir * Math.min(sp * dt, Math.abs(goal - keeper.s)); keeper.walked += sp * dt; keeper.still = 0;
-    if (Math.abs(goal - keeper.s) < 0.01) { keeper.state = 'dwell'; keeper.dwell = keeper.nextDwell; keeper.stopName = STOPS[keeper.target].name;
-      if (keeper.target === 'HOUSE') { keeper.visible = false; logEv('the keeper went in'); } else if (rnd() < 0.5) logEv(`the keeper reached ${keeper.stopName}`); }
-    keeper.walkDir = dir;
+let SUNM=sunMoon(simMs),SUND=V(),MOOND=V();
+let cwNow=COLORWAYS[S.colorway].c.map(hexV),cwFrom=cwNow.map(v=>v.clone()),cwMix=1;
+function keeperTick(dt){
+ const hour=localParts(simMs).hour,tooWet=WX.precip>2||WX.wind>15,off=hour<5.5||hour>21;
+ if(keeper.state==='dwell'){
+  keeper.still+=dt;keeper.dwell-=dt;
+  if(keeper.dwell<=0){
+   if(off||tooWet){keeper.target='WEST';keeper.dwell=rr(180,540);}
+   else{
+    const keys=['WEST','WEST_GAUGE','SPILL','EAST_GAUGE','EAST'];
+    keeper.target=keys[Math.floor(rnd()*keys.length)];
+    keeper.dwell=rr(45,140);
+   }
+   if(Math.abs(keeper.x-STOPS[keeper.target].x)>.4){keeper.state='walk';keeper.still=0;}
   }
-  if (!isFinite(keeper.s)) keeper.s = 0;
-  const at = trailAt(keeper.s); keeper.pos.copy(at.p); keeper.cur = at.kind;
-  if (keeper.state === 'walk') keeper.dir.copy(at.dir).multiplyScalar(keeper.walkDir || 1);
-  else if (keeper.target === 'PIER_END') keeper.dir.lerp(V(SUND.x, 0, SUND.z).normalize(), 0.02).normalize();
-  else if (keeper.target === 'CLIFF') keeper.dir.lerp(V(-0.3, 0, -1).normalize(), 0.02).normalize();
-  const m = keeper.mesh; m.visible = keeper.visible; m.position.copy(keeper.pos); m.rotation.y = Math.atan2(keeper.dir.x, keeper.dir.z);
-  keeper.move = lerp(keeper.move || 0, keeper.state === 'walk' ? 1 : 0, 1 - Math.exp(-dt * 1.5));
-  const wt = fromBearingTravel(WX.windDir), wl = V(wt.x, 0, wt.y).multiplyScalar(clamp(WX.wind / 12, 0, 1.4)).applyAxisAngle(V(0, 1, 0), -m.rotation.y);
-  m.position.y += 0.03 * Math.sin(keeper.walked * 3.4) * keeper.move;
-  m.userData.mats.forEach(mt => { mt.uniforms.uWalk.value = keeper.walked; mt.uniforms.uMove.value = keeper.move; mt.uniforms.uWindL.value.copy(wl); });
+ }else{
+  const goal=STOPS[keeper.target].x,dir=Math.sign(goal-keeper.x);
+  const dist=Math.min(1.12*dt,Math.abs(goal-keeper.x));
+  keeper.x+=dir*dist;keeper.walked+=dist;keeper.dir.set(dir,0,0);
+  if(Math.abs(keeper.x-goal)<.05){
+   keeper.x=goal;keeper.state='dwell';keeper.dwell=rr(75,210);keeper.still=0;
+   keeper.stopName=STOPS[keeper.target].name;
+   if(keeper.target.includes('GAUGE')){
+    S.inspections++;S.inspected[keeper.target]=(S.inspected[keeper.target]||0)+1;
+    logEv('keeper checked '+keeper.stopName+' · inspection '+S.inspections);
+   }else if(rnd()<.22)logEv('keeper reached '+keeper.stopName);
+  }
+ }
+ if(!Number.isFinite(keeper.x))keeper.x=-88;
+ keeper.pos.set(keeper.x,CREST+.4,3);keeper.visible=!(off||tooWet)&&keeper.state!=='dwell'||(!(off||tooWet)&&keeper.target!=='WEST');
+ const m=keeper.mesh;m.visible=keeper.visible;m.position.copy(keeper.pos);m.rotation.y=keeper.dir.x>=0?Math.PI/2:-Math.PI/2;
+ if(keeper.state==='walk')m.position.y+=.035*Math.sin(keeper.walked*8);
+ keeper.move=lerp(keeper.move,keeper.state==='walk'?1:0,1-Math.exp(-dt*2));
 }
-function boatTick(dt, t) {
-  const sunEl = SUNM.sun.el / D2R;
-  if (boat.state === 'moored') { boat.until -= dt; boat.target.copy(MOOR);
-    if (boat.until <= 0) { if (sunEl > 2 && WX.swellH < 2.3 && WX.wind < 13) { boat.state = 'out'; boat.out = true; boat.target.set(rr(-30, 110), 0, rr(-330, -230)); boat.until = rr(18, 50) * 60; logEv('the boat went out'); }
-      else boat.until = rr(10, 25) * 60; } }
-  else if (boat.state === 'out') { boat.until -= dt; if (boat.pos.distanceTo(boat.target) < 6 && rnd() < dt / 120) boat.target.add(V(rr(-30, 30), 0, rr(-30, 30)));
-    if (boat.until <= 0 || sunEl < -3 || WX.swellH > 2.8) { boat.state = 'home'; boat.target.copy(MOOR); } }
-  else if (boat.pos.distanceTo(MOOR) < 1.5) { boat.state = 'moored'; boat.out = false; boat.until = rr(25, 90) * 60; logEv('the boat came home'); }
-  const to = boat.target.clone().sub(boat.pos).setY(0); const d = to.length();
-  if (d > 1) { const want = Math.atan2(to.x, to.z); let dh = ((want - boat.heading + Math.PI) % TAU + TAU) % TAU - Math.PI; boat.heading += clamp(dh, -0.25 * dt, 0.25 * dt);
-    const sp = Math.min(2.6, d * 0.3); boat.pos.x += Math.sin(boat.heading) * sp * dt; boat.pos.z += Math.cos(boat.heading) * sp * dt; }
-  if (!isFinite(boat.pos.x) || !isFinite(boat.heading)) { boat.pos.copy(MOOR); boat.heading = Math.PI; boat.state = 'moored'; boat.out = false; }
-  const y = waveH(boat.pos.x, boat.pos.z, t), yf = waveH(boat.pos.x + Math.sin(boat.heading) * 2.5, boat.pos.z + Math.cos(boat.heading) * 2.5, t), ys = waveH(boat.pos.x + Math.cos(boat.heading) * 1.2, boat.pos.z - Math.sin(boat.heading) * 1.2, t);
-  boat.mesh.position.set(boat.pos.x, y - 0.25, boat.pos.z); boat.mesh.rotation.set(-(yf - y) / 2.5, boat.heading, (ys - y) / 1.2, 'YXZ');
+function birdsTick(dt){
+ for(let i=0;i<birds.length;i++){
+  const b=birds[i];b.a+=dt*b.speed*(1+WX.wind*.025);
+  const x=Math.cos(b.a)*b.r,z=120+i*34+Math.sin(b.a)*b.r;
+  b.p.set(x,HYD.level+.17,z);b.mesh.position.copy(b.p);b.mesh.rotation.y=-b.a;
+ }
 }
-function gullTick(dt, t) {
-  const wd = fromBearingTravel(WX.windDir); let calls = 0;
-  gulls.forEach((g, i) => {
-    g.until -= dt;
-    if (live.ev === 'wreath' && g.state !== 'wreath') g.state = 'wreath';
-    if (live.ev !== 'wreath' && g.state === 'wreath') { g.state = 'soar'; g.until = rr(20, 60); }
-    if (g.until <= 0 && g.state !== 'wreath') { const r = rnd(); g.state = r < 0.55 ? 'soar' : r < 0.8 ? (boat.out ? 'follow' : 'soar') : 'perch'; g.perch = Math.floor(rnd() * PERCH.length); g.until = rr(30, 150);
-      if (g.state === 'soar') { g.orbit.c.set(rr(-110, 60), 0, rr(-200, -30)); g.orbit.r = rr(30, 95); } }
-    let tgt; const gp = g.pos;
-    if (g.state === 'soar') { g.orbit.a += g.orbit.w * dt; tgt = g.orbit.c.clone().add(V(Math.cos(g.orbit.a) * g.orbit.r, g.orbit.h, Math.sin(g.orbit.a) * g.orbit.r)); }
-    else if (g.state === 'follow') tgt = boat.pos.clone().add(V(Math.sin(t * 0.4 + i) * 7, 7 + 2 * Math.sin(t + i), Math.cos(t * 0.3 + i) * 7 + 6));
-    else if (g.state === 'perch') tgt = PERCH[g.perch].clone().add(V((i % 3 - 1) * 1.2, 0, 0));
-    else { const a = t * 0.08 + g.slot / gulls.length * TAU; const right = V(-SUND.z, 0, SUND.x).normalize();
-      tgt = WREATH_C.clone().add(right.multiplyScalar(Math.cos(a) * 48)).add(V(0, Math.sin(a) * 48, 0)); }
-    const to = tgt.clone().sub(gp); const dist = to.length(); const perching = g.state === 'perch' && dist < 3;
-    const speed = perching ? 0 : clamp(dist * 0.4, 2, 14);
-    const want = dist > 0.01 ? to.normalize().multiplyScalar(speed) : V();
-    g.vel.lerp(want, 1 - Math.exp(-dt * 1.3)); g.vel.x += wd.x * WX.wind * 0.02 * dt * 10 * (perching ? 0 : 1); g.vel.z += wd.y * WX.wind * 0.02 * dt * 10 * (perching ? 0 : 1);
-    if (perching) gp.lerp(tgt, 0.1); else gp.addScaledVector(g.vel, dt);
-    if (!isFinite(gp.x)) gp.set(0, 40, -100), g.vel.set(0, 0, 0);
-    const m = g.mesh; m.position.copy(gp); if (g.vel.lengthSq() > 0.05) { m.rotation.y = Math.atan2(g.vel.x, g.vel.z); m.rotation.z = clamp(-g.vel.x * 0.02, -0.5, 0.5); }
-    g.ph += dt * (perching ? 0 : (g.vel.y > 0.5 ? 9 : 4.5)); const flap = perching ? -1.2 : (Math.sin(g.ph) * (g.state === 'wreath' ? 0.15 : 0.55) + 0.1);
-    m.userData.w[0].rotation.z = flap; m.userData.w[1].rotation.z = -flap;
-    if (!perching && calls < 1 && rnd() < dt / 40) { const l = AUD.lens(gp); if (l.g > 0.004 && AUD.ctx && AUD.ctx.state === 'running') { AUD.voice('gull', AUD.ctx.currentTime + 0.02, { pan: l.pan, v: clamp(l.g * 4, 0, 0.09) }); calls++; } }
-  });
-}
-function sealTick(dt, t) {
-  seal.until -= dt;
-  if (seal.until <= 0) { if (seal.up < 0.5) { seal.target = 1; seal.pos.set(PIER_X + rr(6, 30), 0, zL - rr(8, 50)); seal.until = rr(30, 70); if (rnd() < 0.4) logEv('a seal came up by the pier'); } else { seal.target = 0; seal.until = rr(120, 480); } }
-  seal.up = lerp(seal.up, seal.target || 0, 1 - Math.exp(-dt * 0.6));
-  const y = waveH(seal.pos.x, seal.pos.z, t); seal.mesh.position.set(seal.pos.x, y - 0.45 + seal.up * 0.65, seal.pos.z);
-  const look = (keeper.visible ? keeper.pos : camera.position).clone().sub(seal.pos); seal.mesh.rotation.y = Math.atan2(look.x, look.z); seal.mesh.visible = seal.up > 0.05;
-}
-function shoreTick(dt, t) {
-  let env = 0;
-  for (const pr of PROBES) { const h = waveH(pr.p.x, pr.p.z, t); const rising = h > pr.prev; pr.cool -= dt;
-    const thr = 0.32 * WX.swellH * live.calm;
-    if (pr.prev < thr && h >= thr && pr.cool <= 0 && live.calm > 0.5) { pr.cool = WX.swellT * 0.6; const s = clamp(WX.swellH / 2.5, 0.2, 1.4);
-      const dCam = pr.p.distanceTo(camera.position);
-      if (dCam < 900) { spawnSpray(pr.p.clone().setY(h + 0.5), s, Math.round(10 + 22 * s)); }
-      const l = AUD.lens(pr.p.clone().setY(2)); AUD.pend.push({ s, v: l.g * 1.6 * s, pan: l.pan }); }
-    pr.prev = h; const l2 = pr.p.distanceTo(camera.position); env += Math.max(0, h) / (WX.swellH + 0.2) / (1 + l2 / 160); }
-  SHORE_ENV = lerp(SHORE_ENV, env * 0.9, 1 - Math.exp(-dt * 3));
-  for (let i = 0; i < SPRAY_N; i++) { if (sprayLife[i] <= 0) continue; sprayLife[i] -= dt * 0.45; sprayVel[i * 3 + 1] -= 9.8 * dt * 0.8;
-    sprayPos[i * 3] += sprayVel[i * 3] * dt; sprayPos[i * 3 + 1] += sprayVel[i * 3 + 1] * dt; sprayPos[i * 3 + 2] += sprayVel[i * 3 + 2] * dt; if (sprayPos[i * 3 + 1] < -1) sprayLife[i] = 0; }
-  sprayGeo.attributes.position.needsUpdate = true; sprayGeo.attributes.aLife.needsUpdate = true;
-}
-function pierTick(dt) {   // at night, with nobody on it, the pier keeps going
-  const sunEl = SUNM.sun.el / D2R;
-  if (sunEl < -8 && !keeper.visible) { if (S.reachTonight == null) { S.reachTonight = rnd() < 0.55; if (S.reachTonight) logEv('the pier began to reach further out'); }
-    if (S.reachTonight) S.pierExt = Math.min(MAXBAYS, S.pierExt + dt / 240); }
-  else if (sunEl > -6) { if (S.pierExt > 0) { S.pierExt = Math.max(0, S.pierExt - dt / 40); if (S.pierExt === 0) logEv('the pier drew back to its length'); } S.reachTonight = null; }
-  ext.count = Math.floor(S.pierExt);
-}
-
-let wxLogT = 0;
-function step(dt) {
-  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000;
-  // weather slews toward its latest reading
-  if (!WX.live) Object.assign(WXT, synthWx(simMs));
-  for (const k of ['wind', 'cloud', 'precip', 'temp', 'hum', 'swellH', 'swellT']) WX[k] = lerp(WX[k], WXT[k], 1 - Math.exp(-sdt / 90));
-  for (const k of ['windDir', 'swellDir']) { const d = ((WXT[k] - WX[k] + 540) % 360) - 180; WX[k] += d * (1 - Math.exp(-sdt / 120)); }
-  if (simT - lastWxRebuild > 2) { rebuildWaves(); lastWxRebuild = simT; }
-  SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
-  WREATH_C.copy(PIER_END).add(V(SUND.x, Math.max(SUND.y, 0.08), SUND.z).normalize().multiplyScalar(420));
-  keeperTick(sdt); boatTick(sdt, simT); gullTick(sdt, simT); sealTick(sdt, simT); shoreTick(sdt, simT); pierTick(sdt);
-  // tension: stability builds it, slowly
-  S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1);
-  uncannyTick(sdt);
-  // event envelopes
-  const eyeOn = live.ev === 'eye'; live.eyeOpen = lerp(live.eyeOpen, eyeOn && live.evT < live.evDur - 10 ? 1 : 0, 1 - Math.exp(-sdt / (eyeOn ? 6 : 3)));
-  live.nextBlink -= sdt; if (live.nextBlink <= 0) { live.blink = 1; live.nextBlink = rr(5, 14); } live.blink = Math.max(0, live.blink - sdt * 5);
-  live.breath = lerp(live.breath, live.ev === 'breath' ? 2.4 * Math.sin(simT * TAU / (WX.swellT * 1.5)) * smoothstep(0, 15, live.evT) * smoothstep(0, 15, live.evDur - live.evT) : 0, 1 - Math.exp(-sdt * 2));
-  live.face = lerp(live.face, live.ev === 'stack' && live.evT < live.evDur - 12 ? 1 : 0, 1 - Math.exp(-sdt / 5));
-  live.calm = lerp(live.calm, live.ev === 'hush' ? 0.04 : 1, 1 - Math.exp(-sdt / (live.ev === 'hush' ? 4 : 2.5)));
-  const st = STACKS[0]; const look = (boat.out ? boat.pos : seal.up > 0.5 ? seal.pos : PIER_END).clone().sub(st.p);
-  const want = live.face > 0.02 ? Math.atan2(look.x, look.z) : st.yaw0; let dy = ((want - st.yaw + Math.PI) % TAU + TAU) % TAU - Math.PI; st.yaw += dy * (1 - Math.exp(-sdt / 18)); st.grp.rotation.y = st.yaw;
-  st.mat.uniforms.uFace.value = live.face;
-  // director
-  if (simT >= DIR.until && DIR.pendingCut < 0) DIR.pendingCut = chooseShot();
-  if (DIR.pendingCut >= 0 && (!AUD.ctx || AUD.ctx.state !== 'running' || AUD.cur16 !== DIR.last16)) { cut(DIR.pendingCut); DIR.pendingCut = -1; }
-  DIR.last16 = AUD.cur16;
-  CREW.forEach(c => c.upd(c, simT));
-  if (simT - (S._saved || 0) > 60) { S._saved = simT; save(); }
+function step(dt){
+ dt=clamp(dt,0,.25);const d=dt*RATE;simT+=d;simMs+=d*1000;
+ if(!WX.live||Date.now()-WX.at>2*3600e3){
+  if(WX.live&&Date.now()-WX.at>2*3600e3){WX.live=false;logEv('stale weather · simulated fallback')}
+  Object.assign(WXT,synthWx(simMs));
+ }
+ for(const k of ['wind','cloud','precip','temp','hum'])WX[k]=lerp(WX[k],WXT[k],1-Math.exp(-d/90));
+ let wd=((WXT.windDir-WX.windDir+540)%360)-180;WX.windDir+=wd*(1-Math.exp(-d/120));
+ hydraulicsTick(d);SUNM=sunMoon(simMs);SUND.copy(azElToVec(SUNM.sun.az,SUNM.sun.el));MOOND.copy(azElToVec(SUNM.moon.az,SUNM.moon.el));
+ keeperTick(d);birdsTick(d);
+ S.tension+=d/S.epochLen*(live.ev?.3:1);
+ uncannyTick(d);
+ live.calm=lerp(live.calm,live.ev==='hush'?.015:1,1-Math.exp(-d/4));
+ live.apparition=lerp(live.apparition,live.ev==='warren'?smoothstep(0,17,live.evT)*smoothstep(0,17,live.evDur-live.evT):0,1-Math.exp(-d/3));
+ live.breath=lerp(live.breath,live.ev==='warren'?.9*Math.sin(simT/9)*live.apparition:0,1-Math.exp(-d));
+ GHOST.visible=live.apparition>.07&&HYD.level<20.6;
+ GHOST.position.y=HYD.level+.08;
+ GHOST.children.forEach((m,i)=>{m.visible=i<GHOST.children.length*live.apparition});
+ gauges.forEach(g=>{g.needle.rotation.z=.2*Math.sin(simT*.05+g.x)+.15*clamp(HYD.q/20,0,1)});
+ SHORE_ENV=lerp(SHORE_ENV,HYD.q/32,1-Math.exp(-d*.8));
+ if(HYD.q>1&&rnd()<d*.34){const p=V(rr(-35,35),-.2,-35),v=AUD.lens(p);AUD.pend.push({s:clamp(HYD.q/30,0,1),v:v.g*.4,pan:v.pan})}
+ if(simT>=DIR.until&&DIR.pendingCut<0)DIR.pendingCut=chooseShot();
+ if(DIR.pendingCut>=0&&(!AUD.ctx||AUD.ctx.state!=='running'||AUD.cur16!==DIR.last16)){cut(DIR.pendingCut);DIR.pendingCut=-1}
+ DIR.last16=AUD.cur16;CREW.forEach(c=>c.upd(c,simT));
+ if(simT-(S._saved||0)>60){S._saved=simT;save()}
 }
 
 /* ====================================================================== render */
