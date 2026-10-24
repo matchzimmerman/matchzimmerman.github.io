@@ -308,3 +308,9 @@ Path:
 ## Canonical rule
 
 This directory is the source of truth for MZTV broadcast-source code. Experimental local copies should be promoted here once they become part of the MZTV system.
+
+
+### MZ WORLD · KAATERSKILL FALLS — Environment Study 001 (2026-10-23)
+A new independent explorable Three.js waterfall environment informed by HEADLAND: two-stage Spruce Creek falls, an interpretive forested gorge, 200 modeled stone steps, upper overlook, connecting trails, middle and lower pools. Six-ink print, dynamic observational cameras, walk/free-flight survey modes, local site weather and generated waterfall sound. **Interpretive terrain: authoritative USGS 3DEP/LiDAR and trail alignment are follow-up fidelity gates, not represented as already imported.**
+
+Source: `sources/kaaterskill-falls/` · [Live visitor entry](https://matchzimmerman.com/MZTV/sources/kaaterskill-falls/) · [Research/data notes](sources/kaaterskill-falls/README.md)
