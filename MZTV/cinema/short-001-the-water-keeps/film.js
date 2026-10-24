@@ -63,7 +63,8 @@ function loadSlot(i){
 }
 function unloadSlot(i){
  const s=slots.get(i);if(!s)return;
- try{s.api?.audio?.ctx?.suspend()}catch(e){}
+ try{score?.detachWorld(i)}catch(e){}
+ try{s.api?.audio?.ctx?.close?.()}catch(e){}
  s.wrap.remove();slots.delete(i);
 }
 function closeOldFrames(needed){for(const i of [...slots.keys()])if(!needed.has(i))unloadSlot(i)}
@@ -71,7 +72,12 @@ function frameVolume(s,alpha){
  if(!s.ready||!s.api)return;
  try{
   const aud=s.api.audio;if(!aud||!aud.out||!aud.ctx)return;
-  const goal=playing&&soundOn?0.4*0.60*Math.sqrt(clamp(alpha)):0;
+  if(score?.ctx){
+    score.updateWorld(s,alpha);
+    const g=aud.out.gain;if(Math.abs(g.value-.4)>.04)g.setTargetAtTime(.4,aud.ctx.currentTime,.2);
+    return;
+  }
+  const goal=playing&&soundOn?0.4*.60*Math.sqrt(clamp(alpha)):0;
   const g=aud.out.gain;
   if(Math.abs(g.value-goal)>.008)g.setTargetAtTime(goal,aud.ctx.currentTime,.18);
  }catch(e){if(!s.warned){s.warned=true;console.warn('Audio fade',e)}}
