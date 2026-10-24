@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* MZ WORLD · SRUTHÁN v2 — a stream at the back of a field in Inverin, printed through a macro lens; the info box is printed in the current inks */
+/* MZ WORLD · SRUTHÁN v3 — a stream at the back of a field in Inverin, printed through a macro lens; still things keep still patterns */
 :root { --ink:#1b1f3a; --paper:#efe6cf; --hot:#f0603f; --deep:#2c3e7a; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
 html, body { height:100%; margin:0; background:var(--ink); overflow:hidden }
 canvas { display:block; width:100%; height:100% }
@@ -191,7 +191,7 @@ function resize() {
 
 /* ====================================================================== shaders */
 const COMMON = /* glsl */`
-uniform mat4 uVP; uniform float uAspect; uniform float uFocus, uAper;
+uniform mat4 uVP; uniform float uAspect; uniform float uFocus, uAper; uniform float uPerPx, uWobPx, uPxK;
 uniform vec3 uSunD; uniform vec3 uCanC; uniform float uCanR, uCanY, uSway, uDapOn;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
@@ -201,7 +201,18 @@ float screenAngle(vec3 w, vec3 T){
   vec2 d=b.xy/max(b.w,1e-4)-a.xy/max(a.w,1e-4); d.x*=uAspect;
   float ang=atan(d.y,d.x); if(ang<0.) ang+=3.14159265; return ang/3.14159265; }
 float cocAt(float dist){ return clamp(abs(dist-uFocus)/max(dist,0.005)*uAper,0.,1.); }
-vec4 pack(float sh, float id, float ang, float acc, float dist){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., fract(ang), step(0.5,acc)*0.5+0.49*cocAt(dist)); }
+vec4 pack(float sh, float id, float line, float acc, float dist){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., clamp(line,0.,1.), step(0.5,acc)*0.5+0.49*cocAt(dist)); }
+// v3: the hatching is carved into the surface. Lines run along T, spaced across it in the object's own coordinates;
+// the spacing follows distance in octaves so the print keeps its density on screen. A still object keeps a still pattern.
+float lineAt(vec3 W, vec3 N, vec3 T, float dist, float extra){
+  vec3 A=cross(N,T); if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.)); if(dot(A,A)<1e-6) A=vec3(1.,0.,0.); A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float per=uPerPx*(1.+1.6*cocAt(dist))*max(dist,0.01)*uPxK;
+  float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float p0=exp2(floor(L)), p1=p0*2.;
+  float s=dot(W,A), t=dot(W,B); float wk=uWobPx/max(uPerPx,0.1)*1.35;
+  float l0=cos((s+((vn(vec2(s,t)/(p0*7.)+3.1)-.5)*wk+extra)*p0)*6.2831853/p0);
+  float l1=cos((s+((vn(vec2(s,t)/(p1*7.)+3.1)-.5)*wk+extra)*p1)*6.2831853/p1);
+  return 0.5+0.5*mix(l0,l1,f); }
 float dapple(vec3 w){                       // the leaning tree's canopy, projected along the sun
   if(uSunD.y<0.02) return 1.;
   vec2 p=w.xz+uSunD.xz/uSunD.y*(uCanY-w.y); vec2 q=(p-uCanC.xz)/uCanR;
@@ -217,10 +228,10 @@ const SH = {   // shared uniforms
   uBreath: { value: 0 }, uDay: { value: 1 }, uKeyUp: { value: 1 },
   uFocus: { value: 1 }, uAper: { value: 0.2 }, uCanC: { value: V() }, uCanR: { value: 5 }, uCanY: { value: 6 }, uSway: { value: 0 }, uDapOn: { value: 1 },
   uStone: { value: Array.from({ length: 16 }, () => new THREE.Vector4()) }, uVort: { value: VORT.map(v => new THREE.Vector4(v[0], v[1], v[2], v[3])) },
-  uQ: { value: 1 }, uRev: { value: 1 }, uLevel: { value: 0 }, uFlowT: { value: 0 }, uRain: { value: 0 }, uWindL: { value: V() },
+  uQ: { value: 1 }, uRev: { value: 1 }, uLevel: { value: 0 }, uFlowT: { value: 0 }, uPerPx: { value: 6 }, uWobPx: { value: 7 }, uPxK: { value: .0012 }, uRain: { value: 0 }, uWindL: { value: V() },
 };
 const OBJ_VERT = /* glsl */`
-uniform float uTime, uBreath, uBreathOn, uCloth; uniform vec3 uWindL;
+uniform float uTime, uBreath, uBreathOn, uCloth, uMover; uniform vec3 uWindL;
 attribute vec3 aT;
 varying vec3 vW, vN, vL, vT; varying float vC;
 void main(){
@@ -237,7 +248,7 @@ void main(){
     vC=0.06*ph*hgt;
   }
   if(uBreathOn>0.5){ float rip=0.6+0.4*sin(uTime*0.8+w.x*2.3+w.z*1.7); w.xyz+=n*uBreath*rip*0.035; }
-  vW=w.xyz; vN=n; vL=position; vT=mat3(modelMatrix)*lt;
+  vW=w.xyz; vN=n; vL=uMover>0.5?position:w.xyz; vT=mat3(modelMatrix)*lt;   // movers carry their pattern with them
   gl_Position=projectionMatrix*viewMatrix*w;
 }`;
 const OBJ_FRAG = /* glsl */`
@@ -283,13 +294,13 @@ void main(){
   float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
   if(uEmit>0.){ sh=uEmit; fog*=0.4; }
   sh=mix(sh,uFogShade,fog);
-  gl_FragColor=pack(sh,id,screenAngle(vW,T*0.04),acc*(1.-fog),dist);
+  gl_FragColor=pack(sh,id,lineAt(vL,N,T,dist,0.),acc*(1.-fog),dist);
 }`;
 function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
   return new THREE.ShaderMaterial({
     vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
     uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
-      uEmit: { value: 0 }, uBreathOn: { value: 0 }, uCloth: { value: 0 }, uMoss: { value: 1 } }, extra)
+      uEmit: { value: 0 }, uBreathOn: { value: 0 }, uCloth: { value: 0 }, uMoss: { value: 1 }, uMover: { value: 0 } }, extra)
   });
 }
 
@@ -346,7 +357,7 @@ void main(){
   if(uCalm<0.5){ T=normalize(vec3(1.,0.,0.3)); }
   float dist=length(vW-uCamP); float fog=1.-exp(-dist/(uFogD*1.4));
   sh=mix(sh,uFogShade,fog);
-  gl_FragColor=pack(sh,id,screenAngle(vW,T*0.04),0.,dist);
+  gl_FragColor=pack(sh,id,lineAt(vW,vec3(0.,1.,0.),T,dist,(n-0.5)*0.9),0.,dist);   // water: the flow noise moves the lines; the bed under them does not
 }`;
 
 /* ---------- falling sheets */
@@ -377,7 +388,7 @@ void main(){
   float sh=0.42+0.5*rope+0.2*uDiff*dap-0.1*u; float id=rope>0.62-0.12*uQ+0.15*u?3.:2.;
   vec3 Vd=normalize(uCamP-vW); vec3 N=normalize(cross(vTg,vec3(0.,0.,1.))); float spec=pow(max(dot(reflect(-Vd,N),uKeyD),0.),60.)*uKeyUp*dap; sh+=spec;
   float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD); sh=mix(sh,uFogShade,fog);
-  gl_FragColor=pack(sh,id,screenAngle(vW,vTg*0.04),0.,dist);
+  gl_FragColor=pack(sh,id,lineAt(vW,N,vTg,dist,(rope-0.5)*0.8),0.,dist);
 }`;
 
 /* ---------- sky */
@@ -400,7 +411,7 @@ void main(){
     float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
     if(cov>0.5){ id=13.; sh=0.82-0.45*(cl-thr)+0.28*sg; T=normalize(vec3(1.,0.15*(cl-0.6),0.)); }
   }
-  gl_FragColor=pack(sh,id,screenAngle(uCamP+d*100.,T),0.,1e5);
+  gl_FragColor=pack(sh,id,lineAt(uCamP*0.02+d*100.,-d,T,100.,0.),0.,1e5);
 }`;
 const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
 const DISC_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); gl_Position.z=gl_Position.w*0.99998; }`;
@@ -408,14 +419,14 @@ const DISC_FRAG = /* glsl */`
 ${COMMON}
 uniform float uDim; varying vec2 vUv;
 void main(){ vec2 p=vUv*2.-1.; float r=length(p); if(r>1.) discard; float sh=(0.9-0.32*smoothstep(0.5,1.,r))*uDim;
-  gl_FragColor=pack(sh,1.,mod(atan(p.y,p.x),3.14159265)/3.14159265,0.,1e5); }`;
+  gl_FragColor=pack(sh,1.,0.5+0.5*cos(r*38.),0.,1e5); }`;
 const PT_VERT = /* glsl */`attribute float aLife; uniform float uScale; varying float vLife; varying vec3 vW;
 void main(){ vLife=aLife; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; vec4 mv=viewMatrix*w; gl_Position=projectionMatrix*mv;
   gl_PointSize=aLife>0.?clamp(uScale*(0.6+0.8*aLife)/max(-mv.z,0.02),1.,14.):0.; }`;
 const PT_FRAG = /* glsl */`${COMMON}
 uniform vec3 uCamP; uniform float uFogD, uFogShade, uPtId; varying float vLife; varying vec3 vW;
 void main(){ if(vLife<=0.) discard; vec2 c=gl_PointCoord*2.-1.; if(dot(c,c)>1.) discard;
-  float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD); gl_FragColor=pack(mix(0.88,uFogShade,fog),uPtId,0.25,0.,dist); }`;
+  float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD); gl_FragColor=pack(mix(0.88,uFogShade,fog),uPtId,0.5,0.,dist); }`;
 
 /* ---------- print pass: linocut lines through OBAS inks, with a printed depth of field */
 const PU = {
@@ -453,10 +464,7 @@ void main(){
     s=sum/12.; if(coc>0.3) acc=0.;
   }
   vec3 tab=uTab[id]; float hs=uHat[id]*uHatch*(1.-0.78*coc);
-  vec2 dir=vec2(cos(ang),sin(ang));
-  float u=dot(fc,vec2(-dir.y,dir.x)); float per=uPeriod*(1.+1.6*coc);
-  float wob=(vn(fc*0.011+uSeed)-0.5)*uWob+(vn(fc*0.047+uSeed*2.)-0.5)*uWob*0.35;
-  float line=cos((u+wob)*6.2831853/per);
+  float line=d.b*2.-1.;   // v3: the line arrives carved into the surface (lineAt), not computed from the screen
   float mid=1.-abs(2.*s-1.);
   float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith*(1.+coc);
   int k=v<0.36?0:(v<0.69?1:2);
@@ -597,20 +605,33 @@ const WALLS = [], COPES = [];
 /* ---------- the tree: an old ash leaning out over the stream */
 const TREE = { base: V(4.3, 0, 0), lean: V(), crown: V() };
 const treeGeos = [], leafPts = [];
-function limb(pts, r0, r1, segs = 28) {
-  const curve = new THREE.CatmullRomCurve3(pts); const g = new THREE.TubeGeometry(curve, segs, 1, 10, false); const p = g.attributes.position, nrm = g.attributes.normal;
+function limb(pts, r0, r1, segs = 28, o = {}) {
+  const RAD = o.radial || 10;
+  const curve = new THREE.CatmullRomCurve3(pts); const g = new THREE.TubeGeometry(curve, segs, 1, RAD, false); const p = g.attributes.position, nrm = g.attributes.normal;
   const t = new Float32Array(p.count * 3);
-  for (let i = 0; i < p.count; i++) { const u = Math.floor(i / 11) / segs; const c = curve.getPointAt(u); const tg = curve.getTangentAt(u); const r = lerp(r0, r1, Math.pow(u, 0.8)) * (1 + 0.12 * vnoise(i * 0.3, u * 9));
+  for (let i = 0; i < p.count; i++) { const u = Math.floor(i / (RAD + 1)) / segs, j = i % (RAD + 1), ang = j / RAD * TAU; const c = curve.getPointAt(u); const tg = curve.getTangentAt(u);
+    let r = lerp(r0, r1, Math.pow(u, 0.8)) * (1 + 0.12 * vnoise(i * 0.3, u * 9));
+    if (o.flute) {   // an old trunk: buttress lobes and a wide, uneven flare into the roots, bark ridges, burls
+      const low = Math.exp(-u / 0.09), lob = 0.5 + 0.5 * Math.cos(o.lobes * ang + u * 7 + 0.6 * Math.sin(ang * 2.3));
+      r *= (1 + o.flare * low * (0.35 + 0.65 * lob * lob)) * (1 + o.flute * lob * (0.25 + 0.75 * Math.exp(-u / 0.35)));
+      r *= 1 + 0.06 * Math.sin(ang * 23 + 3 * vnoise(u * 30, ang)) + 0.12 * Math.max(0, vnoise(ang * 1.7 + 4, u * 14) - 0.62) * 4;
+    }
     const nx = nrm.getX(i), ny = nrm.getY(i), nz = nrm.getZ(i); p.setXYZ(i, c.x + nx * r, c.y + ny * r, c.z + nz * r); t[i * 3] = tg.x; t[i * 3 + 1] = tg.y; t[i * 3 + 2] = tg.z; }
   g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); g.computeVertexNormals(); treeGeos.push(clean(g)); return curve;
 }
 {
   const bx = 4.3, bz = cz(4.3) + wz0(4.3) + 0.75; const by = terrainH(bx, bz) - 0.15; TREE.base.set(bx, by, bz);
-  const trunk = limb([V(bx, by - 0.2, bz), V(bx - 0.05, by + 1.4, bz - 0.25), V(bx - 0.25, by + 3.0, bz - 1.1), V(bx - 0.5, by + 4.4, bz - 2.0), V(bx - 0.7, by + 5.4, bz - 2.6)], 0.42, 0.16, 40);
+  // v3: an old, fluted, buttressed trunk that leans hard from low down and forks at about 1.7 m; no single smooth column anywhere
+  const trunk = limb([V(bx, by - 0.3, bz), V(bx - 0.12, by + 0.7, bz - 0.35), V(bx - 0.3, by + 1.7, bz - 0.95), V(bx - 0.5, by + 3.0, bz - 1.7), V(bx - 0.7, by + 4.4, bz - 2.3), V(bx - 0.85, by + 5.4, bz - 2.7)], 0.5, 0.15, 56, { radial: 30, flute: 0.42, lobes: 5, flare: 0.9 });
+  const forkP = trunk.getPointAt(0.33);   // the second leader: thinner, off to the side, with its own lean
+  const lead2 = limb([forkP.clone().add(V(0.04, -0.05, 0.02)), forkP.clone().add(V(0.55, 1.0, -0.15)), forkP.clone().add(V(0.95, 2.3, -0.65)), forkP.clone().add(V(1.15, 3.4, -1.2))], 0.3, 0.1, 36, { radial: 20, flute: 0.2, lobes: 3, flare: 0 });
   TREE.crown.copy(trunk.getPointAt(0.85));
-  // roots gripping the bank, some bare into the water
-  for (let k = 0; k < 7; k++) { const a = -Math.PI * 0.95 + k * 0.32 + pr(-0.1, 0.1); const len = pr(0.7, 1.6); const ex = bx + Math.cos(a) * len, ez = bz + Math.sin(a) * len;
-    const ey = Math.max(terrainH(ex, ez) - 0.05, Ebase(ex) - 0.08); limb([V(bx, by + 0.35, bz), V(lerp(bx, ex, 0.4), by + 0.2, lerp(bz, ez, 0.4)), V(ex, ey, ez)], 0.12, 0.03, 16); }
+  // roots: many, flat and gnarled, leaving the buttress lobes along the ground; some bare into the water
+  for (let k = 0; k < 13; k++) { const a = -Math.PI * 1.05 + k * 0.27 + pr(-0.08, 0.08); const len = pr(0.9, 2.2); const ex = bx + Math.cos(a) * len, ez = bz + Math.sin(a) * len;
+    const sx = bx + Math.cos(a) * 0.45, sz = bz + Math.sin(a) * 0.45; const mx = lerp(sx, ex, 0.45) + pr(-0.15, 0.15), mz = lerp(sz, ez, 0.45) + pr(-0.15, 0.15);
+    const ey = Math.max(terrainH(ex, ez) - 0.06, Ebase(ex) - 0.1);
+    const r0 = pr(0.12, 0.18), gy = (x, z) => Math.max(terrainH(x, z), Ebase(x) - 0.04);   // half-buried: they hug the ground and sink into it
+    limb([V(bx + Math.cos(a) * 0.3, by + 0.22, bz + Math.sin(a) * 0.3), V(sx, gy(sx, sz) + r0 * 0.15, sz), V(mx, gy(mx, mz) - 0.02, mz), V(ex, ey - 0.04, ez)], r0, 0.02, 22, { radial: 8 }); }
   // limbs → branches → twigs; leaves at the ends
   function grow(curve, u0, depth, dir0) {
     const n = depth === 0 ? 8 : depth === 1 ? 4 : 3;
@@ -622,11 +643,11 @@ function limb(pts, r0, r1, segs = 28) {
       const c = limb([p0, p2, p3], rr0, rr0 * 0.35, depth === 0 ? 20 : 10);
       if (depth < 2) grow(c, 0.3, depth + 1, V(0, -0.1, 0)); else for (let k = 0; k < 34; k++) leafPts.push(c.getPointAt(pr(0.15, 1)).add(V(pr(-0.5, 0.5), pr(-0.4, 0.25), pr(-0.5, 0.5)))); }
   }
-  grow(trunk, 0.45, 0, V(0, 0.3, -0.1));
+  grow(trunk, 0.5, 0, V(0, 0.3, -0.1)); grow(lead2, 0.4, 1, V(0.2, 0.2, 0));
   const bark = objMat(6, 3); scene.add(new THREE.Mesh(mergeGeometries(treeGeos), bark));
   // canopy leaves (instanced, swaying)
   const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.09, 0.03, 0.12, 0, 0.02, 0.26, -0.09, 0.03, 0.12, 0.05, 0.02, 0.2, -0.05, 0.02, 0.2], 3)); lg.setIndex([0, 1, 2, 0, 2, 3, 1, 4, 2, 3, 2, 5]); lg.computeVertexNormals(); withT(lg, V(0, 0, 1));
-  for (const [id, frac] of [[5, 0.62], [12, 0.26], [10, 0.12]]) { const pts = leafPts.filter(() => pr(0, 1) < frac); const im = new THREE.InstancedMesh(lg, objMat(id, 4, V(0, 0, 1), { uCloth: { value: 4 } }), pts.length);
+  for (const [id, frac] of [[5, 0.62], [12, 0.26], [10, 0.12]]) { const pts = leafPts.filter(() => pr(0, 1) < frac); const im = new THREE.InstancedMesh(lg, objMat(id, 4, V(0, 0, 1), { uCloth: { value: 4 }, uMover: { value: 1 } }), pts.length);
     pts.forEach((q, k) => im.setMatrixAt(k, new THREE.Matrix4().compose(q, new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(0, TAU), pr(0, TAU), pr(0, TAU))), V(1, 1, 1).multiplyScalar(pr(0.8, 1.4))))); im.frustumCulled = false; scene.add(im); }
   const cc = leafPts.reduce((a, b) => a.add(b), V()).multiplyScalar(1 / Math.max(1, leafPts.length)); SH.uCanC.value.copy(cc); SH.uCanY.value = cc.y; SH.uCanR.value = 5.2;
   TREE.lean.copy(cc);
@@ -639,14 +660,14 @@ function limb(pts, r0, r1, segs = 28) {
   while (ms.length < 20000 && tries < 90000) { tries++; const x = pr(-8.4, 8.4), z = pr(-7.5, 6.0); const dist = Math.abs(z - cz(x)) - wz0(x); if (dist < 0.02) continue;
     const near = Math.exp(-dist / 1.4); if (pr(0, 1) > 0.25 + 0.75 * near) continue; const y = terrainH(x, z);
     const h = (0.08 + 0.32 * near * pr(0.4, 1.2)) * (dist < 0.6 ? 1.3 : 1); ms.push(new THREE.Matrix4().compose(V(x, y - 0.01, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.2, 0.2), pr(0, TAU), pr(-0.2, 0.2))), V(pr(0.8, 1.6), h, 1))); }
-  const im = new THREE.InstancedMesh(bg, objMat(14, 4, V(0, 1, 0), { uCloth: { value: 3 } }), ms.length); ms.forEach((m, k) => im.setMatrixAt(k, m)); im.frustumCulled = false; scene.add(im);
+  const im = new THREE.InstancedMesh(bg, objMat(14, 4, V(0, 1, 0), { uCloth: { value: 3 }, uMover: { value: 1 } }), ms.length); ms.forEach((m, k) => im.setMatrixAt(k, m)); im.frustumCulled = false; scene.add(im);
 }
 
 /* ---------- leaves on the water (and the litter that stays) */
 const LEAF_N = 120;
 const leafGeo = (() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.003, -0.032, 0.016, 0.004, -0.018, 0.022, 0.005, 0.004, 0.012, 0.005, 0.024, 0, 0.007, 0.04, -0.012, 0.005, 0.024, -0.022, 0.005, 0.004, -0.016, 0.004, -0.018, 0, 0.004, 0, 0.0015, 0.002, -0.05, -0.0015, 0.002, -0.05], 3));
   g.setIndex([8, 0, 1, 8, 1, 2, 8, 2, 3, 8, 3, 4, 8, 4, 5, 8, 5, 6, 8, 6, 7, 8, 7, 0, 0, 9, 10]); g.computeVertexNormals(); return withT(g, V(0, 0, 1)); })();
-const leafMeshes = [10, 12].map(id => { const im = new THREE.InstancedMesh(leafGeo, objMat(id, 4, V(0, 0, 1)), LEAF_N / 2); im.frustumCulled = false; im.count = LEAF_N / 2; scene.add(im); return im; });
+const leafMeshes = [10, 12].map(id => { const im = new THREE.InstancedMesh(leafGeo, objMat(id, 4, V(0, 0, 1), { uMover: { value: 1 } }), LEAF_N / 2); im.frustumCulled = false; im.count = LEAF_N / 2; scene.add(im); return im; });
 const LEAVES = Array.from({ length: LEAF_N }, (_, i) => ({ i, state: 'off', pos: V(), vel: V(), yaw: rnd() * TAU, spin: 0, age: 0, stuck: 0, s: rr(0.7, 1.4), flutter: rnd() * TAU }));
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
 function leafMatrix(L) { if (L.state === 'off') return HIDE; const tilt = L.state === 'fall' ? Math.sin(L.flutter) * 0.9 : 0.06 * Math.sin(L.age * 2 + L.i);
@@ -656,15 +677,15 @@ function leafMatrix(L) { if (L.state === 'off') return HIDE; const tilt = L.stat
 
 /* ---------- the wagtail, midges, spray */
 function wagtailMesh() {
-  const g = new THREE.Group(); const mb = objMat(8, 0, V(0, 0, 1)), my = objMat(12, 0, V(0, 0, 1));
+  const g = new THREE.Group(); const mb = objMat(8, 0, V(0, 0, 1), { uMover: { value: 1 } }), my = objMat(12, 0, V(0, 0, 1), { uMover: { value: 1 } });
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), mb); body.scale.set(0.8, 0.8, 1.5); body.position.y = 0.04; g.add(body);
   const belly = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), my); belly.scale.set(0.75, 0.6, 1.2); belly.position.set(0, 0.028, 0.004); g.add(belly);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), mb); head.position.set(0, 0.07, 0.04); g.add(head);
-  const bk = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.018, 4), objMat(7, 0)); bk.rotation.x = Math.PI / 2; bk.position.set(0, 0.068, 0.062); g.add(bk);
+  const bk = new THREE.Mesh(new THREE.ConeGeometry(0.004, 0.018, 4), objMat(7, 0, V(0, 1, 0), { uMover: { value: 1 } })); bk.rotation.x = Math.PI / 2; bk.position.set(0, 0.068, 0.062); g.add(bk);
   const tailP = new THREE.Group(); tailP.position.set(0, 0.045, -0.04); g.add(tailP);
   const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.Float32BufferAttribute([-0.006, 0, 0, 0.006, 0, 0, 0.004, -0.004, -0.09, -0.004, -0.004, -0.09], 3)); tg.setIndex([0, 1, 2, 0, 2, 3]); tg.computeVertexNormals();
   tailP.add(new THREE.Mesh(tg, mb));
-  for (const sx of [-0.008, 0.008]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.0015, 0.0015, 0.03, 3), objMat(7, 0)); l.position.set(sx, 0.012, 0); g.add(l); }
+  for (const sx of [-0.008, 0.008]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.0015, 0.0015, 0.03, 3), objMat(7, 0, V(0, 1, 0), { uMover: { value: 1 } })); l.position.set(sx, 0.012, 0); g.add(l); }
   const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.02, 0, 0, -0.03, 0.08, 0.005, -0.02], 3)); wg.computeVertexNormals();
   const wl = new THREE.Mesh(wg, mb), wr = new THREE.Mesh(wg, mb); wr.scale.x = -1; wl.position.y = wr.position.y = 0.055; wl.visible = wr.visible = false; g.add(wl, wr);
   g.userData = { tailP, w: [wl, wr] }; scene.add(g); return g;
@@ -994,7 +1015,7 @@ const CREW = [
       const s = MOSSY[Math.floor(t / 240) % Math.max(1, Math.min(6, MOSSY.length))] || STONES[0];
       const a = Math.PI * 0.15 * Math.sin(t / 60); const side = V(Math.cos(a), 0, Math.sin(a)); c.p.set(s.x, 0, s.z).addScaledVector(side, s.r * 1.5 + 0.12); c.p.y = Math.max(s.top + 0.05, Ez(c.p.x) + 0.05); c.tgt.set(s.x, s.top - 0.04, s.z);
       c.focus = lerp(s.r * 0.9 + 0.1, 1.6, smoothstep(0.35, 0.65, 0.5 + 0.5 * Math.sin(t / 9))); } },
-  { name: 'ROOTS', fov: 44, aper: 0.45, upd(c, t) { const b = TREE.base; const ex = b.x + 2.1; c.p.set(ex, Ez(ex) + 0.2, cz(ex) + 0.15 * wz(ex)); c.tgt.set(b.x - 0.2, b.y + 0.05 + 0.08 * Math.sin(t / 30), b.z - 0.55); c.focus = lerp(c.p.distanceTo(c.tgt), 4, smoothstep(0.4, 0.6, 0.5 + 0.5 * Math.sin(t / 17))); } },
+  { name: 'ROOTS', fov: 44, aper: 0.45, upd(c, t) { const b = TREE.base; const ex = b.x - 0.9; c.p.set(ex, Ez(ex) + 0.14, cz(ex) + 0.1 * wz(ex)); c.tgt.set(b.x + 0.2 * Math.sin(t / 30), Ebase(b.x) + 0.12, b.z - 0.9); /* v3: along the roots to the water, never up the trunk */ c.focus = lerp(c.p.distanceTo(c.tgt), 4, smoothstep(0.4, 0.6, 0.5 + 0.5 * Math.sin(t / 17))); } },
   { name: 'FIELD', fov: 42, aper: 0.06, upd(c, t) { c.p.set(7.6 + 0.3 * Math.sin(t / 50), terrainH(7.6, 3.6) + 1.35, 3.6); c.tgt.set(1.5, Ebase(2) + 1.2, cz(2) - 0.6); c.focus = 6; } },
   { name: 'WAGTAIL', fov: 30, aper: 0.55, upd(c, t) { const p = wagtail.pos; const off = V(Math.cos(t / 23) * 0.45, 0.12, Math.sin(t / 23) * 0.45 + 0.2); const want = p.clone().add(off); want.y = Math.max(want.y, Ez(want.x) + 0.08);
       c.p.lerp(want, 0.03); c.tgt.lerp(p.clone().add(V(0, 0.04, 0)), 0.1); c.focus = c.p.distanceTo(c.tgt); } },
@@ -1112,7 +1133,7 @@ function applyLook(dt) {
   camera.lookAt(c.tgt); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
   if (!isFinite(camera.position.x)) { camera.position.set(6, 3, 3); camera.lookAt(0, 1.5, 0); }
   DIR.focus = lerp(DIR.focus, c.focus || 1, 1 - Math.exp(-dt * 1.4)); DIR.aper = lerp(DIR.aper, c.aper ?? 0.3, 1 - Math.exp(-dt * 3));
-  SH.uFocus.value = DIR.focus; SH.uAper.value = DIR.aper;
+  SH.uFocus.value = DIR.focus; SH.uAper.value = DIR.aper; SH.uPxK.value = 2 * Math.tan(camera.fov * D2R / 2) / IH;
   SH.uVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); SH.uAspect.value = camera.aspect; SH.uCamP.value.copy(camera.position); SH.uTime.value = simT;
   const el = Math.asin(clamp(SUND.y, -1, 1)); const cloudDim = 1 - 0.5 * WX.cloud;
   SH.uDay.value = 1; SH.uSunD.value.copy(SUND); SH.uKeyD.value.copy(SUND);
@@ -1127,7 +1148,7 @@ function applyLook(dt) {
   if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
   const target = COLORWAYS[S.colorway].c.map(hexV);
   for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
-  const gm = S.grammar; PU.uPeriod.value = gm.period * IH / 720; PU.uDith.value = gm.dith; PU.uWob.value = gm.wob * IH / 720; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch; PU.uBlurR.value = 10 * IH / 720;
+  const gm = S.grammar; PU.uPeriod.value = gm.period * IH / 720; PU.uDith.value = gm.dith; PU.uWob.value = gm.wob * IH / 720; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch; PU.uBlurR.value = 10 * IH / 720; SH.uPerPx.value = PU.uPeriod.value; SH.uWobPx.value = PU.uWob.value;
   PU.uRain.value = clamp(WX.precip / 2, 0, 1); const rd = fromBearingTravel(WX.windDir); PU.uRainDir.value.set(rd.x * 0.35, -1).normalize(); PU.uTime.value = simT;
   const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1]));
@@ -1145,7 +1166,7 @@ function hudUpdate() {
   if (!INFO) return; const g = localParts(simMs); const el = Math.asin(clamp(SUND.y, -1, 1)) / D2R; const az = (Math.atan2(SUND.z, SUND.x) / D2R + 360) % 360;
   const bpm = (240 / AUD.barSec).toFixed(0); const fl = LEAVES.filter(l => l.state === 'float').length, lit = LEAVES.filter(l => l.state === 'litter').length;
   const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
-  hud.innerHTML = `<div class="t"><span>MZ WORLD · SRUTHÁN · v2</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · SRUTHÁN · v3</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
   <div class="r"><span>INVERIN ${g.str} · sun ${el.toFixed(0)}° ${compass(az)} · always day</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
   <div class="r"><span>STREAM flow ${QN.toFixed(2)} · level ${LEVEL >= 0 ? '+' : ''}${(LEVEL * 100).toFixed(0)} cm${REV < 0 ? ' · RUNNING BACKWARDS' : ''}</span><span>→ current, foam, roar, bar ${AUD.barSec.toFixed(1)} s (${bpm} bpm)</span></div>
   <div class="r"><span>RAIN ${WX.precip.toFixed(1)} mm · held in the ground ${S.rain.toFixed(1)} mm</span><span>→ rings, flow over hours</span></div>

@@ -9,7 +9,12 @@ A stream at the back of a field in Inverin, filmed through a macro lens and prin
 **Console:** `MZ.force('reverse' | 'breath' | 'rupture')` · `MZ.rain(mm)`
 
 ## Versions
-- `index.html` is **v2** (current), the macro pass:
+- `index.html` is **v3** (current, 2026-10-23):
+  - **Still things keep still patterns.** The linocut hatching is carved into each surface rather than laid over the screen. When the lens drifts past a stone, wall or trunk, the lines move with the surface (perspective, parallax) and never slide across it. Line spacing follows distance in octaves, so the print keeps its density on screen. Moving things (grass, canopy, floating leaves, the wagtail) carry their pattern with them, and the water's lines are bent by its own advected flow. The print pass no longer computes lines from screen position. The paper grain and ordered dither stay fixed to the print, like paper.
+  - **A new tree.** The ash has an old, fluted, buttressed trunk that leans from low down and forks at about 1.7 m into two leaders. There are thirteen flat, half-buried roots leaving the buttress lobes, and burls and ridges in the bark. The ROOTS operator now looks along the roots to the water instead of up the trunk.
+  - Tested headless: a 4 cm sideways camera move matches best at the parallax shift in v3 and at zero shift in v2 (screen-anchored). All cameras render with no errors.
+- `v2.html` is **v2**, the macro pass (moss cushions, pebbles, falling sheets, recomposed close cameras).
+- v2 (now `v2.html`), the macro pass:
   - **Moss cushions** are real geometry, found by dropping rays onto every stone that stands clear of the water and placed along the bank toe and the wall copes. Hair-fine sporophyte stalks with capsules rise from some of them.
   - **Pebbles and grit** cover the gravel bar and the edges, about 6,500 of them.
   - **The bed shows through shallow water** as pebbles refracted by the ripples, streaked by the current.
