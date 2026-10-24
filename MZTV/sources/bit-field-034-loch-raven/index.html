@@ -1,0 +1,1053 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MZ World Loch Raven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* MZ WORLD · LOCH RAVEN — surface-anchored six-ink hydraulic engraving */
+:root { --ink:#1c2b36; --paper:#ece4cd; --hot:#b87454; --deep:#3c5162; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
+html, body { height:100%; margin:0; background:var(--ink); overflow:hidden }
+canvas { display:block; width:100%; height:100% }
+#hud { position:fixed; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:min(470px, calc(100vw - 40px)); box-sizing:border-box; padding:11px 13px 10px; font:400 11px/1.5 var(--mono);
+  color:var(--ink); background:color-mix(in srgb, var(--paper) 90%, transparent); border:2px solid var(--ink);
+  letter-spacing:.01em; font-variant-numeric:tabular-nums; pointer-events:none }
+#hud b { font-weight:600 }
+#hud .t { display:flex; justify-content:space-between; gap:12px; font-weight:600; letter-spacing:.08em; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:6px }
+#hud .r { display:grid; grid-template-columns:1fr auto; gap:0 10px }
+#hud .r span:last-child { color:var(--deep); text-align:right }
+#hud .ev { color:var(--hot); font-weight:600 }
+#hud .log { margin-top:6px; padding-top:5px; border-top:1px dashed var(--ink); min-height:3em }
+#hud .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .cr { margin-top:6px; font-size:10px; letter-spacing:.06em; opacity:.8 }
+#tap { position:fixed; right:calc(20px + env(safe-area-inset-right,0px)); top:calc(20px + env(safe-area-inset-top,0px)); font:600 11px/1 var(--mono);
+  color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:8px 10px; letter-spacing:.08em; cursor:pointer }
+</style>
+
+<div id="hud" hidden></div>
+<button id="tap" type="button" hidden>CLICK FOR SOUND</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ====================================================================== params */
+const Q=new URLSearchParams(location.search);
+const CAPTURE=Q.get('capture')==='1', RATE=Math.max(0.01,+(Q.get('rate')||1));
+const LINES=+(Q.get('lines')||(innerWidth<700?480:720)), AUDIO_WANTED=Q.get('audio')!=='0';
+let INFO=Q.get('info')!=='0'; const SEED=+(Q.get('seed')||1), LIVE_WX=Q.get('live')!=='0';
+const KEY='mzworld-loch-raven-v1'+(Q.has('seed')?'-s'+SEED:'');
+if(Q.get('fresh')==='1'){try{localStorage.removeItem(KEY)}catch(e){}}
+const LAT=39.43038,LON=-76.54358,TAU=Math.PI*2,D2R=Math.PI/180;
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smoothstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+const V=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
+function mulberry(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd=mulberry(SEED*7919+Date.now()%100000),rr=(a,b)=>a+(b-a)*rnd();
+
+/* ====================================================================== clock */
+const eastern=new Intl.DateTimeFormat('en-GB',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+function localParts(ms){const str=eastern.format(new Date(ms)),[h,m,sec]=str.split(':').map(Number);return {h,m,sec,str,hour:h+m/60+sec/3600}}
+let simMs=Date.now();
+if(Q.has('hour')){const want=+Q.get('hour'),cur=localParts(simMs).hour;simMs+=(((want-cur)%24+24)%24)*3600e3}
+if(Q.has('ff'))simMs+=(+Q.get('ff'))*60e3;
+let simT=0;
+
+/* ====================================================================== noise + terrain (sculptural, NOT surveyed DEM) */
+function hash2(x,y){let h=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+104729;h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296}
+function vnoise(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+const a=hash2(xi,yi),b=hash2(xi+1,yi),c=hash2(xi,yi+1),d=hash2(xi+1,yi+1);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+function fbm(x,y){let s=0,a=.5,f=1;for(let i=0;i<4;i++){s+=a*vnoise(x*f,y*f);f*=2.03;a*=.5}return s}
+function terrainH(x,z){
+ const bank=smoothstep(94,250,Math.abs(x))*52;
+ const woods=7*fbm(x*.013+9,z*.011+3);
+ const upstream=z>13?-9:-1;
+ const valley=2+bank+woods+upstream+0.012*Math.abs(z);
+ return valley;
+}
+
+/* ====================================================================== sun + moon */
+function sunMoon(ms) {
+  const d = ms / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * D2R, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, e = (23.439 - 0.00000036 * d) * D2R;
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const lst = (gmst * 15 + LON) * D2R, la = LAT * D2R;
+  const place = (lon, lat) => {
+    const ra = Math.atan2(Math.cos(e) * Math.sin(lon) - Math.tan(lat) * Math.sin(e), Math.cos(lon));
+    const dec = Math.asin(Math.sin(lat) * Math.cos(e) + Math.cos(lat) * Math.sin(e) * Math.sin(lon));
+    const ha = lst - ra;
+    const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+    const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+    return { el, az };
+  };
+  const sun = place(L, 0);
+  const Lm = (218.316 + 13.176396 * d) * D2R, Mm = (134.963 + 13.064993 * d) * D2R, F = (93.272 + 13.229350 * d) * D2R;
+  const mlon = Lm + 6.289 * D2R * Math.sin(Mm), mlat = 5.128 * D2R * Math.sin(F);
+  const moon = place(mlon, mlat);
+  const phase = ((mlon - L) % TAU + TAU) % TAU;               // 0 new, π full
+  return { sun, moon, illum: 0.5 * (1 - Math.cos(phase)) };
+}
+// World axes: +x crest direction, +z upstream, -z downstream; artistic local frame
+const azElToVec = (az, el) => V(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
+const fromBearingTravel = (deg) => { const b = deg * D2R; return new THREE.Vector2(-Math.cos(b), -Math.sin(b)); }; // (x,z) travel for a "from" bearing
+const compass = (deg) => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+
+/* ====================================================================== palettes (6 inks: INK DEEP SEA HOT GLOW PAPER) */
+const COLORWAYS = [
+ {name:'LOCH RAVEN SLATE',c:['#1c2b36','#3c5162','#477b76','#b87454','#cbbf96','#ece4cd']},
+ {name:'SPILLWAY LIMESTONE',c:['#24323e','#4b626c','#729a93','#b16f5e','#dfc88c','#f0e7d6']},
+ {name:'WARREN WATERLINE',c:['#223340','#385561','#6e9690','#b96654','#d7ba82','#eee5cf']},
+ {name:'OCTOBER CANOPY',c:['#2a303c','#536575','#718a67','#bd6849','#d6ad6e','#f2e5cb']},
+ {name:'SIGNAL FLARE',c:['#24123a','#5b3fd1','#6fd3c1','#ff7a8a','#ffd24a','#fbf3e4']},
+ {name:'PISTACHIO NIGHT',c:['#10202b','#1f4a6e','#b6d97a','#ff5a7a','#f9e7b0','#eef4ea']},
+ {name:'ULTRAMARINE',c:['#0c1440','#1f3bb3','#44b8e8','#ff6a1a','#ffd0a1','#fff7ec']},
+ {name:'GUNPOWDER FOG',c:['#292c35','#48565d','#73918f','#b77b64','#b7b099','#e9e2d8']}
+];
+const hexV = (h) => { const n = parseInt(h.slice(1), 16); return V(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+// material ids → [dark, mid, light] ink roles, hatch strength, speckle
+const INK = 0, DEEP = 1, SEA = 2, HOT = 3, GLOW = 4, PAPER = 5;
+const MAT = [
+  /* 0 sky   */ [DEEP, HOT, PAPER, 0.9, 1], /* 1 sun   */ [HOT, GLOW, PAPER, 1.0, 0], /* 2 sea   */ [INK, DEEP, SEA, 1.0, 0],
+  /* 3 foam  */ [SEA, PAPER, PAPER, 0.7, 0], /* 4 cliff */ [INK, DEEP, SEA, 1.0, 0], /* 5 grass */ [DEEP, SEA, GLOW, 0.9, 0],
+  /* 6 wood  */ [INK, DEEP, PAPER, 1.0, 0], /* 7 dark  */ [INK, INK, DEEP, 0.3, 0], /* 8 fabric*/ [INK, INK, DEEP, 1.0, 0],
+  /* 9 white */ [DEEP, PAPER, PAPER, 0.5, 0], /*10 path  */ [INK, INK, HOT, 0.6, 0], /*11 autumn*/ [INK, SEA, GLOW, 0.8, 0],
+  /*12 path  */ [DEEP, GLOW, PAPER, 0.8, 0], /*13 cloud */ [SEA, PAPER, PAPER, 0.8, 0], /*14 moon  */ [DEEP, SEA, PAPER, 0.8, 0],
+  /*15 lamp  */ [GLOW, GLOW, PAPER, 0.0, 0],
+];
+
+/* ====================================================================== persistent state (memory) */
+const DEF=()=>({
+ v:1,born:Date.now(),epoch:1,epochStart:0,epochLen:rr(50,95)*60,tension:0,colorway:0,cwVisits:[1,0,0,0,0,0,0,0],
+ grammar:{period:7.2,dith:.12,wob:7,outline:1,hatch:1,angBias:0},center:38,
+ uncanny:{next:rr(6,12)*60,counts:{},last:{},mem:{}},
+ rainStore:.35,savedAt:Date.now(),stageTrend:0,stageLast:21.8,inspections:0,inspected:{},log:[],runSec:0
+});
+let S=DEF();
+try{const raw=localStorage.getItem(KEY);if(raw){const o=JSON.parse(raw);if(o&&o.v===1)S=Object.assign(DEF(),o)}}catch(e){}
+const T0=S.runSec||0;simT=T0;
+function save(){try{S.runSec=simT;S.savedAt=Date.now();localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function logEv(text){S.log.unshift({t:localParts(simMs).str,text});if(S.log.length>40)S.log.length=40}
+if(!S.log.length)logEv('the water and concrete woke for the first time');
+else logEv('Loch Raven resumed · epoch '+S.epoch);
+
+/* ====================================================================== renderer + targets */
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: CAPTURE });
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.autoClear = true;
+document.body.prepend(renderer.domElement);
+let W = 2, H = 2, IW = 2, IH = 2;
+const rtData = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, generateMipmaps: false });
+const rtPrint = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.5, 40000);
+function resize() {
+  W = innerWidth; H = innerHeight; renderer.setSize(W, H, false);
+  IH = Math.min(LINES, H); IW = Math.round(IH * W / H);
+  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  PU.uRes.value.set(IW, IH);
+}
+
+/* ====================================================================== shaders */
+const COMMON = /* glsl */`
+uniform mat4 uVP; uniform float uAspect;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+float screenAngle(vec3 w, vec3 T){
+  vec4 a=uVP*vec4(w,1.); vec4 b=uVP*vec4(w+T,1.);
+  vec2 d=b.xy/max(b.w,1e-3)-a.xy/max(a.w,1e-3); d.x*=uAspect;
+  float ang=atan(d.y,d.x); if(ang<0.) ang+=3.14159265; return ang/3.14159265; }
+uniform float uPerPx,uWobPx,uPxK;
+float lineAt(vec3 P,vec3 N,vec3 T,float dist,float extra){
+  vec3 A=cross(N,T);
+  if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.));
+  if(dot(A,A)<1e-6) A=vec3(1.,0.,0.);
+  A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float per=max(.0002,uPerPx*max(dist,.01)*uPxK);
+  float L=log2(per);
+  float f=smoothstep(0.,1.,fract(L)),p0=exp2(floor(L)),p1=p0*2.;
+  float s=dot(P,A), t=dot(P,B);
+  float w=uWobPx/max(uPerPx,.1)*1.35;
+  float l0=cos((s+(vn(vec2(s,t)/(p0*7.)+3.1)-.5)*w*p0+extra)*6.2831853/p0);
+  float l1=cos((s+(vn(vec2(s,t)/(p1*7.)+3.1)-.5)*w*p1+extra)*6.2831853/p1);
+  return .5+.5*mix(l0,l1,f);
+}
+vec4 pack(float sh,float id,float line,float acc){
+ return vec4(clamp(sh,0.,1.),(id+0.5)/16.,clamp(line,0.,1.),acc);
+}
+`;
+const SH = {   // shared uniforms (same objects referenced by every material)
+  uVP: { value: new THREE.Matrix4() }, uAspect: { value: 1.78 }, uTime: { value: 0 },
+  uSunD: { value: V(0, 1, 0) }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
+  uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 1600 }, uFogShade: { value: 0.6 },
+  uBreath: { value: 0 }, uDay: { value: 1 }, uKeyUp: { value: 1 },
+  uPerPx: { value: 7.2 }, uWobPx: { value: 8 }, uPxK: { value: .001 },
+};
+const OBJ_VERT = /* glsl */`
+uniform float uTime, uBreath, uBreathOn, uCloth, uClothH, uWalk, uMove; uniform vec3 uWindL;
+attribute vec3 aT;
+varying vec3 vW, vN, vL, vT; varying float vC;
+void main(){
+  vC=0.;
+  vec4 lp=vec4(position,1.); vec3 ln=normal; vec3 lt=aT;
+  if(uCloth>0.5&&uCloth<1.5){   // the dress: folds that deepen toward the hem, pushed by wind and by walking
+    float t=1.-clamp(lp.y/uClothH,0.,1.); float a=atan(lp.x,lp.z); float fl=t*t;
+    vec2 rd=normalize(lp.xz+vec2(1e-4));
+    float fold=0.07*t*sin(a*9.+lp.y*1.3+sin(uTime*0.7+a)*0.8);
+    float rip=0.045*sin(lp.y*5.5-uTime*2.2+a*3.)+0.035*sin(lp.y*2.1-uTime*1.3+a*5.+1.);
+    lp.xz+=rd*(fold+rip*fl*(0.7+uMove)); vC=fold*4.5+rip*2.;
+    lp.xz+=uWindL.xz*fl*0.42;
+    lp.z-=uMove*fl*0.32+smoothstep(0.75,1.,t)*max(-lp.z,0.)*0.9; lp.x+=sin(uWalk*1.7)*0.07*fl*uMove;
+    lp.y+=0.03*fl*sin(uWalk*3.4)*uMove;
+  } else if(uCloth>1.5){         // the veil: a long ribbon from the crown, trailing and fluttering
+    float t=clamp(-lp.y/2.3,0.,1.);
+    float fl=sin(t*7.-uTime*3.1+lp.x*2.)*0.09*t+sin(t*3.-uTime*1.7)*0.06*t;
+    lp.x*=0.3+1.5*t;
+    lp.z-=t*(0.1+0.42*uMove)+fl*0.5+0.12*sqrt(t);
+    lp.xz+=uWindL.xz*t*t*0.6;
+    lp.x+=sin(t*5.-uTime*2.4)*0.07*t; vC=fl*2.5;
+    lp.y+=t*t*(0.15*uMove+0.12*length(uWindL));
+  }
+  #ifdef USE_INSTANCING
+    lp=instanceMatrix*lp; ln=mat3(instanceMatrix)*ln; lt=mat3(instanceMatrix)*lt;
+  #endif
+  vec4 w=modelMatrix*lp; vec3 n=normalize(mat3(modelMatrix)*ln);
+  if(uBreathOn>0.5){
+    float steep=smoothstep(0.35,0.7,1.-n.y);
+    float band=smoothstep(1.,8.,w.y)*(1.-smoothstep(48.,85.,w.y));
+    float rip=0.6+0.4*sin(w.y*0.33-uTime*0.8+w.x*0.05+w.z*0.03);
+    w.xyz+=vec3(n.x,0.,n.z)*uBreath*steep*band*rip;
+  }
+  vW=w.xyz; vN=n; vL=position; vT=mat3(modelMatrix)*lt;
+  gl_Position=projectionMatrix*viewMatrix*w;
+}`;
+const OBJ_FRAG = /* glsl */`
+${COMMON}
+uniform float uId, uMode, uEmit, uFace, uStackH, uTime, uGhostMode, uGhost;
+uniform float uAmb, uDiff, uFogD, uFogShade;
+uniform vec3 uKeyD, uCamP, uT;
+varying vec3 vW, vN, vL, vT; varying float vC;
+void rock(inout vec3 T, inout float sh, inout float acc){
+  float n1=vn(vW.xz*0.06+vW.y*0.015);
+  T=normalize(vec3(0.35*(n1-0.5),1.,0.35*(vn(vW.zx*0.05+3.1)-0.5)));
+  float vein=abs(sin(vW.x*0.31+vW.z*0.27+n1*9.+vW.y*0.05));
+  acc=step(vein,0.045)*step(0.58,vn(vW.xz*0.02+vW.y*0.03+7.));
+  sh-=0.14*(1.-n1);
+}
+void main(){
+  if(uGhostMode>0.5 && hash(floor(vW.xz*3.1+vW.y*.19)) > 0.36*uGhost) discard;
+  vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
+  float sh=uAmb+uDiff*max(dot(N,uKeyD),0.)+vC;
+  float id=uId; vec3 T=uT; float acc=0.;
+  if(uMode>0.5&&uMode<1.5){ rock(T,sh,acc); }
+  else if(uMode>1.5&&uMode<2.5){
+    bool grass=N.y>0.74&&vW.y>2.6;
+    if(grass){ id=5.; T=normalize(vec3(0.6,0.,1.)+vec3(0.5*(vn(vW.xz*0.012)-0.5),0.,0.)); sh+=0.1*(vn(vW.xz*0.09)-0.5); }
+    else { id=4.; rock(T,sh,acc); if(vW.y<1.6) sh*=0.7; }
+  }
+  else if(uMode>2.5&&uMode<3.5){ T=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.); }
+  if(uFace>0.01){
+    float a=atan(vL.x,vL.z); float hh=vL.y/uStackH+0.5;
+    float ey=(hh-0.66)/(0.05*uFace+0.002);
+    float e1=length(vec2((a-0.36)/0.15,ey)), e2=length(vec2((a+0.36)/0.15,ey));
+    if(min(e1,e2)<1.){ id=7.; sh=0.06; acc=0.; }
+  }
+  float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
+  if(uEmit>0.){ sh=uEmit; fog*=0.4; }
+  sh=mix(sh,uFogShade,fog);
+  gl_FragColor=pack(sh,id,lineAt(vW,N,T,dist,0.),acc*(1.-fog));
+}`;
+function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
+    uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
+      uEmit: { value: 0 }, uFace: { value: 0 }, uStackH: { value: 1 }, uBreathOn: { value: 0 },
+      uCloth: { value: 0 }, uClothH: { value: 2 }, uWalk: { value: 0 }, uMove: { value: 0 }, uWindL: { value: V() }, uGhostMode: {value:0}, uGhost: {value:1} }, extra)
+  });
+}
+
+/* ---------- advected hydraulic water: every frame still resolves to six inks */
+const WATER_FRAG=/* glsl */`
+${COMMON}
+uniform float uTime,uFlow,uFall,uWindSpeed,uAmb,uDiff,uFogD,uFogShade;
+uniform vec3 uKeyD,uCamP,uT;
+varying vec3 vW,vN,vL,vT;varying float vC;
+void main(){
+ vec3 N=normalize(vN);
+ if(!gl_FrontFacing)N=-N;
+ float d=length(uCamP-vW);
+ float speed=uFall>.5?1.8+uFlow*.085:.14+uWindSpeed*.07;
+ vec2 coord=uFall>.5?vW.yz:vW.xz;
+ vec2 drift=vec2(uTime*speed*.095,uTime*speed*.047);
+ float a=vn(coord*.13+drift),b=vn(coord*.36-drift*1.7+11.);
+ float streak=.66*a+.34*b;
+ float foam=uFall>.5?smoothstep(.46,.66,streak+uFlow*.005):smoothstep(.74,.88,streak);
+ float id=foam>.5?3.:2.;
+ float sh=uAmb*.75+uDiff*.17*max(dot(N,uKeyD),0.)+.12+streak*.19;
+ if(id>2.5)sh=.65+.2*streak;
+ vec3 tangent=uFall>.5?vec3(0.,-1.,-1.):vec3(1.,0.,.23);
+ // Ink follows the advected water, while concrete and shoreline marks remain still.
+ vec3 moving=vW+(uFall>.5?vec3(0.,uTime*speed*.65,uTime*speed*.45):vec3(uTime*speed*.26,0.,uTime*speed*.04));
+ float line=lineAt(moving,N,tangent,d,0.);
+ float fog=1.-exp(-d/uFogD);
+ gl_FragColor=pack(mix(sh,uFogShade,fog),id,line,0.);
+}
+`;
+function waterMat(fall=false){
+ return new THREE.ShaderMaterial({vertexShader:OBJ_VERT,fragmentShader:WATER_FRAG,side:THREE.DoubleSide,
+  uniforms:Object.assign({},SH,{
+   uTime:{value:0},uT:{value:V(1,0,0)},uFlow:{value:0},uFall:{value:fall?1:0},uWindSpeed:{value:0},
+   uCloth:{value:0},uBreathOn:{value:0},uMove:{value:0},uWindL:{value:V()}
+  })
+ });
+}
+const reservoirMat=waterMat(false),tailwaterMat=waterMat(false),spillMat=waterMat(true);
+
+/* ---------- sky */
+const SKY_FRAG = /* glsl */`
+${COMMON}
+uniform vec3 uSunD, uCamP; uniform float uDay, uCloud, uTime; uniform vec2 uWind;
+varying vec3 vW;
+void main(){
+  vec3 d=normalize(vW-uCamP); float el=d.y;
+  float sg=pow(max(dot(d,uSunD),0.),5.)*smoothstep(-0.25,0.05,uSunD.y);
+  float low=smoothstep(-0.28,0.,uSunD.y)*(1.-smoothstep(0.12,0.5,uSunD.y));
+  float az=pow(max(dot(normalize(d.xz+1e-4),normalize(uSunD.xz+1e-4)),0.),2.);
+  float band=(1.-smoothstep(0.,0.32,max(el,0.)))*az*low;
+  float sh=mix(0.1,0.55,uDay)+0.38*sg-0.16*smoothstep(0.,0.7,el)*uDay+0.12*(1.-smoothstep(0.,0.2,el))*uDay+0.42*band;
+  float id=0.; vec3 T=vec3(1.,0.,0.);
+  if(el>0.){
+    vec2 cp=d.xz/max(el,0.035)*500.+uWind*uTime*6.;
+    float cl=vn(cp*0.0016)*0.62+vn(cp*0.0055+3.)*0.38;
+    float thr=1.05-uCloud*0.75;
+    float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
+    if(cov>0.5){ id=13.; sh=mix(0.32,0.86,uDay)-0.45*(cl-thr)+0.28*sg; T=normalize(vec3(1.,0.15*(cl-0.6),0.)); }
+  }
+  gl_FragColor=pack(sh,id,.5+.5*sin(d.y*38.+uTime*.015),0.);
+}`;
+const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
+
+/* ---------- sun / moon disc with an eye */
+const DISC_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); gl_Position.z=gl_Position.w*0.99998; }`;
+const DISC_FRAG = /* glsl */`
+${COMMON}
+uniform float uOpen, uBlink, uIsMoon, uIllum, uDim; uniform vec2 uGaze;
+varying vec2 vUv;
+void main(){
+  vec2 p=vUv*2.-1.; float r=length(p); if(r>1.) discard;
+  float id=uIsMoon>0.5?14.:1.;
+  float sh=uIsMoon>0.5?0.55+0.4*uIllum:0.9-0.32*smoothstep(0.5,1.,r);
+  sh*=uDim;
+  float la=mod(atan(p.y,p.x),3.14159265)/3.14159265;
+  float o=uOpen*(1.-uBlink);
+  if(o>0.01){
+    float x=p.x/0.66; float ey=p.y+0.03; float lid=0.4*o*(1.-x*x);
+    if(abs(x)<1.&&abs(ey)<lid){
+      vec2 ip=p-vec2(0.,-0.03)-uGaze*o; float ir=length(ip);
+      if(ir<0.075){ id=7.; sh=0.04; }
+      else if(ir<0.21){ id=11.; sh=0.3+0.6*(ir/0.21); la=mod(atan(ip.y,ip.x),3.14159265)/3.14159265; }
+      else { id=9.; sh=0.9; la=0.; }
+      if(length(ip-vec2(-0.05,0.06))<0.03) { id=9.; sh=1.; }
+    } else if(abs(x)<1.08&&ey>0.&&ey<lid+0.045*o+0.012){ id=7.; sh=0.05; }
+    else if(abs(x)<1.&&ey<0.&&ey>-lid-0.02*o){ id=7.; sh=0.12; }
+    // the wing at the outer corner
+    vec2 wq=p-vec2(0.66,0.0); float wl=dot(wq,normalize(vec2(1.,0.55)));
+    if(o>0.35&&wl>0.&&wl<0.22*o&&abs(dot(wq,normalize(vec2(-0.55,1.))))<0.025){ id=7.; sh=0.05; }
+  }
+  gl_FragColor=pack(sh,id,la,0.);
+}`;
+
+/* ---------- spray points */
+const PT_VERT = /* glsl */`attribute float aLife; uniform float uScale; varying float vLife; varying vec3 vW;
+void main(){ vLife=aLife; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; vec4 mv=viewMatrix*w; gl_Position=projectionMatrix*mv;
+  gl_PointSize=aLife>0.?uScale*(0.6+0.8*aLife)/max(-mv.z,1.):0.; }`;
+const PT_FRAG = /* glsl */`${COMMON}
+uniform vec3 uCamP; uniform float uFogD, uFogShade; varying float vLife; varying vec3 vW;
+void main(){ if(vLife<=0.) discard; vec2 c=gl_PointCoord*2.-1.; if(dot(c,c)>1.) discard;
+  float fog=1.-exp(-length(vW-uCamP)/uFogD); gl_FragColor=pack(mix(0.88,uFogShade,fog),3.,0.25,0.); }`;
+
+/* ---------- print pass: linocut lines through OBAS inks */
+const PU = {
+  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) },
+  uPal: { value: Array.from({ length: 6 }, () => V()) },
+  uTab: { value: MAT.map(m => V(m[0], m[1], m[2])) }, uHat: { value: MAT.map(m => m[3]) }, uSpk: { value: MAT.map(m => m[4]) },
+  uPeriod: { value: 6 }, uDith: { value: 0.12 }, uWob: { value: 7 }, uOutline: { value: 1 }, uHatch: { value: 1 },
+  uSeed: { value: rnd() * 100 }, uRain: { value: 0 }, uRainDir: { value: new THREE.Vector2(0.3, -1).normalize() }, uTime: { value: 0 },
+};
+const PRINT_FRAG = /* glsl */`
+uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uTab[16]; uniform float uHat[16]; uniform float uSpk[16];
+uniform float uPeriod, uDith, uWob, uOutline, uHatch, uSeed, uRain, uTime; uniform vec2 uRainDir;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+float b2(vec2 a){ a=floor(a); return fract(dot(a,vec2(0.5,a.y*0.75))); }
+float b4(vec2 a){ return b2(0.5*a)*0.25+b2(a); }
+float b8(vec2 a){ return b4(0.5*a)*0.25+b2(a); }
+int idAt(vec2 fc){ return int(floor(texture2D(uData,fc/uRes).g*16.)); }
+bool soft(int a,int b){
+  bool sa=(a==0||a==13||a==1||a==14), sb=(b==0||b==13||b==1||b==14);
+  if(sa&&sb) return true;
+  if((a==2||a==3)&&(b==2||b==3)) return true;
+  if((a==4||a==5)&&(b==4||b==5)) return false;
+  return false; }
+void main(){
+  vec2 fc=gl_FragCoord.xy;
+  vec4 d=texture2D(uData,fc/uRes);
+  float s=d.r; int id=int(floor(d.g*16.)); float ang=d.b*3.14159265; float acc=d.a;
+  vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
+  float line=d.b*2.-1.;  // carved in world space; not sliding with screen
+  float mid=1.-abs(2.*s-1.);
+  float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith;
+  int k=v<0.36?0:(v<0.69?1:2);
+  float ink=k==0?tab.x:(k==1?tab.y:tab.z);
+  if(uSpk[id]>0.5){ float h=hash(floor(fc/2.6)+uSeed); if(h>0.968){ if(s<0.28) ink=5.; else if(k==2) ink=tab.y; else if(k==1) ink=tab.x; } }
+  if(acc>0.5) ink=3.;
+  if(uOutline>0.5){
+    int il=idAt(fc+vec2(-1.,0.)), iu=idAt(fc+vec2(0.,-1.));
+    if((il!=id&&!soft(il,id))||(iu!=id&&!soft(iu,id))) ink=0.;
+  }
+  if(uRain>0.01){
+    vec2 rp=vec2(dot(fc,vec2(-uRainDir.y,uRainDir.x)), dot(fc,uRainDir)+uTime*520.);
+    vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
+    if(h>1.-uRain*0.06 && fract(rp.y/46.)<0.35 && fract(rp.x/5.)<0.3) ink=(s<0.5)?float(tab.z):5.;
+  }
+  gl_FragColor=vec4(uPal[int(ink+0.5)],1.);
+}`;
+const BLIT_FRAG = /* glsl */`uniform sampler2D uTex; uniform vec2 uOut; varying vec2 vUv;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){ vec3 c=texture2D(uTex,vUv).rgb; float g=hash(floor(gl_FragCoord.xy*0.5)); c*=0.965+0.035*g; gl_FragColor=vec4(c,1.); }`;
+const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const printMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PRINT_FRAG, uniforms: PU, depthTest: false, depthWrite: false });
+const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { uTex: { value: rtPrint.texture }, uOut: { value: new THREE.Vector2() } }, depthTest: false, depthWrite: false });
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
+
+/* ====================================================================== world build */
+const CREST=30, LIP=23, DAM_HALF=99, SPILL_HALF=44;
+const sceneBox=(w,h,d,x,y,z,id=9,dir=V(1,0,0))=>{
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),objMat(id,0,dir));m.position.set(x,y,z);scene.add(m);return m;
+};
+const sceneBeam=(a,b,r,id=9)=>{
+ const o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,a.distanceTo(b),6),objMat(id,0,b.clone().sub(a).normalize()));
+ o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(V(0,1,0),b.clone().sub(a).normalize());scene.add(o);return o;
+};
+// A sculpted valley, not an elevation model.
+{
+ const g=new THREE.PlaneGeometry(750,1000,150,190);g.rotateX(-Math.PI/2);
+ const p=g.attributes.position;
+ for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,terrainH(x,z));}
+ g.computeVertexNormals();scene.add(new THREE.Mesh(g,objMat(4,2,V(.8,0,.5))));
+}
+// The two wooded slopes; the vegetation palette is autumnal at initial broadcast date.
+const TREE=[];
+function makeTree(x,z,kind){
+ const base=terrainH(x,z),ht=rr(10,24),r=rr(2,5);
+ const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.32,.56,ht*.64,6),objMat(6,0,V(0,1,0)));
+ trunk.position.set(x,base+ht*.3,z);scene.add(trunk);
+ const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),objMat(kind,0,V(0,1,0)));
+ crown.scale.set(1.25,1.4,.95);crown.position.set(x,base+ht*.82,z);scene.add(crown);TREE.push(crown);
+}
+for(let i=0;i<250;i++){
+ const x=rr(-345,345),z=rr(-360,465);
+ if(Math.abs(x)<125&&z>-120&&z<300)continue;
+ if(terrainH(x,z)<19)continue;
+ makeTree(x,z,[5,9,11,12,5,11][i%6]);
+}
+// Reservoir: calm printed surface, with waterline displaced by the MEMORY model.
+const reservoir=new THREE.Mesh(new THREE.PlaneGeometry(380,565,70,78),reservoirMat);
+reservoir.rotation.x=-Math.PI/2;reservoir.position.set(0,22,292);scene.add(reservoir);
+const tailwater=new THREE.Mesh(new THREE.PlaneGeometry(155,320,40,54),tailwaterMat);
+tailwater.rotation.x=-Math.PI/2;tailwater.position.set(0,-.6,-188);scene.add(tailwater);
+// Concrete gravity dam; plan proportions informed by published dimensions, surfaces artistically sculpted.
+function face(xa,xb,top,front,bot){
+ const p=[xa,top,front,xb,top,front,xa,bot,-44,xb,bot,-44];
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+ g.setIndex([0,2,1,1,2,3]);g.computeVertexNormals();
+ scene.add(new THREE.Mesh(g,objMat(9,0,V(0,1,-.65))));
+}
+face(-DAM_HALF,-SPILL_HALF,CREST,11,-2);face(SPILL_HALF,DAM_HALF,CREST,11,-2);
+face(-SPILL_HALF,SPILL_HALF,LIP,11,-1);
+sceneBox(DAM_HALF*2,6,11,0,1.4,-40,9);
+for(const side of [-1,1]){
+ const x=side*71;
+ sceneBox(53,3.8,13,x,CREST-1.8,4,9);
+ // The nonoverflow works include a narrow access road, with railings.
+ sceneBox(52,.35,6,x,CREST+.25,2.8,10);
+ for(let xx=x-23;xx<x+25;xx+=6){
+  sceneBeam(V(xx,CREST+.4,-.3),V(xx,CREST+1.7,-.3),.09,7);
+  sceneBeam(V(xx,CREST+.4,6),V(xx,CREST+1.7,6),.09,7);
+ }
+ sceneBeam(V(x-25,CREST+1.7,-.3),V(x+25,CREST+1.7,-.3),.1,7);
+ sceneBeam(V(x-25,CREST+1.7,6),V(x+25,CREST+1.7,6),.1,7);
+}
+// No fictional dam inscriptions. The shallow slots are masonry expansion lines.
+for(let x=-98;x<=98;x+=6.6){
+ sceneBox(.1,Math.abs(x)<SPILL_HALF?15:20,.16,x,Math.abs(x)<SPILL_HALF?11:18,-26,12);
+}
+// Spillway ogee silhouette and physical flow sheets, moved according to modelled overflow.
+const fallGroup=new THREE.Group();scene.add(fallGroup);
+for(let i=0;i<95;i++){
+ const x=-SPILL_HALF+(i+.5)*SPILL_HALF*2/95,dx=.48+(i%3)*.13,verts=[],idx=[];
+ for(let j=0;j<=16;j++){
+  const t=j/16,z=11-51*t+1.6*Math.sin(t*Math.PI),y=LIP-24*t+.08+Math.sin(i*3.7+t*27)*.08;
+  verts.push(x-dx,y,z,x+dx,y,z);
+  if(j){let k=(j-1)*2;idx.push(k,k+2,k+1,k+1,k+2,k+3);}
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);g.computeVertexNormals();
+ const ribbon=new THREE.Mesh(g,spillMat);
+ ribbon.material.side=THREE.DoubleSide;fallGroup.add(ribbon);
+}
+// Hydraulic engraving: ruled waterline bands on the curved face track the flow.
+const hydraulics=[];
+for(let j=1;j<=11;j++){
+ const t=j/12,p=sceneBeam(V(-SPILL_HALF,LIP-24*t+.27,11-51*t),V(SPILL_HALF,LIP-24*t+.27,11-51*t),.047,j%3===0?3:12);
+ hydraulics.push(p);
+}
+// Two simple gauge plinths. No readings presented as real instrumentation values.
+const gauges=[];
+for(const x of [-78,79]){
+ const pl=sceneBox(1.15,2.5,1.3,x,CREST+1.55,3,9);
+ const needle=sceneBeam(V(x,CREST+2.05,2.25),V(x+.4,CREST+2.45,2.25),.065,3);
+ gauges.push({x,pl,needle,at:0});
+ sceneBox(.8,.8,.14,x,CREST+2.35,2.29,5);
+}
+// A fictional nameless keeper of an imagined daily cycle, not an invented historical employee.
+function keeperMesh(){
+ const grp=new THREE.Group(),coat=objMat(8,0,V(0,1,0)),dark=objMat(7,0,V(0,1,0));
+ const torso=new THREE.Mesh(new THREE.CylinderGeometry(.35,.53,1.25,9),coat);torso.position.y=1.15;grp.add(torso);
+ const head=new THREE.Mesh(new THREE.IcosahedronGeometry(.25,1),dark);head.position.y=2.05;grp.add(head);
+ const cap=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.13,9),dark);cap.position.y=2.28;grp.add(cap);
+ for(const k of [-1,1]){
+  const leg=new THREE.Mesh(new THREE.CylinderGeometry(.115,.15,.84,6),dark);leg.position.set(k*.2,.42,0);grp.add(leg);
+  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.10,.11,1,6),coat);arm.position.set(k*.44,1.24,0);arm.rotation.z=k*.14;grp.add(arm);
+ }
+ scene.add(grp);return grp;
+}
+const keeper={mesh:keeperMesh(),x:-88,target:'WEST',state:'dwell',dwell:rr(40,80),still:0,walked:0,dir:V(1,0,0),pos:V(),visible:true,stopName:'west access',move:0,cur:'crest'};
+const STOPS={
+ WEST:{x:-89,name:'west access',deg:0},WEST_GAUGE:{x:-78,name:'west gauge',deg:2},
+ SPILL:{x:-3,name:'spillway overlook',deg:5},EAST_GAUGE:{x:79,name:'east gauge',deg:4},
+ EAST:{x:91,name:'east access',deg:6}
+};
+// Walkway is a symbolic monitoring traverse, not visitor access advice.
+const walkway=sceneBox(192,.28,2.25,0,CREST+.12,3,10);
+const GHOST=new THREE.Group();scene.add(GHOST);GHOST.visible=false;
+// Warren is further upriver. These unlabelled rectangles are a spatial apparition,
+// not surveyed roads, buildings, surviving structures or an archaeological dataset.
+for(const [gx,gz,gw,gd] of [[-18,95,17,12],[17,112,23,14],[-34,150,12,17],[37,156,15,11]]){
+ const pts=[V(gx,0,gz),V(gx+gw,0,gz),V(gx+gw,0,gz+gd),V(gx,0,gz+gd)];
+ for(let i=0;i<4;i++){let a=pts[i],b=pts[(i+1)%4];
+  const geom=new THREE.BoxGeometry(a.distanceTo(b),.23,.28),m=new THREE.Mesh(geom,objMat(12,0,V(1,0,0),{uGhostMode:{value:1},uGhost:{value:0}}));
+  m.position.copy(a).add(b).multiplyScalar(.5);m.rotation.y=-Math.atan2(b.z-a.z,b.x-a.x);GHOST.add(m);
+ }
+}
+// Three waterbirds operate independently of the keeper.
+const birds=Array.from({length:3},(_,i)=>{
+ const group=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.IcosahedronGeometry(.42,1),objMat(7,0,V(0,1,0)));body.scale.set(1,.48,1.8);group.add(body);
+ const neck=new THREE.Mesh(new THREE.CylinderGeometry(.12,.17,.55,6),objMat(7));neck.position.set(0,.32,.48);group.add(neck);
+ scene.add(group);return {mesh:group,a:i*2.15,r:rr(20,68),speed:rr(.014,.029),p:V(0,22,120+i*34)};
+});
+// Real local sun and moon, rendered through the six-ink data pass.
+const skyU=Object.assign({},SH,{uCloud:{value:.5},uWind:{value:new THREE.Vector2(1,0)}});
+const sky=new THREE.Mesh(new THREE.SphereGeometry(20000,48,24),new THREE.ShaderMaterial({vertexShader:SKY_VERT,fragmentShader:SKY_FRAG,uniforms:skyU,side:THREE.BackSide,depthWrite:false}));
+sky.renderOrder=-3;sky.frustumCulled=false;scene.add(sky);
+const discMat=isMoon=>new THREE.ShaderMaterial({vertexShader:DISC_VERT,fragmentShader:DISC_FRAG,depthWrite:false,
+ uniforms:Object.assign({},SH,{uOpen:{value:0},uBlink:{value:0},uIsMoon:{value:isMoon?1:0},uIllum:{value:1},uDim:{value:1},uGaze:{value:new THREE.Vector2()}})});
+const sunM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(false));sunM.renderOrder=-2;sunM.frustumCulled=false;scene.add(sunM);
+const moonM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(true));moonM.renderOrder=-2;moonM.frustumCulled=false;scene.add(moonM);
+
+/* ====================================================================== weather (live, local) + modelled hydraulics */
+const WX={wind:3.4,windDir:245,cloud:.45,precip:0,temp:14,hum:72,swellH:.18,swellT:10,swellDir:200,live:false,at:0};
+const WXT={...WX};
+const HYD={level:21.8,q:0,rainStore:Math.max(0,(S.rainStore??.35)*Math.exp(-Math.max(0,Date.now()-(S.savedAt||Date.now()))/(8*3600e3))),trend:0,override:null};
+function synthWx(ms){const h=ms/3600e3;return {
+ wind:clamp(4+3*Math.sin(h*.47)+Math.sin(h*1.9),0,16),windDir:250+65*Math.sin(h*.2),
+ cloud:clamp(.45+.28*Math.sin(h*.31),0,1),precip:Math.max(0,2*Math.sin(h*.45)-1.68),
+ temp:13+7*Math.sin(h/23),hum:68+17*Math.sin(h*.1)
+}}
+Object.assign(WXT,synthWx(simMs));Object.assign(WX,WXT);
+async function fetchWx(){
+ if(!LIVE_WX)return;
+ try{
+  const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+LAT+'&longitude='+LON+'&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms');
+  if(!r.ok)throw Error('forecast');
+  const j=await r.json(),c=j.current;
+  if(!c||![c.temperature_2m,c.relative_humidity_2m,c.precipitation,c.cloud_cover,c.wind_speed_10m,c.wind_direction_10m].every(Number.isFinite))throw Error('bad weather');
+  Object.assign(WXT,{wind:c.wind_speed_10m,windDir:c.wind_direction_10m,cloud:c.cloud_cover/100,precip:c.precipitation,temp:c.temperature_2m,hum:c.relative_humidity_2m});
+  if(!WX.live)logEv('live Baltimore County weather arrived');
+  WX.live=true;WX.at=Date.now();
+ }catch(e){if(WX.live)logEv('weather source unavailable · simulated fallback');WX.live=false}
+}
+function hydraulicsTick(dt){
+ const previous=HYD.level;
+ HYD.rainStore=clamp(HYD.rainStore*Math.exp(-dt/(8*3600))+WX.precip*dt/7200,0,3.4);
+ const lowCycle=Math.sin(simMs/86400000*TAU/17);
+ const level=21.85+2.65*lowCycle+.56*(HYD.rainStore-.35);
+ HYD.level=HYD.override==null?clamp(level,18.8,26):HYD.override;
+ HYD.trend=lerp(HYD.trend,(HYD.level-previous)/Math.max(dt,.01)*3600,1-Math.exp(-dt/450));
+ // Dimensionless, theatrical flow index, NEVER measured discharge.
+ HYD.q=clamp(Math.pow(Math.max(0,HYD.level-LIP),1.5)*13,0,42);
+ for(const m of [reservoirMat,tailwaterMat,spillMat]){
+  m.uniforms.uFlow.value=HYD.q;m.uniforms.uWindSpeed.value=WX.wind;
+  if(live.ev!=='hush')m.uniforms.uTime.value=simT;
+ }
+ S.rainStore=HYD.rainStore;S.stageTrend=HYD.trend;S.stageLast=HYD.level;
+ WX.swellH=.08+.018*HYD.q;WX.swellT=12-.11*HYD.q;
+ reservoir.position.y=HYD.level;tailwater.position.y=-.55+.013*HYD.q;
+ fallGroup.visible=HYD.q>.3;fallGroup.scale.x=clamp(.18+HYD.q/17,.18,1);
+ hydraulics.forEach((h,i)=>{h.visible=HYD.q>.2&&i<Math.ceil(3+HYD.q/5)});
+}
+fetchWx();setInterval(fetchWx,15*60e3);
+
+/* ====================================================================== the uncanny (one rare memory + the rupture hush) */
+const EVT={
+ warren:{label:'WARREN BELOW · the drowned town flickers through',min:60,max:115,cool:48*60},
+ hush:{label:'the spillway held still',min:22,max:34,cool:0}
+};
+const live={ev:null,evT:0,evDur:0,calm:1,breath:0,why:'',apparition:0};
+function conditions(){return {warren:HYD.level<20.5&&WX.precip<.3&&WX.wind<10}};
+const why={warren:()=>('modelled low water '+HYD.level.toFixed(1)+' (not surveyed), wind '+WX.wind.toFixed(1)+' m/s')};
+function similarity(name){
+ const mem=S.uncanny.mem[name];if(!mem||!mem.length)return 1;
+ let n=0;const h=localParts(simMs).hour;
+ for(const m of mem){const dh=Math.min(Math.abs(m.h-h),24-Math.abs(m.h-h))/3,dl=(m.lv-HYD.level)/1.6,dw=(m.wi-WX.wind)/4;n+=Math.exp(-(dh*dh+dl*dl+dw*dw))}
+ return 1+1.2*n/mem.length;
+}
+function startEvent(name,forced=false){
+ const e=EVT[name];if(!e)return false;
+ if(name==='warren'&&forced&&HYD.level>=20.5){HYD.override=19.3;hydraulicsTick(.016)}
+ live.ev=name;live.evT=0;live.evDur=rr(e.min,e.max);
+ live.why=forced?'forced by hand':(why[name]?why[name]():'');
+ if(name==='warren'){
+  S.uncanny.counts[name]=(S.uncanny.counts[name]||0)+1;S.uncanny.last[name]=simT;
+  const mem=S.uncanny.mem[name]=S.uncanny.mem[name]||[];
+  mem.push({h:localParts(simMs).hour,lv:HYD.level,wi:WX.wind});if(mem.length>12)mem.shift();S.tension+=.07;
+ }
+ logEv(e.label+(live.why?' · '+live.why:''));
+ AUD.event(name,true);return true;
+}
+function endEvent(){
+ const n=live.ev;live.ev=null;AUD.event(n,false);
+ if(n==='hush')rupture('the hush broke');
+ else{HYD.override=null;S.uncanny.next=simT+rr(14,34)*60}
+}
+function uncannyTick(dt){
+ if(live.ev){live.evT+=dt;if(live.evT>=live.evDur)endEvent();return}
+ if(S.tension>=1){startEvent('hush');return}
+ if(simT<S.uncanny.next)return;
+ if(conditions().warren){
+  const last=S.uncanny.last.warren;
+  if(last==null||simT-last>=EVT.warren.cool){
+   const chance=similarity('warren')/(1+.4*(S.uncanny.counts.warren||0));
+   if(rnd()<clamp(chance,0,1)){startEvent('warren');return}
+  }
+ }
+ S.uncanny.next=simT+rr(4,9)*60;
+}
+function rupture(reason){
+ S.epoch++;const prev=S.colorway;
+ const weights=COLORWAYS.map((_,i)=>i===prev?0:1/(1+S.cwVisits[i]*.8));
+ let r=rnd()*weights.reduce((a,b)=>a+b,0),pick=0;
+ for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0){pick=i;break}}
+ S.colorway=pick;S.cwVisits[pick]=(S.cwVisits[pick]||0)+1;
+ S.grammar={period:rr(5.5,10),dith:rr(.05,.22),wob:rr(2,12),outline:rnd()<.8?1:0,hatch:rr(.75,1.25),angBias:0};
+ const centers=[38,33,36,31,41,35];S.center=centers[(centers.indexOf(S.center)+1+Math.floor(rnd()*3))%centers.length];
+ S.tension=0;S.epochStart=simT;S.epochLen=rr(50,95)*60;S.uncanny.next=simT+rr(8,14)*60;
+ cwFrom=cwNow.map(v=>v.clone());cwMix=0;
+ logEv('RUPTURE → epoch '+S.epoch+' · '+COLORWAYS[pick].name+' · centre '+NOTE[S.center%12]+(reason?' · '+reason:''));
+ AUD.rupture();save();
+}
+const NOTE=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+
+/* ====================================================================== audio: the live lens is the microphone */
+const AUD = {
+  ctx: null, ok: false, muted: false, step: 0, nextT: 0, bar: 0, chordI: 0, pend: [], barSec: 5.5,
+  async init() {
+    if (this.ctx || this.booting || !AUDIO_WANTED) return;
+    this.booting = true;
+    let ctx; try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { this.booting = false; return; }
+    this.wl = false;
+    try { await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET)); this.wl = true; }
+    catch (e) { try { const u = URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' })); await ctx.audioWorklet.addModule(u); this.wl = true; } catch (e2) {} }
+    this.ctx = ctx; this.build(); this.ok = true; this.booting = false; this.born = performance.now(); this.lastCT = ctx.currentTime; this.lastCTwall = performance.now(); this.silentFor = 0; this.nextT = 0;
+    if (ctx.state !== 'running') { tapBtn.hidden = false; ctx.resume().catch(() => {}); }
+    if (!this.timers) { this.timers = true; setInterval(() => this.sched(), 40); setInterval(() => this.watch(), 1000); }
+  },
+  rebuild(why) {
+    const old = this.ctx, oldOut = this.out; this.ctx = null; this.ok = false;
+    if (old) { try { oldOut.gain.setTargetAtTime(0, old.currentTime, 0.6); } catch (e) {} setTimeout(() => { try { old.close(); } catch (e) {} }, 4000); }
+    if (why) console.warn('[audio] rebuild:', why);
+    this.init().then(() => { if (this.ctx) { const g = this.out.gain; g.value = 0; g.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 1.2); } });
+  },
+  build() {
+    const c = this.ctx; const g = (v = 1) => { const n = c.createGain(); n.gain.value = v; return n; };
+    const bq = (type, f, q = 0.7, gain = 0) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; n.gain.value = gain; return n; };
+    const curve = (fn) => { const a = new Float32Array(2048); for (let i = 0; i < 2048; i++) a[i] = fn(i / 1023.5 - 1); return a; };
+    this.g = g; this.bq = bq;
+    const out = g(OUT_GAIN), master = g(1);
+    const hp = bq('highpass', 26), sat = c.createWaveShaper(); sat.curve = curve(x => Math.tanh(1.6 * x) / Math.tanh(1.6)); sat.oversample = '2x';
+    const shelf = bq('highshelf', 2000, 0.7, -10), lp = bq('lowpass', 6800, 0.5);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 2.4; comp.knee.value = 10; comp.attack.value = 0.03; comp.release.value = 0.35;
+    master.connect(hp).connect(sat).connect(shelf).connect(lp).connect(comp).connect(out).connect(c.destination);
+    this.an = c.createAnalyser(); this.an.fftSize = 2048; out.connect(this.an);
+    this.master = master; this.out = out;
+    // ping-pong tape echo, unity-gain tanh in the loop
+    const eIn = g(1), dL = c.createDelay(4), dR = c.createDelay(4), fbL = g(0.42), fbR = g(0.42), lpE = bq('lowpass', 1600), hpE = bq('highpass', 150);
+    const ush = c.createWaveShaper(); ush.curve = curve(Math.tanh);
+    const pL = c.createStereoPanner(), pR = c.createStereoPanner(); pL.pan.value = -0.6; pR.pan.value = 0.6; const eOut = g(0.6);
+    eIn.connect(dL); dL.connect(lpE).connect(hpE).connect(ush); ush.connect(fbL).connect(dR); dR.connect(fbR).connect(dL);
+    dL.connect(pL).connect(eOut); dR.connect(pR).connect(eOut); eOut.connect(master);
+    this.echo = { eIn, dL, dR, fbL, fbR, lpE };
+    // room
+    const len = c.sampleRate * 4.2, ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let lpv = 0; for (let i = 0; i < len; i++) { lpv += (Math.random() * 2 - 1 - lpv) * 0.22; d[i] = lpv * Math.pow(1 - i / len, 2.6); } }
+    const conv = c.createConvolver(); conv.buffer = ir; const rIn = g(1), rOut = g(0.55); rIn.connect(conv).connect(rOut).connect(master);
+    this.room = { rIn, rOut };
+    // noise buffers
+    const nb = (brown) => { const b = c.createBuffer(2, c.sampleRate * 9, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let l = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } } return b; };
+    this.white = nb(false); this.brown = nb(true);
+    const loop = (buf) => { if (this.wl) { try { return new AudioWorkletNode(c, 'mz-noise', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { brown: buf === this.brown } }); } catch (e) {} }
+      const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(c.currentTime + rr(0, 0.1), rr(0, 8)); return s; };
+    // spillway and tailwater beds: one wash per side
+    this.water = [-0.55, 0.55].map(pan => { const s = loop(this.brown), f = bq('lowpass', 300, 0.6), gg = g(0), p = c.createStereoPanner(); p.pan.value = pan; s.connect(f).connect(gg).connect(p); p.connect(master); gg.connect(this.room.rIn); return { f, g: gg }; });
+    // wind
+    { const s = loop(this.white), f = bq('bandpass', 320, 0.55), f2 = bq('lowpass', 900), gg = g(0), p = c.createStereoPanner(); s.connect(f).connect(f2).connect(gg).connect(p).connect(master); this.wind = { f, g: gg, p }; }
+    // rain
+    { const s = loop(this.white), f = bq('bandpass', 1000, 0.5), f2 = bq('lowpass', 1500), gg = g(0); s.connect(f).connect(f2).connect(gg).connect(master); gg.connect(this.room.rIn); this.rain = { g: gg }; }
+    // drone
+    this.drone = [1, 1.5, 2.0].map((m, i) => { const o = c.createOscillator(); o.type = i === 2 ? 'sawtooth' : 'sine'; const f = bq('lowpass', 160); const gg = g([0.11, 0.045, 0.02][i]);
+      o.frequency.value = this.hz(S.center - 12) * m; o.connect(f).connect(gg).connect(master); o.start(); return { o, m }; });
+    // pad (three voices, each two detuned saws)
+    this.padBus = g(0); this.padLP = bq('lowpass', 700, 0.6); this.padBus.connect(this.padLP); this.padLP.connect(master); this.padLP.connect(this.room.rIn);
+    this.pad = [0, 1, 2].map(() => { const a = c.createOscillator(), b = c.createOscillator(); a.type = b.type = 'sawtooth'; b.detune.value = 9; a.detune.value = -7; const gg = g(0.045); a.connect(gg); b.connect(gg); gg.connect(this.padBus); a.start(); b.start(); return { a, b }; });
+    // Warren ♭II chord, breath sub, masonry resonance, high fifth
+    this.eyeG = g(0); this.eyeG.connect(master); this.eyeG.connect(this.room.rIn); this.eyeO = [1, 1, 1].map((_, i) => { const o = c.createOscillator(); o.type = 'triangle'; const gg = g(0.06); o.connect(gg).connect(this.eyeG); o.start(); return o; });
+    { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 33; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
+    { const s = loop(this.brown), f = bq('bandpass', 95, 3.5), gg = g(0); s.connect(f).connect(gg).connect(master); gg.connect(this.room.rIn); this.grind = { g: gg, f }; }
+    this.wreG = g(0); this.wreG.connect(this.room.rIn); this.wreG.connect(master); this.wreO = [0, 1].map(i => { const o = c.createOscillator(); o.type = 'sine'; o.connect(this.wreG); o.start(); return o; });
+    this.retune(true);
+  },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  deg(d, oct = 0) { const sc = [0, 1, 3, 5, 7, 8, 10]; const o = Math.floor(d / 7); return S.center + oct * 12 + sc[((d % 7) + 7) % 7] + 12 * o; },
+  retune(now) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    this.drone.forEach(d => d.o.frequency.setTargetAtTime(this.hz(S.center - 12) * d.m, t, now ? 0.01 : 3));
+    this.eyeO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([1, 4, 8][i], 1)), t, 0.5));
+    this.wreO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([0, 4][i], 2)), t, 0.5)); },
+  start() { if (!this.ctx) { this.init(); return; } this.ctx.resume().then(() => { tapBtn.hidden = true; }).catch(() => {}); },
+  watch() {
+    const c = this.ctx; if (!c) return;
+    if (c.state === 'closed') { this.rebuild('closed'); return; }
+    if (c.state === 'suspended') { c.resume().catch(() => {}); return; }
+    const now = performance.now();
+    if (c.currentTime !== this.lastCT) { this.lastCT = c.currentTime; this.lastCTwall = now; }
+    else if (now - this.lastCTwall > 6000) { this.rebuild('clock stalled'); return; }
+    const td = this.td || (this.td = new Float32Array(this.an.fftSize)); this.an.getFloatTimeDomainData(td);
+    let pk = 0, bad = false; for (let i = 0; i < td.length; i += 4) { const v = td[i]; if (!isFinite(v)) { bad = true; break; } pk = Math.max(pk, Math.abs(v)); }
+    if (bad) { this.rebuild('NaN in the mix'); return; }
+    this.silentFor = (pk < 1e-5 && !this.muted) ? this.silentFor + 1 : 0;
+    if (this.silentFor > 20) { this.rebuild('20 s of silence'); return; }
+    if (now - this.born > 3 * 3600e3) this.rebuild('3 h refresh');
+  },
+  mute() { this.muted = !this.muted; if (this.ctx) this.out.gain.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 0.1); },
+  // lens projection for a world point → pan, gain
+  lens(p) { const v = p.clone().project(camera); const behind = v.z > 1; const d = p.distanceTo(camera.position);
+    return { pan: clamp(v.x, -1, 1) * (behind ? -0.4 : 0.85), g: (behind ? 0.35 : (Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 ? 1 : 0.6)) / (1 + d / 140) }; },
+  voice(type, t, o) {
+    const c = this.ctx, g = this.g, bq = this.bq;
+    if (type === 'kick') { const os = c.createOscillator(), gg = g(0); os.type = 'sine'; os.frequency.setValueAtTime(115, t); os.frequency.exponentialRampToValueAtTime(41, t + 0.18);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.006); gg.gain.exponentialRampToValueAtTime(0.0008, t + 0.9);
+      os.connect(gg).connect(this.master); os.start(t); os.stop(t + 1); os.onended = () => gg.disconnect(); return; }
+    if (type === 'bass') { const a = c.createOscillator(), b = c.createOscillator(), f = bq('lowpass', 240, 6), gg = g(0); a.type = 'sawtooth'; b.type = 'sine';
+      const hz = this.hz(o.m); a.frequency.value = hz; b.frequency.value = hz;
+      f.frequency.setValueAtTime(140, t); f.frequency.linearRampToValueAtTime(140 + 260 * o.open, t + o.d * 0.5); f.frequency.linearRampToValueAtTime(120, t + o.d);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.02); gg.gain.setTargetAtTime(0, t + o.d * 0.8, 0.08);
+      a.connect(f); b.connect(gg); f.connect(gg); gg.connect(this.master); a.start(t); b.start(t); a.stop(t + o.d + 0.6); b.stop(t + o.d + 0.6); a.onended = () => gg.disconnect(); return; }
+    if (type === 'thump') { const s = c.createBufferSource(); s.buffer = this.brown; const f = bq('lowpass', 210 + 160 * o.s, 0.8), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      const os = c.createOscillator(); os.type = 'sine'; os.frequency.setValueAtTime(62, t); os.frequency.exponentialRampToValueAtTime(38, t + 0.4); const og = g(0);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v * 1.4, t + 0.03); gg.gain.setTargetAtTime(0, t + 0.1, 0.5 + o.s * 0.5);
+      og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(o.v * 0.6, t + 0.01); og.gain.exponentialRampToValueAtTime(0.0005, t + 0.8);
+      s.connect(f).connect(gg).connect(p); os.connect(og).connect(p); p.connect(this.master); p.connect(this.room.rIn); if (o.throw) p.connect(this.echo.eIn);
+      s.start(t, rr(0, 7)); s.stop(t + 3.5); os.start(t); os.stop(t + 1); s.onended = () => p.disconnect(); return; }
+    
+    if (type === 'swell') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('lowpass', 300, 0.7), gg = g(0); f.frequency.setValueAtTime(200, t); f.frequency.exponentialRampToValueAtTime(1400, t + o.d);
+      gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(o.v, t + o.d); gg.gain.linearRampToValueAtTime(0, t + o.d + 0.04);
+      s.connect(f).connect(gg); gg.connect(this.master); gg.connect(this.room.rIn); s.start(t, rr(0, 4)); s.stop(t + o.d + 0.1); s.onended = () => gg.disconnect(); return; }
+    if (type === 'knock') { const os = c.createOscillator(), gg = g(0), f = bq('bandpass', 320, 4), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'triangle'; os.frequency.value = rr(180, 260);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.004); gg.gain.exponentialRampToValueAtTime(0.0005, t + 0.25);
+      os.connect(f).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); os.start(t); os.stop(t + 0.3); os.onended = () => p.disconnect(); }
+  },
+  euclid(k, n, rot) { const out = []; for (let i = 0; i < n; i++) out.push(((i + rot) * k) % n < k); return out; },
+  sched() {
+    const c = this.ctx; if (!c || c.state !== 'running') return;
+    const ahead = c.currentTime + 0.6;
+    if (this.nextT < c.currentTime - 0.3) this.nextT = c.currentTime + 0.05;   // skip after a stall
+    while (this.nextT < ahead) {
+      const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16;
+      const hush = live.ev === 'hush';
+      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(6.6-2.45*clamp(HYD.q/42,0,1),4.15,6.6), 0.5);
+        if (this.bar % 4 === 0) this.chord(t); }
+      const kp = this.euclid(S.epoch % 3 === 0 ? 3 : 2, 16, 0), bp = this.euclid(S.epoch % 2 ? 5 : 4, 16, 3);
+      if (!hush && kp[st]) this.voice('kick', t, { v: st === 0 ? 0.55 : 0.4 });
+      if (!hush && bp[st] && keeper.visible) { const stop = STOPS[keeper.target] || STOPS.WEST; const d = keeper.state === 'walk' ? (st % 2 ? 2 : stop.deg) : stop.deg;
+        this.voice('bass', t, { m: this.deg(d, 1) - 12, d: sixteenth * rr(2, 4), v: 0.32, open: clamp(WX.wind / 14, 0.15, 1) }); }
+      if (!hush && !keeper.visible && st === 8) this.voice('bass', t, { m: this.deg(0, 0), d: sixteenth * 6, v: 0.22, open: 0.1 });
+      if (this.pend.length) { this.pend.sort((a, b) => b.s - a.s); const p = this.pend.shift(); this.pend.length = 0;
+        if (p.v > 0.01) this.voice('thump', t, { s: p.s, v: clamp(p.v, 0, 0.6), pan: p.pan, throw: p.s > 0.75 && rnd() < 0.4 }); }
+      if (live.ev === 'warren' && (st === 6 || st === 13) && rnd() < 0.22) this.voice('knock',t,{v:0.045*live.apparition,pan:0});
+      this.step++; this.nextT += sixteenth; this.cur16 = st;
+    }
+    // echo time follows the bar
+    const tq = this.barSec / 16 * 3; this.echo.dL.delayTime.setTargetAtTime(tq, c.currentTime, 0.5); this.echo.dR.delayTime.setTargetAtTime(tq * 2 / 3 * 1.5 / 1.5 + this.barSec / 16, c.currentTime, 0.5);
+  },
+  chord(t) { const prog = [[0, 2, 4], [1, 3, 5], [6, 1, 3], [3, 5, 0]]; const ch = prog[this.chordI++ % prog.length];
+    this.pad.forEach((v, i) => { const hz = this.hz(this.deg(ch[i], 1)); v.a.frequency.setTargetAtTime(hz, t, 0.6); v.b.frequency.setTargetAtTime(hz, t, 0.6); }); },
+  event(name, on) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    if (name === 'warren') { this.eyeG.gain.setTargetAtTime(on ? 0.5 : 0, t, on ? 4 : 3); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.18 }); }
+    if (name === 'warren') this.wreG.gain.setTargetAtTime(on ? 0.035 : 0, t, 3);
+    if (name === 'hush' && on) this.voice('swell', t, { d: 6, v: 0.12 }); },
+  rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.22 }); this.voice('kick', t + this.barSec, { v: 0.6 });
+    this.voice('thump', t + this.barSec, { s: 1, v: 0.5, pan: 0, throw: true }); this.retune(false); },
+  frame(dt) {
+    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime;
+    const shore = clamp(SHORE_ENV, 0, 1.5), calm = live.calm;
+    this.water.forEach((s, i) => { s.g.gain.setTargetAtTime((0.025 + 0.19 * shore + 0.05 * (.1+HYD.q/65)) * calm, t, 0.25); s.f.frequency.setTargetAtTime(170 + 330 * shore + 40 * (.1+HYD.q/65), t, 0.3); });
+    this.wind.g.gain.setTargetAtTime(Math.pow(WX.wind, 1.3) * 0.0032 * (live.ev === 'hush' ? 0.2 : 1), t, 0.8); this.wind.f.frequency.setTargetAtTime(220 + WX.wind * 22, t, 1);
+    this.wind.p.pan.setTargetAtTime(0.5 * Math.sin(simT * 0.07), t, 1);
+    this.rain.g.gain.setTargetAtTime(clamp(WX.precip, 0, 4) * 0.02, t, 1);
+    this.padBus.gain.setTargetAtTime((0.25 + 0.35 * (1 - SH.uDay.value)) * (live.ev === 'hush' ? 0.1 : 1), t, 2);
+    this.padLP.frequency.setTargetAtTime(420 + clamp(WX.temp, 0, 25) * 22, t, 2);
+    this.sub.g.gain.setTargetAtTime(Math.abs(live.breath) / 2.4 * 0.22 * (0.5 + 0.5 * Math.sin(simT * TAU / ((8+HYD.q/20) * 1.5))), t, 0.3);
+    this.grind.g.gain.setTargetAtTime(live.ev === 'warren' ? live.apparition * 0.09 * (0.6 + 0.4 * Math.sin(simT * 0.9)) : 0, t, 0.5);
+    const fb = clamp(0.32 + (WX.hum - 70) / 100 + (live.ev ? 0.12 : 0), 0.2, 0.68); this.echo.fbL.gain.setTargetAtTime(fb, t, 1); this.echo.fbR.gain.setTargetAtTime(fb, t, 1);
+    this.room.rOut.gain.setTargetAtTime(0.4 + 0.3 * clamp(WX.precip, 0, 1) + 0.2 * (1 - SH.uDay.value), t, 2);
+    this.wreO.forEach((o, i) => o.detune.setTargetAtTime(6 * Math.sin(simT * 0.3 + i), t, 0.5));
+  },
+};
+let SHORE_ENV = 0;
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(o){super();this.b=!!(o.processorOptions&&o.processorOptions.brown);this.l=[0,0];}
+process(_,outs){const o=outs[0];for(let c=0;c<o.length;c++){const d=o[c];let l=this.l[c]||0;for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(this.b){l=(l+0.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}this.l[c]=l;}return true;}}
+registerProcessor('mz-noise',N);`;
+const OUT_GAIN = 0.4;
+
+/* ====================================================================== camera crew (nine independent observational operators) */
+const CREW=[
+ {name:'SPILLWAY',fov:43,p:V(4,52,-132),upd(c,t){c.tgt.set(Math.sin(t/75)*8,10,1)}},
+ {name:'WEST WORKS',fov:48,p:V(-126,41,-36),upd(c,t){c.tgt.set(-61,25,17)}},
+ {name:'CREST ROAD',fov:46,p:V(-48,33,20),upd(c,t){c.tgt.set(lerp(-12,25,.5+.5*Math.sin(t/48)),30,3)}},
+ {name:'KEEPER',fov:40,p:V(-91,34,17),upd(c,t){const want=keeper.pos.clone().add(V(-7,3.1,11));c.p.lerp(want,.025);c.tgt.lerp(keeper.pos.clone().add(V(4,1.3,0)),.035)}},
+ {name:'TAILWATER',fov:51,p:V(41,9,-89),upd(c,t){c.tgt.set(-12+12*Math.sin(t/83),15,0)}},
+ {name:'EAST GAUGE',fov:32,p:V(89,36,21),upd(c,t){c.tgt.set(79,32,3)}},
+ {name:'UPSTREAM',fov:50,p:V(-103,46,138),upd(c,t){c.tgt.set(0,25,1)}},
+ {name:'LONG LENS',fov:18,p:V(171,64,-208),upd(c,t){c.tgt.set(6,24,4)}},
+ {name:'WATERLINE',fov:38,p:V(31,23,108),upd(c,t){c.tgt.set(-9,20,163+9*Math.sin(t/60))}}
+];
+for(const c of CREW)c.tgt=V(0,20,0);
+const DIR={cur:0,until:0,pendingCut:-1,last16:-1,look:null};
+function cut(i){DIR.cur=clamp(Math.floor(i),0,CREW.length-1);DIR.until=simT+rr(8,19);DIR.pendingCut=-1}
+function chooseShot(){
+ const weights=CREW.map((c,i)=>Math.max(.2,1+(i===3&&keeper.state==='walk'?2.3:0)+(i===0&&HYD.q>2?1.5:0)+(i===8 && HYD.level < 21 ? 0.5 : 0)-(DIR.cur === i ? .65 : 0)));
+ let r=rnd()*weights.reduce((a,b)=>a+b,0);for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0)return i}return 0;
+}
+
+/* ====================================================================== sim */
+let SUNM=sunMoon(simMs),SUND=V(),MOOND=V();
+let cwNow=COLORWAYS[S.colorway].c.map(hexV),cwFrom=cwNow.map(v=>v.clone()),cwMix=1;
+function keeperTick(dt){
+ const hour=localParts(simMs).hour,tooWet=WX.precip>2||WX.wind>15,off=hour<5.5||hour>21;
+ if(keeper.state==='dwell'){
+  keeper.still+=dt;keeper.dwell-=dt;
+  if(keeper.dwell<=0){
+   if(off||tooWet){keeper.target='WEST';keeper.dwell=rr(180,540);}
+   else{
+    const keys=['WEST','WEST_GAUGE','SPILL','EAST_GAUGE','EAST'];
+    keeper.target=keys[Math.floor(rnd()*keys.length)];
+    keeper.dwell=rr(45,140);
+   }
+   if(Math.abs(keeper.x-STOPS[keeper.target].x)>.4){keeper.state='walk';keeper.still=0;}
+  }
+ }else{
+  const goal=STOPS[keeper.target].x,dir=Math.sign(goal-keeper.x);
+  const dist=Math.min(1.12*dt,Math.abs(goal-keeper.x));
+  keeper.x+=dir*dist;keeper.walked+=dist;keeper.dir.set(dir,0,0);
+  if(Math.abs(keeper.x-goal)<.05){
+   keeper.x=goal;keeper.state='dwell';keeper.dwell=rr(75,210);keeper.still=0;
+   keeper.stopName=STOPS[keeper.target].name;
+   if(keeper.target.includes('GAUGE')){
+    S.inspections++;S.inspected[keeper.target]=(S.inspected[keeper.target]||0)+1;
+    logEv('keeper checked '+keeper.stopName+' · inspection '+S.inspections);
+   }else if(rnd()<.22)logEv('keeper reached '+keeper.stopName);
+  }
+ }
+ if(!Number.isFinite(keeper.x))keeper.x=-88;
+ keeper.pos.set(keeper.x,CREST+.4,3);keeper.visible=!(off||tooWet)&&keeper.state!=='dwell'||(!(off||tooWet)&&keeper.target!=='WEST');
+ const m=keeper.mesh;m.visible=keeper.visible;m.position.copy(keeper.pos);m.rotation.y=keeper.dir.x>=0?Math.PI/2:-Math.PI/2;
+ if(keeper.state==='walk')m.position.y+=.035*Math.sin(keeper.walked*8);
+ keeper.move=lerp(keeper.move,keeper.state==='walk'?1:0,1-Math.exp(-dt*2));
+}
+function birdsTick(dt){
+ for(let i=0;i<birds.length;i++){
+  const b=birds[i];b.a+=dt*b.speed*(1+WX.wind*.025);
+  const x=Math.cos(b.a)*b.r,z=120+i*34+Math.sin(b.a)*b.r;
+  b.p.set(x,HYD.level+.17,z);b.mesh.position.copy(b.p);b.mesh.rotation.y=-b.a;
+ }
+}
+function step(dt){
+ dt=clamp(dt,0,.25);const d=dt*RATE;simT+=d;simMs+=d*1000;
+ if(!WX.live||Date.now()-WX.at>2*3600e3){
+  if(WX.live&&Date.now()-WX.at>2*3600e3){WX.live=false;logEv('stale weather · simulated fallback')}
+  Object.assign(WXT,synthWx(simMs));
+ }
+ for(const k of ['wind','cloud','precip','temp','hum'])WX[k]=lerp(WX[k],WXT[k],1-Math.exp(-d/90));
+ let wd=((WXT.windDir-WX.windDir+540)%360)-180;WX.windDir+=wd*(1-Math.exp(-d/120));
+ hydraulicsTick(d);SUNM=sunMoon(simMs);SUND.copy(azElToVec(SUNM.sun.az,SUNM.sun.el));MOOND.copy(azElToVec(SUNM.moon.az,SUNM.moon.el));
+ keeperTick(d);birdsTick(d);
+ S.tension+=d/S.epochLen*(live.ev?.3:1);
+ uncannyTick(d);
+ live.calm=lerp(live.calm,live.ev==='hush'?.015:1,1-Math.exp(-d/4));
+ live.apparition=lerp(live.apparition,live.ev==='warren'?smoothstep(0,17,live.evT)*smoothstep(0,17,live.evDur-live.evT):0,1-Math.exp(-d/3));
+ live.breath=lerp(live.breath,live.ev==='warren'?.9*Math.sin(simT/9)*live.apparition:0,1-Math.exp(-d));
+ GHOST.visible=live.apparition>.07&&HYD.level<20.6;
+ GHOST.position.y=HYD.level+.08;
+ GHOST.children.forEach(m=>{m.material.uniforms.uGhost.value=live.apparition});
+ gauges.forEach(g=>{g.needle.rotation.z=.2*Math.sin(simT*.05+g.x)+.15*clamp(HYD.q/20,0,1)});
+ SHORE_ENV=lerp(SHORE_ENV,HYD.q/32,1-Math.exp(-d*.8));
+ if(HYD.q>1&&rnd()<d*.34){const p=V(rr(-35,35),-.2,-35),v=AUD.lens(p);AUD.pend.push({s:clamp(HYD.q/30,0,1),v:v.g*.4,pan:v.pan})}
+ if(simT>=DIR.until&&DIR.pendingCut<0)DIR.pendingCut=chooseShot();
+ if(DIR.pendingCut>=0&&(!AUD.ctx||AUD.ctx.state!=='running'||AUD.cur16!==DIR.last16)){cut(DIR.pendingCut);DIR.pendingCut=-1}
+ DIR.last16=AUD.cur16;CREW.forEach(c=>c.upd(c,simT));
+ if(simT-(S._saved||0)>60){S._saved=simT;save()}
+}
+
+/* ====================================================================== render */
+function applyLook(dt){
+ const c=DIR.look||CREW[DIR.cur];
+ camera.position.copy(c.p);camera.lookAt(c.tgt);camera.fov=c.fov;
+ camera.updateProjectionMatrix();camera.updateMatrixWorld();
+ if(!Number.isFinite(camera.position.x)){camera.position.set(1,50,-110);camera.lookAt(0,18,0)}
+ SH.uVP.value.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
+ SH.uAspect.value=camera.aspect;SH.uCamP.value.copy(camera.position);SH.uTime.value=simT;
+ const se=SUNM.sun.el,me=SUNM.moon.el,day=smoothstep(-.2,.18,se),cloudDim=1-.55*WX.cloud;
+ SH.uDay.value=day;SH.uSunD.value.copy(SUND);
+ if(se>-.06){SH.uKeyD.value.copy(SUND);SH.uDiff.value=(.18+.62*smoothstep(-.06,.35,se))*cloudDim;
+ SH.uKeyUp.value=smoothstep(-.03,.05,se)*(1-.7*WX.cloud)}
+ else{SH.uKeyD.value.copy(me>0?MOOND:V(0,1,0));SH.uDiff.value=me>0?.2*SUNM.illum*cloudDim:.04;
+ SH.uKeyUp.value=me>0?.6*SUNM.illum*(1-WX.cloud):0}
+ SH.uAmb.value=.13+.3*day+.08*WX.cloud*day;
+ SH.uFogD.value=clamp(1800-1100*smoothstep(72,100,WX.hum)-350*clamp(WX.precip,0,2),400,2200);
+ SH.uFogShade.value=.12+.55*day;SH.uBreath.value=0;
+ skyU.uCloud.value=WX.cloud;const wd=fromBearingTravel(WX.windDir);skyU.uWind.value.set(wd.x,wd.y).multiplyScalar(WX.wind);
+ sky.position.copy(camera.position);
+ const place=(m,dir,deg,up)=>{m.position.copy(camera.position).addScaledVector(dir,15000);m.quaternion.copy(camera.quaternion);const scale=2*15000*Math.tan(deg*D2R);m.scale.set(scale,scale,1);m.visible=up};
+ place(sunM,SUND,3.3,se>-.08);place(moonM,MOOND,1.6,me>-.05&&se<.1);
+ sunM.material.uniforms.uOpen.value=0;moonM.material.uniforms.uOpen.value=0;
+ sunM.material.uniforms.uDim.value=1-.35*WX.cloud;moonM.material.uniforms.uIllum.value=SUNM.illum;
+ if(cwMix<1)cwMix=Math.min(1,cwMix+dt/45);
+ const target=COLORWAYS[S.colorway].c.map(hexV);
+ for(let i=0;i<6;i++){cwNow[i].copy(cwFrom[i]).lerp(target[i],smoothstep(0,1,cwMix));PU.uPal.value[i].copy(cwNow[i])}
+ const g=S.grammar;PU.uPeriod.value=g.period*IH/720;PU.uDith.value=g.dith;
+ PU.uWob.value=g.wob*IH/720;PU.uOutline.value=g.outline;PU.uHatch.value=g.hatch;
+ SH.uPerPx.value=g.period*IH/720;SH.uWobPx.value=g.wob*IH/720;
+ SH.uPxK.value=2*Math.tan(camera.fov*D2R/2)/Math.max(64,IH);
+ PU.uRain.value=clamp(WX.precip/2,0,1);PU.uRainDir.value.set(wd.x*.35,-1).normalize();PU.uTime.value=simT;
+ const css=v=>'#'+v.toArray().map(x=>Math.round(clamp(x,0,1)*255).toString(16).padStart(2,'0')).join('');
+ const rs=document.documentElement.style;rs.setProperty('--ink',css(cwNow[0]));rs.setProperty('--paper',css(cwNow[5]));
+ rs.setProperty('--hot',css(cwNow[3]));rs.setProperty('--deep',css(cwNow[1]));
+}
+function render(){
+ renderer.setRenderTarget(rtData);renderer.setClearColor(0x000000,0);renderer.clear();renderer.render(scene,camera);
+ quad.material=printMat;renderer.setRenderTarget(rtPrint);renderer.render(postScene,postCam);
+ quad.material=blitMat;renderer.setRenderTarget(null);renderer.render(postScene,postCam);
+}
+
+/* ====================================================================== info box */
+const hud=document.getElementById('hud');hud.hidden=!INFO;
+const tapBtn=document.getElementById('tap');
+function hudUpdate(){
+ if(!INFO)return;
+ const t=localParts(simMs),e=SUNM.sun.el/D2R,az=(SUNM.sun.az/D2R+360)%360;
+ const kd=keeper.visible?(keeper.state==='walk'?'walking toward '+STOPS[keeper.target].name:'at '+keeper.stopName):'off duty';
+ const dg=STOPS[keeper.target].deg;
+ const recent=S.log.slice(0,4).map(l=>'<div>'+l.t+' — '+l.text+'</div>').join('');
+ const ev=live.ev?'<div class="ev">NOW · '+EVT[live.ev].label+' · '+live.why+'</div>':'';
+ hud.innerHTML='<div class="t"><span>MZ WORLD · LOCH RAVEN</span><span>EPOCH '+S.epoch+' · '+COLORWAYS[S.colorway].name+'</span></div>'+
+ '<div class="r"><span>BALTIMORE COUNTY '+t.str+' · sun '+e.toFixed(0)+'° '+compass(az)+'</span><span>'+(WX.live?'LIVE':'SIMULATED')+' WEATHER</span></div>'+
+ '<div class="r"><span>SPILLWAY FLOW INDEX '+HYD.q.toFixed(1)+' · MODELLED</span><span>→ curtain, bar '+AUD.barSec.toFixed(1)+' s</span></div>'+
+ '<div class="r"><span>RESERVOIR DATUM '+HYD.level.toFixed(1)+' · MODELLED</span><span>→ waterline, Warren threshold</span></div>'+
+ '<div class="r"><span>WIND '+WX.wind.toFixed(1)+' m/s '+compass(WX.windDir)+' · CLOUD '+Math.round(WX.cloud*100)+'%</span><span>→ leaves, sky</span></div>'+
+ '<div class="r"><span>RAIN '+WX.precip.toFixed(1)+' mm/h · HUMIDITY '+WX.hum.toFixed(0)+'%</span><span>→ rain store, echo</span></div>'+
+ '<div class="r"><span>KEEPER '+kd+' · CHECKS '+S.inspections+'</span><span>→ bass '+NOTE[AUD.deg(dg)%12]+'</span></div>'+
+ '<div class="r"><span>CAMERA '+CREW[DIR.cur].name+'</span><span>TENSION '+Math.min(99,Math.floor(S.tension*100))+'%</span></div>'+
+ ev+'<div class="log">'+recent+'</div><div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>';
+}
+
+/* ====================================================================== loop, keys, API */
+addEventListener('resize',resize);resize();
+renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();console.warn('[gl] context lost')});
+renderer.domElement.addEventListener('webglcontextrestored',()=>{resize();console.warn('[gl] context restored')});
+SUNM=sunMoon(simMs);SUND.copy(azElToVec(SUNM.sun.az,SUNM.sun.el));MOOND.copy(azElToVec(SUNM.moon.az,SUNM.moon.el));
+hydraulicsTick(.016);birdsTick(0);
+const initialHour=localParts(simMs).hour;
+if(initialHour>=5.5&&initialHour<=21){
+ const k=['WEST_GAUGE','SPILL','EAST_GAUGE'][Math.floor(rnd()*3)];
+ keeper.x=STOPS[k].x;keeper.target=k;keeper.stopName=STOPS[k].name;
+}
+keeperTick(.016);
+cut(Q.has('cam')?clamp(+Q.get('cam'),0,CREW.length-1):Math.floor(rnd()*CREW.length));
+if(Q.has('cam'))DIR.until=1e12;
+CREW.forEach(c=>c.upd(c,simT));
+function frame(dt){
+ try{step(dt);applyLook(dt);render();AUD.frame(dt)}
+ catch(e){console.error('[Loch Raven frame]',e)}
+}
+let lastT=performance.now(),hudT=0;
+function raf(now){
+ const dt=clamp((now-lastT)/1000,0,.25);lastT=now;frame(dt);
+ hudT+=dt;if(hudT>.5){hudT=0;hudUpdate()}requestAnimationFrame(raf);
+}
+if(!CAPTURE)requestAnimationFrame(raf);
+addEventListener('beforeunload',save);
+addEventListener('keydown',e=>{
+ const k=e.key.toLowerCase();
+ if(k==='i'){INFO=!INFO;hud.hidden=!INFO;if(INFO)hudUpdate()}
+ if(k==='m')AUD.mute();
+ if(k==='r'&&!live.ev){logEv('human intervention · pressure on the rupture');S.tension=1}
+ AUD.start();
+});
+addEventListener('pointerdown',()=>AUD.start());
+tapBtn.addEventListener('click',()=>AUD.start());
+AUD.init();hudUpdate();
+window.MZ={
+ tick(dt=1/30){frame(dt);hudUpdate()},
+ advance(sec,dt=.25){for(let t=0;t<sec;t+=dt)step(Math.min(dt,sec-t));applyLook(.25);render();hudUpdate()},
+ force(name){if(live.ev)endEvent();if(name==='rupture'){rupture('forced by hand');return}startEvent(name,true);hydraulicsTick(.016)},
+ cam(i){cut(i);DIR.until=1e12},
+ look(p,t,fov=30){DIR.look=p?{p:V(...p),tgt:V(...t),fov}:null},
+ ink(i){const n=clamp(Math.floor(i),0,COLORWAYS.length-1);S.colorway=n;cwMix=1;cwFrom=COLORWAYS[n].c.map(hexV);cwNow=cwFrom.map(v=>v.clone())},
+ grammar(g){Object.assign(S.grammar,g)},
+ seekHour(h){const cur=localParts(simMs).hour;simMs+=(((h-cur)%24+24)%24)*3600e3},
+ rain(mm){HYD.rainStore=clamp(HYD.rainStore+Math.max(0,mm)/10,0,3.4);S.rainStore=HYD.rainStore;logEv('manual rain store +'+mm+' mm (simulated)')},
+ h:(x,z)=>terrainH(x,z),
+ get keeperPos(){return keeper.pos.toArray()},
+ get keeperDir(){return keeper.dir.toArray()},
+ get sunDir(){return SUND.toArray()},
+ keeperWalk(from,to){if(!STOPS[from]||!STOPS[to])return;keeper.x=STOPS[from].x;keeper.target=to;keeper.state='walk';keeper.visible=true},
+ geo:{LAT,LON,CREST,LIP,SPILL_HALF,DAM_HALF,STOPS},
+ get state(){return {S,live:{...live},WX:{...WX},HYD:{...HYD},cam:CREW[DIR.cur].name,keeper:{target:keeper.target,state:keeper.state,visible:keeper.visible,pos:keeper.pos.toArray()}}},
+ setWx(o){Object.assign(WXT,o);Object.assign(WX,o);WX.live=true;WX.at=Date.now()},
+ analyser(){return AUD.an},
+ audio:AUD
+};
+</script>
