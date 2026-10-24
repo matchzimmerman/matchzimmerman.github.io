@@ -989,48 +989,60 @@ function hudUpdate(){
 }
 
 /* ====================================================================== loop, keys, API */
-addEventListener('resize', resize); resize();
-renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
-renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); seaU.uHt.value.needsUpdate = true; console.warn('[gl] context restored'); });
-rebuildWaves(); SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
-cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : Math.floor(rnd() * CREW.length));
-if (Q.has('cam')) DIR.until = 1e12;
-// a keeper who is already out, if the day is up
-if (SUNM.sun.el > 0 && WX.precip < 1.5 && rnd() < 0.8) { const k = ['CLIFF', 'LANDING', 'PIER_END', 'STAIR_TOP'][Math.floor(rnd() * 4)]; keeper.s = STOPS[k].s; keeper.target = k; keeper.stopName = STOPS[k].name; keeper.visible = true; keeper.dwell = rr(30, 200); }
-function frame(dt) {
-  try { step(dt); applyLook(dt); render(); AUD.frame(dt); }
-  catch (e) { console.error(e); }
+addEventListener('resize',resize);resize();
+renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();console.warn('[gl] context lost')});
+renderer.domElement.addEventListener('webglcontextrestored',()=>{resize();console.warn('[gl] context restored')});
+SUNM=sunMoon(simMs);SUND.copy(azElToVec(SUNM.sun.az,SUNM.sun.el));MOOND.copy(azElToVec(SUNM.moon.az,SUNM.moon.el));
+hydraulicsTick(.016);birdsTick(0);
+const initialHour=localParts(simMs).hour;
+if(initialHour>=5.5&&initialHour<=21){
+ const k=['WEST_GAUGE','SPILL','EAST_GAUGE'][Math.floor(rnd()*3)];
+ keeper.x=STOPS[k].x;keeper.target=k;keeper.stopName=STOPS[k].name;
 }
-let lastT = performance.now(), hudT = 0;
-function raf(now) { const dt = (now - lastT) / 1000; lastT = now; frame(dt); hudT += dt; if (hudT > 0.5) { hudT = 0; hudUpdate(); } requestAnimationFrame(raf); }
-if (!CAPTURE) requestAnimationFrame(raf);
-addEventListener('beforeunload', save);
-addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
-  if (k === 'i') { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); }
-  if (k === 'm') AUD.mute();
-  if (k === 'r' && !live.ev) { logEv('a hand on the headland (human intervention)'); S.tension = 1; }
-  AUD.start(); });
-addEventListener('pointerdown', () => AUD.start());
-tapBtn.addEventListener('click', () => AUD.start());
-AUD.init(); hudUpdate();
-window.MZ = {
-  tick(dt = 1 / 30) { frame(dt); hudUpdate(); },
-  advance(sec, dt = 0.25) { for (let t = 0; t < sec; t += dt) step(dt); applyLook(sec); render(); hudUpdate(); },
-  force(name) { if (live.ev) endEvent(); if (name === 'rupture') { rupture('forced by hand'); return; } if (name === 'reach') { S.reachTonight = true; S.pierExt = MAXBAYS * 0.6; return; } startEvent(name, true); },
-  cam(i) { cut(i); DIR.until = 1e12; },
-  look(p, t, fov = 30) { DIR.look = p ? { p: V(...p), tgt: V(...t), fov } : null; },
-  get keeperPos() { return keeper.pos.toArray(); },
-  get keeperDir() { return keeper.dir.toArray(); },
-  get sunDir() { return SUND.toArray(); },
-  geo: { PIER_X, DECK, zL, zT, PIER_END_Z, HOUSE: HOUSE.toArray() },
-  keeperWalk(from, to) { keeper.s = STOPS[from].s; keeper.target = to; keeper.state = 'walk'; keeper.visible = true; keeper.nextDwell = 600; },
-  h: (x, z) => terrainH(x, z), coast: (x) => coastZ(x),
-  ink(i) { S.colorway = i; cwMix = 1; cwFrom = COLORWAYS[i].c.map(hexV); },
-  grammar(g) { Object.assign(S.grammar, g); },
-  seekHour(h) { const cur = galwayParts(simMs).hour; simMs += (((h - cur) % 24 + 24) % 24) * 3600e3; },
-  get state() { return { S, live: { ...live }, WX: { ...WX }, cam: CREW[DIR.cur].name, keeper: { target: keeper.target, state: keeper.state, visible: keeper.visible }, boat: boat.state }; },
-  setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
-  analyser() { return AUD.an; },
-  audio: AUD,
+keeperTick(.016);
+cut(Q.has('cam')?clamp(+Q.get('cam'),0,CREW.length-1):Math.floor(rnd()*CREW.length));
+if(Q.has('cam'))DIR.until=1e12;
+CREW.forEach(c=>c.upd(c,simT));
+function frame(dt){
+ try{step(dt);applyLook(dt);render();AUD.frame(dt)}
+ catch(e){console.error('[Loch Raven frame]',e)}
+}
+let lastT=performance.now(),hudT=0;
+function raf(now){
+ const dt=clamp((now-lastT)/1000,0,.25);lastT=now;frame(dt);
+ hudT+=dt;if(hudT>.5){hudT=0;hudUpdate()}requestAnimationFrame(raf);
+}
+if(!CAPTURE)requestAnimationFrame(raf);
+addEventListener('beforeunload',save);
+addEventListener('keydown',e=>{
+ const k=e.key.toLowerCase();
+ if(k==='i'){INFO=!INFO;hud.hidden=!INFO;if(INFO)hudUpdate()}
+ if(k==='m')AUD.mute();
+ if(k==='r'&&!live.ev){logEv('human intervention · pressure on the rupture');S.tension=1}
+ AUD.start();
+});
+addEventListener('pointerdown',()=>AUD.start());
+tapBtn.addEventListener('click',()=>AUD.start());
+AUD.init();hudUpdate();
+window.MZ={
+ tick(dt=1/30){frame(dt);hudUpdate()},
+ advance(sec,dt=.25){for(let t=0;t<sec;t+=dt)step(Math.min(dt,sec-t));applyLook(.25);render();hudUpdate()},
+ force(name){if(live.ev)endEvent();if(name==='rupture'){rupture('forced by hand');return}startEvent(name,true);hydraulicsTick(.016)},
+ cam(i){cut(i);DIR.until=1e12},
+ look(p,t,fov=30){DIR.look=p?{p:V(...p),tgt:V(...t),fov}:null},
+ ink(i){const n=clamp(Math.floor(i),0,COLORWAYS.length-1);S.colorway=n;cwMix=1;cwFrom=COLORWAYS[n].c.map(hexV);cwNow=cwFrom.map(v=>v.clone())},
+ grammar(g){Object.assign(S.grammar,g)},
+ seekHour(h){const cur=localParts(simMs).hour;simMs+=(((h-cur)%24+24)%24)*3600e3},
+ rain(mm){HYD.rainStore=clamp(HYD.rainStore+Math.max(0,mm)/10,0,3.4);S.rainStore=HYD.rainStore;logEv('manual rain store +'+mm+' mm (simulated)')},
+ h:(x,z)=>terrainH(x,z),
+ get keeperPos(){return keeper.pos.toArray()},
+ get keeperDir(){return keeper.dir.toArray()},
+ get sunDir(){return SUND.toArray()},
+ keeperWalk(from,to){if(!STOPS[from]||!STOPS[to])return;keeper.x=STOPS[from].x;keeper.target=to;keeper.state='walk';keeper.visible=true},
+ geo:{LAT,LON,CREST,LIP,SPILL_HALF,DAM_HALF,STOPS},
+ get state(){return {S,live:{...live},WX:{...WX},HYD:{...HYD},cam:CREW[DIR.cur].name,keeper:{target:keeper.target,state:keeper.state,visible:keeper.visible,pos:keeper.pos.toArray()}}},
+ setWx(o){Object.assign(WXT,o);Object.assign(WX,o);WX.live=true;WX.at=Date.now()},
+ analyser(){return AUD.an},
+ audio:AUD
 };
 </script>
