@@ -1,4 +1,4 @@
-# ONE EDIT — Simulation model, v0.1
+# ONE EDIT — Simulation model, v0.2
 
 ## What is represented
 
@@ -52,3 +52,14 @@ A deterministic seeded PRNG creates matched starting fields. Each run records se
 ## v0.2 — Interpretive guidance
 
 The experience now supplies explanations at the point of observation. A phase-sensitive field guide identifies yeast, invites cell inspection and modification, then explains why DNA function, phenotype, and environmental adenine may diverge. A magnified budding-yeast silhouette is illustrative, not microscope imagery. This does not model actual molecular Cas9 cutting or repair. The gene-function and colony-color relationship is sourced; pulse success probability, replication speed, and pigment are uncalibrated artistic choices.
+
+
+## Event evidence and ancestry
+
+Cells store a stable `parent` ID. `ancestor` is the directly edited cell that began an altered branch, not necessarily a starting cell. Inherited `changed` records intervention history independently of `genome` and pigment; restoring ADE2 also produces an altered lineage. Family rings follow a common starting cell, including relatives that did not receive an edit. Edit-history diamonds follow `changed` only.
+
+The editing PRNG is separate from the growth PRNG so a failed pulse does not itself consume growth randomness and create apparent divergence. Once growth diverges, stochastic geometry can diverge too; counts are qualitative outcomes, not measurements of biological fitness.
+
+The detector stores a beat, relevant cell, and evidence snapshot per observation. Inheritance requires an actual daughter with an edited ancestor; redness/paleness use fictional visual thresholds; restoration fading compares a directly restored cell with its pigment at the pulse. Nutrient observations compare the same disrupted cell with its state at the most recent environment change, require unchanged gene function and an appropriate directional pigment change. They do not infer environmental causation from a changing population average. These checks illustrate the model's relationships, not independent experimental proof. Observations are deduplicated by event type (environment events also by change beat and setting).
+
+Both fields stop division at 760 cells independently; pigment remains responsive. Saturation is explicitly announced for each field and should never be read as biological arrest or competition. There is no death or continuous turnover. Initial adenine and scenario must be restored when replaying a run; seed alone determines neither intervention timing nor visitor choices. The capture interface advances integer beats and returns copied state; it does not expose mutable simulation internals.

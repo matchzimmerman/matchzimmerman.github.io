@@ -12,11 +12,15 @@ Allow visitor-selected location, modeled reach and incomplete uptake. Change onl
 ## 4. Render delayed consequences [COMPLETE, V0.1]
 Add genotype inheritance, delayed red pigmentation, environment-sensitive growth and an evidence comparison trace. Include alternative restore-function scenario.
 
-## 5. Expand embodied observation [FIRST PASS, V0.1]
-Introduce a quiet four-voice stereo sound field and lineage-trace overlay. Next: inspectable lineages, zoomable 3D/2.5D colony topology, accessibility improvements, tangible delayed audio changes, documentary camera bookmarks.
+## 5. Expand embodied observation [CONTEXTUAL LAYER COMPLETE, V0.2]
+Introduce a quiet four-voice stereo sound field and lineage-trace overlay. v0.2 adds inspectable ancestry, keyboard/touch navigation, family and edit-history symbols, progressive control context and an evidence-driven observation ledger. Next: novice visitor sessions, physical mobile and screenreader checks, low-power performance and perceptual audio review. Zoomable topology and documentary camera bookmarks remain optional artistic investigations.
 
 ## 6. Validate, publish and investigate [NEXT]
 Review the qualitative model with a qualified yeast geneticist. Run observational artist/studio sessions to evaluate felt understanding, not facts memorized. Publish the work as a freely accessible standalone world, with evidence notes, source links, version numbers and transparent distinctions between published biology and the art model. If a collaborator supplies real biological datasets later, add an optional *data-grounded* playback mode rather than silently substituting measured data for simulated dynamics.
 
 ## Publication gate
 Before identifying this as scientifically validated: independent biology review, mobile/keyboard/screenreader testing, performance test on low-power devices, reproducibility review for exported traces, and external hosting with secure headers. The current artifact is a playable exploratory prototype, not a peer-reviewed simulation.
+
+## v0.2 delivery evidence
+
+Automated Chromium checks exercise actual browser controls and the documented deterministic capture API: matched populations, disruptive/restorative pulses, no-change outcome, inherited instructions, pigment lag, same-cell environmental changes, scarce adenine, saturation, replay, JSON downloads, keyboard/touch and responsive layout. See `tests/browser.cjs` and README verification limits. The artwork is ready for exploratory publication through the existing GitHub Pages workflow; independent scientific validation and observed comprehension with genetics novices are still pending.
