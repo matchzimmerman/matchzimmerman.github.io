@@ -929,68 +929,63 @@ function step(dt){
 }
 
 /* ====================================================================== render */
-function applyLook(dt) {
-  const c = DIR.look || CREW[DIR.cur]; camera.position.copy(c.p); camera.lookAt(c.tgt); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
-  if (!isFinite(camera.position.x)) { camera.position.set(0, 30, 60); camera.lookAt(0, 0, -200); }
-  SH.uVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); SH.uAspect.value = camera.aspect; SH.uCamP.value.copy(camera.position); SH.uTime.value = simT;
-  const sEl = SUNM.sun.el, mEl = SUNM.moon.el;
-  const day = smoothstep(-0.2, 0.18, sEl); SH.uDay.value = day; SH.uSunD.value.copy(SUND);
-  const cloudDim = 1 - 0.55 * WX.cloud;
-  if (sEl > -0.06) { SH.uKeyD.value.copy(SUND); SH.uDiff.value = (0.18 + 0.62 * smoothstep(-0.06, 0.35, sEl)) * cloudDim; SH.uKeyUp.value = smoothstep(-0.03, 0.05, sEl) * (1 - 0.7 * WX.cloud); }
-  else { SH.uKeyD.value.copy(mEl > 0 ? MOOND : V(0, 1, 0)); SH.uDiff.value = mEl > 0 ? 0.2 * SUNM.illum * cloudDim : 0.04; SH.uKeyUp.value = mEl > 0 ? 0.6 * SUNM.illum * (1 - WX.cloud) : 0; }
-  SH.uAmb.value = 0.13 + 0.3 * day + 0.08 * WX.cloud * day;
-  SH.uFogD.value = clamp(2400 - 1500 * smoothstep(72, 100, WX.hum) - 500 * clamp(WX.precip, 0, 2), 500, 2600);
-  SH.uFogShade.value = 0.12 + 0.55 * day;
-  SH.uBreath.value = live.breath;
-  seaU.uCalm.value = live.calm; seaU.uSkyB.value = 0.2 + 0.6 * day;
-  skyU.uCloud.value = WX.cloud; const wd = fromBearingTravel(WX.windDir); skyU.uWind.value.set(wd.x, wd.y).multiplyScalar(WX.wind);
-  sky.position.copy(camera.position);
-  // discs: screen-aligned billboards so their lines are in screen space
-  const place = (m, dir, deg, up) => { m.position.copy(camera.position).addScaledVector(dir, 15000); m.quaternion.copy(camera.quaternion); const s = 2 * 15000 * Math.tan(deg * D2R); m.scale.set(s, s, 1); m.visible = up; };
-  place(sunM, SUND, 3.3, sEl > -0.08); place(moonM, MOOND, 1.6, mEl > -0.05 && sEl < 0.1);
-  const eyeOnSun = live.subject !== 'moon';
-  const gaze = (m, dir) => { const tgt = keeper.visible ? keeper.pos : PIER_END; const v = tgt.clone().sub(m.position).normalize();
-    const right = V(1, 0, 0).applyQuaternion(camera.quaternion), up = V(0, 1, 0).applyQuaternion(camera.quaternion); return new THREE.Vector2(v.dot(right), v.dot(up)).multiplyScalar(0.9).clampLength(0, 0.12); };
-  sunM.material.uniforms.uOpen.value = eyeOnSun ? live.eyeOpen : 0; sunM.material.uniforms.uBlink.value = live.blink; sunM.material.uniforms.uGaze.value.copy(gaze(sunM, SUND));
-  sunM.material.uniforms.uDim.value = 1 - 0.35 * WX.cloud;
-  moonM.material.uniforms.uOpen.value = eyeOnSun ? 0 : live.eyeOpen; moonM.material.uniforms.uBlink.value = live.blink; moonM.material.uniforms.uIllum.value = SUNM.illum; moonM.material.uniforms.uGaze.value.copy(gaze(moonM, MOOND));
-  // lamps at night
-  const night = sEl < 0.02; LAMPS.forEach((l, i) => { const on = night && (i === 0 ? !keeper.visible : (i === LAMPS.length - 1 ? boat.out || true : true));
-    l.material.uniforms.uId.value = on ? 15 : 7; l.material.uniforms.uEmit.value = on ? 1 : 0; });
-  // inks
-  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
-  const target = COLORWAYS[S.colorway].c.map(hexV);
-  for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
-  const gm = S.grammar; PU.uPeriod.value = gm.period * IH / 720; PU.uDith.value = gm.dith; PU.uWob.value = gm.wob * IH / 720; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch;
-  PU.uRain.value = clamp(WX.precip / 2, 0, 1); const rd = fromBearingTravel(WX.windDir); PU.uRainDir.value.set(rd.x * 0.35, -1).normalize(); PU.uTime.value = simT;
-  // css inks for the info box
-  const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
-  const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1]));
+function applyLook(dt){
+ const c=DIR.look||CREW[DIR.cur];
+ camera.position.copy(c.p);camera.lookAt(c.tgt);camera.fov=c.fov;
+ camera.updateProjectionMatrix();camera.updateMatrixWorld();
+ if(!Number.isFinite(camera.position.x)){camera.position.set(1,50,-110);camera.lookAt(0,18,0)}
+ SH.uVP.value.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
+ SH.uAspect.value=camera.aspect;SH.uCamP.value.copy(camera.position);SH.uTime.value=simT;
+ const se=SUNM.sun.el,me=SUNM.moon.el,day=smoothstep(-.2,.18,se),cloudDim=1-.55*WX.cloud;
+ SH.uDay.value=day;SH.uSunD.value.copy(SUND);
+ if(se>-.06){SH.uKeyD.value.copy(SUND);SH.uDiff.value=(.18+.62*smoothstep(-.06,.35,se))*cloudDim;
+ SH.uKeyUp.value=smoothstep(-.03,.05,se)*(1-.7*WX.cloud)}
+ else{SH.uKeyD.value.copy(me>0?MOOND:V(0,1,0));SH.uDiff.value=me>0?.2*SUNM.illum*cloudDim:.04;
+ SH.uKeyUp.value=me>0?.6*SUNM.illum*(1-WX.cloud):0}
+ SH.uAmb.value=.13+.3*day+.08*WX.cloud*day;
+ SH.uFogD.value=clamp(1800-1100*smoothstep(72,100,WX.hum)-350*clamp(WX.precip,0,2),400,2200);
+ SH.uFogShade.value=.12+.55*day;SH.uBreath.value=0;
+ skyU.uCloud.value=WX.cloud;const wd=fromBearingTravel(WX.windDir);skyU.uWind.value.set(wd.x,wd.y).multiplyScalar(WX.wind);
+ sky.position.copy(camera.position);
+ const place=(m,dir,deg,up)=>{m.position.copy(camera.position).addScaledVector(dir,15000);m.quaternion.copy(camera.quaternion);const scale=2*15000*Math.tan(deg*D2R);m.scale.set(scale,scale,1);m.visible=up};
+ place(sunM,SUND,3.3,se>-.08);place(moonM,MOOND,1.6,me>-.05&&se<.1);
+ sunM.material.uniforms.uOpen.value=0;moonM.material.uniforms.uOpen.value=0;
+ sunM.material.uniforms.uDim.value=1-.35*WX.cloud;moonM.material.uniforms.uIllum.value=SUNM.illum;
+ if(cwMix<1)cwMix=Math.min(1,cwMix+dt/45);
+ const target=COLORWAYS[S.colorway].c.map(hexV);
+ for(let i=0;i<6;i++){cwNow[i].copy(cwFrom[i]).lerp(target[i],smoothstep(0,1,cwMix));PU.uPal.value[i].copy(cwNow[i])}
+ const g=S.grammar;PU.uPeriod.value=g.period*IH/720;PU.uDith.value=g.dith;
+ PU.uWob.value=g.wob*IH/720;PU.uOutline.value=g.outline;PU.uHatch.value=g.hatch;
+ PU.uRain.value=clamp(WX.precip/2,0,1);PU.uRainDir.value.set(wd.x*.35,-1).normalize();PU.uTime.value=simT;
+ const css=v=>'#'+v.toArray().map(x=>Math.round(clamp(x,0,1)*255).toString(16).padStart(2,'0')).join('');
+ const rs=document.documentElement.style;rs.setProperty('--ink',css(cwNow[0]));rs.setProperty('--paper',css(cwNow[5]));
+ rs.setProperty('--hot',css(cwNow[3]));rs.setProperty('--deep',css(cwNow[1]));
 }
-function render() {
-  renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
-  quad.material = printMat; renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
-  quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+function render(){
+ renderer.setRenderTarget(rtData);renderer.setClearColor(0x000000,0);renderer.clear();renderer.render(scene,camera);
+ quad.material=printMat;renderer.setRenderTarget(rtPrint);renderer.render(postScene,postCam);
+ quad.material=blitMat;renderer.setRenderTarget(null);renderer.render(postScene,postCam);
 }
 
 /* ====================================================================== info box */
-const hud = document.getElementById('hud'); hud.hidden = !INFO;
-const tapBtn = document.getElementById('tap');
-function hudUpdate() {
-  if (!INFO) return; const g = galwayParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360;
-  const bpm = (240 / AUD.barSec).toFixed(0);
-  const kd = keeper.visible ? (keeper.state === 'walk' ? `walking to ${STOPS[keeper.target].name}` : `at ${keeper.stopName}`) : 'indoors';
-  const deg = STOPS[keeper.state === 'walk' ? keeper.target : (Object.keys(STOPS).find(k => STOPS[k].name === keeper.stopName) || 'HOUSE')].deg;
-  const ev = live.ev ? `<div class="ev">NOW · ${live.ev === 'eye' && live.subject === 'moon' ? 'the moon has an eye open' : EVT[live.ev].label}</div>` : '';
-  hud.innerHTML = `<div class="t"><span>MZ WORLD · LOCH RAVEN</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
-  <div class="r"><span>GALWAY BAY ${g.str} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
-  <div class="r"><span>SWELL ${WX.swellH.toFixed(1)} m · ${WX.swellT.toFixed(1)} s from ${compass(WX.swellDir)}</span><span>→ sea, bar ${AUD.barSec.toFixed(1)} s (${bpm} bpm)</span></div>
-  <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · CLOUD ${(WX.cloud * 100).toFixed(0)}%</span><span>→ chop, sky drift, gulls</span></div>
-  <div class="r"><span>HUMIDITY ${WX.hum.toFixed(0)}%${WX.precip > 0.05 ? ' · RAIN ' + WX.precip.toFixed(1) + ' mm' : ''}</span><span>→ haze ${(SH.uFogD.value | 0)} m, echo</span></div>
-  <div class="r"><span>KEEPER ${kd}</span><span>→ bass on ${NOTE[AUD.deg(deg) % 12]}</span></div>
-  <div class="r"><span>BOAT ${boat.out ? 'out' : boat.state === 'home' ? 'coming home' : 'moored'} · PIER +${(Math.floor(S.pierExt) * 4)} m</span><span>${CREW[DIR.cur].name} · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
-  ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
-  <div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
+const hud=document.getElementById('hud');hud.hidden=!INFO;
+const tapBtn=document.getElementById('tap');
+function hudUpdate(){
+ if(!INFO)return;
+ const t=localParts(simMs),e=SUNM.sun.el/D2R,az=(SUNM.sun.az/D2R+360)%360;
+ const kd=keeper.visible?(keeper.state==='walk'?'walking toward '+STOPS[keeper.target].name:'at '+keeper.stopName):'off duty';
+ const dg=STOPS[keeper.target].deg;
+ const recent=S.log.slice(0,4).map(l=>'<div>'+l.t+' — '+l.text+'</div>').join('');
+ const ev=live.ev?'<div class="ev">NOW · '+EVT[live.ev].label+' · '+live.why+'</div>':'';
+ hud.innerHTML='<div class="t"><span>MZ WORLD · LOCH RAVEN</span><span>EPOCH '+S.epoch+' · '+COLORWAYS[S.colorway].name+'</span></div>'+
+ '<div class="r"><span>BALTIMORE COUNTY '+t.str+' · sun '+e.toFixed(0)+'° '+compass(az)+'</span><span>'+(WX.live?'LIVE':'SIMULATED')+' WEATHER</span></div>'+
+ '<div class="r"><span>SPILLWAY FLOW INDEX '+HYD.q.toFixed(1)+' · MODELLED</span><span>→ curtain, bar '+AUD.barSec.toFixed(1)+' s</span></div>'+
+ '<div class="r"><span>RESERVOIR DATUM '+HYD.level.toFixed(1)+' · MODELLED</span><span>→ waterline, Warren threshold</span></div>'+
+ '<div class="r"><span>WIND '+WX.wind.toFixed(1)+' m/s '+compass(WX.windDir)+' · CLOUD '+Math.round(WX.cloud*100)+'%</span><span>→ leaves, sky</span></div>'+
+ '<div class="r"><span>RAIN '+WX.precip.toFixed(1)+' mm/h · HUMIDITY '+WX.hum.toFixed(0)+'%</span><span>→ rain store, echo</span></div>'+
+ '<div class="r"><span>KEEPER '+kd+' · CHECKS '+S.inspections+'</span><span>→ bass '+NOTE[AUD.deg(dg)%12]+'</span></div>'+
+ '<div class="r"><span>CAMERA '+CREW[DIR.cur].name+'</span><span>TENSION '+Math.min(99,Math.floor(S.tension*100))+'%</span></div>'+
+ ev+'<div class="log">'+recent+'</div><div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>';
 }
 
 /* ====================================================================== loop, keys, API */
