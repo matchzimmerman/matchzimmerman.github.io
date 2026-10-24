@@ -842,44 +842,25 @@ process(_,outs){const o=outs[0];for(let c=0;c<o.length;c++){const d=o[c];let l=t
 registerProcessor('mz-noise',N);`;
 const OUT_GAIN = 0.4;
 
-/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */
-const crewP = (x, z, up) => V(x, terrainH(x, z) + up, z);
-const CREW = [
-  { name: 'HEADLAND', fov: 40, p: crewP(-122, -48, 7), upd(c, t) { c.tgt.set(70 + 70 * Math.sin(t / 67), 2, -235); } },
-  { name: 'PIER', fov: 50, p: V(PIER_X - 0.6, DECK + 1.6, zL - 6), upd(c, t) { c.p.y = DECK + 1.6 + 0.05 * Math.sin(t * 0.7); c.tgt.set(PIER_X + 8 + 10 * Math.sin(t / 53), 4, PIER_END_Z - 400); } },
-  { name: 'KEEPER', fov: 46, p: V(), lag: 1.2, upd(c, t) {
-      if (keeper.visible) { const side = Math.sin(t / 29) * 1.2 + 0.4; const back = keeper.dir.clone().applyAxisAngle(V(0, 1, 0), side).multiplyScalar(-11);
-        const want = keeper.pos.clone().add(back).add(V(0, 2.4, 0)); want.y = Math.max(want.y, terrainH(want.x, want.z) + 1.6, 2.6); c.p.lerp(want, 1 - Math.exp(-0.016 * 60 / c.lag));
-        c.tgt.lerp(keeper.pos.clone().add(keeper.dir.clone().multiplyScalar(5)).add(V(0, 1.3, 0)), 0.05); }
-      else { c.p.copy(crewP(34, 128, 2.4)); c.tgt.copy(HOUSE).add(V(0, 2, 0)); } } },
-  { name: 'GULL', fov: 52, p: V(), upd(c, t) { const a = t / 95; c.p.set(-20 + Math.cos(a) * 260, 78 + 18 * Math.sin(t / 41), -150 + Math.sin(a) * 260); c.tgt.set(-20, 6, -150); } },
-  { name: 'LONG LENS', fov: 11, p: crewP(70, coastZ(70) + 14, 3), upd(c, t) {
-      let want; if (boat.out) want = boat.pos.clone().add(V(0, 1, 0));
-      else if (live.ev === 'eye' && (live.subject === 'sun' ? SUND : MOOND).y > -0.01) want = c.p.clone().add((live.subject === 'sun' ? SUND : MOOND).clone().multiplyScalar(800));
-      else if (live.ev === 'stack') want = STACKS[0].p.clone().setY(20);
-      else want = [STACKS[0].p.clone().setY(16), V(240, 30, -150), PIER_END.clone()][Math.floor(t / 120) % 3];
-      c.tgt.lerp(want, 0.01); } },
-  { name: 'STAIR', fov: 54, p: V(PIER_X - 7, terrainH(PIER_X - 7, zT + 2) + 2.2, zT + 2), upd(c, t) { c.tgt.set(PIER_X + 6 + 3 * Math.sin(t / 37), -2, zL - 45); } },
-  { name: 'CLIFF FACE', fov: 46, p: V(-15, 9, -175), upd(c, t) { c.p.y = 9 + 0.6 * Math.sin(t * 0.3); c.tgt.set(-100, 14 + 4 * Math.sin(t / 47), -95); } },
+/* ====================================================================== camera crew (nine independent observational operators) */
+const CREW=[
+ {name:'SPILLWAY',fov:43,p:V(4,52,-132),upd(c,t){c.tgt.set(Math.sin(t/75)*8,10,1)}},
+ {name:'WEST WORKS',fov:48,p:V(-126,41,-36),upd(c,t){c.tgt.set(-61,25,17)}},
+ {name:'CREST ROAD',fov:46,p:V(-48,33,20),upd(c,t){c.tgt.set(lerp(-12,25,.5+.5*Math.sin(t/48)),30,3)}},
+ {name:'KEEPER',fov:40,p:V(-91,34,17),upd(c,t){const want=keeper.pos.clone().add(V(-7,3.1,11));c.p.lerp(want,.025);c.tgt.lerp(keeper.pos.clone().add(V(4,1.3,0)),.035)}},
+ {name:'TAILWATER',fov:51,p:V(41,9,-89),upd(c,t){c.tgt.set(-12+12*Math.sin(t/83),15,0)}},
+ {name:'EAST GAUGE',fov:32,p:V(89,36,21),upd(c,t){c.tgt.set(79,32,3)}},
+ {name:'UPSTREAM',fov:50,p:V(-103,46,138),upd(c,t){c.tgt.set(0,25,1)}},
+ {name:'LONG LENS',fov:18,p:V(171,64,-208),upd(c,t){c.tgt.set(6,24,4)}},
+ {name:'WATERLINE',fov:38,p:V(31,23,108),upd(c,t){c.tgt.set(-9,20,163+9*Math.sin(t/60)}}
 ];
-const PIER_END = V(PIER_X, DECK, PIER_END_Z);
-CREW.forEach(c => { c.tgt = V(0, 0, -200); c.upd(c, 0); if (c.name === 'LONG LENS') c.tgt.copy(STACKS[0].p).setY(16); });
-const DIR = { cur: 0, prev: -1, until: 6, pendingCut: -1 };
-function camSees(c, p) { const f = c.tgt.clone().sub(c.p).normalize(); const d = p.clone().sub(c.p).normalize(); return f.dot(d) > Math.cos((c.fov * 0.55) * D2R * 1.3); }
-function chooseShot() {
-  const w = CREW.map((c, i) => {
-    if (i === DIR.cur) return 0; let x = 1; if (i === DIR.prev) x *= 0.35;
-    if (c.name === 'KEEPER') x *= keeper.visible ? (keeper.state === 'walk' ? 3 : 1.6) : 0.3;
-    if (c.name === 'STAIR') x *= keeper.cur === 'stair' ? 2.5 : 0.8;
-    if (c.name === 'PIER') x *= keeper.cur === 'pier' ? 1.8 : 1;
-    if (c.name === 'LONG LENS') x *= boat.out ? 2.2 : 1;
-    if (c.name === 'CLIFF FACE') x *= WX.swellH > 1.6 ? 1.6 : 0.8;
-    if (live.ev) { const subj = live.ev === 'eye' ? c.p.clone().add((live.subject === 'sun' ? SUND : MOOND).clone().multiplyScalar(1000)) : live.ev === 'stack' ? STACKS[0].p.clone().setY(20) : live.ev === 'breath' ? V(-100, 20, -100) : live.ev === 'wreath' ? WREATH_C : null;
-      if (subj && camSees(c, subj)) x *= 2.2; }
-    return x; });
-  let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; } return 0;
+for(const c of CREW)c.tgt=V(0,20,0);
+const DIR={cur:0,until:0,pendingCut:-1,last16:-1,look:null};
+function cut(i){DIR.cur=clamp(Math.floor(i),0,CREW.length-1);DIR.until=simT+rr(8,19);DIR.pendingCut=-1}
+function chooseShot(){
+ const weights=CREW.map((c,i)=>Math.max(.2,1+(i===3&&keeper.state==='walk'?2.3:0)+(i===0&&HYD.q>2?1.5:0)+(i===8&&HYD.level<21?.5:0)-(DIR.cur===i?.65:0)));
+ let r=rnd()*weights.reduce((a,b)=>a+b,0);for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0)return i}return 0;
 }
-function cut(i) { DIR.prev = DIR.cur; DIR.cur = i; DIR.until = simT + rr(8, 19) * (CREW[i].name === 'LONG LENS' ? 1.3 : 1); }
 
 /* ====================================================================== sim */
 let SUNM = sunMoon(simMs), SUND = V(), MOOND = V(), WREATH_C = V();
