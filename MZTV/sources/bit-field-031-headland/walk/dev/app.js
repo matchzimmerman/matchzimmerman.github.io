@@ -115,7 +115,7 @@ async function pack(){
    "Includes layout.json with stable asset IDs, exact coordinates, rotations, and photo references.",
    "Photos are unaltered pixels captured directly from HEADLAND WebGL renderer.",
    "Coords: +X east, +Z inland, -Z sea. Rotation r = radians around Y.",
-   "Import JSON using this Developer Mode. Shared production layout requires reviewed GitHub commit.",
+   "Import JSON using Developer Mode. To publish for everyone, review and commit its assets to walk/layouts/published.json.",
    "Original HEADLAND broadcast has NOT been edited."].join("\n");
   const files=[{name:"HEADLAND_LAYOUT.json",bytes:textBytes(JSON.stringify(review(),null,2))},
    {name:"README.txt",bytes:textBytes(instructions)}];
@@ -147,9 +147,18 @@ function tick(t){
  requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
+let approvedLayout=null;
 async function boot(){
  try{
-  const [a,b,c]=await Promise.all([fetch("../../index.html",{cache:"no-store"}),fetch("../editable-scenes.js",{cache:"no-store"}),fetch("./engine-api.js",{cache:"no-store"})]);
+  const [a,b,c,published]=await Promise.all([
+   fetch("../../index.html",{cache:"no-store"}),
+   fetch("../editable-scenes.js",{cache:"no-store"}),
+   fetch("./engine-api.js",{cache:"no-store"}),
+   fetch("../layouts/published.json",{cache:"no-store"}).catch(()=>null)]);
+  if(published?.ok){
+   try{const x=await published.json();if(x.schema===SCHEMA&&Array.isArray(x.assets))approvedLayout=x.assets}
+   catch(e){console.warn("Approved layout unavailable",e)}
+  }
   if(!a.ok||!b.ok||!c.ok)throw Error("Unable to load original world, editable meshes or developer API");
   let world=await a.text();
   const patches=[
@@ -172,7 +181,11 @@ const check=setInterval(()=>{
     apply(validate({schema:SCHEMA,assets:incoming.assets.map(a=>({id:a[0],x:a[1],z:a[2],r:a[3]}))}));say("SHARED LAYOUT LINK LOADED");
    }catch(e){say("Share data could not load: "+e.message)}
   }else{
-   try{const old=localStorage.getItem(KEY);if(old){apply(validate(JSON.parse(old)));say("LOCAL DRAFT RESTORED")}}catch(e){say("Browser draft cannot load: "+e.message)}
+   try{
+     const old=localStorage.getItem(KEY);
+     if(old){apply(validate(JSON.parse(old)));say("LOCAL DRAFT RESTORED")}
+     else if(approvedLayout?.length){apply(validate({schema:SCHEMA,assets:approvedLayout}));say("PUBLISHED GITHUB LAYOUT LOADED")}
+   }catch(e){say("Saved layout cannot load: "+e.message)}
   }
   api.grammar({hatch:.23,dith:.018,wob:1.25,period:11,outline:1});
   api.look([eye.x,eye.y,eye.z],[eye.x,eye.y-12,eye.z-100],70);api.tick(0);
