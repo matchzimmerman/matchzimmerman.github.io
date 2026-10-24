@@ -26,7 +26,7 @@ Initial groups include:
 - `turf` (the bog turf stack ensemble)
 - `gravesite` (the entire three-sided stone enclosure and all headstones)
 
-Total: **22 movable groups**. The original gravesite's first-pass anchor is X -136 / Z -124 on the western promontory. The input's world coordinate system is identical to the engine: X/Z horizontal world coordinates, Y up. The new group Y position is adjusted by the local heightfield difference when relocated. This is useful for site-layout studies but **not full terrain conforming** for long relocated wall runs. Refining individual stones or conforming long walls to new slopes remains future work.
+Total: **21 movable groups**. The original gravesite's first-pass anchor is X -136 / Z -124 on the western promontory. The input's world coordinate system is identical to the engine: X/Z horizontal world coordinates, Y up. The new group Y position is adjusted by the local heightfield difference when relocated. This is useful for site-layout studies but **not full terrain conforming** for long relocated wall runs. Refining individual stones or conforming long walls to new slopes remains future work.
 
 Only the above SEALS geometries are builder-editable in Study 001. HEADLAND's generated ground, coastline, pier, original cottage, autonomous keeper, camera crew, sea stacks, boat, gulls and weather are not yet editable as independent assets.
 
