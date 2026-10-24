@@ -128,12 +128,12 @@ const DEF=()=>({
  v:1,born:Date.now(),epoch:1,epochStart:0,epochLen:rr(50,95)*60,tension:0,colorway:0,cwVisits:[1,0,0,0,0,0,0,0],
  grammar:{period:7.2,dith:.12,wob:7,outline:1,hatch:1,angBias:0},center:38,
  uncanny:{next:rr(6,12)*60,counts:{},last:{},mem:{}},
- rainStore:.35,stageTrend:0,stageLast:21.8,inspections:0,inspected:{},log:[],runSec:0
+ rainStore:.35,savedAt:Date.now(),stageTrend:0,stageLast:21.8,inspections:0,inspected:{},log:[],runSec:0
 });
 let S=DEF();
 try{const raw=localStorage.getItem(KEY);if(raw){const o=JSON.parse(raw);if(o&&o.v===1)S=Object.assign(DEF(),o)}}catch(e){}
 const T0=S.runSec||0;simT=T0;
-function save(){try{S.runSec=simT;localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){try{S.runSec=simT;S.savedAt=Date.now();localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function logEv(text){S.log.unshift({t:localParts(simMs).str,text});if(S.log.length>40)S.log.length=40}
 if(!S.log.length)logEv('the water and concrete woke for the first time');
 else logEv('Loch Raven resumed · epoch '+S.epoch);
@@ -307,7 +307,7 @@ void main(){
 function waterMat(fall=false){
  return new THREE.ShaderMaterial({vertexShader:OBJ_VERT,fragmentShader:WATER_FRAG,side:THREE.DoubleSide,
   uniforms:Object.assign({},SH,{
-   uT:{value:V(1,0,0)},uFlow:{value:0},uFall:{value:fall?1:0},uWindSpeed:{value:0},
+   uTime:{value:0},uT:{value:V(1,0,0)},uFlow:{value:0},uFall:{value:fall?1:0},uWindSpeed:{value:0},
    uCloth:{value:0},uBreathOn:{value:0},uMove:{value:0},uWindL:{value:V()}
   })
  });
@@ -571,7 +571,7 @@ const moonM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(true));moonM.ren
 /* ====================================================================== weather (live, local) + modelled hydraulics */
 const WX={wind:3.4,windDir:245,cloud:.45,precip:0,temp:14,hum:72,swellH:.18,swellT:10,swellDir:200,live:false,at:0};
 const WXT={...WX};
-const HYD={level:21.8,q:0,rainStore:S.rainStore||.35,trend:0,override:null};
+const HYD={level:21.8,q:0,rainStore:Math.max(0,(S.rainStore??.35)*Math.exp(-Math.max(0,Date.now()-(S.savedAt||Date.now()))/(8*3600e3))),trend:0,override:null};
 function synthWx(ms){const h=ms/3600e3;return {
  wind:clamp(4+3*Math.sin(h*.47)+Math.sin(h*1.9),0,16),windDir:250+65*Math.sin(h*.2),
  cloud:clamp(.45+.28*Math.sin(h*.31),0,1),precip:Math.max(0,2*Math.sin(h*.45)-1.68),
@@ -599,7 +599,10 @@ function hydraulicsTick(dt){
  HYD.trend=lerp(HYD.trend,(HYD.level-previous)/Math.max(dt,.01)*3600,1-Math.exp(-dt/450));
  // Dimensionless, theatrical flow index, NEVER measured discharge.
  HYD.q=clamp(Math.pow(Math.max(0,HYD.level-LIP),1.5)*13,0,42);
- for(const m of [reservoirMat,tailwaterMat,spillMat]){m.uniforms.uFlow.value=HYD.q;m.uniforms.uWindSpeed.value=WX.wind;}
+ for(const m of [reservoirMat,tailwaterMat,spillMat]){
+  m.uniforms.uFlow.value=HYD.q;m.uniforms.uWindSpeed.value=WX.wind;
+  if(live.ev!=='hush')m.uniforms.uTime.value=simT;
+ }
  S.rainStore=HYD.rainStore;S.stageTrend=HYD.trend;S.stageLast=HYD.level;
  WX.swellH=.08+.018*HYD.q;WX.swellT=12-.11*HYD.q;
  reservoir.position.y=HYD.level;tailwater.position.y=-.55+.013*HYD.q;
