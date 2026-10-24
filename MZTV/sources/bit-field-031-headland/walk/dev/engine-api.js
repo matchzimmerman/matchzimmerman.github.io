@@ -18,6 +18,15 @@
     }
     return null;
   },
+  builderGroundRay(nx,ny,groundY=0){
+    if(![nx,ny,groundY].every(Number.isFinite))return null;
+    camera.updateMatrixWorld();
+    const cast=new THREE.Raycaster();
+    cast.setFromCamera(new THREE.Vector2(nx,ny),camera);
+    const plane=new THREE.Plane(new THREE.Vector3(0,1,0),-groundY);
+    const v=new THREE.Vector3();
+    return cast.ray.intersectPlane(plane,v)?[v.x,v.y,v.z]:null;
+  },
   getBuilderTerrain(x,z){return terrainH(x,z);},
   captureBuilderFrame(){
     // CAPTURE=1 preserves real WebGL framebuffer.
