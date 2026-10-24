@@ -278,8 +278,8 @@ function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
 }
 
 /* ---------- advected hydraulic water: every frame still resolves to six inks */
-const WATER_FRAG=/* glsl */\`
-\${COMMON}
+const WATER_FRAG=/* glsl */`
+${COMMON}
 uniform float uTime,uFlow,uFall,uWindSpeed,uAmb,uDiff,uFogD,uFogShade;
 uniform vec3 uKeyD,uCamP,uT;
 varying vec3 vW,vN,vL,vT;varying float vC;
@@ -303,7 +303,7 @@ void main(){
  float fog=1.-exp(-d/uFogD);
  gl_FragColor=pack(mix(sh,uFogShade,fog),id,line,0.);
 }
-\`;
+`;
 function waterMat(fall=false){
  return new THREE.ShaderMaterial({vertexShader:OBJ_VERT,fragmentShader:WATER_FRAG,side:THREE.DoubleSide,
   uniforms:Object.assign({},SH,{
