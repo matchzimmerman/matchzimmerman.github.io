@@ -435,193 +435,139 @@ const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShad
 const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
 
 /* ====================================================================== world build */
-// terrain
-const TER = { x0: -500, z0: -450, sx: 1000, sz: 1200 };
-{
-  const g = new THREE.PlaneGeometry(TER.sx, TER.sz, 400, 480); g.rotateX(-Math.PI / 2);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i) + TER.z0 + TER.sz / 2; p.setZ(i, z); p.setY(i, terrainH(x, z)); }
-  g.computeVertexNormals();
-  scene.add(new THREE.Mesh(g, objMat(4, 2, V(0, 1, 0), { uBreathOn: { value: 1 } })));
-  // height texture for the sea's shore foam
-  const N = 256, data = new Uint8Array(N * N * 4);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const x = TER.x0 + (i + 0.5) / N * TER.sx, z = TER.z0 + (j + 0.5) / N * TER.sz;
-    const v = clamp((terrainH(x, z) + 20) / 80, 0, 1) * 255; const o = (j * N + i) * 4; data[o] = data[o + 1] = data[o + 2] = v; data[o + 3] = 255;
-  }
-  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
-  seaU.uHt.value = tex;
-}
-// distant hills across the bay (south) and low islands to the west
-{
-  const ridge = (pts) => { const pos = [], idx = []; pts.forEach((q, i) => { pos.push(q[0], q[1], q[2], q[0], -30, q[2]); if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } });
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g; };
-  const hills = []; for (let z = -9000; z <= 6000; z += 120) hills.push([-4200 - 300 * Math.sin(z * 0.0004), 110 + 230 * fbm(z * 0.0009, 1.3) + 90 * Math.exp(-Math.pow((z + 1500) / 2200, 2)), z]);
-  scene.add(new THREE.Mesh(ridge(hills), objMat(5, 0, V(0, 1, 0))));
-  const isl = []; for (let x = -7000; x <= -1500; x += 100) isl.push([x, Math.max(0, 70 * Math.sin((x + 7000) / 5500 * Math.PI) * (0.6 + 0.6 * fbm(x * 0.002, 9))) - 4, -11000]);
-  scene.add(new THREE.Mesh(ridge(isl), objMat(4, 0, V(0, 1, 0))));
-}
-// sea: polar grid around the bay
-const SEA_C = V(0, 0, -120);
-{
-  const RINGS = 200, SEG = 192, K = 0.035, RMAX = 14000, den = Math.exp(RINGS * K) - 1;
-  const pos = [0, 0, 0], idx = [];
-  for (let i = 1; i <= RINGS; i++) { const r = RMAX * (Math.exp(i * K) - 1) / den;
-    for (let j = 0; j < SEG; j++) { const a = j / SEG * TAU; pos.push(SEA_C.x + Math.cos(a) * r, 0, SEA_C.z + Math.sin(a) * r); } }
-  for (let j = 0; j < SEG; j++) idx.push(0, 1 + (j + 1) % SEG, 1 + j);
-  for (let i = 1; i < RINGS; i++) for (let j = 0; j < SEG; j++) {
-    const a = 1 + (i - 1) * SEG + j, b = 1 + (i - 1) * SEG + (j + 1) % SEG, c = 1 + i * SEG + j, d = 1 + i * SEG + (j + 1) % SEG;
-    idx.push(a, b, c, b, d, c);
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
-  const m = new THREE.ShaderMaterial({ vertexShader: SEA_VERT, fragmentShader: SEA_FRAG, uniforms: Object.assign({}, SH, seaU), side: THREE.DoubleSide });
-  const sea = new THREE.Mesh(g, m); sea.frustumCulled = false; scene.add(sea);
-}
-// sky dome, sun, moon
-const skyU = Object.assign({}, SH, { uCloud: { value: 0.5 }, uWind: { value: new THREE.Vector2(1, 0) } });
-const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 48, 24), new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthWrite: false }));
-sky.renderOrder = -3; sky.frustumCulled = false; scene.add(sky);
-const discMat = (isMoon) => new THREE.ShaderMaterial({ vertexShader: DISC_VERT, fragmentShader: DISC_FRAG, depthWrite: false,
-  uniforms: Object.assign({}, SH, { uOpen: { value: 0 }, uBlink: { value: 0 }, uIsMoon: { value: isMoon ? 1 : 0 }, uIllum: { value: 1 }, uDim: { value: 1 }, uGaze: { value: new THREE.Vector2() } }) });
-const sunM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(false)); sunM.renderOrder = -2; sunM.frustumCulled = false; scene.add(sunM);
-const moonM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(true)); moonM.renderOrder = -2; moonM.frustumCulled = false; scene.add(moonM);
-
-// stacks (one of them is not only stone)
-function stackGeo(r, h, seed) {
-  const g = new THREE.CylinderGeometry(r * 0.82, r * 1.15, h, 28, 18, false); const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const a = Math.atan2(x, z), rr0 = Math.hypot(x, z);
-    const f = 0.82 + 0.3 * vnoise(a * 2.2 + seed, y * 0.07) + 0.08 * Math.sin(a * 11 + seed) ; const top = y > h / 2 - 0.01;
-    const rad = rr0 * f; p.setX(i, Math.sin(a) * rad); p.setZ(i, Math.cos(a) * rad); if (top) p.setY(i, y + 2.5 * vnoise(x * 0.2 + seed, z * 0.2)); }
-  g.computeVertexNormals(); return g;
-}
-const STACKS = [
-  { p: V(-55, 0, -238), r: 13, h: 46 }, { p: V(38, 0, -315), r: 9, h: 34 }, { p: V(150, 0, -170), r: 15, h: 30 }, { p: V(-10, 0, -150), r: 4, h: 9 },
-].map((s, i) => { const m = objMat(4, 1, V(0, 1, 0), { uStackH: { value: s.h } }); const mesh = new THREE.Mesh(stackGeo(s.r, s.h, i * 3.3), m);
-  const grp = new THREE.Group(); grp.position.set(s.p.x, s.h / 2 - 7, s.p.z); grp.add(mesh); scene.add(grp); return Object.assign(s, { grp, mat: m, yaw: 0, yaw0: rnd() * TAU }); });
-STACKS.forEach(s => s.grp.rotation.y = s.yaw = s.yaw0);
-
-// gully, landing, stair, pier, path
-const PIER_X = 20, DECK = 2.4;
-let zL = -30; for (let z = -30; z < 40; z += 0.25) { if (terrainH(PIER_X, z) >= 0.6) { zL = z + 1.2; break; } }
-let zT = zL; for (let z = zL; z < 120; z += 0.5) { if (terrainH(PIER_X, z) >= landTop(PIER_X, z) - 0.7) { zT = z; break; } }
-const BOXES = [];   // merged wood geometry
-function addBox(w, h, d, m4, T) { const g = new THREE.BoxGeometry(w, h, d); g.applyMatrix4(m4); const n = g.attributes.position.count; const t = new Float32Array(n * 3);
-  const tv = T.clone().transformDirection(m4); for (let i = 0; i < n; i++) { t[i * 3] = tv.x; t[i * 3 + 1] = tv.y; t[i * 3 + 2] = tv.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); BOXES.push(g); }
-const M4 = (x, y, z, ry = 0, rx = 0, rz = 0) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(1, 1, 1));
-function beam(a, b, t, Tdir) { const len = a.distanceTo(b); const o = new THREE.Object3D(); o.position.copy(a).add(b).multiplyScalar(0.5); o.lookAt(b); o.updateMatrix(); addBox(t, t, len, o.matrix, V(0, 0, 1)); }
-const pierY = (z) => z > zL - 8 ? lerp(terrainH(PIER_X, zL) + 0.15, DECK, clamp((zL - z) / 8, 0, 1)) : DECK;
-const PIER_LEN = 62, PIER_END_Z = zL - PIER_LEN;
-for (let z = zL; z > PIER_END_Z; z -= 0.5) { const y = pierY(z); addBox(3.0, 0.12, 0.42, M4(PIER_X + (rnd() - 0.5) * 0.06, y + (rnd() - 0.5) * 0.04, z, 0, (rnd() - 0.5) * 0.02, (rnd() - 0.5) * 0.03), V(1, 0, 0)); }
-for (let z = zL - 2; z > PIER_END_Z - 0.1; z -= 4) { const y = pierY(z);
-  for (const sx of [-1.5, 1.5]) { const top = y + 1.05, bot = -7; addBox(0.26, top - bot, 0.26, M4(PIER_X + sx, (top + bot) / 2, z, rnd() * 0.3), V(0, 1, 0)); }
-  if (z - 4 > PIER_END_Z - 0.1) for (const sx of [-1.5, 1.5]) beam(V(PIER_X + sx, y + 1.0, z), V(PIER_X + sx, pierY(z - 4) + 1.0, z - 4), 0.1); }
-for (let z = zL - 2; z > PIER_END_Z; z -= 8) beam(V(PIER_X - 1.5, -1.2, z), V(PIER_X + 1.5, pierY(z) - 0.2, z - 4), 0.14);
-// stair down the gully
-const stairPts = [];
-for (let z = zT; z >= zL; z -= 0.55) { const y = terrainH(PIER_X, z) + 0.22; stairPts.push(V(PIER_X, y, z)); addBox(2.0, 0.16, 0.5, M4(PIER_X, y, z, 0, 0, (rnd() - 0.5) * 0.04), V(1, 0, 0)); }
-for (let i = 0; i < stairPts.length; i += 5) for (const sx of [-1.1, 1.1]) { const p = stairPts[i]; addBox(0.14, 1.1, 0.14, M4(p.x + sx, p.y + 0.5, p.z), V(0, 1, 0));
-  const q = stairPts[Math.min(i + 5, stairPts.length - 1)]; if (q !== p) beam(V(p.x + sx, p.y + 1.0, p.z), V(q.x + sx, q.y + 1.0, q.z), 0.07); }
-// cottage on the land, and a few across the bay
-const LAMPS = [];
-function cottage(x, z, ry, s = 1) {
-  const y = terrainH(x, z); const grp = new THREE.Group(); grp.position.set(x, y, z); grp.rotation.y = ry; grp.scale.setScalar(s);
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 5), objMat(9, 0, V(1, 0, 0))); walls.position.y = 1.5; grp.add(walls);
-  const rg = new THREE.CylinderGeometry(0.01, 3.6, 2.6, 4, 1); rg.rotateY(Math.PI / 4); rg.scale(1.6, 1, 1);
-  const roof = new THREE.Mesh(rg, objMat(7, 0, V(1, 0, 0))); roof.position.y = 4.4; grp.add(roof);
-  const ch = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, 0.8), objMat(9, 0, V(0, 1, 0))); ch.position.set(3.2, 5.0, 0); grp.add(ch);
-  const lamp = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.0), objMat(7, 0, V(0, 1, 0))); lamp.position.set(-1.6, 1.9, -2.52); lamp.rotation.y = Math.PI; grp.add(lamp);
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 2.0), objMat(10, 0, V(0, 1, 0))); door.position.set(1.4, 1.0, -2.52); door.rotation.y = Math.PI; grp.add(door);
-  LAMPS.push(lamp); scene.add(grp); return grp;
-}
-const HOUSE = V(62, 0, 165); HOUSE.y = terrainH(HOUSE.x, HOUSE.z);
-cottage(HOUSE.x, HOUSE.z, 0.25);
-cottage(232, -150, 1.2, 0.9); cottage(246, -120, 0.7, 0.8); cottage(215, -195, 2.0, 0.85);
-// path: house → cliff view → stair top
-const pathWay = [[62, 160], [52, 128], [36, 98], [-4, coastZ(-4) + 9], [12, zT + 6], [PIER_X, zT]];
-const pathPts = [];
-for (let i = 0; i < pathWay.length - 1; i++) { const [ax, az] = pathWay[i], [bx, bz] = pathWay[i + 1]; const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 2);
-  for (let k = 0; k < n; k++) { const t = k / n; const x = lerp(ax, bx, t) + 1.5 * Math.sin(t * 6 + i), z = lerp(az, bz, t); pathPts.push(V(x, terrainH(x, z) + 0.08, z)); } }
-pathPts.push(V(PIER_X, terrainH(PIER_X, zT) + 0.08, zT));
-{ // ribbon
-  const pos = [], idx = []; for (let i = 0; i < pathPts.length; i++) { const a = pathPts[Math.max(0, i - 1)], b = pathPts[Math.min(pathPts.length - 1, i + 1)];
-    const t = b.clone().sub(a).setY(0).normalize(); const nx = -t.z, nz = t.x; const p = pathPts[i]; const w = 0.9 + 0.3 * vnoise(i * 0.3, 1);
-    for (const s of [-1, 1]) { const x = p.x + nx * w * s, z = p.z + nz * w * s; pos.push(x, terrainH(x, z) + 0.12, z); }
-    if (i) { const o = (i - 1) * 2; idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2); } }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-  const m = objMat(12, 0, V(0, 0, 1)); m.polygonOffset = true; m.polygonOffsetFactor = -2; scene.add(new THREE.Mesh(g, m));
-}
-const woodMat = objMat(6, 3, V(1, 0, 0));
-scene.add(new THREE.Mesh(mergeGeometries(BOXES), woodMat));
-// pier extension bays (the pier sometimes reaches further out at night)
-const BAY = []; { const save = BOXES.length;
-  for (let z = 0; z > -4; z -= 0.5) addBox(3.0, 0.12, 0.42, M4(PIER_X, DECK, z, 0, 0, (rnd() - 0.5) * 0.03), V(1, 0, 0));
-  for (const sx of [-1.5, 1.5]) { addBox(0.26, DECK + 8, 0.26, M4(PIER_X + sx, (DECK + 1.05 - 7) / 2, -2), V(0, 1, 0)); beam(V(PIER_X + sx, DECK + 1, 0), V(PIER_X + sx, DECK + 1, -4), 0.1); }
-  BAY.push(...BOXES.splice(save)); }
-const MAXBAYS = 14;
-const ext = new THREE.InstancedMesh(mergeGeometries(BAY), woodMat, MAXBAYS);
-for (let i = 0; i < MAXBAYS; i++) ext.setMatrixAt(i, new THREE.Matrix4().makeTranslation(0, 0, PIER_END_Z - i * 4)); ext.count = 0; ext.frustumCulled = false; scene.add(ext);
-
-/* ---------- trail for the keeper */
-const TRAIL = [];   // {p, kind}
-pathPts.forEach(p => TRAIL.push({ p, kind: 'path' }));
-stairPts.forEach(p => TRAIL.push({ p: p.clone().add(V(0, 0.05, 0)), kind: 'stair' }));
-for (let z = zL; z >= PIER_END_Z + 2; z -= 1) TRAIL.push({ p: V(PIER_X, pierY(z) + 0.06, z), kind: 'pier' });
-let acc = 0; TRAIL.forEach((t, i) => { if (i) acc += t.p.distanceTo(TRAIL[i - 1].p); t.s = acc; });
-const sAt = (pred) => TRAIL.find(pred).s;
-const STOPS = {
-  HOUSE: { s: 0, name: 'the house', deg: 0 },
-  CLIFF: { s: TRAIL.reduce((b, t) => t.kind === 'path' && Math.abs(t.p.x + 4) < 1.2 ? t.s : b, 0) || TRAIL[Math.floor(pathPts.length * 0.6)].s, name: 'the cliff edge', deg: 3 },
-  STAIR_TOP: { s: sAt(t => t.kind === 'stair'), name: 'the top of the stair', deg: 1 },
-  LANDING: { s: sAt(t => t.kind === 'pier'), name: 'the landing', deg: 4 },
-  PIER_MID: { s: sAt(t => t.kind === 'pier') + 28, name: 'the middle of the pier', deg: 6 },
-  PIER_END: { s: TRAIL[TRAIL.length - 1].s, name: 'the end of the pier', deg: 4 },
+const CREST=30, LIP=23, DAM_HALF=99, SPILL_HALF=44;
+const sceneBox=(w,h,d,x,y,z,id=9,dir=V(1,0,0))=>{
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),objMat(id,0,dir));m.position.set(x,y,z);scene.add(m);return m;
 };
-function trailAt(s) { s = clamp(s, 0, TRAIL[TRAIL.length - 1].s); let lo = 0, hi = TRAIL.length - 1;
-  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (TRAIL[m].s <= s) lo = m; else hi = m; }
-  const a = TRAIL[lo], b = TRAIL[hi]; const t = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0; return { p: a.p.clone().lerp(b.p, t), dir: b.p.clone().sub(a.p).setY(0).normalize(), kind: a.kind }; }
-
-/* ---------- figures */
-function keeperMesh() {   // a long black veil: fabric in the shape of a figure
-  const g = new THREE.Group(); const H = 2.05;
-  const prof = [[0, 2.1], [0.05, 2.09], [0.1, 2.02], [0.115, 1.9], [0.095, 1.78], [0.14, 1.68], [0.17, 1.52], [0.17, 1.3], [0.21, 1.02], [0.3, 0.66], [0.45, 0.3], [0.62, 0.06], [0.7, 0.0]].map(q => new THREE.Vector2(q[0], q[1]));
-  const dress = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), objMat(8, 0, V(0, 1, 0), { uCloth: { value: 1 }, uClothH: { value: H } }));
-  const vg = new THREE.PlaneGeometry(0.5, 2.3, 8, 30); vg.translate(0, -1.15, 0);
-  const veil = new THREE.Mesh(vg, objMat(8, 0, V(0, 1, 0), { uCloth: { value: 2 } })); veil.position.set(0, 2.08, -0.05);
-  g.add(dress, veil); g.userData.mats = [dress.material, veil.material]; g.scale.setScalar(1.12); scene.add(g); return g;
+const sceneBeam=(a,b,r,id=9)=>{
+ const o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,a.distanceTo(b),6),objMat(id,0,b.clone().sub(a).normalize()));
+ o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(V(0,1,0),b.clone().sub(a).normalize());scene.add(o);return o;
+};
+// A sculpted valley, not an elevation model.
+{
+ const g=new THREE.PlaneGeometry(750,1000,150,190);g.rotateX(-Math.PI/2);
+ const p=g.attributes.position;
+ for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,terrainH(x,z));}
+ g.computeVertexNormals();scene.add(new THREE.Mesh(g,objMat(4,2,V(.8,0,.5))));
 }
-const keeper = { mesh: keeperMesh(), s: 0, target: 'HOUSE', dwell: rr(20, 90), state: 'dwell', visible: false, walked: 0, pos: V(), dir: V(0, 0, -1), stopName: 'the house', still: 0 };
-function boatMesh() {
-  const g = new THREE.Group();
-  const hg = new THREE.CylinderGeometry(1.1, 0.5, 6.2, 12, 1, false, 0, Math.PI); hg.rotateZ(Math.PI / 2); hg.rotateX(Math.PI); hg.scale(1, 0.75, 1);
-  const hull = new THREE.Mesh(hg, objMat(10, 0, V(1, 0, 0))); hull.rotation.y = Math.PI / 2; hull.position.y = 0.55; g.add(hull);
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.35), objMat(6, 3, V(1, 0, 0))); seat.position.y = 0.6; g.add(seat);
-  const fisher = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.9, 8), objMat(7, 0, V(0, 1, 0))); fisher.position.set(0, 1.05, 1.2); g.add(fisher);
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), objMat(7, 0, V(0, 1, 0))); lamp.position.set(0, 1.6, -2.4); g.add(lamp); LAMPS.push(lamp);
-  scene.add(g); return g;
+// The two wooded slopes; the vegetation palette is autumnal at initial broadcast date.
+const TREE=[];
+function makeTree(x,z,kind){
+ const base=terrainH(x,z),ht=rr(10,24),r=rr(2,5);
+ const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.32,.56,ht*.64,6),objMat(6,0,V(0,1,0)));
+ trunk.position.set(x,base+ht*.3,z);scene.add(trunk);
+ const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),objMat(kind,0,V(0,1,0)));
+ crown.scale.set(1.25,1.4,.95);crown.position.set(x,base+ht*.82,z);scene.add(crown);TREE.push(crown);
 }
-const MOOR = V(PIER_X + 3.6, 0, PIER_END_Z + 8);
-const boat = { mesh: boatMesh(), pos: MOOR.clone(), heading: Math.PI, state: 'moored', until: rr(5, 20) * 60, target: MOOR.clone(), out: false };
-function gullMesh() {
-  const g = new THREE.Group(); const m = objMat(7, 0, V(1, 0, 0));
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 6), m); body.rotation.x = Math.PI / 2; g.add(body);
-  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.18, 0, 0, -0.22, 0.75, 0.04, -0.1, 0.75, 0.04, -0.1, 1.25, -0.05, -0.32, 0, 0, -0.22], 3)); wg.computeVertexNormals();
-  const wl = new THREE.Mesh(wg, m), wr = new THREE.Mesh(wg, m); wr.scale.x = -1; g.add(wl, wr); g.userData.w = [wl, wr]; g.scale.setScalar(1.7); scene.add(g); return g;
+for(let i=0;i<250;i++){
+ const x=rr(-345,345),z=rr(-360,465);
+ if(Math.abs(x)<125&&z>-120&&z<300)continue;
+ if(terrainH(x,z)<19)continue;
+ makeTree(x,z,[5,9,11,12,5,11][i%6]);
 }
-const PERCH = [ ...STACKS.slice(0, 3).map(s => V(s.p.x, s.h - 7 + 1.2, s.p.z)), V(PIER_X - 1.5, DECK + 1.2, PIER_END_Z + 4), V(PIER_X + 1.5, DECK + 1.2, zL - 20), V(-20, terrainH(-20, coastZ(-20) + 5) + 0.3, coastZ(-20) + 5) ];
-const gulls = Array.from({ length: 9 }, (_, i) => ({ mesh: gullMesh(), pos: V(rr(-80, 60), rr(30, 60), rr(-200, -40)), vel: V(rr(-3, 3), 0, rr(-3, 3)), state: 'soar', until: rr(20, 120), ph: rnd() * TAU,
-  orbit: { c: V(rr(-90, 40), 0, rr(-160, -40)), r: rr(30, 90), h: rr(28, 62), w: (rnd() < 0.5 ? -1 : 1) * rr(0.05, 0.11), a: rnd() * TAU }, perch: 0, slot: i }));
-const seal = { mesh: null, up: 0, until: rr(60, 240), pos: V(PIER_X + 14, 0, zL - 18) };
-{ const g = new THREE.Group(); const m = objMat(7, 0, V(1, 0, 0)); const h = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), m); h.scale.set(1, 0.95, 1.15); g.add(h);
-  const sn = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), m); sn.position.set(0, -0.06, 0.3); g.add(sn); seal.mesh = g; scene.add(g); }
-// spray
-const SPRAY_N = 600;
-const sprayGeo = new THREE.BufferGeometry(); const sprayPos = new Float32Array(SPRAY_N * 3), sprayLife = new Float32Array(SPRAY_N), sprayVel = new Float32Array(SPRAY_N * 3);
-sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPos, 3)); sprayGeo.setAttribute('aLife', new THREE.BufferAttribute(sprayLife, 1));
-const spray = new THREE.Points(sprayGeo, new THREE.ShaderMaterial({ vertexShader: PT_VERT, fragmentShader: PT_FRAG, uniforms: Object.assign({}, SH, { uScale: { value: 900 } }) }));
-spray.frustumCulled = false; scene.add(spray); let sprayI = 0;
-function spawnSpray(p, strength, n) { for (let k = 0; k < n; k++) { const i = sprayI = (sprayI + 1) % SPRAY_N;
-  sprayPos[i * 3] = p.x + rr(-3, 3); sprayPos[i * 3 + 1] = p.y + rr(0, 1); sprayPos[i * 3 + 2] = p.z + rr(-3, 3);
-  sprayVel[i * 3] = rr(-2.5, 2.5); sprayVel[i * 3 + 1] = rr(4, 9) * strength; sprayVel[i * 3 + 2] = rr(0, 3.5); sprayLife[i] = 1; } }
+// Reservoir: calm printed surface, with waterline displaced by the MEMORY model.
+const reservoir=new THREE.Mesh(new THREE.PlaneGeometry(380,565,70,78),objMat(2,0,V(1,0,.15)));
+reservoir.rotation.x=-Math.PI/2;reservoir.position.set(0,22,292);scene.add(reservoir);
+const tailwater=new THREE.Mesh(new THREE.PlaneGeometry(155,320,40,54),objMat(2,0,V(.2,0,1)));
+tailwater.rotation.x=-Math.PI/2;tailwater.position.set(0,-.6,-188);scene.add(tailwater);
+// Concrete gravity dam; plan proportions informed by published dimensions, surfaces artistically sculpted.
+function face(xa,xb,top,front,bot){
+ const p=[xa,top,front,xb,top,front,xa,bot,-44,xb,bot,-44];
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+ g.setIndex([0,2,1,1,2,3]);g.computeVertexNormals();
+ scene.add(new THREE.Mesh(g,objMat(9,0,V(0,1,-.65))));
+}
+face(-DAM_HALF,-SPILL_HALF,CREST,11,-2);face(SPILL_HALF,DAM_HALF,CREST,11,-2);
+face(-SPILL_HALF,SPILL_HALF,LIP,11,-1);
+sceneBox(DAM_HALF*2,6,11,0,1.4,-40,9);
+for(const side of [-1,1]){
+ const x=side*71;
+ sceneBox(53,3.8,13,x,CREST-1.8,4,9);
+ // The nonoverflow works include a narrow access road, with railings.
+ sceneBox(52,.35,6,x,CREST+.25,2.8,10);
+ for(let xx=x-23;xx<x+25;xx+=6){
+  sceneBeam(V(xx,CREST+.4,-.3),V(xx,CREST+1.7,-.3),.09,7);
+  sceneBeam(V(xx,CREST+.4,6),V(xx,CREST+1.7,6),.09,7);
+ }
+ sceneBeam(V(x-25,CREST+1.7,-.3),V(x+25,CREST+1.7,-.3),.1,7);
+ sceneBeam(V(x-25,CREST+1.7,6),V(x+25,CREST+1.7,6),.1,7);
+}
+// No fictional dam inscriptions. The shallow slots are masonry expansion lines.
+for(let x=-98;x<=98;x+=6.6){
+ sceneBox(.1,Math.abs(x)<SPILL_HALF?15:20,.16,x,Math.abs(x)<SPILL_HALF?11:18,-26,12);
+}
+// Spillway ogee silhouette and physical flow sheets, moved according to modelled overflow.
+const fallGroup=new THREE.Group();scene.add(fallGroup);
+for(let i=0;i<95;i++){
+ const x=-SPILL_HALF+(i+.5)*SPILL_HALF*2/95,dx=.48+(i%3)*.13,verts=[],idx=[];
+ for(let j=0;j<=16;j++){
+  const t=j/16,z=11-51*t+1.6*Math.sin(t*Math.PI),y=LIP-24*t+.08+Math.sin(i*3.7+t*27)*.08;
+  verts.push(x-dx,y,z,x+dx,y,z);
+  if(j){let k=(j-1)*2;idx.push(k,k+2,k+1,k+1,k+2,k+3);}
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);g.computeVertexNormals();
+ const ribbon=new THREE.Mesh(g,objMat(i%4===0?3:2,0,V(0,-1,-2)));
+ ribbon.material.side=THREE.DoubleSide;fallGroup.add(ribbon);
+}
+// Hydraulic engraving: ruled waterline bands on the curved face track the flow.
+const hydraulics=[];
+for(let j=1;j<=11;j++){
+ const t=j/12,p=sceneBeam(V(-SPILL_HALF,LIP-24*t+.27,11-51*t),V(SPILL_HALF,LIP-24*t+.27,11-51*t),.047,j%3===0?3:12);
+ hydraulics.push(p);
+}
+// Two simple gauge plinths. No readings presented as real instrumentation values.
+const gauges=[];
+for(const x of [-78,79]){
+ const pl=sceneBox(1.15,2.5,1.3,x,CREST+1.55,3,9);
+ const needle=sceneBeam(V(x,CREST+2.05,2.25),V(x+.4,CREST+2.45,2.25),.065,3);
+ gauges.push({x,pl,needle,at:0});
+ sceneBox(.8,.8,.14,x,CREST+2.35,2.29,5);
+}
+// A fictional nameless keeper of an imagined daily cycle, not an invented historical employee.
+function keeperMesh(){
+ const grp=new THREE.Group(),coat=objMat(8,0,V(0,1,0)),dark=objMat(7,0,V(0,1,0));
+ const torso=new THREE.Mesh(new THREE.CylinderGeometry(.35,.53,1.25,9),coat);torso.position.y=1.15;grp.add(torso);
+ const head=new THREE.Mesh(new THREE.IcosahedronGeometry(.25,1),dark);head.position.y=2.05;grp.add(head);
+ const cap=new THREE.Mesh(new THREE.CylinderGeometry(.31,.31,.13,9),dark);cap.position.y=2.28;grp.add(cap);
+ for(const k of [-1,1]){
+  const leg=new THREE.Mesh(new THREE.CylinderGeometry(.115,.15,.84,6),dark);leg.position.set(k*.2,.42,0);grp.add(leg);
+  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.10,.11,1,6),coat);arm.position.set(k*.44,1.24,0);arm.rotation.z=k*.14;grp.add(arm);
+ }
+ scene.add(grp);return grp;
+}
+const keeper={mesh:keeperMesh(),x:-88,target:'WEST',state:'dwell',dwell:rr(40,80),still:0,walked:0,dir:V(1,0,0),pos:V(),visible:true,stopName:'west access',move:0,cur:'crest'};
+const STOPS={
+ WEST:{x:-89,name:'west access',deg:0},WEST_GAUGE:{x:-78,name:'west gauge',deg:2},
+ SPILL:{x:-3,name:'spillway overlook',deg:5},EAST_GAUGE:{x:79,name:'east gauge',deg:4},
+ EAST:{x:91,name:'east access',deg:6}
+};
+// Walkway is a symbolic monitoring traverse, not visitor access advice.
+const walkway=sceneBox(192,.28,2.25,0,CREST+.12,3,10);
+const GHOST=new THREE.Group();scene.add(GHOST);GHOST.visible=false;
+// Warren is further upriver. These unlabelled rectangles are a spatial apparition,
+// not surveyed roads, buildings, surviving structures or an archaeological dataset.
+for(const [gx,gz,gw,gd] of [[-18,95,17,12],[17,112,23,14],[-34,150,12,17],[37,156,15,11]]){
+ const pts=[V(gx,0,gz),V(gx+gw,0,gz),V(gx+gw,0,gz+gd),V(gx,0,gz+gd)];
+ for(let i=0;i<4;i++){let a=pts[i],b=pts[(i+1)%4];
+  const geom=new THREE.BoxGeometry(a.distanceTo(b),.23,.28),m=new THREE.Mesh(geom,objMat(12,0,V(1,0,0)));
+  m.position.copy(a).add(b).multiplyScalar(.5);m.rotation.y=-Math.atan2(b.z-a.z,b.x-a.x);GHOST.add(m);
+ }
+}
+// Three waterbirds operate independently of the keeper.
+const birds=Array.from({length:3},(_,i)=>{
+ const group=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.IcosahedronGeometry(.42,1),objMat(7,0,V(0,1,0)));body.scale.set(1,.48,1.8);group.add(body);
+ const neck=new THREE.Mesh(new THREE.CylinderGeometry(.12,.17,.55,6),objMat(7));neck.position.set(0,.32,.48);group.add(neck);
+ scene.add(group);return {mesh:group,a:i*2.15,r:rr(20,68),speed:rr(.014,.029),p:V(0,22,120+i*34)};
+});
+// Real local sun and moon, rendered through the six-ink data pass.
+const skyU=Object.assign({},SH,{uCloud:{value:.5},uWind:{value:new THREE.Vector2(1,0)}});
+const sky=new THREE.Mesh(new THREE.SphereGeometry(20000,48,24),new THREE.ShaderMaterial({vertexShader:SKY_VERT,fragmentShader:SKY_FRAG,uniforms:skyU,side:THREE.BackSide,depthWrite:false}));
+sky.renderOrder=-3;sky.frustumCulled=false;scene.add(sky);
+const discMat=isMoon=>new THREE.ShaderMaterial({vertexShader:DISC_VERT,fragmentShader:DISC_FRAG,depthWrite:false,
+ uniforms:Object.assign({},SH,{uOpen:{value:0},uBlink:{value:0},uIsMoon:{value:isMoon?1:0},uIllum:{value:1},uDim:{value:1},uGaze:{value:new THREE.Vector2()}})});
+const sunM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(false));sunM.renderOrder=-2;sunM.frustumCulled=false;scene.add(sunM);
+const moonM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(true));moonM.renderOrder=-2;moonM.frustumCulled=false;scene.add(moonM);
 
 /* ====================================================================== weather */
 const WX = { wind: 7, windDir: 245, cloud: 0.55, precip: 0, temp: 12, hum: 84, swellH: 1.5, swellT: 10, swellDir: 265, live: false, at: 0 };
