@@ -280,7 +280,7 @@ window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur",()=>{keys.clear();drag=lookDrag=null});
 hit.addEventListener("wheel",e=>{e.preventDefault();speed=clamp(speed*Math.exp(-e.deltaY*.001),1,100)},{passive:false});
 document.querySelectorAll("[data-touch]").forEach(b=>{
- const k=b.dataset.touch==="up"?" ":"c";
+ const k={up:" ",down:"c",forward:"w",backward:"s",left:"a",right:"d"}[b.dataset.touch];
  b.addEventListener("pointerdown",e=>{keys.add(k);b.setPointerCapture(e.pointerId)});
  b.addEventListener("pointerup",()=>keys.delete(k));b.addEventListener("pointercancel",()=>keys.delete(k));
 });
