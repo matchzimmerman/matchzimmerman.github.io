@@ -48,3 +48,7 @@ A deterministic seeded PRNG creates matched starting fields. Each run records se
 - 2023 CRI-SPA red phenotype and adenine conditions: https://pmc.ncbi.nlm.nih.gov/articles/PMC10516668/
 - 2018 ADE2 disruption/repair: https://pubmed.ncbi.nlm.nih.gov/30311729/
 - 2024 yeast-based colorimetric assay: https://www.frontiersin.org/journals/synthetic-biology/articles/10.3389/fsybi.2024.1265343/full
+
+## v0.2 — Interpretive guidance
+
+The experience now supplies explanations at the point of observation. A phase-sensitive field guide identifies yeast, invites cell inspection and modification, then explains why DNA function, phenotype, and environmental adenine may diverge. A magnified budding-yeast silhouette is illustrative, not microscope imagery. This does not model actual molecular Cas9 cutting or repair. The gene-function and colony-color relationship is sourced; pulse success probability, replication speed, and pigment are uncalibrated artistic choices.
