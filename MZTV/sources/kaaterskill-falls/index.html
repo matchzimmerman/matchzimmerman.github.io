@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1f3a">
+<meta name="description" content="MZ WORLD · KAATERSKILL FALLS — a navigable six-ink landscape study.">
+<title>KAATERSKILL / MZ WORLD — MZTV</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<style>
+:root{--ink:#1b1f3a;--deep:#2c3e7a;--sea:#3f9aa6;--hot:#f0603f;--glow:#f2c14e;--paper:#efe6cf;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--paper)}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--ink)}
+canvas{display:block}
+#stage{position:fixed;inset:0;touch-action:none;cursor:crosshair}
+#screen{position:fixed;inset:0;pointer-events:none;display:flex;justify-content:space-between;flex-direction:column;padding:clamp(12px,2vw,26px)}
+#top,#bottom{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+#bottom{align-items:flex-end}
+.plate{background:rgba(27,31,58,.89);border:1px solid var(--paper);padding:10px 13px;max-width:410px;box-shadow:4px 4px 0 var(--hot)}
+#brand{background:var(--paper);color:var(--ink);border:2px solid var(--ink);box-shadow:4px 4px 0 var(--hot)}
+.micro{font-size:9px;letter-spacing:.14em;font-weight:bold}
+h1{font-size:clamp(17px,2.4vw,30px);letter-spacing:-.06em;margin:3px 0;line-height:1}
+p{font-size:10px;line-height:1.6;margin:5px 0}
+#telemetry{font-size:10px;line-height:1.6;text-align:right;letter-spacing:.04em;min-width:160px}
+#telemetry b{color:var(--glow)}
+#map{width:205px;height:176px;border:1px solid var(--paper);background:rgba(27,31,58,.88);pointer-events:auto;touch-action:manipulation}
+#routeLegend{font-size:9px;letter-spacing:.09em;margin:3px 0 8px}
+#readout{max-width:420px}
+#readout strong{color:var(--glow);letter-spacing:.08em}
+#buttons{display:flex;gap:5px;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end;max-width:520px}
+button{background:var(--ink);color:var(--paper);font:700 10px/1.15 ui-monospace,monospace;padding:10px;border:1px solid var(--paper);cursor:pointer;letter-spacing:.05em}
+button:hover,button[aria-pressed=true]{background:var(--paper);color:var(--ink)}
+button:focus-visible{outline:2px solid var(--glow);outline-offset:3px}
+#gate{position:fixed;inset:0;background:rgba(27,31,58,.76);z-index:10;display:grid;place-items:center;padding:15px}
+#gate[hidden],#guide[hidden]{display:none}
+#intro{max-width:560px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--hot);padding:clamp(20px,5vw,38px)}
+#intro h2{font-size:clamp(44px,10vw,90px);letter-spacing:-.095em;line-height:.82;margin:17px 0}
+#intro p{font-size:12px;line-height:1.7}
+#intro button{padding:15px;margin:13px 8px 0 0}
+#intro .secondary{background:transparent;color:var(--ink);border:2px solid var(--ink)}
+#guide{position:fixed;inset:0;z-index:12;background:rgba(27,31,58,.75);display:grid;place-items:center;padding:12px}
+#guide .sheet{background:var(--paper);color:var(--ink);padding:24px;max-width:520px;width:100%;max-height:92dvh;overflow:auto;border:3px solid var(--ink)}
+#guide h2{margin:0;font-size:24px}
+#guide table{font-size:11px;line-height:1.7;width:100%;border-collapse:collapse;margin:12px 0}
+#guide td{padding:6px 2px;border-bottom:1px solid #aaaca5}
+#guide td:first-child{font-weight:bold;width:34%}
+#mobile{display:none;position:fixed;inset:0;pointer-events:none}
+#stick{width:112px;height:112px;border:1px solid var(--paper);border-radius:50%;background:rgba(27,31,58,.48);position:absolute;bottom:130px;left:20px}
+#nub{width:42px;height:42px;border-radius:50%;background:rgba(239,230,207,.78);position:absolute;left:34px;top:34px}
+#lookzone{position:absolute;bottom:136px;right:20px;font-size:9px;letter-spacing:.08em;text-align:right;text-shadow:0 1px 3px #000}
+#notice{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%);font-size:10px;letter-spacing:.12em;pointer-events:none;text-align:center;opacity:0;transition:opacity .4s;background:var(--ink);padding:10px}
+#notice.show{opacity:1}
+@media(pointer:coarse){#mobile{display:block}}
+@media(max-width:650px){
+ #screen{padding:12px}
+ #brand{max-width:53vw;padding:7px 9px}
+ #brand h1{font-size:18px}
+ #telemetry{font-size:8px;min-width:0;padding:6px;max-width:46vw}
+ #map{width:135px;height:118px}
+ #bottom{flex-wrap:wrap;gap:5px}
+ #readout{font-size:9px;max-width:100%;padding:6px 8px}
+ #buttons{max-width:100%;width:100%;justify-content:space-between;flex-wrap:nowrap}
+ #buttons button{font-size:8px;padding:7px 3px;flex:1;min-height:37px}
+ #routeLegend{font-size:8px;margin:2px 0}
+ #stick{bottom:138px;left:12px}
+ #lookzone{bottom:178px;right:12px}
+ #intro h2{font-size:50px}
+}
+@media(max-height:540px) and (pointer:coarse){
+ #map{width:115px;height:96px}
+ #stick{bottom:58px}
+ #lookzone{bottom:70px}
+ #telemetry{display:none}
+ #bottom{align-items:flex-end}
+ #readout{max-width:46%}
+ #buttons{max-width:53%;flex-wrap:wrap}
+ #buttons button{flex:0 1 auto}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+</head>
+<body>
+<div id="stage" aria-label="Explorable Kaaterskill Falls environment"></div>
+<div id="screen">
+ <div id="top">
+  <div id="brand" class="plate"><div class="micro">MZTV · MZ WORLD / ENVIRONMENT STUDY 001</div><h1>KAATERSKILL FALLS</h1><div class="micro">SPRUCE CREEK · CATSKILL MOUNTAINS · NEW YORK</div></div>
+  <div id="telemetry" class="plate"><b id="mode">OBSERVING</b><div id="clock">EASTERN TIME</div><div id="wx">WEATHER INITIALIZING</div><div id="discharge">FLOW STUDY · MODELLED</div></div>
+ </div>
+ <div id="bottom">
+  <div><canvas id="map" width="410" height="352" title="Click a waypoint to travel"></canvas><div id="routeLegend">FIELD SURVEY · NOT A NAVIGATION MAP</div></div>
+  <div id="readout" class="plate"><strong id="place">TWO DROPS / ONE GORGE</strong><div id="details">CAMERAS FOLLOW THE WATER AND THE STONE TRAIL</div></div>
+  <div id="buttons"><button id="walk" type="button">WALK [V]</button><button id="camera" type="button">NEXT SHOT [C]</button><button id="sound" type="button" aria-pressed="false">SOUND OFF [M]</button><button id="fly" type="button">FLY [F]</button><button id="help" type="button">CONTROLS [?]</button></div>
+ </div>
+</div>
+<div id="mobile" aria-hidden="true"><div id="stick"><div id="nub"></div></div><div id="lookzone">DRAG TO TURN<br>LEFT THUMB TO MOVE</div></div>
+<div id="notice"></div>
+<div id="gate"><div id="intro">
+ <div class="micro">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>
+ <h2>KAATER<br>SKILL</h2>
+ <p>Enter a constructed six-ink world of Spruce Creek, two cascades, and the stone steps between them. Walk from the upper overlook toward the middle pool and descend the 200-step staircase, or surrender to an autonomous camera survey.</p>
+ <p><strong>FIELD STUDY 001.</strong> The drop heights and staircase count follow NYSDEC documentation. The initial terrain and trail geometry are interpretive, not yet derived from georeferenced 3DEP elevation data. Weather is live when available; flow is a visualization, not a measured stream gauge.</p>
+ <button id="enter" type="button">ENTER / WALK</button><button class="secondary" id="watch" type="button">OBSERVE WORLD</button>
+ <p id="load">THREE.JS ENVIRONMENT · LOADING…</p>
+</div></div>
+<div id="guide" hidden><div class="sheet">
+ <div class="micro">KAATERSKILL / FIELD NOTES</div><h2>Navigate the gorge</h2>
+ <table>
+ <tr><td>WASD / ARROWS</td><td>Move on terrain and stone treads</td></tr>
+ <tr><td>MOUSE DRAG</td><td>Turn your camera / fly orientation</td></tr>
+ <tr><td>SHIFT</td><td>Move faster</td></tr>
+ <tr><td>V</td><td>Walk / observe</td></tr>
+ <tr><td>F</td><td>Free-fly survey camera</td></tr>
+ <tr><td>SPACE / Q</td><td>Fly up / fly down</td></tr>
+ <tr><td>C</td><td>Next autonomous camera shot</td></tr>
+ <tr><td>1–5</td><td>Jump to trail landmarks</td></tr>
+ <tr><td>M</td><td>Toggle waterfall sound</td></tr>
+ <tr><td>TOUCH</td><td>Left joystick to move; right drag to look</td></tr>
+ </table>
+ <p>Survey points are approximate; use the map to teleport. This is art/research, not a trail guide or safety-navigation product. Follow posted NYSDEC trails when visiting in person.</p>
+ <button id="closeHelp" type="button">RETURN TO WORLD</button>
+ </div></div>
+<script type="module" src="./world.js"></script>
+</body></html>
