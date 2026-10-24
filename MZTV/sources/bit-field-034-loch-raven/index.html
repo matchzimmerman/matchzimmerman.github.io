@@ -234,7 +234,7 @@ void main(){
 }`;
 const OBJ_FRAG = /* glsl */`
 ${COMMON}
-uniform float uId, uMode, uEmit, uFace, uStackH, uTime;
+uniform float uId, uMode, uEmit, uFace, uStackH, uTime, uGhostMode, uGhost;
 uniform float uAmb, uDiff, uFogD, uFogShade;
 uniform vec3 uKeyD, uCamP, uT;
 varying vec3 vW, vN, vL, vT; varying float vC;
@@ -246,6 +246,7 @@ void rock(inout vec3 T, inout float sh, inout float acc){
   sh-=0.14*(1.-n1);
 }
 void main(){
+  if(uGhostMode>0.5 && hash(floor(vW.xz*3.1+vW.y*.19)) > 0.36*uGhost) discard;
   vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
   float sh=uAmb+uDiff*max(dot(N,uKeyD),0.)+vC;
   float id=uId; vec3 T=uT; float acc=0.;
@@ -272,7 +273,7 @@ function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
     vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
     uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
       uEmit: { value: 0 }, uFace: { value: 0 }, uStackH: { value: 1 }, uBreathOn: { value: 0 },
-      uCloth: { value: 0 }, uClothH: { value: 2 }, uWalk: { value: 0 }, uMove: { value: 0 }, uWindL: { value: V() } }, extra)
+      uCloth: { value: 0 }, uClothH: { value: 2 }, uWalk: { value: 0 }, uMove: { value: 0 }, uWindL: { value: V() }, uGhostMode: {value:0}, uGhost: {value:1} }, extra)
   });
 }
 
@@ -510,7 +511,7 @@ const GHOST=new THREE.Group();scene.add(GHOST);GHOST.visible=false;
 for(const [gx,gz,gw,gd] of [[-18,95,17,12],[17,112,23,14],[-34,150,12,17],[37,156,15,11]]){
  const pts=[V(gx,0,gz),V(gx+gw,0,gz),V(gx+gw,0,gz+gd),V(gx,0,gz+gd)];
  for(let i=0;i<4;i++){let a=pts[i],b=pts[(i+1)%4];
-  const geom=new THREE.BoxGeometry(a.distanceTo(b),.23,.28),m=new THREE.Mesh(geom,objMat(12,0,V(1,0,0)));
+  const geom=new THREE.BoxGeometry(a.distanceTo(b),.23,.28),m=new THREE.Mesh(geom,objMat(12,0,V(1,0,0),{uGhostMode:{value:1},uGhost:{value:0}}));
   m.position.copy(a).add(b).multiplyScalar(.5);m.rotation.y=-Math.atan2(b.z-a.z,b.x-a.x);GHOST.add(m);
  }
 }
@@ -759,7 +760,7 @@ const AUD = {
         if (this.bar % 4 === 0) this.chord(t); }
       const kp = this.euclid(S.epoch % 3 === 0 ? 3 : 2, 16, 0), bp = this.euclid(S.epoch % 2 ? 5 : 4, 16, 3);
       if (!hush && kp[st]) this.voice('kick', t, { v: st === 0 ? 0.55 : 0.4 });
-      if (!hush && bp[st] && keeper.visible) { const stop = STOPS[keeper.target] || STOPS.HOUSE; const d = keeper.state === 'walk' ? (st % 2 ? 2 : stop.deg) : stop.deg;
+      if (!hush && bp[st] && keeper.visible) { const stop = STOPS[keeper.target] || STOPS.WEST; const d = keeper.state === 'walk' ? (st % 2 ? 2 : stop.deg) : stop.deg;
         this.voice('bass', t, { m: this.deg(d, 1) - 12, d: sixteenth * rr(2, 4), v: 0.32, open: clamp(WX.wind / 14, 0.15, 1) }); }
       if (!hush && !keeper.visible && st === 8) this.voice('bass', t, { m: this.deg(0, 0), d: sixteenth * 6, v: 0.22, open: 0.1 });
       if (this.pend.length) { this.pend.sort((a, b) => b.s - a.s); const p = this.pend.shift(); this.pend.length = 0;
@@ -781,13 +782,13 @@ const AUD = {
   frame(dt) {
     const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime;
     const shore = clamp(SHORE_ENV, 0, 1.5), calm = live.calm;
-    this.water.forEach((s, i) => { s.g.gain.setTargetAtTime((0.05 + 0.16 * shore + 0.04 * (.1+HYD.q/65)) * calm, t, 0.25); s.f.frequency.setTargetAtTime(170 + 330 * shore + 40 * (.1+HYD.q/65), t, 0.3); });
+    this.water.forEach((s, i) => { s.g.gain.setTargetAtTime((0.025 + 0.19 * shore + 0.05 * (.1+HYD.q/65)) * calm, t, 0.25); s.f.frequency.setTargetAtTime(170 + 330 * shore + 40 * (.1+HYD.q/65), t, 0.3); });
     this.wind.g.gain.setTargetAtTime(Math.pow(WX.wind, 1.3) * 0.0032 * (live.ev === 'hush' ? 0.2 : 1), t, 0.8); this.wind.f.frequency.setTargetAtTime(220 + WX.wind * 22, t, 1);
     this.wind.p.pan.setTargetAtTime(0.5 * Math.sin(simT * 0.07), t, 1);
     this.rain.g.gain.setTargetAtTime(clamp(WX.precip, 0, 4) * 0.02, t, 1);
     this.padBus.gain.setTargetAtTime((0.25 + 0.35 * (1 - SH.uDay.value)) * (live.ev === 'hush' ? 0.1 : 1), t, 2);
     this.padLP.frequency.setTargetAtTime(420 + clamp(WX.temp, 0, 25) * 22, t, 2);
-    this.sub.g.gain.setTargetAtTime(live.breath / 2.4 * 0.22 * (0.5 + 0.5 * Math.sin(simT * TAU / ((8+HYD.q/20) * 1.5))), t, 0.3);
+    this.sub.g.gain.setTargetAtTime(Math.abs(live.breath) / 2.4 * 0.22 * (0.5 + 0.5 * Math.sin(simT * TAU / ((8+HYD.q/20) * 1.5))), t, 0.3);
     this.grind.g.gain.setTargetAtTime(live.ev === 'warren' ? live.apparition * 0.09 * (0.6 + 0.4 * Math.sin(simT * 0.9)) : 0, t, 0.5);
     const fb = clamp(0.32 + (WX.hum - 70) / 100 + (live.ev ? 0.12 : 0), 0.2, 0.68); this.echo.fbL.gain.setTargetAtTime(fb, t, 1); this.echo.fbR.gain.setTargetAtTime(fb, t, 1);
     this.room.rOut.gain.setTargetAtTime(0.4 + 0.3 * clamp(WX.precip, 0, 1) + 0.2 * (1 - SH.uDay.value), t, 2);
@@ -879,7 +880,7 @@ function step(dt){
  live.breath=lerp(live.breath,live.ev==='warren'?.9*Math.sin(simT/9)*live.apparition:0,1-Math.exp(-d));
  GHOST.visible=live.apparition>.07&&HYD.level<20.6;
  GHOST.position.y=HYD.level+.08;
- GHOST.children.forEach((m,i)=>{m.visible=i<GHOST.children.length*live.apparition});
+ GHOST.children.forEach(m=>{m.material.uniforms.uGhost.value=live.apparition});
  gauges.forEach(g=>{g.needle.rotation.z=.2*Math.sin(simT*.05+g.x)+.15*clamp(HYD.q/20,0,1)});
  SHORE_ENV=lerp(SHORE_ENV,HYD.q/32,1-Math.exp(-d*.8));
  if(HYD.q>1&&rnd()<d*.34){const p=V(rr(-35,35),-.2,-35),v=AUD.lens(p);AUD.pend.push({s:clamp(HYD.q/30,0,1),v:v.g*.4,pan:v.pan})}
