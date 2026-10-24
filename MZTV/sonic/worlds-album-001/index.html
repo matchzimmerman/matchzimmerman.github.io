@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#191f26">
+<title>MZ SONIC · WORLDS ALBUM 001</title>
+<meta name="description" content="An original 15-minute procedural album, three worlds, six instruments, MIDI and Ableton-ready WAV stems.">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand"><span class="brand-mark">MZ<span class="small-dot">.</span></span><span>SONIC SYSTEMS<br><small>ALBUM ENGINE / EXPERIMENT 001</small></span></div>
+    <div class="header-meta"><span class="live-dot"></span> SELF-CONTAINED SCORE <span class="dot-sep">/</span> 15:00 <span class="dot-sep">/</span> REV 01</div>
+  </header>
+  <main>
+    <section class="intro">
+      <div class="overline">WORLD COMPOSITION SERIES <span>001 — 2026</span></div>
+      <h1>THE FIELD<br><em>BETWEEN WORLDS</em></h1>
+      <div class="intro-foot"><p>One continuous procedural record.<br>Three independently behaving environments.<br>Six musical systems, carrying a motif between them.</p>
+      <p class="intro-side">A composed framework with a generated performance.<br>No recording of the live broadcast sources is used.<br>Browser audio becomes the listening edition; MIDI and stems become the studio edition.</p></div>
+    </section>
+    <section class="console" aria-label="Album player">
+      <div class="console-title"><span>01 / THE PERFORMANCE</span><span id="edition">SEED 81001</span></div>
+      <div class="transport">
+        <button class="play" id="play" aria-label="Play or pause"><span id="playIcon">▶</span></button>
+        <button id="restart" class="plain" title="Return to beginning" aria-label="Restart">↺</button>
+        <div class="counter"><strong id="time">00:00</strong><span>/ 15:00</span></div>
+        <div class="transport-space"></div>
+        <div class="state"><span id="playStatus">READY</span><small id="barStatus">BAR 001 / 5·4 / 60 BPM</small></div>
+        <div class="volume"><label for="volume">LEVEL</label><input id="volume" type="range" min="0" max="100" value="74"></div>
+      </div>
+      <div class="score-top"><span>THE FULL SCORE / CLICK TO SEEK</span><span>DRONE / PAD / BASS / MOTIF / PULSE / FIELD</span></div>
+      <div class="score-wrap" id="scoreWrap" tabindex="0" role="slider" aria-label="Seek album" aria-valuemin="0" aria-valuemax="900" aria-valuenow="0">
+        <canvas id="score" height="300"></canvas>
+        <div id="needle"></div>
+        <div class="score-axis"><span>00:00</span><span>05:00</span><span>10:00</span><span>15:00</span></div>
+      </div>
+      <div class="telemetry">
+        <div><small>CURRENT WORLD</small><strong id="nowWorld">HEADLAND</strong></div>
+        <div><small>MUSICAL MODE</small><strong id="nowKey">D DORIAN</strong></div>
+        <div><small>FLOW / SWELL</small><strong id="flow">0.00</strong></div>
+        <div><small>WIND</small><strong id="wind">0.00</strong></div>
+        <div><small>GROWTH</small><strong id="growth">0.00</strong></div>
+        <div><small>ACTIVE PHENOMENON</small><strong id="phenomenon">DEPARTURE</strong></div>
+      </div>
+    </section>
+    <section class="worlds" aria-label="Movement navigation">
+      <div class="section-title"><span>02 / THREE MOVEMENTS</span><span>INDIVIDUAL PIECES / ONE CONTINUOUS EXPERIENCE</span></div>
+      <div class="world-grid" id="worldGrid">
+        <button class="world active" data-move="headland"><span class="world-number">I / 00:00—05:00</span><strong>HEADLAND</strong><span>DEPARTURE</span><div class="world-lines world-a"></div><small>5/4 · D DORIAN<br>WIND / SWELL / DISTANCE</small></button>
+        <button class="world" data-move="raven"><span class="world-number">II / 05:00—10:00</span><strong>LOCH RAVEN</strong><span>MEMORY</span><div class="world-lines world-b"></div><small>7/8 · D PHRYGIAN<br>KEEPER / SPILLWAY / WARREN</small></button>
+        <button class="world" data-move="plant"><span class="world-number">III / 10:00—15:00</span><strong>48 PLANT</strong><span>EMERGENCE</span><div class="world-lines world-c"></div><small>4/4 · F LYDIAN<br>GROWTH / RECOLLECTION</small></button>
+      </div>
+    </section>
+    <section class="instrument" aria-label="Sonic layers">
+      <div class="section-title"><span>03 / THE SIX INSTRUMENTS</span><span>CLICK A LAYER TO MUTE OR RESTORE IT</span></div>
+      <div class="part-grid" id="parts"></div>
+      <p class="smallprint">These six parts are synthesized directly in the browser, following a common score and the changing conditions of each imagined environment. The arrangement, tempo map, note events and exports are repeatable from the seed.</p>
+    </section>
+    <section class="export" aria-label="Studio exports">
+      <div class="section-title"><span>04 / THE STUDIO EDITION</span><span>PREPARE FOR ABLETON LIVE</span></div>
+      <div class="export-body">
+        <div class="export-text">
+          <h2>A COMPOSITION<br>YOU CAN OPEN.</h2>
+          <p>The MIDI pack carries separate tracks, movement markers, per-bar tempo changes, time signatures and mode labels. WAV stems are rendered separately so you can mix and process them in Live.</p>
+          <p class="smallprint">XML is included as a documented interchange manifest, <strong>not</strong> an Ableton .als project or importable device preset. Ableton devices and automation need a configured template for a native Live Set.</p>
+          <div class="seed-line"><label for="seed">PERFORMANCE SEED</label><input id="seed" type="number" min="1" max="9999999" value="81001"><button id="generate" class="text-button">GENERATE NEW EDITION ↗</button></div>
+        </div>
+        <div class="export-controls">
+          <button id="midi" class="dl">↓ MIDI + TEMPO + MARKERS <span>SMALL ZIP</span></button>
+          <div class="export-select"><label for="movement">WAV MOVEMENT</label><select id="movement"><option value="headland">I / HEADLAND</option><option value="raven">II / LOCH RAVEN</option><option value="plant">III / 48 PLANT</option></select></div>
+          <button id="mix" class="dl">↓ MOVEMENT MIX · WAV <span>~13 MB</span></button>
+          <button id="stems" class="dl">↓ SIX SEPARATE STEMS · ZIP <span>~80 MB</span></button>
+          <button id="album" class="dl">↓ COMPLETE ALBUM · WAV <span>~40 MB</span></button>
+          <div class="export-progress" id="progressWrap" hidden><div id="progress"></div></div>
+          <div class="export-message" id="message" aria-live="polite">Ready to render. WAV exports are 22.05 kHz / 16-bit mono to keep this first browser build manageable.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer><span>MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV / MZ SONIC</span><span>ARTIST-DIRECTED / GENERATED INSTRUMENTS / VERSION 0.1</span></footer>
+</div>
+<script src="./core.js"></script>
+<script src="./app.js"></script>
+</body></html>
