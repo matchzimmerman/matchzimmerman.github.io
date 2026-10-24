@@ -22,7 +22,7 @@ function compose(seed){
  let tick=0;
  function add(part,t,dur,note,vel,w,pan=0){
   if(t>=LEN)return;
-  notes.push({part,t:Math.max(0,t),dur:Math.max(.05,Math.min(dur,LEN-t)),note,vel:clamp(vel,8,120),world:w.id,pan:clamp(pan,-1,1)});
+  notes.push({part,t:Math.max(0,t),dur:Math.max(.05,Math.min(dur,LEN-t,w.end-t)),note,vel:clamp(vel,8,120),world:w.id,pan:clamp(pan,-1,1)});
  }
  WORLDS.forEach((w,mi)=>{
   let t=w.start,i=0;
@@ -30,7 +30,10 @@ function compose(seed){
   while(t<w.end-.0001){
    const e=conditions(w,t,seed),p=(t-w.start)/300;
    const natural=mi===0?5.2-.85*e.flow:mi===1?6.35-2.32*e.flow:6-.95*p;
-   const sec=Math.min(w.end-t,clamp(natural+.15*Math.sin(i*.21+seed*.01),3.9,6.6));
+   let sec=clamp(natural+.15*Math.sin(i*.21+seed*.01),3.9,6.6);const remaining=w.end-t;
+   // Divide an impending short orphan bar into two coherent final bars.
+   if(remaining>sec&&remaining-sec<3.9)sec=remaining/2;
+   else sec=Math.min(sec,remaining);
    const beats=w.meter[0]*4/w.meter[1],bpm=60*beats/sec;
    const bar={t,sec,tick:Math.round(tick),ticks:Math.round(beats*480),num:w.meter[0],den:w.meter[1],bpm,world:w.id,i,e};
    bars.push(bar);automation.push({t,world:w.id,bar:i+1,bpm,meter:w.meter.join('/'),wind:e.wind,flow:e.flow,growth:e.growth});
