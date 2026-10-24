@@ -200,6 +200,13 @@ $("back").addEventListener("click",()=>location.href="../");
 $("panelToggle").textContent="PANEL [H]";
 $("panelToggle").addEventListener("click",()=>{const show=$("side").hidden;$("side").hidden=!show;$("side").dataset.pinned=show?"yes":"no"});
 $("asset").addEventListener("change",e=>select(e.target.value));
+$("focus").addEventListener("click",()=>{
+ const a=locations().find(x=>x.id===selected);if(!a)return say("Choose an asset to focus on");
+ eye.x=a.x+11;eye.z=a.z+18;eye.y=api.getBuilderTerrain(a.x,a.z)+13;
+ const dx=a.x-eye.x,dz=a.z-eye.z,dy=api.getBuilderTerrain(a.x,a.z)+2-eye.y;
+ yaw=Math.atan2(dx,-dz);pitch=Math.atan2(dy,Math.hypot(dx,dz));
+ say("CAMERA POSITIONED NEAR "+a.title+" · use P to capture a reference photo");
+});
 $("apply").addEventListener("click",()=>{
  if(!selected)return say("Select an asset first");
  if(![$("xx").value,$("zz").value,$("rr").value].every(v=>v.trim()))return say("Complete X, Z and Yaw");
