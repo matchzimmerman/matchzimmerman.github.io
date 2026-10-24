@@ -177,9 +177,17 @@ const $ = id => document.getElementById(id);
 const frame=$("headland"), hit=$("hit"), gate=$("gate"), help=$("help");
 const mobile=matchMedia("(pointer:coarse)").matches;
 
+let approvedLayout=null;
 async function bootKeeperWorld(){
  try{
-  const [r,places]=await Promise.all([fetch("../index.html",{cache:"no-cache"}),fetch("./editable-scenes.js",{cache:"no-cache"})]);
+  const [r,places,published]=await Promise.all([
+   fetch("../index.html",{cache:"no-cache"}),
+   fetch("./editable-scenes.js",{cache:"no-cache"}),
+   fetch("./layouts/published.json",{cache:"no-store"}).catch(()=>null)
+  ]);
+  if(published?.ok){
+   try{const x=await published.json();if(x.schema==="mz.headland.layout.v1"&&Array.isArray(x.assets))approvedLayout=x.assets}catch(e){console.warn("HEADLAND published layout unavailable",e)}
+  }
   if(!r.ok||!places.ok)throw new Error("HEADLAND source or SEALS scene data not found");
   let html=await r.text(),scenes=await places.text();
   const edits=[
@@ -327,6 +335,7 @@ function readyCheck(){
   }else{
    const draft=JSON.parse(localStorage.getItem("mz-headland-builder-v1")||"null");
    if(draft?.schema==="mz.headland.layout.v1")rows=draft.assets;
+   else rows=approvedLayout;
   }
   if(rows)api.applyBuilderLayout(rows);
  }catch(e){console.warn("HEADLAND builder layout rejected",e)}
