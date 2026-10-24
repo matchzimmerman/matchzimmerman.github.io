@@ -17,6 +17,12 @@ MZTV contains multiple parallel research lineages rather than one sequential sty
 - **FIELD ENGINE** — environments in which forces enter, propagate, interact, accumulate and alter materials, sound, light, memory and perception. A Field Engine piece may use OBAS as a rendering language without becoming an OBAS experiment conceptually. BIT FIELD 020–024 mark the emergence of this branch; their historical names are retained.
 - **LIVE CODE** — autonomous compositional systems in which the running logic/state is exposed as part of the work.
 
+## MZ SONIC · WORLDS ALBUM 001 — THE FIELD BETWEEN WORLDS
+
+New independent 15-minute, three-movement procedural album prototype in `sonic/worlds-album-001/`: HEADLAND (Departure), LOCH RAVEN (Memory), 48 PLANT (Emergence). One cross-world motif, six synthetic layers, deterministic 900-second score, a listening interface, MIDI tempo and meter map, movement/cue markers, WAV movement mixes and separated studio stems. **It translates the worlds' behavior into a new score; it does not run the real broadcast audio engines.** Portable XML is a manifest, not native Ableton .als, and Ableton import/plug-in automation remain an integration step.
+
+URL: https://matchzimmerman.com/MZTV/sonic/worlds-album-001/ (when deployed). Full notes: `sonic/worlds-album-001/README.md`.
+
 ## Current sources
 
 ### BIT FIELD 001
