@@ -853,7 +853,7 @@ for(const c of CREW)c.tgt=V(0,20,0);
 const DIR={cur:0,until:0,pendingCut:-1,last16:-1,look:null};
 function cut(i){DIR.cur=clamp(Math.floor(i),0,CREW.length-1);DIR.until=simT+rr(8,19);DIR.pendingCut=-1}
 function chooseShot(){
- const weights=CREW.map((c,i)=>Math.max(.2,1+(i===3&&keeper.state==='walk'?2.3:0)+(i===0&&HYD.q>2?1.5:0)+(i===8&&HYD.level<21?.5:0)-(DIR.cur===i?.65:0)));
+ const weights=CREW.map((c,i)=>Math.max(.2,1+(i===3&&keeper.state==='walk'?2.3:0)+(i===0&&HYD.q>2?1.5:0)+(i===8 && HYD.level < 21 ? 0.5 : 0)-(DIR.cur===i?.65:0)));
  let r=rnd()*weights.reduce((a,b)=>a+b,0);for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0)return i}return 0;
 }
 
