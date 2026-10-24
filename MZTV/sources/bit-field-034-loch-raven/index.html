@@ -277,6 +277,43 @@ function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
   });
 }
 
+/* ---------- advected hydraulic water: every frame still resolves to six inks */
+const WATER_FRAG=/* glsl */\`
+\${COMMON}
+uniform float uTime,uFlow,uFall,uWindSpeed,uAmb,uDiff,uFogD,uFogShade;
+uniform vec3 uKeyD,uCamP,uT;
+varying vec3 vW,vN,vL,vT;varying float vC;
+void main(){
+ vec3 N=normalize(vN);
+ if(!gl_FrontFacing)N=-N;
+ float d=length(uCamP-vW);
+ float speed=uFall>.5?1.8+uFlow*.085:.14+uWindSpeed*.07;
+ vec2 coord=uFall>.5?vW.yz:vW.xz;
+ vec2 drift=vec2(uTime*speed*.095,uTime*speed*.047);
+ float a=vn(coord*.13+drift),b=vn(coord*.36-drift*1.7+11.);
+ float streak=.66*a+.34*b;
+ float foam=uFall>.5?smoothstep(.46,.66,streak+uFlow*.005):smoothstep(.74,.88,streak);
+ float id=foam>.5?3.:2.;
+ float sh=uAmb*.75+uDiff*.17*max(dot(N,uKeyD),0.)+.12+streak*.19;
+ if(id>2.5)sh=.65+.2*streak;
+ vec3 tangent=uFall>.5?vec3(0.,-1.,-1.):vec3(1.,0.,.23);
+ // Ink follows the advected water, while concrete and shoreline marks remain still.
+ vec3 moving=vW+(uFall>.5?vec3(0.,uTime*speed*.65,uTime*speed*.45):vec3(uTime*speed*.26,0.,uTime*speed*.04));
+ float line=lineAt(moving,N,tangent,d,0.);
+ float fog=1.-exp(-d/uFogD);
+ gl_FragColor=pack(mix(sh,uFogShade,fog),id,line,0.);
+}
+\`;
+function waterMat(fall=false){
+ return new THREE.ShaderMaterial({vertexShader:OBJ_VERT,fragmentShader:WATER_FRAG,side:THREE.DoubleSide,
+  uniforms:Object.assign({},SH,{
+   uT:{value:V(1,0,0)},uFlow:{value:0},uFall:{value:fall?1:0},uWindSpeed:{value:0},
+   uCloth:{value:0},uBreathOn:{value:0},uMove:{value:0},uWindL:{value:V()}
+  })
+ });
+}
+const reservoirMat=waterMat(false),tailwaterMat=waterMat(false),spillMat=waterMat(true);
+
 /* ---------- sky */
 const SKY_FRAG = /* glsl */`
 ${COMMON}
@@ -428,9 +465,9 @@ for(let i=0;i<250;i++){
  makeTree(x,z,[5,9,11,12,5,11][i%6]);
 }
 // Reservoir: calm printed surface, with waterline displaced by the MEMORY model.
-const reservoir=new THREE.Mesh(new THREE.PlaneGeometry(380,565,70,78),objMat(2,0,V(1,0,.15)));
+const reservoir=new THREE.Mesh(new THREE.PlaneGeometry(380,565,70,78),reservoirMat);
 reservoir.rotation.x=-Math.PI/2;reservoir.position.set(0,22,292);scene.add(reservoir);
-const tailwater=new THREE.Mesh(new THREE.PlaneGeometry(155,320,40,54),objMat(2,0,V(.2,0,1)));
+const tailwater=new THREE.Mesh(new THREE.PlaneGeometry(155,320,40,54),tailwaterMat);
 tailwater.rotation.x=-Math.PI/2;tailwater.position.set(0,-.6,-188);scene.add(tailwater);
 // Concrete gravity dam; plan proportions informed by published dimensions, surfaces artistically sculpted.
 function face(xa,xb,top,front,bot){
@@ -468,7 +505,7 @@ for(let i=0;i<95;i++){
   if(j){let k=(j-1)*2;idx.push(k,k+2,k+1,k+1,k+2,k+3);}
  }
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);g.computeVertexNormals();
- const ribbon=new THREE.Mesh(g,objMat(i%4===0?3:2,0,V(0,-1,-2)));
+ const ribbon=new THREE.Mesh(g,spillMat);
  ribbon.material.side=THREE.DoubleSide;fallGroup.add(ribbon);
 }
 // Hydraulic engraving: ruled waterline bands on the curved face track the flow.
@@ -562,6 +599,7 @@ function hydraulicsTick(dt){
  HYD.trend=lerp(HYD.trend,(HYD.level-previous)/Math.max(dt,.01)*3600,1-Math.exp(-dt/450));
  // Dimensionless, theatrical flow index, NEVER measured discharge.
  HYD.q=clamp(Math.pow(Math.max(0,HYD.level-LIP),1.5)*13,0,42);
+ for(const m of [reservoirMat,tailwaterMat,spillMat]){m.uniforms.uFlow.value=HYD.q;m.uniforms.uWindSpeed.value=WX.wind;}
  S.rainStore=HYD.rainStore;S.stageTrend=HYD.trend;S.stageLast=HYD.level;
  WX.swellH=.08+.018*HYD.q;WX.swellT=12-.11*HYD.q;
  reservoir.position.y=HYD.level;tailwater.position.y=-.55+.013*HYD.q;
