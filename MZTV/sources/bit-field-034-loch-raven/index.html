@@ -569,115 +569,104 @@ const discMat=isMoon=>new THREE.ShaderMaterial({vertexShader:DISC_VERT,fragmentS
 const sunM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(false));sunM.renderOrder=-2;sunM.frustumCulled=false;scene.add(sunM);
 const moonM=new THREE.Mesh(new THREE.PlaneGeometry(1,1),discMat(true));moonM.renderOrder=-2;moonM.frustumCulled=false;scene.add(moonM);
 
-/* ====================================================================== weather */
-const WX = { wind: 7, windDir: 245, cloud: 0.55, precip: 0, temp: 12, hum: 84, swellH: 1.5, swellT: 10, swellDir: 265, live: false, at: 0 };
-const WXT = Object.assign({}, WX);
-function synthWx(ms) { const h = ms / 3600e3;
-  return { wind: 6 + 4 * Math.sin(h * 0.7) + 2 * Math.sin(h * 2.3 + 1), windDir: 240 + 45 * Math.sin(h * 0.31), cloud: clamp(0.55 + 0.35 * Math.sin(h * 0.9 + 1), 0, 1),
-    precip: Math.max(0, Math.sin(h * 1.7) * 1.6 - 0.9), temp: 12 + 3 * Math.sin(h * 0.26), hum: 82 + 10 * Math.sin(h * 0.5),
-    swellH: 1.4 + 0.8 * Math.sin(h * 0.21), swellT: 10 + 2.6 * Math.sin(h * 0.17), swellDir: 265 + 18 * Math.sin(h * 0.12) }; }
-Object.assign(WXT, synthWx(simMs)); Object.assign(WX, WXT);
-async function fetchWx() {
-  if (!LIVE_WX) return;
-  try {
-    const [a, b] = await Promise.all([
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`).then(r => r.json()),
-      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=53.2&longitude=-9.65&current=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`).then(r => r.json()).catch(() => null),
-    ]);
-    const c = a.current; const m = b && b.current;
-    const prev = { ...WXT };
-    Object.assign(WXT, { wind: c.wind_speed_10m, windDir: c.wind_direction_10m, cloud: c.cloud_cover / 100, precip: c.precipitation, temp: c.temperature_2m, hum: c.relative_humidity_2m });
-    if (m) { const sh = m.swell_wave_height ?? m.wave_height, sp = m.swell_wave_period ?? m.wave_period, sd = m.swell_wave_direction ?? m.wave_direction;
-      if (sh != null) WXT.swellH = clamp(sh, 0.15, 7); if (sp != null) WXT.swellT = clamp(sp, 4, 18); if (sd != null) WXT.swellDir = sd; }
-    if (!WX.live) logEv('live weather from Galway Bay arrived');
-    else if (Math.abs(prev.swellH - WXT.swellH) > 0.3) logEv(`swell ${prev.swellH.toFixed(1)} → ${WXT.swellH.toFixed(1)} m`);
-    WX.live = true; WXT.live = true;
-  } catch (e) { WX.live = false; }
+/* ====================================================================== weather (live, local) + modelled hydraulics */
+const WX={wind:3.4,windDir:245,cloud:.45,precip:0,temp:14,hum:72,swellH:.18,swellT:10,swellDir:200,live:false,at:0};
+const WXT={...WX};
+const HYD={level:21.8,q:0,rainStore:S.rainStore||.35,trend:0,override:null};
+function synthWx(ms){const h=ms/3600e3;return {
+ wind:clamp(4+3*Math.sin(h*.47)+Math.sin(h*1.9),0,16),windDir:250+65*Math.sin(h*.2),
+ cloud:clamp(.45+.28*Math.sin(h*.31),0,1),precip:Math.max(0,2*Math.sin(h*.45)-1.68),
+ temp:13+7*Math.sin(h/23),hum:68+17*Math.sin(h*.1)
+}}
+Object.assign(WXT,synthWx(simMs));Object.assign(WX,WXT);
+async function fetchWx(){
+ if(!LIVE_WX)return;
+ try{
+  const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+LAT+'&longitude='+LON+'&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms');
+  if(!r.ok)throw Error('forecast');
+  const j=await r.json(),c=j.current;
+  if(!c||![c.temperature_2m,c.relative_humidity_2m,c.precipitation,c.cloud_cover,c.wind_speed_10m,c.wind_direction_10m].every(Number.isFinite))throw Error('bad weather');
+  Object.assign(WXT,{wind:c.wind_speed_10m,windDir:c.wind_direction_10m,cloud:c.cloud_cover/100,precip:c.precipitation,temp:c.temperature_2m,hum:c.relative_humidity_2m});
+  if(!WX.live)logEv('live Baltimore County weather arrived');
+  WX.live=true;WX.at=Date.now();
+ }catch(e){if(WX.live)logEv('weather source unavailable · simulated fallback');WX.live=false}
 }
-fetchWx(); setInterval(fetchWx, 15 * 60e3);
+function hydraulicsTick(dt){
+ const previous=HYD.level;
+ HYD.rainStore=clamp(HYD.rainStore*Math.exp(-dt/(8*3600))+WX.precip*dt/7200,0,3.4);
+ const lowCycle=Math.sin(simMs/86400000*TAU/17);
+ const level=21.85+2.65*lowCycle+.56*(HYD.rainStore-.35);
+ HYD.level=HYD.override==null?clamp(level,18.8,26):HYD.override;
+ HYD.trend=lerp(HYD.trend,(HYD.level-previous)/Math.max(dt,.01)*3600,1-Math.exp(-dt/450));
+ // Dimensionless, theatrical flow index, NEVER measured discharge.
+ HYD.q=clamp(Math.pow(Math.max(0,HYD.level-LIP),1.5)*13,0,42);
+ S.rainStore=HYD.rainStore;S.stageTrend=HYD.trend;S.stageLast=HYD.level;
+ WX.swellH=.08+.018*HYD.q;WX.swellT=12-.11*HYD.q;
+ reservoir.position.y=HYD.level;tailwater.position.y=-.55+.013*HYD.q;
+ fallGroup.visible=HYD.q>.3;fallGroup.scale.x=clamp(.18+HYD.q/17,.18,1);
+ hydraulics.forEach((h,i)=>{h.visible=HYD.q>.2&&i<Math.ceil(3+HYD.q/5)});
+}
+fetchWx();setInterval(fetchWx,15*60e3);
 
-/* ---------- waves from weather */
-const WAVES = [];
-function rebuildWaves() {
-  WAVES.length = 0;
-  const sd = fromBearingTravel(WX.swellDir), wd = fromBearingTravel(WX.windDir);
-  const sA = Math.atan2(sd.y, sd.x), wA = Math.atan2(wd.y, wd.x);
-  const amp = WX.swellH * 0.5;
-  [[0, 1, 0.48], [0.2, 0.86, 0.24], [-0.27, 1.13, 0.17], [0.42, 0.74, 0.11]].forEach(([da, pm, af], i) => {
-    const T = WX.swellT * pm, w = TAU / T, k = w * w / 9.81, a = sA + da; WAVES.push({ dx: Math.cos(a), dz: Math.sin(a), k, A: amp * af, w, Q: 0, ph: i * 1.31 }); });
-  const wT = clamp(0.55 * Math.sqrt(WX.wind) + 1.2, 1.5, 5), ww = TAU / wT, wk = ww * ww / 9.81, wa = 0.012 * Math.pow(WX.wind, 1.35);
-  [[0, 0.6], [0.5, 0.4]].forEach(([da, af], i) => WAVES.push({ dx: Math.cos(wA + da), dz: Math.sin(wA + da), k: wk * (1 + i * 0.4), A: wa * af, w: ww * Math.sqrt(1 + i * 0.4), Q: 0, ph: 2.1 + i }));
-  const sumKA = WAVES.reduce((s, q) => s + q.k * q.A, 0) || 1;
-  WAVES.forEach((q, i) => { q.Q = clamp(0.62 / sumKA, 0, 1.4); seaU.uW.value[i].set(q.dx, q.dz, q.k, q.A); seaU.uW2.value[i].set(q.w, q.Q, q.ph, 0); });
-  for (let i = 0; i < NC; i++) { const a = wA + (i - 2.5) * 0.35, L = 2.5 + i * 1.3, k = TAU / L; seaU.uC.value[i].set(Math.cos(a), Math.sin(a), k, clamp(WX.wind / 14, 0.05, 1.2) * 0.05 / (1 + i * 0.25)); }
-}
-function waveH(x, z, t) { let y = 0; for (const q of WAVES) y += q.A * Math.sin(q.k * (q.dx * x + q.dz * z) - q.w * t + q.ph); return y * seaU.uCalm.value; }
-
-/* ====================================================================== the uncanny (rare events where the landscape is alive) */
-const EVT = {
-  eye: { label: 'the sun opened an eye', min: 70, max: 160, cool: 40 * 60 },
-  breath: { label: 'the cliff breathed with the swell', min: 90, max: 200, cool: 30 * 60 },
-  stack: { label: 'a stack turned to look', min: 70, max: 150, cool: 35 * 60 },
-  wreath: { label: 'the gulls drew a ring around the light', min: 60, max: 120, cool: 45 * 60 },
-  hush: { label: 'the sea held its breath', min: 22, max: 34, cool: 0 },
+/* ====================================================================== the uncanny (one rare memory + the rupture hush) */
+const EVT={
+ warren:{label:'WARREN BELOW · the drowned town flickers through',min:60,max:115,cool:48*60},
+ hush:{label:'the spillway held still',min:22,max:34,cool:0}
 };
-const live = { ev: null, evT: 0, evDur: 0, subject: null, eyeOpen: 0, eyeTarget: 0, blink: 0, nextBlink: 5, breath: 0, face: 0, calm: 1, wreath: 0, why: '' };
-function conditions() {
-  const sunEl = SUNM.sun.el / D2R, moonEl = SUNM.moon.el / D2R;
-  const watched = (keeper.stopName === 'the end of the pier' || keeper.stopName === 'the cliff edge') && keeper.state === 'dwell' && keeper.still > 25;
-  const soaring = gulls.filter(g => g.state === 'soar').length;
-  return {
-    eye: ((sunEl > -2 && sunEl < 16) || (sunEl < -6 && moonEl > 3 && moonEl < 45 && WX.cloud < 0.75)) && (watched || (WX.swellH < 1.3 && sunEl > -2)),
-    breath: WX.swellT >= 8 && keeper.cur !== 'stair',
-    stack: boat.out || seal.up > 0.5,
-    wreath: soaring >= 5 && WX.wind < 11 && (sunEl > 0 || moonEl > 8),
-  };
+const live={ev:null,evT:0,evDur:0,calm:1,breath:0,why:'',apparition:0};
+function conditions(){return {warren:HYD.level<20.5&&WX.precip<.3&&WX.wind<10}};
+const why={warren:()=>('modelled low water '+HYD.level.toFixed(1)+' (not surveyed), wind '+WX.wind.toFixed(1)+' m/s')};
+function similarity(name){
+ const mem=S.uncanny.mem[name];if(!mem||!mem.length)return 1;
+ let n=0;const h=localParts(simMs).hour;
+ for(const m of mem){const dh=Math.min(Math.abs(m.h-h),24-Math.abs(m.h-h))/3,dl=(m.lv-HYD.level)/1.6,dw=(m.wi-WX.wind)/4;n+=Math.exp(-(dh*dh+dl*dl+dw*dw))}
+ return 1+1.2*n/mem.length;
 }
-const why = {
-  eye: () => keeper.still > 25 ? `the keeper stood still at ${keeper.stopName}` : 'the sea was calm and the sun was low',
-  breath: () => `swell period ${WX.swellT.toFixed(1)} s`, stack: () => boat.out ? 'the boat was out' : 'the seal was up',
-  wreath: () => `${gulls.filter(g => g.state === 'soar').length} gulls aloft, wind ${WX.wind.toFixed(1)} m/s`,
-};
-function similarity(name) {   // memory: events recur more readily under conditions like the ones they happened in before
-  const mem = S.uncanny.mem[name]; if (!mem || !mem.length) return 1;
-  const h = galwayParts(simMs).hour; let s = 0;
-  for (const m of mem) { const dh = Math.min(Math.abs(m.h - h), 24 - Math.abs(m.h - h)) / 3, ds = (m.sw - WX.swellH) / 0.8, dw = (m.wi - WX.wind) / 4; s += Math.exp(-(dh * dh + ds * ds + dw * dw)); }
-  return 1 + 1.2 * s / mem.length;
+function startEvent(name,forced=false){
+ const e=EVT[name];if(!e)return false;
+ if(name==='warren'&&forced&&HYD.level>=20.5){HYD.override=19.3;hydraulicsTick(.016)}
+ live.ev=name;live.evT=0;live.evDur=rr(e.min,e.max);
+ live.why=forced?'forced by hand':(why[name]?why[name]():'');
+ if(name==='warren'){
+  S.uncanny.counts[name]=(S.uncanny.counts[name]||0)+1;S.uncanny.last[name]=simT;
+  const mem=S.uncanny.mem[name]=S.uncanny.mem[name]||[];
+  mem.push({h:localParts(simMs).hour,lv:HYD.level,wi:WX.wind});if(mem.length>12)mem.shift();S.tension+=.07;
+ }
+ logEv(e.label+(live.why?' · '+live.why:''));
+ AUD.event(name,true);return true;
 }
-function startEvent(name, forced) {
-  const e = EVT[name]; live.ev = name; live.evT = 0; live.evDur = rr(e.min, e.max); live.why = forced ? 'forced by hand' : (why[name] ? why[name]() : '');
-  if (name === 'eye') live.subject = (SUNM.sun.el > -2 * D2R || SUNM.moon.el < 0) ? 'sun' : 'moon';
-  S.uncanny.counts[name] = (S.uncanny.counts[name] || 0) + 1; S.uncanny.last[name] = simT;
-  const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: galwayParts(simMs).hour, sw: WX.swellH, wi: WX.wind }); if (mem.length > 12) mem.shift();
-  if (name !== 'hush') S.tension += 0.07;
-  logEv((name === 'eye' && live.subject === 'moon' ? 'the moon opened an eye' : e.label) + (live.why ? ' · ' + live.why : '') + (forced ? '' : ''));
-  AUD.event(name, true);
+function endEvent(){
+ const n=live.ev;live.ev=null;AUD.event(n,false);
+ if(n==='hush')rupture('the hush broke');
+ else{HYD.override=null;S.uncanny.next=simT+rr(14,34)*60}
 }
-function endEvent() { const n = live.ev; live.ev = null; AUD.event(n, false);
-  if (n === 'hush') rupture('the hush broke'); else S.uncanny.next = simT + rr(14, 34) * 60 * (1 - 0.05 * Math.min(S.epoch - 1, 6)); }
-function uncannyTick(dt) {
-  if (live.ev) { live.evT += dt; if (live.evT >= live.evDur) endEvent(); return; }
-  if (S.tension >= 1) { startEvent('hush'); return; }
-  if (simT < S.uncanny.next) return;
-  const c = conditions(); const opts = [];
-  for (const n of ['eye', 'breath', 'stack', 'wreath']) { if (!c[n]) continue; const last = S.uncanny.last[n]; if (last != null && simT - last < EVT[n].cool && last <= simT) continue;
-    opts.push([n, similarity(n) / (1 + 0.4 * (S.uncanny.counts[n] || 0)) * (n === 'eye' ? 1.6 : 1)]); }
-  if (!opts.length) return;
-  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; for (const [n, w] of opts) { r -= w; if (r <= 0) { startEvent(n); return; } }
+function uncannyTick(dt){
+ if(live.ev){live.evT+=dt;if(live.evT>=live.evDur)endEvent();return}
+ if(S.tension>=1){startEvent('hush');return}
+ if(simT<S.uncanny.next)return;
+ if(conditions().warren){
+  const last=S.uncanny.last.warren;
+  if(last==null||simT-last>=EVT.warren.cool){
+   const chance=similarity('warren')/(1+.4*(S.uncanny.counts.warren||0));
+   if(rnd()<clamp(chance,0,1)){startEvent('warren');return}
+  }
+ }
+ S.uncanny.next=simT+rr(4,9)*60;
 }
-function rupture(reason) {
-  S.epoch++; const prev = S.colorway;
-  const w = COLORWAYS.map((_, i) => i === prev ? 0 : 1 / (1 + S.cwVisits[i] * 0.8)); let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot, pick = 0;
-  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) { pick = i; break; } }
-  S.colorway = pick; S.cwVisits[pick] = (S.cwVisits[pick] || 0) + 1;
-  S.grammar = { period: rr(5.5, 10), dith: rr(0.05, 0.22), wob: rr(2, 12), outline: rnd() < 0.8 ? 1 : 0, hatch: rr(0.75, 1.25), angBias: 0 };
-  const centers = [38, 33, 36, 31, 41, 35]; S.center = centers[(centers.indexOf(S.center) + 1 + Math.floor(rnd() * 3)) % centers.length];
-  S.tension = 0; S.epochStart = simT; S.epochLen = rr(50, 95) * 60; S.uncanny.next = simT + rr(5, 12) * 60;
-  cwFrom = cwNow.map(v => v.clone()); cwMix = 0;
-  logEv(`RUPTURE → epoch ${S.epoch} · inks ${COLORWAYS[pick].name} · centre ${NOTE[S.center % 12]}` + (reason ? ' · ' + reason : ''));
-  AUD.rupture(); save();
+function rupture(reason){
+ S.epoch++;const prev=S.colorway;
+ const weights=COLORWAYS.map((_,i)=>i===prev?0:1/(1+S.cwVisits[i]*.8));
+ let r=rnd()*weights.reduce((a,b)=>a+b,0),pick=0;
+ for(let i=0;i<weights.length;i++){r-=weights[i];if(r<=0){pick=i;break}}
+ S.colorway=pick;S.cwVisits[pick]=(S.cwVisits[pick]||0)+1;
+ S.grammar={period:rr(5.5,10),dith:rr(.05,.22),wob:rr(2,12),outline:rnd()<.8?1:0,hatch:rr(.75,1.25),angBias:0};
+ const centers=[38,33,36,31,41,35];S.center=centers[(centers.indexOf(S.center)+1+Math.floor(rnd()*3))%centers.length];
+ S.tension=0;S.epochStart=simT;S.epochLen=rr(50,95)*60;S.uncanny.next=simT+rr(8,14)*60;
+ cwFrom=cwNow.map(v=>v.clone());cwMix=0;
+ logEv('RUPTURE → epoch '+S.epoch+' · '+COLORWAYS[pick].name+' · centre '+NOTE[S.center%12]+(reason?' · '+reason:''));
+ AUD.rupture();save();
 }
-const NOTE = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const NOTE=['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
 
 /* ====================================================================== audio: the live lens is the microphone */
 const AUD = {
