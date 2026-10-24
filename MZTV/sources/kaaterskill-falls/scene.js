@@ -73,7 +73,7 @@ const mats={
  marker:mat('#efc14e',{emissive:'#55380c',emissiveIntensity:.2})
 };
 export const LANDMARKS={upper:{x:0,z:12,top:95,bottom:42,span:53},
- lower:{x:0,z:-34,top:41,bottom:10,span:31}};
+ lower:{x:0,z:-34,top:38,bottom:12,span:26}};
 export function populate(scene){
  const land=buildTerrain();scene.add(land);
  buildCliffs(scene);buildWater(scene);buildStairs(scene);buildPaths(scene);
