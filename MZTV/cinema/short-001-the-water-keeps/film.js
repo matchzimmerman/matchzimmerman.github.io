@@ -301,6 +301,12 @@ class FilmScore{
   for(const link of this.worldLinks.values())try{link.aud.ctx.resume()}catch(e){}
  }
  pause(){if(this.ctx){this.monitor.gain.setTargetAtTime(0,this.ctx.currentTime,.04);this.ctx.suspend().catch(()=>{})}}
+ shutdown(){
+  for(const i of [...this.worldLinks.keys()])this.detachWorld(i);
+  for(const b of this.amb||[])try{b.src.stop()}catch(e){}
+  try{this.ctx?.close()}catch(e){}
+  this.ctx=null;
+ }
  mute(flag){this.muted=!!flag;if(this.ctx)this.monitor.gain.setTargetAtTime(this.muted?0:.45,this.ctx.currentTime,.1)}
  reset(){this.recorded=[];this.activeAct=-1;this.tickIndex=-1;this.warrenAt=-1;this.rng=this.seed||173;}
  seek(s){this.activeAct=-1;this.tickIndex=-1;this.recorded=[];this.warrenAt=s>=535?535:-1;}
