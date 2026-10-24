@@ -72,8 +72,6 @@ function terrainH(x,z){
  const valley=2+bank+woods+upstream+0.012*Math.abs(z);
  return valley;
 }
-function fromBearingTravel(deg){const a=deg*D2R;return {x:Math.cos(a),y:Math.sin(a)}}
-function compass(deg){return ['N','NE','E','SE','S','SW','W','NW'][Math.round((deg%360+360)%360/45)%8]}
 
 /* ====================================================================== sun + moon */
 function sunMoon(ms) {
@@ -97,7 +95,7 @@ function sunMoon(ms) {
   const phase = ((mlon - L) % TAU + TAU) % TAU;               // 0 new, π full
   return { sun, moon, illum: 0.5 * (1 - Math.cos(phase)) };
 }
-// world axes: +x north, +z east, -z west (the open bay), y up
+// World axes: +x crest direction, +z upstream, -z downstream; artistic local frame
 const azElToVec = (az, el) => V(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
 const fromBearingTravel = (deg) => { const b = deg * D2R; return new THREE.Vector2(-Math.cos(b), -Math.sin(b)); }; // (x,z) travel for a "from" bearing
 const compass = (deg) => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
