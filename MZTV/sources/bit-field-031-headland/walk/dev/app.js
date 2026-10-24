@@ -216,7 +216,8 @@ $("reset").addEventListener("click",()=>{
  const a=locations().find(x=>x.id===selected);if(a)move(a.baseX,a.baseZ,0);
 });
 $("ground").addEventListener("click",()=>{
- const a=locations().find(x=>x.id===selected);if(a)move(a.x,a.z,a.r);
+ const a=locations().find(x=>x.id===selected);
+ if(a)say(a.title+" / PROCEDURAL TERRAIN HEIGHT "+fmt(api.getBuilderTerrain(a.x,a.z))+" WORLD UNITS");
 });
 document.querySelectorAll("[data-nudge]").forEach(btn=>btn.addEventListener("click",()=>{
  const a=locations().find(x=>x.id===selected);if(!a)return;
