@@ -26,7 +26,7 @@ Independent **album-composition prototype** in `MZTV/sonic/worlds-album-001/`. D
 - This is a *first compositional study*, not certified for mastering, broadcast, multichannel surround, or sample-exact DAW parity.
 
 ## Technical gate
-- Score generation tested at seed 8001: 176 bars, 1583 note events, starts at 0 and ends at 900 seconds; 16,627-byte MIDI and valid ZIP headers generated.
+- Score generation tested at seed 8001: 175 bars, 1570 note events, starts at 0 and ends at 900 seconds; 16,484-byte MIDI and valid ZIP headers generated.
 - `core.js` and `app.js` JavaScript static parse: PASS on creation.
 - Browser player, HTML/CSS layouts, full OfflineAudioContext export time and imported Ableton markers have **not yet been validated inside Ableton**. If the preview/test browser reports any functional errors, document and patch those before treating this as a finished tool.
 
