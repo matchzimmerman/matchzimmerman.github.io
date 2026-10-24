@@ -205,7 +205,7 @@ function wiring(){
  $('closeNotes').addEventListener('click',()=>toggleNotes(false));
  $('fullscreen').addEventListener('click',()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen?.().catch(()=>{});else document.exitFullscreen?.()});
  $('cueExport').addEventListener('click',()=>download('MZ-CINEMA-001-edition-'+edition+'-cues.json',JSON.stringify(cueSheet(),null,2)));
- $('resetEdition').addEventListener('click',()=>{edition=Math.floor(Math.random()*899999)+100000;localStorage.setItem(EDKEY,String(edition));pause();restart();toggleNotes(false);$('launch').hidden=false});
+ $('resetEdition').addEventListener('click',()=>{pause();score?.shutdown();score=null;edition=Math.floor(Math.random()*899999)+100000;writeLocal(EDKEY,edition);restart();toggleNotes(false);$('launch').hidden=false});
  $('seek').addEventListener('pointerdown',()=>seekDragging=true);
  $('seek').addEventListener('input',e=>{seekDragging=true;$('timecode').textContent=fmt(Number(e.target.value))});
  $('seek').addEventListener('change',e=>{seekDragging=false;seekTo(e.target.value)});
