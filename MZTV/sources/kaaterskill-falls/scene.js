@@ -13,6 +13,44 @@ const smooth=(a,b,v)=>{let t=clamp(0,1,(v-a)/(b-a));return t*t*(3-2*t)};
 function hash(x,z){const n=Math.sin(x*127.1+z*311.7+18.73)*43758.5453;return n-Math.floor(n)}
 function noise(x,z){const a=Math.floor(x),b=Math.floor(z),u=smooth(0,1,x-a),v=smooth(0,1,z-b);return lerp(lerp(hash(a,b),hash(a+1,b),u),lerp(hash(a,b+1),hash(a+1,b+1),u),v)}
 function fbm(x,z){return .58*noise(x,z)+.29*noise(x*2.03,z*2.03)+.13*noise(x*4.09,z*4.09)}
+
+/* ========================================================================
+   REAL NEW YORK CALENDAR / CATSKILLS CANOPY PHENOLOGY
+   2026-10-21 field report: Hunter has passed peak; muted orange/yellow,
+   significant leaf drop. This is a seasonal model, NOT a live leaf sensor.
+   The calendar stays real even when scene lighting is permanently daylight.
+   ======================================================================== */
+const NY_DATE_FMT=new Intl.DateTimeFormat('en-US',{
+ timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'
+});
+export function foliageForDate(date=new Date()){
+ const parts=Object.fromEntries(NY_DATE_FMT.formatToParts(date).filter(p=>p.type!=='literal').map(p=>[p.type,+p.value]));
+ const {year,month,day}=parts;
+ const doy=1+Math.round((Date.UTC(year,month-1,day)-Date.UTC(year,0,1))/86400000);
+ let retention,phase,turn=0,litter=0;
+ if(doy<90){phase='WINTER · BARE CANOPY';retention=.02;}
+ else if(doy<158){phase='SPRING · LEAF OUT';retention=.02+.98*smooth(104,149,doy);}
+ else if(doy<261){phase='SUMMER · FULL CANOPY';retention=1;}
+ else if(doy<342){
+  turn=smooth(255,286,doy);
+  retention=1-.96*smooth(272,311,doy);
+  litter=smooth(268,310,doy)*(1-smooth(337,363,doy));
+  phase=doy<279?'AUTUMN · TURNING':doy<292?'AUTUMN · PEAK-TO-LATE':'PAST PEAK · LEAF DROP';
+ }else{phase='WINTER · BARE CANOPY';retention=.02;}
+ return {year,month,day,doy,key:year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0'),
+  retention:clamp(0,1,retention),turn,litter,phase,
+  label:new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric'}).format(date)};
+}
+export let FOLIAGE=foliageForDate();
+let forestSeason=null;
+export function refreshFoliage(date=new Date()){
+ const incoming=foliageForDate(date);
+ if(incoming.key===FOLIAGE.key)return false;
+ FOLIAGE=incoming;
+ if(forestSeason)forestSeason.update(FOLIAGE);
+ return true;
+}
+
 let seed=4221825;
 export function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
 
@@ -91,7 +129,10 @@ function buildTerrain(){
   const slope=Math.hypot(height(x+.8,z)-height(x-.8,z),height(x,z+.8)-height(x,z-.8));
   const barren=smooth(4,19,slope),forest=smooth(6,60,Math.abs(x));
   const c=low.clone().lerp(mid,forest*.85).lerp(rock,barren*.85);
-  c.lerp(autumn,.13*noise(x*.047+1,z*.047+2));
+  // Leaf litter, dormant understory and brown floor follow the same calendar.
+  const soil=smooth(.05,.82,FOLIAGE.litter);
+  c.lerp(autumn,.13*noise(x*.047+1,z*.047+2)+.43*soil*(1-barren));
+  if(FOLIAGE.phase.startsWith('WINTER'))c.lerp(new THREE.Color('#777569'),.24*(1-barren));
   c.multiplyScalar(.88+.21*noise(x*.14,z*.14));
   col.push(c.r,c.g,c.b);
  }
@@ -266,31 +307,111 @@ function buildBoulders(scene){
  batch.instanceMatrix.needsUpdate=true;batch.receiveShadow=true;scene.add(batch);
 }
 function buildForest(scene){
+ // Geometry is persistent; colors and live/dead foliage instances can be
+ // updated at NY midnight without restarting a 48-hour broadcast.
  const gTrunk=new THREE.CylinderGeometry(.12,.23,1,5);
+ const gBranch=new THREE.CylinderGeometry(.045,.07,1,5);
  const gLeaf=new THREE.IcosahedronGeometry(1,1),gPine=new THREE.ConeGeometry(1,2.6,6);
- const n=660;
- const trunks=new THREE.InstancedMesh(gTrunk,mats.trunk,n);
- const broad=new THREE.InstancedMesh(gLeaf,mats.leaf,n);
- const pine=new THREE.InstancedMesh(gPine,mats.pine,n);
- const colors=['#56715a','#6e7d58','#a98c52','#9d6c4d','#697959','#a27953'].map(s=>new THREE.Color(s));
- const p=new THREE.Object3D();let count=0;
- for(let i=0;i<n*4&&count<n;i++){
+ const max=660,dead=new THREE.Matrix4().makeScale(.00001,.00001,.00001);
+ const trunks=new THREE.InstancedMesh(gTrunk,mats.trunk,max);
+ const broad=new THREE.InstancedMesh(gLeaf,mats.leaf,max);
+ const pine=new THREE.InstancedMesh(gPine,mats.pine,max);
+ const branches=new THREE.InstancedMesh(gBranch,mats.trunk,max*4);
+ const summer=['#456b53','#62815a','#72814d','#536d53','#6e835f','#6b7955'].map(x=>new THREE.Color(x));
+ const autumn=['#ab864e','#946c43','#b19a61','#945b4b','#86704e','#bc9759'].map(x=>new THREE.Color(x));
+ const bud=new THREE.Color('#a6b77c');
+ const p=new THREE.Object3D(),up=new THREE.Vector3(0,1,0);
+ const rows=[];let count=0,branchCount=0;
+ for(let i=0;i<max*5&&count<max;i++){
   const x=-148+rand()*296,z=-164+rand()*303;
   if(Math.abs(x)<15||nearRoute(x,z)<5.5)continue;
   const y=height(x,z);
   const steep=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1));
   if(steep>9)continue;
   const tall=6+rand()*10,evergreen=rand()<.29;
-  p.position.set(x,y+tall*.25,z);p.rotation.set(0,rand()*TAU,0);p.scale.set(.75+rand()*.55,tall*.5,.75+rand()*.5);
+  const trait=rand(),color=Math.floor(rand()*summer.length),exposure=rand();
+  const treeYaw=rand()*TAU;
+  p.position.set(x,y+tall*.25,z);
+  p.rotation.set(0,treeYaw,0);
+  p.scale.set(.75+rand()*.55,tall*.5,.75+rand()*.5);
   p.updateMatrix();trunks.setMatrixAt(count,p.matrix);
-  p.position.y=y+tall*.83;p.scale.set(evergreen?2.9:3.3,tall*(evergreen?.41:.24),evergreen?2.9:3.1);
-  p.updateMatrix();(evergreen?pine:broad).setMatrixAt(count,p.matrix);
-  if(evergreen){broad.setColorAt(count,new THREE.Color('#324640'));broad.setMatrixAt(count,new THREE.Matrix4().makeScale(0,0,0))}
-  else{pine.setMatrixAt(count,new THREE.Matrix4().makeScale(0,0,0));broad.setColorAt(count,colors[Math.floor(rand()*colors.length)])}
+  rows.push({x,y,z,tall,evergreen,trait,color,exposure,treeYaw});
+  // Three or four woody branches remain when the deciduous canopy drops.
+  if(!evergreen){
+   const arms=3+(rand()<.55?1:0);
+   for(let k=0;k<arms;k++){
+    const ang=treeYaw+TAU*k/arms+.28*(rand()-.5);
+    const reach=tall*(.17+.08*rand()),rise=tall*(.09+.08*rand());
+    const direction=new THREE.Vector3(Math.cos(ang)*reach,rise,Math.sin(ang)*reach);
+    const length=direction.length();
+    p.position.set(x+direction.x*.47,y+tall*.43+direction.y*.47,z+direction.z*.47);
+    p.quaternion.setFromUnitVectors(up,direction.normalize());
+    p.scale.set(.9+rand()*.4,length,.9+rand()*.4);
+    p.updateMatrix();branches.setMatrixAt(branchCount++,p.matrix);
+   }
+  }
   count++;
  }
- for(const o of [trunks,broad,pine]){o.count=count;o.instanceMatrix.needsUpdate=true;o.castShadow=false;scene.add(o)}
- if(broad.instanceColor)broad.instanceColor.needsUpdate=true;
+ trunks.count=broad.count=pine.count=count;branches.count=branchCount;
+ for(const mesh of [trunks,broad,pine,branches]){
+  mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=false;scene.add(mesh);
+ }
+ function update(season){
+  const ret=season.retention,turn=season.turn;
+  for(let i=0;i<count;i++){
+   const a=rows[i];
+   if(a.evergreen){broad.setMatrixAt(i,dead);
+    p.position.set(a.x,a.y+a.tall*.73,a.z);
+    p.quaternion.identity();p.rotation.set(0,a.treeYaw,0);
+    p.scale.set(2.55,a.tall*.41,2.55);p.updateMatrix();pine.setMatrixAt(i,p.matrix);
+    continue;
+   }
+   pine.setMatrixAt(i,dead);
+   // Exposed high shoulders shed earlier; sheltered creek trees last longer.
+   const exposureFactor=a.y>76?.64:a.y<42?1.28:.94;
+   const hold=clamp(0,1,ret*exposureFactor*(.73+.60*a.exposure));
+   const hasLeaf=a.trait<hold;
+   if(!hasLeaf){broad.setMatrixAt(i,dead);continue;}
+   p.position.set(a.x,a.y+a.tall*.83,a.z);
+   p.quaternion.identity();p.rotation.set(0,a.treeYaw,0);
+   const volume=.36+.64*Math.sqrt(hold);
+   p.scale.set(3.1*volume,a.tall*.24*volume,2.95*volume);
+   p.updateMatrix();broad.setMatrixAt(i,p.matrix);
+   const crown=summer[a.color].clone().lerp(autumn[a.color],turn);
+   if(season.phase.includes('SPRING'))crown.lerp(bud,.3);
+   // A few olive leaves remain at sheltered creek level.
+   if(turn>.7&&a.exposure>.85)crown.lerp(summer[a.color],.26);
+   broad.setColorAt(i,crown);
+  }
+  broad.instanceMatrix.needsUpdate=true;pine.instanceMatrix.needsUpdate=true;
+  if(broad.instanceColor)broad.instanceColor.needsUpdate=true;
+  const last=scene.getObjectByName('Autumn fallen leaf field');
+  if(last)last.visible=season.litter>.12;
+ }
+ forestSeason={update};
+ update(FOLIAGE);
+ // Fallen autumn leaves: instance geometry, no per-leaf draw-call overhead.
+ const leafMat=new THREE.MeshBasicMaterial({color:'#b88d50',vertexColors:false,side:THREE.DoubleSide,depthWrite:true});
+ const leafGeo=new THREE.PlaneGeometry(.48,.25);
+ const litter=new THREE.InstancedMesh(leafGeo,leafMat,1650);
+ litter.name='Autumn fallen leaf field';
+ const palette=['#9c7045','#b48c55','#88704d','#aa794a','#8c503e'].map(x=>new THREE.Color(x));
+ let leaves=0;
+ for(let k=0;k<4500&&leaves<1650;k++){
+  const x=-123+rand()*246,z=-153+rand()*267;
+  if(Math.abs(x)<13)continue;
+  const yy=height(x,z);
+  const gx=height(x+.7,z)-height(x-.7,z),gz=height(x,z+.7)-height(x,z-.7);
+  if(Math.hypot(gx,gz)>5.2)continue;
+  p.position.set(x,yy+.065,z);
+  p.rotation.set(-PI/2,rand()*TAU,0);
+  const size=.6+rand()*.85;p.scale.set(size,size,1);p.updateMatrix();
+  litter.setMatrixAt(leaves,p.matrix);litter.setColorAt(leaves,palette[Math.floor(rand()*palette.length)]);leaves++;
+ }
+ litter.count=leaves;litter.instanceMatrix.needsUpdate=true;
+ if(litter.instanceColor)litter.instanceColor.needsUpdate=true;
+ litter.visible=FOLIAGE.litter>.12;
+ scene.add(litter);
 }
 function buildSigns(scene){
  for(const s of PLACES.slice(0,4)){
