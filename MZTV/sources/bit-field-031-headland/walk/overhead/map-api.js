@@ -1,3 +1,11 @@
+  applyBuilderLayout(records){
+    if(!Array.isArray(records))return;
+    for(const a of records){
+      if(a&&typeof a.id==="string"&&[a.x,a.z,a.r].every(Number.isFinite)){
+        setSEALSPosition(a.id,a.x,a.z,a.r);
+      }
+    }
+  },
 
 mapShot(w=960,h=1280){
  w=clamp(Math.round(w),500,1700);h=clamp(Math.round(h),640,2300);
