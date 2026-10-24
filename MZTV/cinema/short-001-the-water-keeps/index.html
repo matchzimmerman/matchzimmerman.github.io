@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#131d26">
+<meta name="description" content="MZ CINEMA 001 · THE WATER KEEPS — a 15-minute procedural film performed by three MZ WORLDS and MZ SONIC.">
+<title>MZ CINEMA 001 · THE WATER KEEPS</title>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<main id="cinema">
+  <section id="screen" aria-label="Procedural film">
+    <div id="worlds" aria-hidden="true"></div>
+    <div id="filmGrain" aria-hidden="true"></div>
+    <div id="titles" aria-live="polite">
+      <p id="chapterNumber"></p><h1 id="chapterTitle">THE WATER KEEPS</h1><p id="chapterDesc">MZ CINEMA · FILM 001</p>
+    </div>
+    <div id="endcard" hidden><div><p>MZ CINEMA · 001</p><h2>THE WATER KEEPS</h2><p>END OF PERFORMANCE</p><button id="replay">REPLAY THE FILM</button></div></div>
+    <div id="error" role="status" hidden></div>
+  </section>
+  <header id="topbar">
+    <a id="brand" href="../../" title="MZTV library">MZ<span>CINEMA</span></a>
+    <span id="edition">SHORT 001 <span class="midsep">/</span> A FILM THAT PERFORMS ITSELF</span>
+    <span id="status" aria-live="polite">READY</span>
+  </header>
+  <nav id="transport" aria-label="Film controls">
+    <button id="toggle" aria-label="Start the film" title="Play / Pause"><span id="playIcon">▶</span></button>
+    <div id="time">
+      <strong id="timecode">00:00</strong><span class="slash">/</span><span>15:00</span>
+    </div>
+    <div id="seekWrap"><input id="seek" type="range" min="0" max="900" value="0" step="0.01" aria-label="Film timeline"><div id="sections" aria-hidden="true"></div></div>
+    <div id="movement"><span id="movementTag">I</span><span id="movementName">THE FIELD</span></div>
+    <button id="soundToggle" title="Mute / Unmute" aria-label="Mute audio">◖))</button>
+    <button id="notesToggle" title="Show the score notes" aria-label="Score notes" aria-expanded="false">☷</button>
+    <button id="fullscreen" title="Full screen" aria-label="Fullscreen">⛶</button>
+  </nav>
+  <aside id="notes" hidden>
+    <div class="noteshead"><div><small>MZ SONIC · SCORE</small><h2>THE WATER KEEPS</h2></div><button id="closeNotes" aria-label="Close notes">✕</button></div>
+    <p>Fifteen minutes. Five movements. Three autonomous MZ WORLDS. A three-note figure survives every change of place.</p>
+    <div id="actList"></div>
+    <div class="spec"><span>SOUND</span><b>8 MAIN + 2 SUB BUSES</b><small>Browser preview folds the procedural surround score to stereo. Each MZ WORLD contributes its original stereo audio, where available. A discrete-channel surround master and editable Ableton stems are not exported by this prototype.</small></div>
+    <div class="spec"><span>FILM</span><b>900 S · REAL-TIME PERFORMANCE</b><small>World geometry and cameras are live, not pre-rendered footage. Sound is procedurally performed; a recorded edition can be captured with OBS.</small></div>
+    <div class="actions"><button id="cueExport">EXPORT CUE SHEET (.JSON)</button><button id="resetEdition">NEW EDITION</button></div>
+    <p class="credit">ARTIST · MATCH ZIMMERMAN<br>PROCEDURAL ENVIRONMENTS · MZ WORLDS<br>CAMERAS · MZCAM / SCORE · MZ SONIC<br>MZCMG · 2026</p>
+  </aside>
+  <div id="launch" role="dialog" aria-label="Begin the film">
+    <div class="launchInfo"><div class="eyebrow">MZ CINEMA / SHORT 001</div>
+    <h2>THE WATER<br>KEEPS<span class="fullstop">.</span></h2>
+    <p>Fifteen minutes through three living worlds.<br>One musical memory. No narration.</p>
+    <button id="start" autofocus><span>▶</span> BEGIN FILM WITH SOUND</button>
+    <small>HEADPHONES RECOMMENDED · BEST EXPERIENCED FULL SCREEN</small>
+    </div>
+  </div>
+</main>
+<script src="film.js" defer></script>
+</body></html>
