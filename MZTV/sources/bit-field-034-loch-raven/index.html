@@ -718,8 +718,8 @@ const AUD = {
     this.white = nb(false); this.brown = nb(true);
     const loop = (buf) => { if (this.wl) { try { return new AudioWorkletNode(c, 'mz-noise', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { brown: buf === this.brown } }); } catch (e) {} }
       const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(c.currentTime + rr(0, 0.1), rr(0, 8)); return s; };
-    // sea bed: one wash per side
-    this.sea = [-0.55, 0.55].map(pan => { const s = loop(this.brown), f = bq('lowpass', 300, 0.6), gg = g(0), p = c.createStereoPanner(); p.pan.value = pan; s.connect(f).connect(gg).connect(p); p.connect(master); gg.connect(this.room.rIn); return { f, g: gg }; });
+    // spillway and tailwater beds: one wash per side
+    this.water = [-0.55, 0.55].map(pan => { const s = loop(this.brown), f = bq('lowpass', 300, 0.6), gg = g(0), p = c.createStereoPanner(); p.pan.value = pan; s.connect(f).connect(gg).connect(p); p.connect(master); gg.connect(this.room.rIn); return { f, g: gg }; });
     // wind
     { const s = loop(this.white), f = bq('bandpass', 320, 0.55), f2 = bq('lowpass', 900), gg = g(0), p = c.createStereoPanner(); s.connect(f).connect(f2).connect(gg).connect(p).connect(master); this.wind = { f, g: gg, p }; }
     // rain
@@ -730,7 +730,7 @@ const AUD = {
     // pad (three voices, each two detuned saws)
     this.padBus = g(0); this.padLP = bq('lowpass', 700, 0.6); this.padBus.connect(this.padLP); this.padLP.connect(master); this.padLP.connect(this.room.rIn);
     this.pad = [0, 1, 2].map(() => { const a = c.createOscillator(), b = c.createOscillator(); a.type = b.type = 'sawtooth'; b.detune.value = 9; a.detune.value = -7; const gg = g(0.045); a.connect(gg); b.connect(gg); gg.connect(this.padBus); a.start(); b.start(); return { a, b }; });
-    // eye chord, breath sub, stone grind, wreath tones
+    // Warren ♭II chord, breath sub, masonry resonance, high fifth
     this.eyeG = g(0); this.eyeG.connect(master); this.eyeG.connect(this.room.rIn); this.eyeO = [1, 1, 1].map((_, i) => { const o = c.createOscillator(); o.type = 'triangle'; const gg = g(0.06); o.connect(gg).connect(this.eyeG); o.start(); return o; });
     { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 33; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
     { const s = loop(this.brown), f = bq('bandpass', 95, 3.5), gg = g(0); s.connect(f).connect(gg).connect(master); gg.connect(this.room.rIn); this.grind = { g: gg, f }; }
@@ -778,10 +778,7 @@ const AUD = {
       og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(o.v * 0.6, t + 0.01); og.gain.exponentialRampToValueAtTime(0.0005, t + 0.8);
       s.connect(f).connect(gg).connect(p); os.connect(og).connect(p); p.connect(this.master); p.connect(this.room.rIn); if (o.throw) p.connect(this.echo.eIn);
       s.start(t, rr(0, 7)); s.stop(t + 3.5); os.start(t); os.stop(t + 1); s.onended = () => p.disconnect(); return; }
-    if (type === 'gull') { const os = c.createOscillator(), f = bq('lowpass', 1100, 1), gg = g(0), p = c.createStereoPanner(); os.type = 'sawtooth'; p.pan.value = o.pan;
-      const f0 = rr(520, 700); os.frequency.setValueAtTime(f0, t); os.frequency.linearRampToValueAtTime(f0 * 0.72, t + 0.32);
-      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.04); gg.gain.setTargetAtTime(0, t + 0.22, 0.06);
-      os.connect(f).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); os.start(t); os.stop(t + 0.7); os.onended = () => p.disconnect(); return; }
+    
     if (type === 'swell') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('lowpass', 300, 0.7), gg = g(0); f.frequency.setValueAtTime(200, t); f.frequency.exponentialRampToValueAtTime(1400, t + o.d);
       gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(o.v, t + o.d); gg.gain.linearRampToValueAtTime(0, t + o.d + 0.04);
       s.connect(f).connect(gg); gg.connect(this.master); gg.connect(this.room.rIn); s.start(t, rr(0, 4)); s.stop(t + o.d + 0.1); s.onended = () => gg.disconnect(); return; }
@@ -797,16 +794,16 @@ const AUD = {
     while (this.nextT < ahead) {
       const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16;
       const hush = live.ev === 'hush';
-      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(WX.swellT * 0.55, 4.0, 6.4), 0.5);
+      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(6.6-2.45*clamp(HYD.q/42,0,1),4.15,6.6), 0.5);
         if (this.bar % 4 === 0) this.chord(t); }
       const kp = this.euclid(S.epoch % 3 === 0 ? 3 : 2, 16, 0), bp = this.euclid(S.epoch % 2 ? 5 : 4, 16, 3);
       if (!hush && kp[st]) this.voice('kick', t, { v: st === 0 ? 0.55 : 0.4 });
-      if (!hush && bp[st] && keeper.visible) { const stop = STOPS[keeper.target] || STOPS.HOUSE; const d = keeper.state === 'walk' ? (keeper.cur === 'stair' ? 1 : (st % 2 ? 2 : stop.deg)) : stop.deg;
+      if (!hush && bp[st] && keeper.visible) { const stop = STOPS[keeper.target] || STOPS.HOUSE; const d = keeper.state === 'walk' ? (st % 2 ? 2 : stop.deg) : stop.deg;
         this.voice('bass', t, { m: this.deg(d, 1) - 12, d: sixteenth * rr(2, 4), v: 0.32, open: clamp(WX.wind / 14, 0.15, 1) }); }
       if (!hush && !keeper.visible && st === 8) this.voice('bass', t, { m: this.deg(0, 0), d: sixteenth * 6, v: 0.22, open: 0.1 });
       if (this.pend.length) { this.pend.sort((a, b) => b.s - a.s); const p = this.pend.shift(); this.pend.length = 0;
         if (p.v > 0.01) this.voice('thump', t, { s: p.s, v: clamp(p.v, 0, 0.6), pan: p.pan, throw: p.s > 0.75 && rnd() < 0.4 }); }
-      if (live.ev === 'stack' && (st === 6 || st === 13) && rnd() < 0.5) this.voice('knock', t, { v: 0.12 * live.face, pan: 0 });
+      if (live.ev === 'warren' && (st === 6 || st === 13) && rnd() < 0.22) this.voice('knock',t,{v:0.045*live.apparition,pan:0});
       this.step++; this.nextT += sixteenth; this.cur16 = st;
     }
     // echo time follows the bar
@@ -815,22 +812,22 @@ const AUD = {
   chord(t) { const prog = [[0, 2, 4], [1, 3, 5], [6, 1, 3], [3, 5, 0]]; const ch = prog[this.chordI++ % prog.length];
     this.pad.forEach((v, i) => { const hz = this.hz(this.deg(ch[i], 1)); v.a.frequency.setTargetAtTime(hz, t, 0.6); v.b.frequency.setTargetAtTime(hz, t, 0.6); }); },
   event(name, on) { if (!this.ctx) return; const t = this.ctx.currentTime;
-    if (name === 'eye') { this.eyeG.gain.setTargetAtTime(on ? 0.5 : 0, t, on ? 4 : 3); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.18 }); }
-    if (name === 'wreath') this.wreG.gain.setTargetAtTime(on ? 0.035 : 0, t, 3);
+    if (name === 'warren') { this.eyeG.gain.setTargetAtTime(on ? 0.5 : 0, t, on ? 4 : 3); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.18 }); }
+    if (name === 'warren') this.wreG.gain.setTargetAtTime(on ? 0.035 : 0, t, 3);
     if (name === 'hush' && on) this.voice('swell', t, { d: 6, v: 0.12 }); },
   rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.22 }); this.voice('kick', t + this.barSec, { v: 0.6 });
     this.voice('thump', t + this.barSec, { s: 1, v: 0.5, pan: 0, throw: true }); this.retune(false); },
   frame(dt) {
     const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime;
     const shore = clamp(SHORE_ENV, 0, 1.5), calm = live.calm;
-    this.sea.forEach((s, i) => { s.g.gain.setTargetAtTime((0.05 + 0.16 * shore + 0.04 * WX.swellH) * calm, t, 0.25); s.f.frequency.setTargetAtTime(170 + 330 * shore + 40 * WX.swellH, t, 0.3); });
+    this.water.forEach((s, i) => { s.g.gain.setTargetAtTime((0.05 + 0.16 * shore + 0.04 * (.1+HYD.q/65)) * calm, t, 0.25); s.f.frequency.setTargetAtTime(170 + 330 * shore + 40 * (.1+HYD.q/65), t, 0.3); });
     this.wind.g.gain.setTargetAtTime(Math.pow(WX.wind, 1.3) * 0.0032 * (live.ev === 'hush' ? 0.2 : 1), t, 0.8); this.wind.f.frequency.setTargetAtTime(220 + WX.wind * 22, t, 1);
     this.wind.p.pan.setTargetAtTime(0.5 * Math.sin(simT * 0.07), t, 1);
     this.rain.g.gain.setTargetAtTime(clamp(WX.precip, 0, 4) * 0.02, t, 1);
     this.padBus.gain.setTargetAtTime((0.25 + 0.35 * (1 - SH.uDay.value)) * (live.ev === 'hush' ? 0.1 : 1), t, 2);
     this.padLP.frequency.setTargetAtTime(420 + clamp(WX.temp, 0, 25) * 22, t, 2);
-    this.sub.g.gain.setTargetAtTime(live.breath / 2.4 * 0.22 * (0.5 + 0.5 * Math.sin(simT * TAU / (WX.swellT * 1.5))), t, 0.3);
-    this.grind.g.gain.setTargetAtTime(live.ev === 'stack' ? live.face * 0.09 * (0.6 + 0.4 * Math.sin(simT * 0.9)) : 0, t, 0.5);
+    this.sub.g.gain.setTargetAtTime(live.breath / 2.4 * 0.22 * (0.5 + 0.5 * Math.sin(simT * TAU / ((8+HYD.q/20) * 1.5))), t, 0.3);
+    this.grind.g.gain.setTargetAtTime(live.ev === 'warren' ? live.apparition * 0.09 * (0.6 + 0.4 * Math.sin(simT * 0.9)) : 0, t, 0.5);
     const fb = clamp(0.32 + (WX.hum - 70) / 100 + (live.ev ? 0.12 : 0), 0.2, 0.68); this.echo.fbL.gain.setTargetAtTime(fb, t, 1); this.echo.fbR.gain.setTargetAtTime(fb, t, 1);
     this.room.rOut.gain.setTargetAtTime(0.4 + 0.3 * clamp(WX.precip, 0, 1) + 0.2 * (1 - SH.uDay.value), t, 2);
     this.wreO.forEach((o, i) => o.detune.setTargetAtTime(6 * Math.sin(simT * 0.3 + i), t, 0.5));
