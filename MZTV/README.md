@@ -290,6 +290,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-033-sruthan/`
 
+### BIT FIELD 034 — MZ WORLD · LOCH RAVEN (review candidate, 2026-10-23)
+A sculpted print-world at Loch Raven Dam in Baltimore County. A nameless dam keeper follows symbolic crest-road rounds and checks gauges, while reservoir stage and spillway flow are clearly marked **modelled** rather than measured. Bar length responds to the synthetic flow index; nine autonomous observational cameras follow concrete, water, wooded banks and the keeper. The print employs six chromatic inks and surface-anchored hydraulic engraving, with a home colourway called **LOCH RAVEN SLATE**. One rare apparition, **WARREN BELOW**, offers sparse unlabelled shapes at low modelled water; this is an imaginative memory of the documented upstream town, **not** a claim that Warren lies under the dam or that the outlines are surveyed. Memory retains rain, inspections and event conditions, and rupture changes inks and music. **NOT LIVE / NOT APPROVED FOR DEPLOYMENT.** Only static JS parse verified; browser/OBS and audio tests pending.
+
+Path:
+`sources/bit-field-034-loch-raven/index.html`
+
+Status:
+`mz-world/loch-raven-034` branch only — see its `README.md` for limitations and test gate.
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 
