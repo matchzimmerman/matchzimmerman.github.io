@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {SITE,INKS,PLACES,ROUTES,LOWER_STAIR,stairCenters,LANDMARKS,height,populate,addSpray,animateEnvironment,weatherFallback} from './scene.js';
+import {SITE,INKS,PLACES,ROUTES,LOWER_STAIR,stairCenters,LANDMARKS,height,populate,addSpray,animateEnvironment,weatherFallback,FOLIAGE,refreshFoliage} from './scene.js';
 
 const $=s=>document.getElementById(s);
 const clamp=(a,b,v)=>Math.max(a,Math.min(b,v));
@@ -106,19 +106,23 @@ updateWeather();setInterval(updateWeather,15*60*1000);
 function eastern(){
  return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());
 }
+// DAYLIGHT LOCK: the camera clock may advance, but the sun never sets.
+ // Solar height represents a clear local *daytime* sun for the current season.
+ // New York time sets the phenology/date, not the light/dark cycle.
 function lighting(){
- const hr=Number(eastern().slice(0,2)),phase=(hr-6)/12*Math.PI;
- const sunFactor=clamp(.08,1,Math.sin(phase));
- const cloud=wx.cloud/100;
- const lum=lerp(.14,.98,sunFactor)*(1-cloud*.27);
- hemi.intensity=lerp(.38,2.2,lum);
- sun.intensity=lerp(.1,2.15,lum)*(1-cloud*.33);
- fill.intensity=.52*lum+.16;
- sun.position.set(Math.cos(phase)*130,Math.max(8,Math.sin(phase)*155),72);
- const sky=new THREE.Color('#243348').lerp(new THREE.Color('#9eb8b2'),sunFactor*.95);
- sky.lerp(new THREE.Color('#85979d'),cloud*.25);
+ const lat=SITE.lat*PI/180,dec=(23.44*PI/180)*Math.sin(TAU*(FOLIAGE.doy-81)/365.2422);
+ const hourAngle=15*PI/180; // approximately 1 PM solar time, year-round
+ const altitude=Math.asin(Math.sin(lat)*Math.sin(dec)+Math.cos(lat)*Math.cos(dec)*Math.cos(hourAngle));
+ const angle=Math.max(19*PI/180,altitude);
+ const cloud=clamp(0,1,wx.cloud/100);
+ const brightness=1-cloud*.19;
+ hemi.intensity=1.9*brightness;
+ sun.intensity=2.35*(1-cloud*.37);
+ fill.intensity=.65*brightness;
+ sun.position.set(-187*Math.cos(angle)*.83,187*Math.sin(angle),187*Math.cos(angle)*.56);
+ const sky=new THREE.Color('#b2c9c9').lerp(new THREE.Color('#9babaf'),cloud*.65);
  scene.background.copy(sky);scene.fog.color.copy(sky);
- scene.fog.density=.0035+cloud*.0012+wx.rain*.0003;
+ scene.fog.density=.0034+cloud*.0012+wx.rain*.0003;
 }
 lighting();
 
@@ -337,8 +341,8 @@ function survey(){
  c.font='bold 12px monospace';c.fillStyle='#efe6cf';c.fillText('N ↑',15,19);
 }
 function updateUI(){
- const clock=eastern();
- $('clock').textContent='NY LOCAL '+clock+' · '+(wx.live?'LIVE WX':'SIMULATED WX');
+ $('clock').textContent='DAYLIGHT LOCK · '+FOLIAGE.label.toUpperCase();
+ $('season').textContent='FOLIAGE · '+FOLIAGE.phase+' · SEASONAL MODEL';
  $('wx').textContent='WIND '+wx.wind.toFixed(1)+' M/S · CLOUD '+wx.cloud.toFixed(0)+'%';
  $('discharge').textContent='WATER '+wx.flow.toFixed(2)+' × · MODELLED FLOW';
  let label='TWO DROPS · 260 FT TOTAL',detail='175 FT UPPER / 85 FT LOWER · SPRUCE CREEK';
@@ -357,10 +361,13 @@ function render(){
  renderer.setRenderTarget(target);renderer.render(scene,camera);
  renderer.setRenderTarget(null);renderer.render(screenScene,screenCam);
 }
-let last=performance.now(),uiAt=0;
+let last=performance.now(),uiAt=0,lastDateCheck=0;
 function tick(nowMs){
  const dt=clamp(0,.045,(nowMs-last)/1000);last=nowMs;
- time+=dt;animateEnvironment(time,wx);
+ time+=dt;
+ // A long-running MZTV world advances its autumn canopy at New York midnight.
+ if(nowMs-lastDateCheck>120000){refreshFoliage();lastDateCheck=nowMs;}
+ animateEnvironment(time,wx);
  if(entered&&!help){
   if(mode==='walk')moveWalker(dt);
   else if(mode==='fly')moveFly(dt);
