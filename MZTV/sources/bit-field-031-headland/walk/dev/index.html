@@ -1,0 +1,90 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HEADLAND / DEVELOPER + 3D BUILDER</title>
+<meta name="theme-color" content="#1b1f3a">
+<style>
+:root{color-scheme:dark;--ink:#1b1f3a;--paper:#efe6cf;--hot:#f0603f;--yellow:#f2c14e;--muted:#9fa9bf;--mono:ui-monospace,"JetBrains Mono",Menlo,monospace}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font:11px/1.5 var(--mono)}
+button,input,select,textarea{font:inherit}button{cursor:pointer;touch-action:manipulation}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+#world,#hit{position:fixed;inset:0;width:100%;height:100%}
+#world{border:0;background:var(--ink);pointer-events:none}
+#hit{z-index:1;touch-action:none;cursor:crosshair}
+#top{position:fixed;top:14px;left:15px;right:15px;display:flex;justify-content:space-between;gap:12px;pointer-events:none;z-index:4}
+#name{padding:10px 13px;border:2px solid var(--ink);background:var(--paper);color:var(--ink);box-shadow:4px 4px 0 var(--hot)}
+#name b{font-size:16px;display:block;line-height:1.2}
+.micro{font-size:9px;letter-spacing:.13em;font-weight:700}
+#modeButtons{display:flex;gap:5px;pointer-events:auto;align-self:flex-start}
+button.control{background:var(--ink);border:1px solid var(--paper);color:var(--paper);padding:10px 12px;font-weight:bold}
+button.control.active,button.control:hover{background:var(--paper);color:var(--ink)}
+#side{position:fixed;right:15px;top:84px;bottom:86px;width:min(328px,calc(100vw - 30px));padding:14px;z-index:3;background:rgba(27,31,58,.96);border:1px solid #acb6bb;overflow:auto;box-shadow:4px 5px 0 rgba(0,0,0,.3)}
+#side[hidden]{display:none}#side h2{font-size:13px;margin:3px 0 11px;letter-spacing:.09em;color:var(--yellow)}
+#side .group{border-top:1px solid #60687c;padding-top:10px;margin-top:12px}
+label{display:block;margin:8px 0 3px;color:var(--muted);font-size:10px}
+input,select,textarea{color:var(--paper);background:#283351;border:1px solid #737f94;padding:8px;width:100%;border-radius:0}
+textarea{resize:vertical;min-height:58px;max-height:140px}
+input[type=number]{font-variant-numeric:tabular-nums}
+#rowxyz{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+#rowxyz label{margin-top:3px}
+#rowxyz input{padding:7px 4px}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.actions button{flex:1 1 80px;min-height:35px;background:#283351;border:1px solid #a9b2bd;color:var(--paper);padding:7px 9px;font-size:10px}
+.actions button:hover{background:var(--paper);color:var(--ink)}
+.actions button.primary{background:var(--yellow);border-color:var(--yellow);color:var(--ink);font-weight:bold}
+#status{position:fixed;left:15px;bottom:14px;z-index:4;background:rgba(27,31,58,.93);padding:9px 13px;border-left:3px solid var(--hot);max-width:calc(100vw - 45px);pointer-events:none}
+#statusLine{font-weight:bold;color:var(--yellow)}
+#message{font-size:10px;color:var(--paper);white-space:normal}
+#modeInfo{position:fixed;top:102px;left:16px;max-width:270px;padding:8px 10px;background:rgba(27,31,58,.86);color:var(--paper);z-index:2;pointer-events:none}
+#badge{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;pointer-events:none;opacity:.9;font-size:22px;color:var(--paper);text-shadow:0 0 4px #181c25}
+#shots{max-height:170px;overflow:auto;color:var(--paper);font-size:10px}
+.shot{padding:7px 0;border-bottom:1px solid #48506a}
+.shot b{color:var(--yellow)}
+.small{color:var(--muted);font-size:10px}
+#enter{position:fixed;inset:0;background:rgba(27,31,58,.85);z-index:10;display:grid;place-items:center;padding:20px}
+#enter[hidden]{display:none}
+#enter article{max-width:620px;background:var(--paper);color:var(--ink);padding:30px;box-shadow:7px 7px 0 var(--hot);border:2px solid var(--ink)}
+#enter h1{font-size:clamp(31px,5vw,58px);line-height:1.03;margin:8px 0}
+#enter p{font-size:12px;line-height:1.7}
+#enter button{background:var(--ink);color:var(--paper);padding:12px 20px;border:0;font-weight:bold}
+#loadMsg{color:#675849;font-weight:bold;margin-top:10px}
+#mobileControls{position:fixed;left:15px;bottom:115px;z-index:3;display:none;gap:7px}
+#mobileControls button{background:rgba(27,31,58,.86);color:var(--paper);border:1px solid #d7d3c0;padding:12px}
+@media (pointer:coarse){#mobileControls{display:flex}}
+@media(max-width:690px){#name b{font-size:12px}#name{padding:6px 8px}button.control{padding:7px}#top{top:7px;left:8px;right:8px}#side{top:68px;right:8px;bottom:64px;width:min(300px,calc(100vw - 16px))}#status{left:8px;bottom:6px;padding:6px 9px;font-size:9px}#modeInfo{top:66px;left:8px;font-size:9px}#modeInfo.hidden{display:none}#enter article{padding:19px}}
+</style></head><body>
+<iframe id="world" title="Isolated HEADLAND builder world" allow="autoplay"></iframe>
+<div id="hit" tabindex="0" aria-label="Free-fly camera. In builder mode, click scenery to select and drag to reposition."></div>
+<div id="badge">+</div>
+<header id="top"><div id="name"><div class="micro">MZTV / HEADLAND / STUDIO TOOLS 001</div><b>DEVELOPER / BUILDER</b></div>
+ <div id="modeButtons"><button class="control active" id="fly">FLY [F]</button><button class="control" id="build">BUILDER [B]</button><button class="control" id="panelToggle">PANEL [TAB]</button><button class="control" id="back">KEEPER ↗</button></div></header>
+<div id="modeInfo">WASD move · mouse look (drag right → right) · SPACE up · C down · SHIFT faster · scroll speed · P photo · ESC release</div>
+<aside id="side" hidden>
+<h2>3D BUILDER / ASSET INSPECTOR</h2>
+<div class="small">Select an object on screen or choose a stable asset ID. Drag the selected object across the ground in BUILD mode, or adjust its exact coordinates.</div>
+<label for="asset">SELECT ASSET</label><select id="asset"><option value="">— choose scene asset —</option></select>
+<div class="group"><div class="micro">WORLD POSITION / ROTATION</div>
+ <div id="rowxyz"><div><label for="xx">X</label><input id="xx" type="number" step=".25"></div><div><label for="zz">Z</label><input id="zz" type="number" step=".25"></div><div><label for="rr">YAW °</label><input id="rr" type="number" step="5"></div></div>
+ <div class="actions"><button id="apply" class="primary">APPLY POSITION</button><button id="ground">GROUND ALIGN</button><button id="reset">RESET SELECTED</button></div>
+ <div class="actions"><button data-nudge="left">← X −</button><button data-nudge="right">X + →</button><button data-nudge="up">Z − ↑</button><button data-nudge="down">Z + ↓</button></div>
+ <div class="actions"><button id="undo">UNDO [CTRL Z]</button><button id="redo">REDO [CTRL Y]</button></div>
+</div>
+<div class="group"><h2>PHOTOGRAPH / FIELD NOTE</h2>
+<label for="note">Comment on this location or asset</label><textarea id="note" placeholder="Example: Make the wall follow the ridge, lower the gate, move haystacks closer to the shore…"></textarea>
+<div class="actions"><button class="primary" id="photo">PHOTO + NOTE [P]</button></div>
+<div class="small">Each photo is retained in this browser session for a review-package download.</div><div id="shots"></div>
+</div>
+<div class="group"><h2>LAYOUT / HANDOFF</h2>
+<div class="actions"><button class="primary" id="save">SAVE BROWSER DRAFT</button><button id="bundle">DOWNLOAD REVIEW ZIP</button></div>
+<div class="actions"><button id="share">COPY SHARE LINK</button><button id="importBtn">IMPORT LAYOUT JSON</button><button id="exportJson">EXPORT JSON</button></div>
+<div class="actions"><button id="restore">RESTORE DEFAULT WORLD</button></div>
+<input id="file" type="file" accept=".json,application/json" hidden>
+<div class="small">Browser save is local to this browser. The ZIP includes JSON coordinates, camera notes and screenshots for MZ agents. Share links encode the layout without server storage; publishing a permanent shared world still requires a GitHub commit.</div>
+</div>
+</aside>
+<div id="mobileControls"><button data-touch="up">ASCEND</button><button data-touch="down">DESCEND</button></div>
+<footer id="status"><div id="statusLine">CONNECTING TO HEADLAND WORLD…</div><div id="message">Loading exact terrain and editable SEALS geometry</div></footer>
+<section id="enter"><article><div class="micro">MZCMG / HUMAN-DIRECTED FIELD DEVELOPMENT</div><h1>ENTER<br>DEVELOPER MODE</h1><p>A free-flying camera in the real HEADLAND environment. In 3D Builder Mode, select walls, individual haystacks, the gravesite, barn, gate, tree, bicycle, and turf, then move or rotate them. Your layout exports as precise XYZ-referenced agent data.</p>
+<p>Original MZTV broadcast and keeper walk are not modified by editing here. No account token is stored or sent.</p>
+<button id="launch" disabled>ENTER STUDIO</button><div id="loadMsg">LOADING WEBGL 2 WORLD…</div></article></section>
+<script src="./app.js"></script>
+</body></html>
