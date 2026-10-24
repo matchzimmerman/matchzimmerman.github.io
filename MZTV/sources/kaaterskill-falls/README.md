@@ -55,3 +55,13 @@ Replace procedural `height(x,z)` with a georeferenced **USGS 3DEP bare-earth DEM
 - No existing HEADLAND, HEADLAND/WALK, SEALS or gallery files were modified as part of the initial world build.
 
 **Files:** `index.html` (UI + import map), `scene.js` (terrain, stone steps, flora, water), `world.js` (Three renderer, print pipeline, observer, inputs, weather, audio).
+
+## Daylight + current-date foliage (2026-10-23 update)
+
+- **Daylight only:** the environment uses an approximately 1 PM *seasonally adjusted* solar angle at Kaaterskill's latitude. The simulated camera never transitions to night. Current cloud/rain reports still influence brightness and haze; clock time does not dim the world.
+- **Actual New York calendar:** `scene.js` calculates the current **America/New_York** calendar day (including leap years). Spring leaf-out, full summer canopy, autumn color/leaf drop and winter bare branches follow a continuous approximate seasonal curve. Trees, ground colors and leaf-litter cover derive from this state. **A 48-hour run refreshes tree foliage automatically within two minutes of an NY midnight.**
+- **Late October 2026 is past peak, not peak foliage:** the October 21–27 NY report places **Hunter** in Greene County at *100% changed, past-peak* with mostly muted yellow/orange and significant leaf drop. This scene therefore keeps bare deciduous branches, remaining ochre/rust crowns, evergreen conifers and fallen leaves rather than an unrealistically full green/yellow canopy. The forest includes early-shedding exposed crowns and better-preserved sheltered valley crowns.
+- **Source, contemporary 2026 observation:** [I LOVE NY Fall Foliage Report — Week of October 21–27](https://www.iloveny.com/things-to-do/fall/foliage-report/), with [October 22 Greene County/Hunter summary](https://www.aol.com/articles/ny-fall-foliage-report-regions-121010000.html).
+- **Scope:** foliage is **date-aligned and calibrated to a reported regional condition**, not remotely sensed daily foliage at individual trees. The scene does not pull a foliage service continuously. Weather remains an independently fetched environmental input. The deciduous tree positions/species and terrain are still an interpretive reconstruction.
+
+Validation: source modules pass JavaScript syntax inspection; mobile Safari/WebGL scene and long-running calendar rollover remain unverified until browser testing.
