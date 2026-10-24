@@ -9,8 +9,10 @@ const quality=Math.max(320,Math.min(960,Number(qs.get('lines'))||(innerWidth<800
 const utc0=Date.now();
 const dates=String(utc0).slice(-7);
 const EDKEY='mz-cinema-water-keeps-edition-v1';
-let edition=Number(qs.get('edition')) || Number(localStorage.getItem(EDKEY)) || Math.floor(Math.random()*899999)+100000;
-if(!qs.has('edition'))localStorage.setItem(EDKEY,String(edition));
+const readLocal=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const writeLocal=(k,v)=>{try{localStorage.setItem(k,String(v))}catch(e){}};
+let edition=Number(qs.get('edition')) || Number(readLocal(EDKEY)) || Math.floor(Math.random()*899999)+100000;
+if(!qs.has('edition'))writeLocal(EDKEY,edition);
 let time=0,playing=false,ended=false,soundOn=true,lastWall=performance.now(),lastAct=-1,seekDragging=false;
 let nextStart=false,score=null,lastSync=0,showedWarning=false,warrenDone=false,fullscreen=false;
 const epsilon=.00001;
@@ -57,7 +59,10 @@ function loadSlot(i){
   slot.api=mz;slot.ready=true;slot.failed=false;
   mz.tick(1/60);
   if(playing&&soundOn){try{mz.audio?.start()}catch(e){}}
- }catch(e){slot.failed=true;console.warn('MZ CINEMA capture unavailable: '+a.world,e);}});
+  else try{if(mz.audio?.out) mz.audio.out.gain.value=0}catch(e){}
+ }catch(e){slot.failed=true;console.warn('MZ CINEMA capture unavailable: '+a.world,e);
+    const er=$('error');er.hidden=false;er.textContent='Visual source '+a.world+' could not initialize. The film score can continue; reload to try again.';
+ }});
  frame.src=fileSrc(a,i);
  return slot;
 }
@@ -162,7 +167,7 @@ function finish(){
  time=FINAL;playing=false;ended=true;score?.pause();
  for(const id of [...slots.keys()]){frameVolume(slots.get(id),0);unloadSlot(id)}
  $('endcard').hidden=false;$('titles').classList.remove('active');updateUI();
- try{localStorage.setItem('mz-cinema-001-last-edition',String(edition))}catch(e){}
+ try{writeLocal('mz-cinema-001-last-edition',edition)}catch(e){}
 }
 function download(name,body,type='application/json'){
  const blob=new Blob([body],{type});const u=URL.createObjectURL(blob);
@@ -217,6 +222,7 @@ function wiring(){
 let uiLast=0;
 function loop(now){
  const delta=Math.min(.07,Math.max(0,(now-lastWall)/1000));lastWall=now;
+ if(!playing&&!ended){for(const sl of slots.values())frameVolume(sl,0)}
  if(playing&&!ended){
   const prev=time;time=Math.min(FINAL,time+delta*rate);
   if(time>=FINAL){finish()}
