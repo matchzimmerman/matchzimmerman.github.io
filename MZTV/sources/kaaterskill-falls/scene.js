@@ -17,8 +17,8 @@ let seed=4221825;
 export function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
 
 export const LOWER_STAIR=[
- [19,-91,8],[30,-80,12],[53,-85,17],[71,-77,21],
- [74,-60,26],[52,-55,30],[52,-37,35],[69,-28,40],[46,-19,44]
+ [19,-91,8],[25,-76,16],[32,-64,23],
+ [34,-49,30],[40,-36,37],[46,-19,44]
 ];
 export const UPPER_CONNECTOR=[
  [47,54,99],[92,48,98],[105,12,82],[103,-22,66],[82,-32,53],[65,-20,44],[46,-19,44]
@@ -203,7 +203,7 @@ function pathCenters(route,n){
 }
 export const stairCenters=pathCenters(LOWER_STAIR,200);
 function buildStairs(scene){
- const g=new THREE.BoxGeometry(1.65,.29,.74);
+ const g=new THREE.BoxGeometry(1.65,.29,.44);
  const mesh=new THREE.InstancedMesh(g,mats.stoneLight,200);
  const dummy=new THREE.Object3D();
  for(let i=0;i<200;i++){
