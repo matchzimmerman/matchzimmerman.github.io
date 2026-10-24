@@ -126,6 +126,7 @@ td:first-child{font-weight:700;width:43%}
     <button type="button" class="control" id="print" aria-pressed="true">INK LIGHT</button>
    <button type="button" class="control" id="viewMode">OBSERVE [V]</button>
    <button type="button" class="control" id="places">PLACES</button>
+   <button type="button" class="control" id="devButton">DEV / BUILDER</button>
    <button type="button" class="control" id="helpButton">CONTROLS [?]</button>
   </div>
  </div>
@@ -140,6 +141,7 @@ td:first-child{font-weight:700;width:43%}
   <div class="actions">
    <button class="action" id="enter" type="button" disabled>ENTER THE HEADLAND</button>
    <button class="action secondary" id="observe" type="button" disabled>WATCH THE CAMERAS</button>
+   <a class="action secondary" href="./dev/" style="display:inline-block;text-decoration:none">DEVELOPER / 3D BUILDER ↗</a>
   </div>
   <div id="loadstate" role="status">CONNECTING TO THE ORIGINAL WORLD…</div>
  </section>
@@ -165,7 +167,7 @@ td:first-child{font-weight:700;width:43%}
   <div class="smallcap" id="destinations">HEADLAND LANDMARKS</div>
   <div class="actions" id="memoryJumps" aria-label="Memory places"></div>
   <div class="actions" id="jumps"><button class="action secondary" type="button" data-jump="1">1 · COTTAGE</button><button class="action secondary" type="button" data-jump="2">2 · CLIFF</button><button class="action secondary" type="button" data-jump="3">3 · STAIR</button><button class="action secondary" type="button" data-jump="4">4 · PIER</button></div>
-  <div class="actions"><a class="action secondary" style="text-decoration:none;display:inline-block" href="./overhead/" target="_blank" rel="noopener">EXPORT TRUE OVERHEAD PNG ↗</a><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
+  <div class="actions"><a class="action secondary" style="text-decoration:none;display:inline-block" href="./overhead/" target="_blank" rel="noopener">EXPORT TRUE OVERHEAD PNG ↗</a><a class="action secondary" style="text-decoration:none;display:inline-block" href="./dev/">DEVELOPER / 3D BUILDER ↗</a><button type="button" class="action" id="closeHelp">RETURN TO HEADLAND</button></div>
  </section>
 </div>
 <script>
@@ -177,13 +179,13 @@ const mobile=matchMedia("(pointer:coarse)").matches;
 
 async function bootKeeperWorld(){
  try{
-  const [r,places]=await Promise.all([fetch("../index.html",{cache:"no-cache"}),fetch("./seals-scenes.js",{cache:"no-cache"})]);
+  const [r,places]=await Promise.all([fetch("../index.html",{cache:"no-cache"}),fetch("./editable-scenes.js",{cache:"no-cache"})]);
   if(!r.ok||!places.ok)throw new Error("HEADLAND source or SEALS scene data not found");
   let html=await r.text(),scenes=await places.text();
   const edits=[
    ["const Q = new URLSearchParams(location.search);","const Q = new URLSearchParams('?info=0&seed=31081&lines="+(mobile?(innerWidth>innerHeight?440:420):720)+"');"],
    ["function keeperTick(dt) {","/* The visitor controls HEADLAND's existing single keeper mesh; no duplicate figure. */\nconst WALK_POSE={active:false,pos:V(62,0,156),heading:0,speed:0};\nfunction keeperPlayerTick(dt){\n if(!WALK_POSE.active)return false;\n const k=keeper,p=WALK_POSE;\n k.visible=true;k.pos.copy(p.pos);k.dir.set(Math.sin(p.heading),0,-Math.cos(p.heading));\n k.state=p.speed>0.14?'walk':'dwell';\n k.still=p.speed>0.14?0:(k.still||0)+dt;\n k.walked+=p.speed*dt;\n const m=k.mesh;m.visible=true;m.position.copy(k.pos);m.rotation.y=Math.atan2(k.dir.x,k.dir.z);\n k.move=lerp(k.move||0,Math.min(1,p.speed/2.6),1-Math.exp(-dt*3));\n const wt=fromBearingTravel(WX.windDir);\n const wl=V(wt.x,0,wt.y).multiplyScalar(clamp(WX.wind/12,0,1.4)).applyAxisAngle(V(0,1,0),-m.rotation.y);\n m.position.y+=0.03*Math.sin(k.walked*3.4)*k.move;\n m.userData.mats.forEach(mt=>{mt.uniforms.uWalk.value=k.walked;mt.uniforms.uMove.value=k.move;mt.uniforms.uWindL.value.copy(wl);});\n return true;\n}\nfunction keeperTick(dt) { if(keeperPlayerTick(dt))return;"],
-   ["window.MZ = {","window.MZ = {\n claimKeeper(){WALK_POSE.active=true;WALK_POSE.pos.copy(keeper.pos);WALK_POSE.speed=0;keeperPlayerTick(0);},\n driveKeeper(x,y,z,heading,speed){\n  if(!WALK_POSE.active||![x,y,z,heading,speed].every(Number.isFinite))return;\n  WALK_POSE.pos.set(x,y,z);WALK_POSE.heading=heading;WALK_POSE.speed=clamp(speed,0,9);keeperPlayerTick(0);\n },\n get playerKeeper(){return WALK_POSE.active;},\n get memoryPlaces(){return SEALS_SCENES.map(({key,title,x,z,range})=>({key,title,x,z,range}));},"],
+   ["window.MZ = {","window.MZ = {\n claimKeeper(){WALK_POSE.active=true;WALK_POSE.pos.copy(keeper.pos);WALK_POSE.speed=0;keeperPlayerTick(0);},\n driveKeeper(x,y,z,heading,speed){\n  if(!WALK_POSE.active||![x,y,z,heading,speed].every(Number.isFinite))return;\n  WALK_POSE.pos.set(x,y,z);WALK_POSE.heading=heading;WALK_POSE.speed=clamp(speed,0,9);keeperPlayerTick(0);\n },\n get playerKeeper(){return WALK_POSE.active;},\n get memoryPlaces(){return SEALS_SCENES.map(({key,title,x,z,range})=>({key,title,x,z,range}));},\n applyBuilderLayout(records){\n  if(!Array.isArray(records))return;\n  for(const row of records){\n   if(row&&typeof row.id===\"string\"&&[row.x,row.z,row.r].every(Number.isFinite)){\n    setSEALSPosition(row.id,row.x,row.z,row.r);\n   }\n  }\n },"],
    ["/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */",scenes+"\n/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */"]
   ];
   for(const [from,to] of edits){if(html.split(from).length!==2)throw new Error("HEADLAND changed: "+from);html=html.replace(from,to);}
@@ -316,6 +318,18 @@ function readyCheck(){
  if(!inside || typeof inside.h!=="function" || typeof inside.look!=="function" || typeof inside.claimKeeper!=="function" || typeof inside.driveKeeper!=="function" || !inside.geo)return;
  api=inside;ready=true;
  baselineInk={...api.state.S.grammar};inkEpoch=api.state.S.epoch;
+ try{
+  const q=new URLSearchParams(location.search),shared=q.get("layout");
+  let rows=null;
+  if(shared){
+   const obj=JSON.parse(shared);
+   if(obj.v===1&&Array.isArray(obj.assets))rows=obj.assets.map(a=>({id:a[0],x:a[1],z:a[2],r:a[3]}));
+  }else{
+   const draft=JSON.parse(localStorage.getItem("mz-headland-builder-v1")||"null");
+   if(draft?.schema==="mz.headland.layout.v1")rows=draft.assets;
+  }
+  if(rows)api.applyBuilderLayout(rows);
+ }catch(e){console.warn("HEADLAND builder layout rejected",e)}
  if(api.memoryPlaces?.length){
    const target=$("memoryJumps");
    for(const place of api.memoryPlaces){
@@ -337,6 +351,7 @@ function readyCheck(){
 const poll=setInterval(readyCheck,200);
 frame.addEventListener("load",readyCheck);
 setTimeout(()=>{if(!ready)$("loadstate").textContent="STILL LOADING. WEBGL 2 AND NETWORK ACCESS ARE REQUIRED.";},18000);
+$("devButton").addEventListener("click",()=>location.href="./dev/");
 $("enter").addEventListener("click",()=>begin("walk"));
 $("observe").addEventListener("click",()=>begin("observe"));
 $("sound").addEventListener("click",()=>setSound(!soundOn));
