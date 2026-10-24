@@ -32,7 +32,8 @@ function compose(seed){
    const natural=mi===0?5.2-.85*e.flow:mi===1?6.35-2.32*e.flow:6-.95*p;
    let sec=clamp(natural+.15*Math.sin(i*.21+seed*.01),3.9,6.6);const remaining=w.end-t;
    // Divide an impending short orphan bar into two coherent final bars.
-   if(remaining>sec&&remaining-sec<3.9)sec=remaining/2;
+   if(remaining<=7.0)sec=remaining;
+   else if(remaining>sec&&remaining-sec<3.9)sec=remaining/2;
    else sec=Math.min(sec,remaining);
    const beats=w.meter[0]*4/w.meter[1],bpm=60*beats/sec;
    const bar={t,sec,tick:Math.round(tick),ticks:Math.round(beats*480),num:w.meter[0],den:w.meter[1],bpm,world:w.id,i,e};
