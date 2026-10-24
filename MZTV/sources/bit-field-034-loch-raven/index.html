@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* MZ WORLD · LOCH RAVEN — full-frame print of a living coast; the info box is printed in the current inks */
+/* MZ WORLD · LOCH RAVEN — surface-anchored six-ink hydraulic engraving */
 :root { --ink:#1c2b36; --paper:#ece4cd; --hot:#b87454; --deep:#3c5162; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
 html, body { height:100%; margin:0; background:var(--ink); overflow:hidden }
 canvas { display:block; width:100%; height:100% }
@@ -118,7 +118,7 @@ const MAT = [
   /* 0 sky   */ [DEEP, HOT, PAPER, 0.9, 1], /* 1 sun   */ [HOT, GLOW, PAPER, 1.0, 0], /* 2 sea   */ [INK, DEEP, SEA, 1.0, 0],
   /* 3 foam  */ [SEA, PAPER, PAPER, 0.7, 0], /* 4 cliff */ [INK, DEEP, SEA, 1.0, 0], /* 5 grass */ [DEEP, SEA, GLOW, 0.9, 0],
   /* 6 wood  */ [INK, DEEP, PAPER, 1.0, 0], /* 7 dark  */ [INK, INK, DEEP, 0.3, 0], /* 8 fabric*/ [INK, INK, DEEP, 1.0, 0],
-  /* 9 white */ [DEEP, PAPER, PAPER, 0.5, 0], /*10 boat  */ [INK, INK, HOT, 0.6, 0], /*11 iris  */ [INK, SEA, GLOW, 0.8, 0],
+  /* 9 white */ [DEEP, PAPER, PAPER, 0.5, 0], /*10 path  */ [INK, INK, HOT, 0.6, 0], /*11 autumn*/ [INK, SEA, GLOW, 0.8, 0],
   /*12 path  */ [DEEP, GLOW, PAPER, 0.8, 0], /*13 cloud */ [SEA, PAPER, PAPER, 0.8, 0], /*14 moon  */ [DEEP, SEA, PAPER, 0.8, 0],
   /*15 lamp  */ [GLOW, GLOW, PAPER, 0.0, 0],
 ];
@@ -167,13 +167,32 @@ float screenAngle(vec3 w, vec3 T){
   vec4 a=uVP*vec4(w,1.); vec4 b=uVP*vec4(w+T,1.);
   vec2 d=b.xy/max(b.w,1e-3)-a.xy/max(a.w,1e-3); d.x*=uAspect;
   float ang=atan(d.y,d.x); if(ang<0.) ang+=3.14159265; return ang/3.14159265; }
-vec4 pack(float sh, float id, float ang, float acc){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., fract(ang), acc); }
+uniform float uPerPx,uWobPx,uPxK;
+float lineAt(vec3 P,vec3 N,vec3 T,float dist,float extra){
+  vec3 A=cross(N,T);
+  if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.));
+  if(dot(A,A)<1e-6) A=vec3(1.,0.,0.);
+  A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float per=max(.0002,uPerPx*max(dist,.01)*uPxK);
+  float L=log2(per);
+  float f=smoothstep(0.,1.,fract(L)),p0=exp2(floor(L)),p1=p0*2.;
+  float s=dot(P,A), t=dot(P,B);
+  float w=uWobPx/max(uPerPx,.1)*1.35;
+  float l0=cos((s+(vn(vec2(s,t)/(p0*7.)+3.1)-.5)*w*p0+extra)*6.2831853/p0);
+  float l1=cos((s+(vn(vec2(s,t)/(p1*7.)+3.1)-.5)*w*p1+extra)*6.2831853/p1);
+  return .5+.5*mix(l0,l1,f);
+}
+vec4 pack(float sh,float id,float line,float acc){
+ return vec4(clamp(sh,0.,1.),(id+0.5)/16.,clamp(line,0.,1.),acc);
+}
 `;
 const SH = {   // shared uniforms (same objects referenced by every material)
   uVP: { value: new THREE.Matrix4() }, uAspect: { value: 1.78 }, uTime: { value: 0 },
   uSunD: { value: V(0, 1, 0) }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
   uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 1600 }, uFogShade: { value: 0.6 },
   uBreath: { value: 0 }, uDay: { value: 1 }, uKeyUp: { value: 1 },
+  uPerPx: { value: 7.2 }, uWobPx: { value: 8 }, uPxK: { value: .001 },
 };
 const OBJ_VERT = /* glsl */`
 uniform float uTime, uBreath, uBreathOn, uCloth, uClothH, uWalk, uMove; uniform vec3 uWindL;
@@ -246,7 +265,7 @@ void main(){
   float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
   if(uEmit>0.){ sh=uEmit; fog*=0.4; }
   sh=mix(sh,uFogShade,fog);
-  gl_FragColor=pack(sh,id,screenAngle(vW,T*0.6),acc*(1.-fog));
+  gl_FragColor=pack(sh,id,lineAt(vW,N,T,dist,0.),acc*(1.-fog));
 }`;
 function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
   return new THREE.ShaderMaterial({
@@ -256,59 +275,6 @@ function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
       uCloth: { value: 0 }, uClothH: { value: 2 }, uWalk: { value: 0 }, uMove: { value: 0 }, uWindL: { value: V() } }, extra)
   });
 }
-
-/* ---------- sea */
-const NW = 6, NC = 6;
-const seaU = { uW: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uW2: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },
-  uC: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uCalm: { value: 1 }, uHt: { value: null }, uHtB: { value: new THREE.Vector4(-500, -450, 1000, 1200) },
-  uChop: { value: 0.3 }, uSkyB: { value: 0.6 } };
-const SEA_VERT = /* glsl */`
-uniform vec4 uW[8]; uniform vec4 uW2[8]; uniform float uTime, uCalm; uniform vec3 uCamP;
-varying vec3 vW; varying vec2 vXZ; varying float vCrest;
-void main(){
-  vec2 x0=position.xz; float fade=uCalm*(1.-smoothstep(1500.,5000.,length(x0-uCamP.xz)));
-  vec3 d=vec3(0.); float crest=0.;
-  for(int i=0;i<${NW};i++){ vec4 a=uW[i]; vec4 b=uW2[i];
-    float ph=a.z*dot(a.xy,x0)-b.x*uTime+b.z; float A=a.w*fade;
-    d.x+=b.y*A*a.x*cos(ph); d.z+=b.y*A*a.y*cos(ph); d.y+=A*sin(ph); crest+=b.y*A*a.z*sin(ph); }
-  vec3 w=vec3(x0.x+d.x,d.y,x0.y+d.z); vW=w; vXZ=x0; vCrest=crest;
-  gl_Position=projectionMatrix*viewMatrix*vec4(w,1.);
-}`;
-const SEA_FRAG = /* glsl */`
-${COMMON}
-uniform vec4 uW[8]; uniform vec4 uW2[8]; uniform vec4 uC[8];
-uniform sampler2D uHt; uniform vec4 uHtB;
-uniform vec3 uKeyD, uCamP; uniform float uTime, uCalm, uAmb, uDiff, uFogD, uFogShade, uKeyUp, uSkyB, uDay;
-varying vec3 vW; varying vec2 vXZ; varying float vCrest;
-void main(){
-  vec2 x0=vXZ; float dist=length(vW-uCamP);
-  float fade=uCalm*(1.-smoothstep(1500.,5000.,length(x0-uCamP.xz)));
-  vec3 n=vec3(0.,1.,0.);
-  for(int i=0;i<${NW};i++){ vec4 a=uW[i]; vec4 b=uW2[i]; float ph=a.z*dot(a.xy,x0)-b.x*uTime+b.z; float A=a.w*fade;
-    n.x-=A*a.z*a.x*cos(ph); n.z-=A*a.z*a.y*cos(ph); }
-  float cf=uCalm*(1.-smoothstep(120.,900.,dist));
-  for(int i=0;i<${NC};i++){ vec4 c=uC[i]; float w=sqrt(9.81*c.z); float ph=c.z*dot(c.xy,vW.xz)-w*uTime+float(i)*1.7;
-    n.x-=c.w*cf*c.z*c.x*cos(ph); n.z-=c.w*cf*c.z*c.y*cos(ph); }
-  n=normalize(n);
-  vec3 Vd=normalize(uCamP-vW);
-  float lam=max(dot(n,uKeyD),0.);
-  float fres=pow(1.-max(dot(n,Vd),0.),4.);
-  vec3 R=reflect(-Vd,n); float spec=pow(max(dot(R,uKeyD),0.),160.)*uKeyUp;
-  float sh=uAmb*0.8+uDiff*0.35*lam+0.12*uSkyB+0.45*fres*uSkyB+spec*1.7;
-  vec2 tuv=(vW.xz-uHtB.xy)/uHtB.zw; float ht=-30.;
-  if(tuv.x>0.&&tuv.x<1.&&tuv.y>0.&&tuv.y<1.) ht=texture2D(uHt,tuv).r*80.-20.;
-  float depth=-ht;
-  float bands=vn(vW.xz*0.08+vec2(uTime*0.05,0.));
-  float shore=smoothstep(4.5,0.6,depth+(bands-0.5)*3.-1.4*sin(uTime*0.55+depth*1.2));
-  float crest=smoothstep(0.3,0.62,vCrest)*(0.55+0.7*vn(vW.xz*0.05+uTime*0.02));
-  float foam=max(shore,crest)*(1.-smoothstep(1200.,3000.,dist));
-  float id=2.;
-  if(foam>0.5){ id=3.; sh=0.55+0.35*lam+0.15*bands+0.2*uDay; }
-  vec3 T=normalize(vec3(-uW[0].y,0.,uW[0].x)+0.5*vec3(n.x,0.,n.z));
-  float fog=1.-exp(-dist/(uFogD*1.6));
-  sh=mix(sh,uFogShade,fog);
-  gl_FragColor=pack(sh,id,screenAngle(vW,T*2.),0.);
-}`;
 
 /* ---------- sky */
 const SKY_FRAG = /* glsl */`
@@ -330,7 +296,7 @@ void main(){
     float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
     if(cov>0.5){ id=13.; sh=mix(0.32,0.86,uDay)-0.45*(cl-thr)+0.28*sg; T=normalize(vec3(1.,0.15*(cl-0.6),0.)); }
   }
-  gl_FragColor=pack(sh,id,screenAngle(uCamP+d*100.,T),0.);
+  gl_FragColor=pack(sh,id,.5+.5*sin(d.y*38.+uTime*.015),0.);
 }`;
 const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
 
@@ -402,10 +368,7 @@ void main(){
   vec4 d=texture2D(uData,fc/uRes);
   float s=d.r; int id=int(floor(d.g*16.)); float ang=d.b*3.14159265; float acc=d.a;
   vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
-  vec2 dir=vec2(cos(ang),sin(ang));
-  float u=dot(fc,vec2(-dir.y,dir.x));
-  float wob=(vn(fc*0.011+uSeed)-0.5)*uWob+(vn(fc*0.047+uSeed*2.)-0.5)*uWob*0.35;
-  float line=cos((u+wob)*6.2831853/uPeriod);
+  float line=d.b*2.-1.;  // carved in world space; not sliding with screen
   float mid=1.-abs(2.*s-1.);
   float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith;
   int k=v<0.36?0:(v<0.69?1:2);
@@ -954,6 +917,8 @@ function applyLook(dt){
  for(let i=0;i<6;i++){cwNow[i].copy(cwFrom[i]).lerp(target[i],smoothstep(0,1,cwMix));PU.uPal.value[i].copy(cwNow[i])}
  const g=S.grammar;PU.uPeriod.value=g.period*IH/720;PU.uDith.value=g.dith;
  PU.uWob.value=g.wob*IH/720;PU.uOutline.value=g.outline;PU.uHatch.value=g.hatch;
+ SH.uPerPx.value=g.period*IH/720;SH.uWobPx.value=g.wob*IH/720;
+ SH.uPxK.value=2*Math.tan(camera.fov*D2R/2)/Math.max(64,IH);
  PU.uRain.value=clamp(WX.precip/2,0,1);PU.uRainDir.value.set(wd.x*.35,-1).normalize();PU.uTime.value=simT;
  const css=v=>'#'+v.toArray().map(x=>Math.round(clamp(x,0,1)*255).toString(16).padStart(2,'0')).join('');
  const rs=document.documentElement.style;rs.setProperty('--ink',css(cwNow[0]));rs.setProperty('--paper',css(cwNow[5]));
