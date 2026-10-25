@@ -129,22 +129,37 @@ void main(){vec3 q=p+translate;float flutter=matId==4.0?sin(q.x*.8+q.z*.57+time*
 if(matId==15.0){q.y=mod(q.y-time*(.39+.07*sin(p.x*.6)),14.0)+.3;q.x+=sin(time*.49+p.z*.4)*.25;}
 vW=q;vN=n;vMat=matId;vAccent=accent;gl_Position=viewProj*vec4(q,1.0);}`;
 const FRAG=`#version 300 es
-precision highp float;in vec3 vW;in vec3 vN;flat in float vMat;in float vAccent;uniform float time;uniform vec3 sun;uniform float glow;uniform float pauseAmt;layout(location=0)out vec4 packed;
+precision highp float;in vec3 vW;in vec3 vN;flat in float vMat;in float vAccent;uniform float time;uniform vec3 sun;uniform float glow;uniform vec3 formGrammar;layout(location=0)out vec4 packed;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
-void main(){vec3 n=normalize(vN);float sunlit=clamp(abs(dot(n,normalize(sun)))*.61+.30,.10,1.0);float shade=sunlit;
-if(vMat==5.0||vMat==11.0){shade=clamp(.22+sunlit*.38+hash(floor(vW*2.4))*.18,0.,1.);}
-if(vMat==4.0){shade=.33+sunlit*.45+.14*hash(floor(vW*.8));}
-if(vMat==6.0)shade=.32+sunlit*.44;
-if(vMat==7.0)shade=.3+sunlit*.38;
-if(vMat==13.0)shade=.23+sunlit*.22;
-if(vMat==14.0)shade=.83; if(vMat==15.0)shade=.62+sunlit*.18;
-vec2 tangent=(vMat==5.0||vMat==11.0||vMat==3.0)?vec2(vW.y*.92+vW.x*.24,vW.z*.4):vMat==4.0?vec2(vW.x*.37+vW.y*.63,vW.z*.72):vec2(vW.x*.35+vW.z*.56,vW.y*.44+vW.z*.33);
-float engrave=sin(20.0*tangent.x+8.*sin(tangent.y*.25));float lines=engrave>.39?.79:.12;
-// The current object's hatch is WORLD anchored, never recomputed from pixel position.
-float accentVal=clamp(vAccent*.1+lines*.72,0.,1.);
-float dist=length(vW.xz-vec2(${clearCenter[0].toFixed(1)},${clearCenter[1].toFixed(1)}));
-if(vMat==6.0&&dist<8.0){shade+=smoothstep(9.,0.,dist)*(.23+glow*.22);}
-packed=vec4(clamp(shade,0.,1.),vMat/32.0,accentVal,1.);}`;
+void main(){
+vec3 n=normalize(vN),L=normalize(sun);
+float directional=clamp(.28+.72*dot(n,L),.055,.97);
+float rough=hash(floor(vW*vec3(2.1,1.35,1.8)));
+float shade=directional;
+if(vMat==4.0)shade=clamp(.18+.68*directional+.15*rough,.12,.87);
+if(vMat==5.0)shade=clamp(.10+.58*directional+.22*rough,.09,.74);
+if(vMat==11.0)shade=clamp(.065+.47*directional+.12*rough,.055,.58);
+if(vMat==1.0)shade=clamp(.17+.63*directional+.09*rough,.12,.82);
+if(vMat==2.0)shade=clamp(.20+.66*directional+.08*rough,.15,.92);
+if(vMat==6.0)shade=clamp(.27+.55*directional+.09*rough,.18,.88);
+if(vMat==7.0)shade=clamp(.17+.71*directional+.08*rough,.12,.85);
+if(vMat==14.0)shade=clamp(.64+.40*directional,.68,.98);
+if(vMat==12.0)shade=clamp(.47+.40*directional,.35,.98);
+float treeDist=distance(vW.xz,vec2(6.5,29.0));
+if(vMat==6.0&&treeDist<8.6)shade=clamp(shade+.18+.12*glow,.32,.89);
+vec2 uv;float freq;
+if(vMat==11.0){uv=vec2(vW.y*.9+atan(vW.z-29.,vW.x-6.5)*.68,vW.y*.20+vW.z*.30);freq=35.;}
+else if(vMat==5.0){uv=vec2(vW.y*.93+vW.x*.12,vW.z*.31+vW.x*.16);freq=32.;}
+else if(vMat==4.0){uv=vec2(vW.x*.39+vW.y*.54,vW.z*.48-vW.y*.16);freq=17.;}
+else if(vMat==6.0||vMat==14.0){uv=vec2(vW.y*.95+vW.x*.12,vW.z*.43+vW.x*.27);freq=28.;}
+else if(vMat==2.0||vMat==1.0){uv=vec2(vW.x*.43+vW.z*.14,vW.z*.49-vW.x*.16);freq=22.;}
+else if(vMat==3.0||vMat==8.0){uv=vec2(vW.y*.56+vW.x*.49,vW.z*.17+vW.x*.24);freq=29.;}
+else{uv=vec2(vW.y*.53+vW.x*.26,vW.z*.27+vW.x*.39);freq=24.;}
+float carved=sin(freq*uv.x*formGrammar.x+sin(uv.y*5.4)*formGrammar.y*.23+1.4*rough);
+float interrupted=hash(floor(vW*vec3(1.9,2.7,1.6)));
+float stroke=step(.29,carved)*step(vMat==11.0?.12:.035,interrupted);
+packed=vec4(clamp(shade,0.,1.),vMat/32.0,clamp(stroke*formGrammar.z+.08*rough,0.,1.),1.);
+}`;
 const QUADVERT=`#version 300 es
 precision highp float;out vec2 uv;void main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,gl_VertexID==2?3.0:-1.0);uv=p*.5+.5;gl_Position=vec4(p,0,1);}`;
 const PRINT=`#version 300 es
