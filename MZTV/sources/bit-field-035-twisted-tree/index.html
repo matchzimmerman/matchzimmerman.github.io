@@ -155,9 +155,26 @@ else if(vMat==6.0||vMat==14.0){uv=vec2(vW.y*.95+vW.x*.12,vW.z*.43+vW.x*.27);freq
 else if(vMat==2.0||vMat==1.0){uv=vec2(vW.x*.43+vW.z*.14,vW.z*.49-vW.x*.16);freq=22.;}
 else if(vMat==3.0||vMat==8.0){uv=vec2(vW.y*.56+vW.x*.49,vW.z*.17+vW.x*.24);freq=29.;}
 else{uv=vec2(vW.y*.53+vW.x*.26,vW.z*.27+vW.x*.39);freq=24.;}
-float carved=sin(freq*uv.x*formGrammar.x+sin(uv.y*5.4)*formGrammar.y*.23+1.4*rough);
+float offset=sin(uv.y*5.4)*formGrammar.y*.23+1.4*rough;
+float carved=sin(freq*uv.x*formGrammar.x+offset);
 float interrupted=hash(floor(vW*vec3(1.9,2.7,1.6)));
 float stroke=step(.29,carved)*step(vMat==11.0?.12:.035,interrupted);
+// Canopy uses grouped leaf shadows, not the same continuous line as wood.
+if(vMat==4.0){
+  float clustered=sin(uv.x*11.0+uv.y*7.0)*cos(uv.y*14.0-uv.x*2.6);
+  stroke=step(.27,clustered)*step(.10,interrupted);
+}
+// Tree grain is crooked and deeply broken by knot and carved bark crevices.
+if(vMat==11.0){
+  float grain=sin(uv.x*42.0+1.4*sin(uv.y*8.1)+.7*rough);
+  float fissure=sin(uv.y*17.0+uv.x*3.2);
+  stroke=step(.12,grain)*step(-.4,fissure)*step(.18,interrupted);
+}
+// Grass holds upright incisions, while ground follows broader contour terraces.
+if(vMat==6.0||vMat==14.0)stroke=step(.48,carved)*step(.04,interrupted);
+if(vMat==1.0||vMat==2.0)stroke=step(.24,carved+.28*sin(uv.y*12.0))*step(.02,interrupted);
+// The creek's near-white dry stones are chipped, granular flecks.
+if(vMat==7.0)stroke=step(.58,hash(floor(vW*vec3(8.0,5.2,8.1))));
 packed=vec4(clamp(shade,0.,1.),vMat/32.0,clamp(stroke*formGrammar.z+.08*rough,0.,1.),1.);
 }`;
 const QUADVERT=`#version 300 es
