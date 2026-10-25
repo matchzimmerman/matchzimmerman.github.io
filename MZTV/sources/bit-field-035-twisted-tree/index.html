@@ -25,9 +25,9 @@ canvas#scene{display:block;width:100vw;height:100vh;height:100dvh;touch-action:n
 @media(prefers-reduced-motion:reduce){.controls *{transition:none!important}}
 </style></head><body>
 <canvas id="scene" aria-label="Three-dimensional printed autumn woodland and twisted tree"></canvas>
-<div class="top"><div class="brand">MZ WORLD / STUDY 001<b>TWISTED TREE</b><em>THE DAY I FOUND THE BEAUTY OF NATURE</em></div><div class="stateTop"><div class="tag" id="badge">JAVASCRIPT REQUIRED · OPEN LIVE PAGE</div><a class="walklink" href="./walk.html">WALK THROUGH WORLD ↗</a></div></div>
+<div class="top"><div class="brand">MZ WORLD / STUDY 002<b>TWISTED TREE</b><em>THE DAY I FOUND THE BEAUTY OF NATURE</em></div><div class="stateTop"><div class="tag" id="badge">JAVASCRIPT REQUIRED · OPEN LIVE PAGE</div><a class="walklink" href="./walk.html">WALK THROUGH WORLD ↗</a></div></div>
 <div id="hud" class="hud"><div class="info-title">OBSERVING / THE CLEARING</div><div id="readout">LOADING FOREST · OPEN LIVE BROWSER IF THIS DOES NOT CHANGE</div><div class="log" id="log"></div></div>
-<div class="controls"><div class="hint">An autonomous observation of a fourth-grader's nature story. No quests, no narration. The woods keep their own time.</div><div class="buttons"><button id="modeBtn">CAMERAS: AUTO</button><button id="treeBtn">THE TREE</button><button id="trailBtn">THE TRAIL</button><button id="muteBtn">ENABLE SOUND</button><button id="storyBtn">STORY</button><button id="infoBtn">INFO ▾</button></div><div class="mobile-hint">Drag to look around · buttons change the observation</div></div>
+<div class="controls"><div class="hint">A forest remembers light, wind and the geometry of one extraordinary tree. No figures, no quests, no narration.</div><div class="buttons"><button id="modeBtn">CAMERAS: AUTO</button><button id="treeBtn">THE TREE</button><button id="trailBtn">THE TRAIL</button><button id="muteBtn">ENABLE SOUND</button><button id="storyBtn">STORY</button><button id="infoBtn">INFO ▾</button></div><div class="mobile-hint">Drag to look around · buttons change the observation</div></div>
 <aside id="storyPanel" class="story-panel" hidden><small>ORIGINAL STORY / FOURTH-GRADE WRITER</small><h2>The Day I Found the Beauty of Nature</h2><p>This woodland is an adaptation of the author's experience of noticing one unusual tree on a school hike.</p><blockquote>“The trees were like big ice cream cones around us.”</blockquote><blockquote>“The sun was like a lemon snowball.”</blockquote><blockquote>“The tree was like a giant thick piece of black licorice.”</blockquote><blockquote>“Even though I’m just someone small in a big world I am important. Just like the tree.”</blockquote><p>The original story and cover drawing are preserved as private reference materials in the project ZIP. The world does not add narration or invented events to the child's writing.</p><button id="closeStory">RETURN TO THE WORLD</button></aside>
 <div class="veil" id="noWebgl" hidden><div class="message"><h2 id="fatalTitle">WEBGL UNAVAILABLE</h2><p id="fatalDetail">This scene requires WebGL2. Open the public HTTPS page directly in Safari or Chrome rather than an HTML-file preview.</p><small id="fatalFoot">If your browser blocks graphics acceleration, use a device supporting WebGL2.</small></div></div>
 <script>
@@ -43,17 +43,17 @@ const param=new URLSearchParams(location.search),capture=param.has('capture'),wa
 let randState=seed|0;function rnd(){randState=(randState*1664525+1013904223)|0;return (randState>>>0)/4294967296;}
 const P={INK:0,DEEP:1,SEA:2,HOT:3,GLOW:4,PAPER:5};
 const palette=[
-['AUTUMN CLEARING','#1c302f','#3c5651','#789481','#b77d56','#f1ce78','#eee6bf'],
-['LEMON SNOWBALL','#273337','#547f7b','#a6b9a4','#c27b46','#f6d35f','#f0eccf'],
-['WET GRASS','#182f32','#385b5a','#6c8777','#ad7955','#debf81','#dfdfc8'],
-['BLACK LICORICE','#211f31','#4b5067','#7f8e93','#af7861','#d5b788','#e8ddd0'],
-['SIGNAL FLARE','#241e3c','#393e70','#6d789c','#e06a4f','#f4c97a','#e7dac5'],
-['PISTACHIO NIGHT','#272f2e','#577261','#99b491','#b87965','#e6c8a5','#e8e2cd'],
-['ULTRAMARINE','#192e50','#365986','#4e82a3','#d37f6e','#ebc677','#f0dcca'],
-['FIRST FROST','#263a43','#677c81','#a6b1a3','#bc9b89','#e7d8ac','#eae9df']];
-let cw=0,cwPrev=0,cwMix=1,cwCounts=palette.map(()=>0),epoch=1,tension=0,weather={wind:.39,wet:.74,cloud:.22},worldT=0,simHour=9.67,camFixed=-1,camIndex=0,camNext=10,hikerState=0,treePause=0,drift=0,scrollW=1,info=true;
-const STORAGE='mzworld-twisted-tree-v1'+(param.has('walk')?'-walk':'')+(param.has('seed')?'-s'+seed:'');
-const memory={visits:0,pauses:0,leafLitter:0,wet:.7,log:[],events:[],lastEvent:-900};
+['AUTUMN CLEARING','#252840','#3a5274','#518e89','#c77350','#f2c85f','#efe5c9'],
+['LEMON SNOWBALL','#28253e','#4f5985','#73a2a1','#ca7657','#f4d550','#f4e9cb'],
+['WET GRASS / RUSSET','#253544','#3b6079','#73a89b','#c78152','#e7bf6d','#ece7d2'],
+['BLACK LICORICE / TWILIGHT','#211f38','#46466d','#8c9d9a','#c0785b','#e8c579','#eee3d4'],
+['SIGNAL FLARE','#24123a','#5b3fd1','#6fd3c1','#ff7a8a','#ffd24a','#fbf3e4'],
+['PISTACHIO NIGHT','#10202b','#1f4a6e','#b6d97a','#ff5a7a','#f9e7b0','#eef4ea'],
+['ULTRAMARINE','#0c1440','#1f3bb3','#44b8e8','#ff6a1a','#ffd0a1','#fff7ec'],
+['FIRST FROST / COPPER','#283748','#58768b','#8aa9a7','#cf7c5d','#e5c077','#f3ead5']];
+let cw=0,cwPrev=0,cwMix=1,cwCounts=palette.map(()=>0),epoch=1,tension=0,weather={wind:.39,wet:.74,cloud:.22},worldT=0,simHour=9.67,camFixed=-1,camIndex=0,camNext=10,treeStillness=0,lightPatch=.5,drift=0,scrollW=1,info=true;
+const STORAGE='mzworld-twisted-tree-v2'+(param.has('walk')?'-walk':'')+(param.has('seed')?'-s'+seed:'');
+const memory={lightTraces:0,canopyStillSeconds:0,leafLitter:0,rainStore:.7,wet:.7,log:[],events:[],lastEvent:-900};
 try{if(!param.has('fresh'))Object.assign(memory,JSON.parse(localStorage.getItem(STORAGE)||'{}'));}catch(e){}
 function record(s){memory.log.unshift(s);memory.log=memory.log.slice(0,40);document.querySelector('#log').textContent=memory.log.slice(0,3).join(' · ');}
 function save(){try{localStorage.setItem(STORAGE,JSON.stringify(memory));}catch(e){}}
@@ -69,7 +69,7 @@ const land=(x,z)=> .85*Math.sin(x*.042)+.58*Math.sin(z*.077)+.22*Math.sin(x*.18+
 function creekDistance(x,z){const z1=-13+1.5*Math.sin(x*.12),z2=8+1.1*Math.sin(x*.19+1.5);return Math.min(Math.abs(z-z1),Math.abs(z-z2));}
 function height(x,z){let y=land(x,z),c=creekDistance(x,z);y-=Math.max(0,1-c/2.7)*.66;return y;}
 const clearCenter=[6.5,29];
-const MAT={GROUND:1,TRAIL:2,WOOD:3,CANOPY:4,BARK:5,GRASS:6,STONE:7,BRIDGE:8,BIRD:9,SKY:10,TREE:11,LEAF:12,HIKER:13,SUN:14};
+const MAT={GROUND:1,TRAIL:2,WOOD:3,CANOPY:4,BARK:5,GRASS:6,STONE:7,BRIDGE:8,BIRD:9,SKY:10,TREE:11,LEAF:12,SUNPATCH:14};
 const shapes=[];let data=[];
 function tri(a,b,c,m=1,accent=0){const n=unit(cross(sub(b,a),sub(c,a))),p=[a,b,c];for(let k=0;k<3;k++)data.push(...p[k],...n,m,accent);}
 function quad(a,b,c,d,m,ac=0){tri(a,b,c,m,ac);tri(a,c,d,m,ac);}
@@ -85,6 +85,9 @@ for(const [x,z,k] of sites){let y=height(x,z),r=.27+k*.28,h=4.6+k*6.1;if(Math.ab
 meshBaked('woodland');
 // Grass in clearing and around the path. Thin forms catch six-ink hatching.
 for(let i=0;i<4200;i++){const x=-48+rnd()*95,z=-34+rnd()*88;if(creekDistance(x,z)<1.6||trailD(x,z)<1.45)continue;let y=height(x,z),h=.14+rnd()*.47,a=rnd()*TAU,tilt=.12;const r=[Math.cos(a),0,Math.sin(a)];tri([x-.055,y,z],[x+.055,y,z],[x+tilt*r[0],y+h,z+tilt*r[2]],MAT.GRASS);}
+// A restrained warm focal accent occurs in the clearing vegetation, never as bloom.
+for(let i=0;i<560;i++){const a=rnd()*TAU,r=Math.sqrt(rnd())*8.2,x=clearCenter[0]+Math.cos(a)*r,z=clearCenter[1]+Math.sin(a)*r,y=height(x,z)+.015,h=.10+rnd()*.39;
+tri([x-.045,y,z],[x+.055,y,z],[x+.055*Math.sin(a),y+h,z+.055*Math.cos(a)],MAT.SUNPATCH);}
 meshBaked('grass');
 // Bridges through a dry creek: flat plank beds and simple rails.
 for(const z of [-13,8]){const x=trailX(z),y=height(x,z)+.75;for(let n=-5;n<=5;n++){let zz=z+n*.38;box(x,y,zz,3.5,.18,.30,MAT.BRIDGE);}for(const side of [-1,1]){let xx=x+side*1.66;for(let t=-2.3;t<=2.3;t+=1.15)cyl([xx,y, z+t],[xx,y+.92,z+t],.065,.06,MAT.BRIDGE,5);cyl([xx,y+.81,z-2.45],[xx,y+.81,z+2.45],.065,.06,MAT.BRIDGE,6);}}
@@ -113,11 +116,7 @@ BR([[-2.4,5.1,.3],[-4.4,5.9,.3],[-5.25,6.55,.42]],.3);
 BR([[.9,4.7,-.75],[.7,5.7,-1.8],[1.3,6.4,-2.9]],.25);
 for(let i=0;i<8;i++){let x=.45+.48*Math.sin(i*2.43),z=.23+.3*Math.cos(i*1.7);cyl(T(x,.52+i*.44,z),T(x+.14,1.15+i*.44,z),.16,.09,MAT.TREE,5);}
 meshBaked('twisted_tree');
-// Hiker geometry, with world motion as per-object model matrix; original creature is symbolic rather than a replica of the child.
-box(0,1,0,.5,1,.25,MAT.HIKER);crown(0,1.83,0,.26,.30,.24,MAT.HIKER);
-cyl([-.19,.82,0],[-.23,.18,0],.12,.11,MAT.BARK);cyl([.19,.82,0],[.24,.18,0],.12,.11,MAT.BARK);box(-.23,.15,-.1,.29,.27,.48,MAT.TREE);box(.24,.15,-.1,.29,.27,.48,MAT.TREE);
-cyl([-.36,1.4,0],[-.46,.83,0],.08,.065,MAT.HIKER);cyl([.36,1.4,0],[.47,.83,0],.08,.065,MAT.HIKER);box(0,1.48,-.16,.61,.10,.12,MAT.SUN);
-meshBaked('hiker');
+// The tree, vegetation and sunlight are the subjects. No figure geometry exists.
 // birds in flight and falling geometric leaflets (small independent draw batches)
 for(let j=0;j<16;j++){let z=-25+rnd()*77,x=-27+rnd()*54,y=8+rnd()*7;let b=[x,y,z];cyl(b,add(b,[-.55,.12,-.18]),.032,.005,MAT.BIRD,4);cyl(b,add(b,[.55,.12,-.18]),.032,.005,MAT.BIRD,4);}
 meshBaked('birds');
@@ -191,7 +190,7 @@ const crew=[
 {name:'DRY CREEK',p:()=>[trailX(-13)+5,2.2,-16],t:()=>[trailX(-13),-.1,-13],fov:64},
 {name:'WOODEN BIRDS',p:()=>[trailX(18)+2.5,2.3,14],t:()=>[trailX(18)+2.2,1.7,18],fov:49},
 {name:'CANOPY / HIGH',p:()=>[8,15,17],t:()=>[5,1.9,29],fov:65},
-{name:'HIKER / DISTANT',p:()=>[trailX(3)+5,3.2,-1],t:()=>[trailX(12),1.2,12],fov:56}
+{name:'WOODLAND / FAR',p:()=>[trailX(3)+5,5.3,-1],t:()=>[trailX(12),3.2,12],fov:56}
 ];
 // Mouse drag: look around the held operator; does not control the autonomous subject.
 let angX=0,angY=0,dragStart=null;const walk={x:trailX(-31),z:-31,yaw:0,keys:new Set(),axes:[0,0]};
@@ -201,16 +200,21 @@ canvas.addEventListener('pointerup',()=>{dragStart=null;});
 function ink(i){cwPrev=cw;cw=((i%palette.length)+palette.length)%palette.length;cwMix=0;cwCounts[cw]=(cwCounts[cw]||0)+1;record('PRINT RE-INKS · '+palette[cw][0]);}
 function event(name){let labels={lemon:'LEMON SNOWBALL',birds:'WOODEN BIRDS TURN',river:'DRY RIVER REMEMBERS',tree:'TWISTED TREE HOLD'};memory.events.push({name,hour:simHour,wind:weather.wind,wet:weather.wet,at:worldT});memory.events=memory.events.slice(-40);memory.lastEvent=worldT;memory.current={name,until:worldT+12+8*rnd()};record('NOW · '+(labels[name]||name));tension+=.07;}
 function rupture(){record('HUSH / PRINT TURNS');tension=0;epoch++;let weighted=palette.map((p,i)=>[i,1/(1+(cwCounts[i]||0))]);let mass=weighted.reduce((v,x)=>v+x[1],0),r=rnd()*mass;for(let [i,w] of weighted){if((r-=w)<=0){ink(i);break;}}memory.current={name:'hush',until:worldT+6};}
-let hikerPos=V(0,0,0);
-function modelHiker(t){const whole=125,cycle=(t+34)%whole;
-let z,phase;if(cycle<64){z=-32+cycle*.96;phase='OUTWARD';}else if(cycle<86){z=29;phase='AT THE TREE';treePause+=Math.max(0,scrollW);}
-else{z=29-(cycle-86)*1.59;phase='RETURN';}
-let x=trailX(z);const enter=clamp((cycle-57)/12,0,1),leave=1-clamp((cycle-82)/10,0,1);x+=(clearCenter[0]-trailX(z)-2.8)*enter*leave;let y=height(x,z)+.18;hikerPos=[x,y,z];hikerState=phase;
-if(cycle>=64&&cycle<86&&!memory.flagged){memory.visits++;memory.pauses++;record('HIKER NOTICES THE TREE');memory.flagged=true;}if(cycle<3)memory.flagged=false;return hikerPos;}
+// Autonomous tree/canopy ecology replaces the entire former character lifecycle.
+const engraving={period:1,wob:1,hatch:1,dith:1,outline:1};
+function forestProcesses(dt){
+ treeStillness=clamp(1.0-weather.wind*1.3,0,1);
+ if(treeStillness>.71)memory.canopyStillSeconds=(memory.canopyStillSeconds||0)+dt;
+ const align=Math.max(0,Math.cos((simHour-10.1)*.9));
+ lightPatch=clamp(.25+align*.68-weather.cloud*.18,0,1);
+ if(lightPatch>.70&&weather.wind<.43)memory.lightTraces=(memory.lightTraces||0)+dt*.006;
+ memory.rainStore=Math.max(0,(memory.rainStore||.65)-dt/28000);
+ memory.wet=clamp(memory.rainStore+.13*Math.sin(worldT*.001),.1,1);
+}
 let last=performance.now(),frame=0,audio=null,soundOn=false;
 function initAudio(){if(audio){soundOn=!soundOn;audio.master.gain.setTargetAtTime(soundOn?.26:0,audio.ctx.currentTime,.3);return;}
 try{const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC(),master=ctx.createGain(),hp=ctx.createBiquadFilter(),lp=ctx.createBiquadFilter(),comp=ctx.createDynamicsCompressor();master.gain.value=.2;hp.type='highpass';hp.frequency.value=26;lp.type='lowpass';lp.frequency.value=1200;comp.threshold.value=-22;comp.ratio.value=2.5;master.connect(hp);hp.connect(lp);lp.connect(comp);comp.connect(ctx.destination);let dr=ctx.createOscillator(),d=ctx.createGain(),f=ctx.createBiquadFilter();dr.type='sine';dr.frequency.value=73.42;f.type='lowpass';f.frequency.value=240;d.gain.value=.43;dr.connect(f);f.connect(d);d.connect(master);dr.start();let cricket=ctx.createOscillator(),cg=ctx.createGain();cricket.type='sine';cricket.frequency.value=760;cg.gain.value=.002;cricket.connect(cg);cg.connect(master);cricket.start();audio={ctx,master,dr,cricket,cg};soundOn=true;ctx.resume();}catch(e){record('AUDIO UNAVAILABLE');}}
-function tickAudio(){if(!audio||!soundOn)return;const t=audio.ctx.currentTime;audio.dr.frequency.setTargetAtTime(70+4*Math.round(hikerPos[2]/8),t,.6);audio.cg.gain.setTargetAtTime(.0015+Math.sin(worldT*17)*.0015,t,.08);}
+function tickAudio(){if(!audio||!soundOn)return;const t=audio.ctx.currentTime;audio.dr.frequency.setTargetAtTime(62+17*treeStillness+9*lightPatch,t,.6);audio.cg.gain.setTargetAtTime(.0015+Math.sin(worldT*17)*.0015,t,.08);}
 function render(t){
  resize();const position=camFixed>=0?camFixed:camIndex,crewCam=crew[position]||crew[0];let pos=crewCam.p(),target=crewCam.t(),yaw=angX,down=angY;
  if(!capture){pos[0]+=.14*Math.sin(t*.12);pos[1]+=.07*Math.sin(t*.19);pos[2]+=.11*Math.cos(t*.16);}
@@ -220,20 +224,27 @@ function render(t){
  gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.viewport(0,0,W,H);gl.enable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
  gl.clearColor(.11,.19,.18,1);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  gl.useProgram(sceneProg);gl.uniformMatrix4fv(camU.viewProj,false,vp);gl.uniform1f(camU.time,t);gl.uniform3f(camU.sun,-.5,.91,-.25);gl.uniform1f(camU.glow,memory.current?.name==='lemon'&&memory.current.until>t?1:0);gl.uniform1f(camU.pauseAmt,0);
- for(const part of shapes){gl.bindBuffer(gl.ARRAY_BUFFER,part.buffer);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,32,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,32,12);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,1,gl.FLOAT,false,32,24);gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,1,gl.FLOAT,false,32,28);let translate=part.name==='hiker'?hikerPos:[0,0,0];gl.uniform3fv(camU.translate,translate);gl.drawArrays(gl.TRIANGLES,0,part.vertices);}
+ for(const part of shapes){gl.bindBuffer(gl.ARRAY_BUFFER,part.buffer);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,32,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,32,12);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,1,gl.FLOAT,false,32,24);gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,1,gl.FLOAT,false,32,28);gl.uniform3fv(camU.translate,[0,0,0]);gl.drawArrays(gl.TRIANGLES,0,part.vertices);}
  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);gl.disable(gl.DEPTH_TEST);gl.useProgram(postProg);gl.bindVertexArray(emptyVao);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,bgTex);gl.uniform1i(postU.tex,0);gl.uniform2f(postU.resolution,W,H);gl.uniform3fv(postU.inks,colset(cw));gl.uniform3fv(postU.prevInks,colset(cwPrev));gl.uniform1f(postU.fade,cwMix);gl.drawArrays(gl.TRIANGLES,0,3);
  }
-function infoUpdate(){const box=document.querySelector('#hud');box.hidden=!info;document.querySelector('#readout').textContent=`EPOCH ${epoch} · ${palette[cw][0]}\nWIND ${(weather.wind*6).toFixed(1)} m/s (SIM) → leaves / bar ${(5.8-weather.wind*1.6).toFixed(1)} s\nGROUND ${Math.round(weather.wet*100)}% WET (SIM) → grass / mud\nSUN 09:${String(Math.floor((simHour%1)*60)).padStart(2,'0')} (SIM) → clearing\nHIKER ${hikerState} → bass / path\n${walkMode?'VIEW WALK / HUMAN EYE':'CAM '+(camIndex+1)+' '+crew[(camFixed<0?camIndex:camFixed)].name}\nPAUSES ${memory.pauses} · LITTER ${memory.leafLitter.toFixed(1)} · TENSION ${tension.toFixed(2)}\n${memory.current?.until>worldT?'NOW '+memory.current.name.toUpperCase():''}`;document.querySelector('#log').textContent=memory.log.slice(0,3).join('  /  ');}
+function infoUpdate(){const box=document.querySelector('#hud');box.hidden=!info;document.querySelector('#readout').textContent=`EPOCH ${epoch} · ${palette[cw][0]}\nWIND ${(weather.wind*6).toFixed(1)} m/s (SIM) → leaves / bar ${(5.8-weather.wind*1.6).toFixed(1)} s\nGROUND ${Math.round(weather.wet*100)}% WET (SIM) → grass / mud\nSUN 09:${String(Math.floor((simHour%1)*60)).padStart(2,'0')} (SIM) → clearing\nTREE STILLNESS ${treeStillness.toFixed(2)} → bass / canopy\n${walkMode?'VIEW WALK / HUMAN EYE':'CAM '+(camIndex+1)+' '+crew[(camFixed<0?camIndex:camFixed)].name}\nLIGHT TRACES ${(memory.lightTraces||0).toFixed(1)} · LITTER ${memory.leafLitter.toFixed(1)} · TENSION ${tension.toFixed(2)}\n${memory.current?.until>worldT?'NOW '+memory.current.name.toUpperCase():''}`;document.querySelector('#log').textContent=memory.log.slice(0,3).join('  /  ');}
 function step(dt){
  if(walkMode){const fore=(walk.keys.has('w')||walk.keys.has('ArrowUp')?1:0)-(walk.keys.has('s')||walk.keys.has('ArrowDown')?1:0)-walk.axes[1];const sideways=(walk.keys.has('d')||walk.keys.has('ArrowRight')?1:0)-(walk.keys.has('a')||walk.keys.has('ArrowLeft')?1:0)+walk.axes[0];const speed=4.4*dt;walk.x=clamp(walk.x+(fore*Math.sin(walk.yaw)+sideways*Math.cos(walk.yaw))*speed,-62,62);walk.z=clamp(walk.z+(fore*Math.cos(walk.yaw)-sideways*Math.sin(walk.yaw))*speed,-38,52);}
- worldT+=dt;simHour=(9.67+worldT/2100)%24;weather.wind=clamp(.39+.21*Math.sin(worldT*.043)+.05*Math.sin(worldT*.13),0,1);memory.leafLitter=clamp(memory.leafLitter+dt*.0007,0,36);weather.wet=Math.max(.22,memory.wet*Math.exp(-worldT/20000));tension=clamp(tension+dt/(65*60),0,1.01);if(tension>=1)rupture();cwMix=Math.min(1,cwMix+dt*.17);modelHiker(worldT);
+ worldT+=dt;simHour=(9.67+worldT/2100)%24;weather.wind=clamp(.39+.21*Math.sin(worldT*.043)+.05*Math.sin(worldT*.13),0,1);memory.leafLitter=clamp(memory.leafLitter+dt*.0007,0,36);weather.wet=Math.max(.16,(memory.rainStore||.7)*Math.exp(-worldT/20000));tension=clamp(tension+dt/(65*60),0,1.01);if(tension>=1)rupture();cwMix=Math.min(1,cwMix+dt*.17);forestProcesses(dt);
  if(!walkMode&&camFixed<0&&worldT>camNext){camIndex=(camIndex+1)%crew.length;camNext=worldT+8+rnd()*8;angX=angY=0;}
- if(worldT-memory.lastEvent>840){let nearTree= hikerPos[2]>17;
- if(rnd()<dt*.03){if(nearTree&&simHour>9&&weather.wind<.6)event(rnd()<.57?'lemon':'tree');else if(camIndex===4&&weather.wet>.5)event('river');else if(camIndex===5)event('birds');}}
+ if(worldT-memory.lastEvent>840){
+ const familiar=(memory.events||[]).some(e=>Math.abs(e.wind-weather.wind)<.11&&Math.abs(e.wet-weather.wet)<.14);
+ if(rnd()<dt*(familiar?.055:.034)){
+  if(lightPatch>.61&&weather.wind<.59)event('lemon');
+  else if(treeStillness>.67&&memory.leafLitter>.03)event('tree');
+  else if(weather.wet>.47&&camIndex===4)event('river');
+  else if(camIndex===5||weather.wind>.5)event('birds');
+ }
+}
  if(memory.current&&memory.current.until<worldT)memory.current=null;tickAudio();}
-function loop(ms){let dt=clamp((ms-last)/1000,0,.09);last=ms;if(!capture)step(dt*(Number(param.get('rate'))||1));try{render(worldT);}catch(e){console.error(e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;return;}if(frame++%16===0)infoUpdate();try{render(worldT);requestAnimationFrame(loop);}catch(e){console.error('Initial render failed',e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;}}
+function loop(ms){let dt=clamp((ms-last)/1000,0,.09);last=ms;if(!capture)step(dt*(Number(param.get('rate'))||1));try{render(worldT);}catch(e){console.error(e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;return;}if(frame++%16===0)infoUpdate();requestAnimationFrame(loop);}
 // public camera/runtime API (candidate, not a broadcast-approved build)
-window.MZ={tick(dt){step(dt);render(worldT)},advance(sec){let count=Math.ceil(sec/1);for(let i=0;i<count;i++)step(sec/count);render(worldT)},force(name){if(name==='rupture')rupture();else if(['lemon','river','birds','tree'].includes(name))event(name);else return false;render(worldT);return true;},cam(i){camFixed=i===-1?-1:clamp(i|0,0,crew.length-1);angX=angY=0;render(worldT);},look(p,t,fov){camFixed=0;crew[0]={...crew[0],p:()=>p,t:()=>t,fov:fov||55};render(worldT);},ink, get state(){return{worldT,epoch,tension,cw,palette:palette[cw][0],memory:{...memory},hiker:hikerPos,simHour,weather}},setWx(o){Object.assign(weather,o)},analyser(){return null},h:height,grammar(o){record('PRINT GRAMMAR · PREVIEW');return o;},get keeper(){return hikerPos},get geo(){return{region:'woodland / school edge',provisional:true}}};
+window.MZ={tick(dt){step(dt);render(worldT)},advance(sec){let count=Math.ceil(sec/1);for(let i=0;i<count;i++)step(sec/count);render(worldT)},force(name){if(name==='rupture')rupture();else if(['lemon','river','birds','tree'].includes(name))event(name);else return false;render(worldT);return true;},cam(i){camFixed=i===-1?-1:clamp(i|0,0,crew.length-1);angX=angY=0;render(worldT);},look(p,t,fov){camFixed=0;crew[0]={...crew[0],p:()=>p,t:()=>t,fov:fov||55};render(worldT);},ink, get state(){return{worldT,epoch,tension,cw,palette:palette[cw][0],memory:{...memory},treeStillness,lightPatch,simHour,weather}},setWx(o){Object.assign(weather,o)},analyser(){return null},h:height,grammar(o){if(!o)return{...engraving};for(const k of Object.keys(engraving))if(typeof o[k]==='number'&&Number.isFinite(o[k]))engraving[k]=clamp(o[k],.3,2);record('PRINT GRAMMAR · MODIFIED');return {...engraving};},get tree(){return{position:[tx,ty,tz],stillness:treeStillness,light:lightPatch}},get geo(){return{region:'woodland / school edge',provisional:true}}};
 if(walkMode){document.querySelector('#modeBtn').textContent='WALK / LOOK AROUND';document.querySelector('#treeBtn').textContent='GO TO TREE';document.querySelector('#trailBtn').textContent='TRAIL START';document.querySelector('.hint').textContent='Walk with WASD / arrow keys; drag to look. No quests or scoring. This is a separate experimental visitor view.';}
  window.addEventListener('message',e=>{if(e.source!==window.parent||!e.data||e.data.kind!=='mz-walk-input')return;walk.axes=[clamp(Number(e.data.x)||0,-1,1),clamp(Number(e.data.z)||0,-1,1)];});
  window.addEventListener('keyup',e=>walk.keys.delete(e.key));
@@ -246,6 +257,6 @@ document.querySelector('#infoBtn').onclick=()=>{info=!info;infoUpdate();};
 document.querySelector('#storyBtn').onclick=()=>document.querySelector('#storyPanel').hidden=!document.querySelector('#storyPanel').hidden;
 document.querySelector('#closeStory').onclick=()=>document.querySelector('#storyPanel').hidden=true;
 window.addEventListener('keydown',e=>{if(walkMode&&['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){walk.keys.add(e.key);e.preventDefault();}if(e.key==='i'||e.key==='I'){info=!info;infoUpdate()}if(e.key==='m'||e.key==='M'){initAudio();document.querySelector('#muteBtn').textContent=soundOn?'MUTE SOUND':'ENABLE SOUND';}if(e.key==='r'||e.key==='R'){tension+=.16;record('HUMAN HAND / RUPTURE');if(tension>=1)rupture();}});
-record('THE WOOD HOLDS A CLEARING');bootStatus('SIMULATED AUTUMN MORNING');if(param.has('cam')){camFixed=clamp(Number(param.get('cam'))||0,0,crew.length-1);camIndex=camFixed;}if(param.has('ff')){let sec=Math.max(0,Math.min(6*3600,(Number(param.get('ff'))||0)*60));for(let i=0;i<sec;i+=1)step(1);}infoUpdate();try{render(worldT);requestAnimationFrame(loop);}catch(e){console.error('Initial render failed',e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;}
+record('THE TREE HOLDS A CLEARING');bootStatus('SIMULATED AUTUMN MORNING');if(param.has('cam')){camFixed=clamp(Number(param.get('cam'))||0,0,crew.length-1);camIndex=camFixed;}if(param.has('ff')){let sec=Math.max(0,Math.min(6*3600,(Number(param.get('ff'))||0)*60));for(let i=0;i<sec;i+=1)step(1);}infoUpdate();try{render(worldT);requestAnimationFrame(loop);}catch(e){console.error('Initial render failed',e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;}
 })();
 </script></body></html>
