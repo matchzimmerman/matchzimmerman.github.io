@@ -1,0 +1,251 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#18282a"><meta name="color-scheme" content="dark"><title>MZ WORLD · TWISTED TREE — The Day I Found the Beauty of Nature</title>
+<style>
+:root{--paper:#e7e2b9;--ink:#213133;--hot:#efc56a;--deep:#617f75;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;height:100dvh;width:100%;margin:0;background:#192b2c;color:#f2ecd4;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden}
+body{position:relative;overscroll-behavior:none}
+canvas#scene{display:block;width:100vw;height:100vh;height:100dvh;touch-action:none;object-fit:fill}
+.top{position:absolute;top:0;left:0;right:0;z-index:5;padding:calc(12px + env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) 12px max(18px,env(safe-area-inset-left));pointer-events:none;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;text-shadow:0 1px 4px #142b2d}
+.brand{font-weight:bold;letter-spacing:.12em;font-size:clamp(10px,1.4vw,12px);max-width:72%;line-height:1.3}
+.brand b{font-family:Georgia,serif;font-weight:400;font-size:clamp(23px,4vw,46px);letter-spacing:-.015em;display:block;margin-top:6px}
+.brand em{font-weight:normal;font-style:normal;color:#e6e3d5;display:block;font-size:clamp(8px,1vw,10px);letter-spacing:.055em;margin-top:6px}
+.tag{border:1px solid #c5d1b4a1;background:#1b3332de;color:#e8e7d5;padding:9px 11px;font-size:clamp(8px,1vw,10px);letter-spacing:.07em;max-width:32%;text-align:right}
+.hud{position:absolute;bottom:max(19px,env(safe-area-inset-bottom));left:max(16px,env(safe-area-inset-left));max-width:min(460px,46vw);max-height:40dvh;overflow:hidden;z-index:5;pointer-events:none;text-shadow:0 1px 4px #152023;white-space:pre-line;font-size:10px;line-height:1.5;padding:11px 13px;background:#213235de;border-left:2px solid #e2b76a;box-shadow:0 4px 19px #17202344}
+.hud[hidden]{display:none}.hud .info-title{font-weight:800;letter-spacing:.1em;font-size:10px;margin-bottom:5px;color:#f5ddb5}.hud .log{color:#d7dbc6;max-height:42px;overflow:hidden}
+.controls{position:absolute;right:max(15px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));z-index:10;display:flex;align-items:flex-end;flex-direction:column;gap:6px;max-width:58vw}
+.controls .buttons{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.controls button,.controls a{border:1px solid #d3d8c99e;color:#f0e6c9;background:#263a3aef;letter-spacing:.07em;font-size:10px;text-decoration:none;padding:12px 11px;font-family:inherit;cursor:pointer;touch-action:manipulation;min-height:44px;border-radius:0}
+.controls button:active,.controls button:hover,.controls .selected{background:#e4d0a9;color:#243635}
+.hint{font-size:9px;max-width:330px;line-height:1.5;text-align:right;color:#f4ebd3;background:#203431d8;padding:5px 8px}
+.veil{position:absolute;inset:0;background:#172827;display:grid;place-items:center;z-index:30;color:#efebd8;padding:16px}.veil[hidden]{display:none}.veil .message{max-width:560px;padding:24px;text-align:center;line-height:1.7}.veil small{color:#b4c8bc}.veil button{border:1px solid #c9d6c0;padding:12px 18px;background:transparent;color:#eee7d5;cursor:pointer}
+.story-panel{position:absolute;z-index:12;right:max(16px,env(safe-area-inset-right));top:max(110px,env(safe-area-inset-top));width:min(430px,calc(100vw - 32px));max-height:calc(100dvh - 160px);overflow:auto;padding:22px;background:#203636f5;border:1px solid #ebd7b6;color:#f6edd7;box-shadow:0 12px 55px #111e20aa}.story-panel[hidden]{display:none}.story-panel h2{font:italic normal 27px Georgia,serif;line-height:1.2;margin:4px 0 18px}.story-panel blockquote{border-left:2px solid #dfc87e;margin:16px 0;padding:0 0 0 12px;font:italic 16px/1.5 Georgia,serif}.story-panel p{font-size:11px;color:#bdcfc3;line-height:1.6}.story-panel button{font:11px monospace;padding:12px 13px;border:1px solid #e3d1af;color:#ebdec9;background:transparent;cursor:pointer}
+.mobile-hint{display:none}
+@media(max-width:700px){.top{padding-top:calc(12px + env(safe-area-inset-top));padding-left:max(13px,env(safe-area-inset-left));padding-right:max(13px,env(safe-area-inset-right))}.brand{max-width:68%;font-size:10px}.brand b{font-size:clamp(22px,6vw,32px)}.brand em{font-size:8px}.tag{font-size:8px;max-width:34%;padding:7px}.controls{left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));bottom:max(11px,env(safe-area-inset-bottom));max-width:none;gap:5px}.controls .buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;gap:5px}.controls button,.controls a{font-size:clamp(8px,2.05vw,10px);padding:8px 3px;text-align:center;line-height:1.2;min-width:0;overflow-wrap:break-word;min-height:43px}.controls button:nth-child(5),.controls button:nth-child(6){grid-column:span 2}.hud{bottom:calc(118px + env(safe-area-inset-bottom));left:11px;max-width:min(330px,75vw);max-height:23dvh;overflow:hidden;font-size:9px;line-height:1.3;padding:7px 9px}.hud .info-title{font-size:9px}.hud .log{max-height:20px}.hint{display:none}.mobile-hint{display:none}.story-panel{top:calc(96px + env(safe-area-inset-top));max-height:calc(100dvh - 220px);right:10px;width:calc(100vw - 20px)}}
+@media(orientation:landscape) and (max-height:550px){.top{padding-top:calc(6px + env(safe-area-inset-top))}.brand b{font-size:22px;margin-top:2px}.brand em{font-size:8px;margin-top:2px}.tag{padding:5px 7px}.hud{max-height:43dvh;max-width:35vw;bottom:8px;font-size:8px}.controls{bottom:max(8px,env(safe-area-inset-bottom));right:max(8px,env(safe-area-inset-right));left:auto;width:min(370px,56vw);max-width:min(370px,56vw)}.controls .buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}.controls button:nth-child(5),.controls button:nth-child(6){grid-column:auto}.controls button{font-size:8px;min-height:35px;padding:5px}.story-panel{top:8px;right:8px;max-height:calc(100dvh - 16px);width:min(440px,70vw)}}
+@media(prefers-reduced-motion:reduce){.controls *{transition:none!important}}
+</style></head><body>
+<canvas id="scene" aria-label="Three-dimensional printed autumn woodland and twisted tree"></canvas>
+<div class="top"><div class="brand">MZ WORLD / STUDY 001<b>TWISTED TREE</b><em>THE DAY I FOUND THE BEAUTY OF NATURE</em></div><div class="tag" id="badge">JAVASCRIPT REQUIRED · OPEN LIVE PAGE</div></div>
+<div id="hud" class="hud"><div class="info-title">OBSERVING / THE CLEARING</div><div id="readout">LOADING FOREST · OPEN LIVE BROWSER IF THIS DOES NOT CHANGE</div><div class="log" id="log"></div></div>
+<div class="controls"><div class="hint">An autonomous observation of a fourth-grader's nature story. No quests, no narration. The woods keep their own time.</div><div class="buttons"><button id="modeBtn">CAMERAS: AUTO</button><button id="treeBtn">THE TREE</button><button id="trailBtn">THE TRAIL</button><button id="muteBtn">ENABLE SOUND</button><button id="storyBtn">STORY</button><button id="infoBtn">INFO ▾</button></div><div class="mobile-hint">Drag to look around · buttons change the observation</div></div>
+<aside id="storyPanel" class="story-panel" hidden><small>ORIGINAL STORY / FOURTH-GRADE WRITER</small><h2>The Day I Found the Beauty of Nature</h2><p>This woodland is an adaptation of the author's experience of noticing one unusual tree on a school hike.</p><blockquote>“The trees were like big ice cream cones around us.”</blockquote><blockquote>“The sun was like a lemon snowball.”</blockquote><blockquote>“The tree was like a giant thick piece of black licorice.”</blockquote><blockquote>“Even though I’m just someone small in a big world I am important. Just like the tree.”</blockquote><p>The original story and cover drawing are preserved as private reference materials in the project ZIP. The world does not add narration or invented events to the child's writing.</p><button id="closeStory">RETURN TO THE WORLD</button></aside>
+<div class="veil" id="noWebgl" hidden><div class="message"><h2 id="fatalTitle">WEBGL UNAVAILABLE</h2><p id="fatalDetail">This scene requires WebGL2. Open the public HTTPS page directly in Safari or Chrome rather than an HTML-file preview.</p><small id="fatalFoot">If your browser blocks graphics acceleration, use a device supporting WebGL2.</small></div></div>
+<script>
+window.addEventListener('error', function(e){const v=document.getElementById('noWebgl');if(!v)return;document.getElementById('fatalTitle').textContent='WORLD STARTUP ERROR';document.getElementById('fatalDetail').textContent=(e.message||'A startup error prevented rendering')+' · line '+(e.lineno||'?');document.getElementById('fatalFoot').textContent='Report this message or try another browser. This is a preview build.';v.hidden=false;});
+(()=>{'use strict';
+const bootStatus=(s)=>{document.querySelector('#badge').textContent=s};bootStatus('INITIALIZING WORLD');
+// MZ WORLD · TWISTED TREE · experimental standalone proof. Generated geometry only, no image textures.
+const canvas=document.querySelector('#scene');
+let gl=null;try{gl=canvas.getContext('webgl2',{alpha:false,antialias:false,preserveDrawingBuffer:false,powerPreference:'default',desynchronized:false});}catch(e){console.warn('WebGL2 init failure',e);}
+
+if(!gl){document.querySelector('#fatalTitle').textContent='WEBGL2 NOT AVAILABLE';document.querySelector('#fatalDetail').textContent='The viewer cannot use WebGL2. Open the HTTPS GitHub Pages version directly in Safari or Chrome rather than this file preview.';document.querySelector('#noWebgl').hidden=false;return;}bootStatus('BUILDING WOODLAND');
+const param=new URLSearchParams(location.search),capture=param.has('capture'),walkMode=param.has('walk'),seed=Number(param.get('seed'))||7821,clamp=(v,a,b)=>Math.min(b,Math.max(a,v)),TAU=Math.PI*2;
+let randState=seed|0;function rnd(){randState=(randState*1664525+1013904223)|0;return (randState>>>0)/4294967296;}
+const P={INK:0,DEEP:1,SEA:2,HOT:3,GLOW:4,PAPER:5};
+const palette=[
+['AUTUMN CLEARING','#1c302f','#3c5651','#789481','#b77d56','#f1ce78','#eee6bf'],
+['LEMON SNOWBALL','#273337','#547f7b','#a6b9a4','#c27b46','#f6d35f','#f0eccf'],
+['WET GRASS','#182f32','#385b5a','#6c8777','#ad7955','#debf81','#dfdfc8'],
+['BLACK LICORICE','#211f31','#4b5067','#7f8e93','#af7861','#d5b788','#e8ddd0'],
+['SIGNAL FLARE','#241e3c','#393e70','#6d789c','#e06a4f','#f4c97a','#e7dac5'],
+['PISTACHIO NIGHT','#272f2e','#577261','#99b491','#b87965','#e6c8a5','#e8e2cd'],
+['ULTRAMARINE','#192e50','#365986','#4e82a3','#d37f6e','#ebc677','#f0dcca'],
+['FIRST FROST','#263a43','#677c81','#a6b1a3','#bc9b89','#e7d8ac','#eae9df']];
+let cw=0,cwPrev=0,cwMix=1,cwCounts=palette.map(()=>0),epoch=1,tension=0,weather={wind:.39,wet:.74,cloud:.22},worldT=0,simHour=9.67,camFixed=-1,camIndex=0,camNext=10,hikerState=0,treePause=0,drift=0,scrollW=1,info=true;
+const STORAGE='mzworld-twisted-tree-v1'+(param.has('walk')?'-walk':'')+(param.has('seed')?'-s'+seed:'');
+const memory={visits:0,pauses:0,leafLitter:0,wet:.7,log:[],events:[],lastEvent:-900};
+try{if(!param.has('fresh'))Object.assign(memory,JSON.parse(localStorage.getItem(STORAGE)||'{}'));}catch(e){}
+function record(s){memory.log.unshift(s);memory.log=memory.log.slice(0,40);document.querySelector('#log').textContent=memory.log.slice(0,3).join(' · ');}
+function save(){try{localStorage.setItem(STORAGE,JSON.stringify(memory));}catch(e){}}
+window.addEventListener('pagehide',save);setInterval(save,60000);
+// ----- 3D math -----
+const V=(x=0,y=0,z=0)=>[x,y,z],add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],mul=(a,s)=>a.map(v=>v*s),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],dot=(a,b)=>a.reduce((s,n,i)=>s+n*b[i],0),unit=a=>{let l=Math.hypot(...a)||1;return a.map(x=>x/l);},mix=(a,b,t)=>a.map((v,i)=>v*(1-t)+b[i]*t);
+function perspective(fov,aspect,n,f){let t=1/Math.tan(fov*.5),z=f/(n-f);return [t/aspect,0,0,0,0,t,0,0,0,0,z,-1,0,0,z*n,0];}
+function lookAt(pos,target){let z=unit(sub(pos,target)),x=unit(cross([0,1,0],z)),y=cross(z,x);return [x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,pos),-dot(y,pos),-dot(z,pos),1];}
+function matMul(a,b){const c=new Float32Array(16);for(let j=0;j<4;j++)for(let i=0;i<4;i++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+i]*b[j*4+k];c[j*4+i]=s;}return c;}
+// ----- landscape -----
+const trailX=z=>-5.5+2.7*Math.sin(z*.065+.6)+1.4*Math.sin(z*.19),trailD=(x,z)=>Math.abs(x-trailX(z));
+const land=(x,z)=> .85*Math.sin(x*.042)+.58*Math.sin(z*.077)+.22*Math.sin(x*.18+z*.09)+.07*Math.sin(x*.7)*Math.cos(z*.37);
+function creekDistance(x,z){const z1=-13+1.5*Math.sin(x*.12),z2=8+1.1*Math.sin(x*.19+1.5);return Math.min(Math.abs(z-z1),Math.abs(z-z2));}
+function height(x,z){let y=land(x,z),c=creekDistance(x,z);y-=Math.max(0,1-c/2.7)*.66;return y;}
+const clearCenter=[6.5,29];
+const MAT={GROUND:1,TRAIL:2,WOOD:3,CANOPY:4,BARK:5,GRASS:6,STONE:7,BRIDGE:8,BIRD:9,SKY:10,TREE:11,LEAF:12,HIKER:13,SUN:14};
+const shapes=[];let data=[];
+function tri(a,b,c,m=1,accent=0){const n=unit(cross(sub(b,a),sub(c,a))),p=[a,b,c];for(let k=0;k<3;k++)data.push(...p[k],...n,m,accent);}
+function quad(a,b,c,d,m,ac=0){tri(a,b,c,m,ac);tri(a,c,d,m,ac);}
+function cyl(a,b,r1,r2,m=MAT.BARK,sides=7,ac=0){let ax=unit(sub(b,a)),side=unit(cross(ax,Math.abs(ax[1])<.8?[0,1,0]:[1,0,0])),bit=cross(ax,side);for(let j=0;j<sides;j++){let q=j*TAU/sides,t=(j+1)*TAU/sides;let u=add(mul(side,Math.cos(q)),mul(bit,Math.sin(q))),v=add(mul(side,Math.cos(t)),mul(bit,Math.sin(t)));let a0=add(a,mul(u,r1)),a1=add(a,mul(v,r1)),b0=add(b,mul(u,r2)),b1=add(b,mul(v,r2));quad(a0,a1,b1,b0,m,ac);}}
+function box(x,y,z,w,h,d,m,ac=0){let A=[x-w/2,y-h/2,z-d/2],B=[x+w/2,y-h/2,z-d/2],C=[x+w/2,y+h/2,z-d/2],D=[x-w/2,y+h/2,z-d/2],E=[x-w/2,y-h/2,z+d/2],F=[x+w/2,y-h/2,z+d/2],G=[x+w/2,y+h/2,z+d/2],H=[x-w/2,y+h/2,z+d/2];quad(A,B,C,D,m,ac);quad(F,E,H,G,m,ac);quad(E,A,D,H,m,ac);quad(B,F,G,C,m,ac);quad(D,C,G,H,m,ac);quad(E,F,B,A,m,ac);}
+function crown(cx,cy,cz,rx,ry,rz,m=MAT.CANOPY){const stacks=4,sides=8;for(let j=0;j<stacks;j++){let p0=-Math.PI/2+Math.PI*j/stacks,p1=-Math.PI/2+Math.PI*(j+1)/stacks;for(let k=0;k<sides;k++){let t0=k*TAU/sides,t1=(k+1)*TAU/sides;function s(p,t){return[cx+rx*Math.cos(p)*Math.cos(t),cy+ry*Math.sin(p),cz+rz*Math.cos(p)*Math.sin(t)];}quad(s(p0,t0),s(p0,t1),s(p1,t1),s(p1,t0),m,1);}}}
+function meshBaked(name){const verts=new Float32Array(data),b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.STATIC_DRAW);shapes.push({name,buffer:b,vertices:verts.length/8,offset:0});data=[];}
+for(let z=-42;z<56;z+=1.6)for(let x=-67;x<68;x+=1.8){let a=[x,height(x,z)-.1,z],b=[x+1.8,height(x+1.8,z)-.1,z],c=[x+1.8,height(x+1.8,z+1.6)-.1,z+1.6],d=[x,height(x,z+1.6)-.1,z+1.6];let tr=trailD(x+.9,z+.8)<1.65,creek=creekDistance(x+.9,z+.8)<1.35,clearing=Math.hypot(x+.9-clearCenter[0],z+.8-clearCenter[1])<8.8;quad(a,b,c,d,creek?MAT.STONE:tr?MAT.TRAIL:clearing?MAT.GRASS:MAT.GROUND);}
+meshBaked('ground');
+// autumn forest edge. Geometry clusters are intentionally stylized like the cover's large cone crowns.
+let sites=[];for(let i=0;i<190;i++){let x=-63+rnd()*125,z=-37+rnd()*93,nearTree=Math.hypot(x-clearCenter[0],z-clearCenter[1]);if(trailD(x,z)<4.3||nearTree<10.7||creekDistance(x,z)<1.3)continue;sites.push([x,z,rnd()]);}
+for(const [x,z,k] of sites){let y=height(x,z),r=.27+k*.28,h=4.6+k*6.1;if(Math.abs(x)>47)h*=1.23;cyl([x,y-.2,z],[x+.3*Math.sin(x),y+h,z+.5*Math.cos(z)],r,r*.65,MAT.BARK,6);const top=[x+.3*Math.sin(x),y+h,z+.5*Math.cos(z)];if(k<.15){cyl(top,add(top,[.8,1.7,.6]),r*.32,.02,MAT.BARK,5);}else{crown(top[0],top[1]+1,top[2],2.2+2*k,2.7+1.5*k,2.1+2*k);crown(top[0]+1.3,top[1],top[2]-.45,1.65,1.95,1.5);}}
+meshBaked('woodland');
+// Grass in clearing and around the path. Thin forms catch six-ink hatching.
+for(let i=0;i<4200;i++){const x=-48+rnd()*95,z=-34+rnd()*88;if(creekDistance(x,z)<1.6||trailD(x,z)<1.45)continue;let y=height(x,z),h=.14+rnd()*.47,a=rnd()*TAU,tilt=.12;const r=[Math.cos(a),0,Math.sin(a)];tri([x-.055,y,z],[x+.055,y,z],[x+tilt*r[0],y+h,z+tilt*r[2]],MAT.GRASS);}
+meshBaked('grass');
+// Bridges through a dry creek: flat plank beds and simple rails.
+for(const z of [-13,8]){const x=trailX(z),y=height(x,z)+.75;for(let n=-5;n<=5;n++){let zz=z+n*.38;box(x,y,zz,3.5,.18,.30,MAT.BRIDGE);}for(const side of [-1,1]){let xx=x+side*1.66;for(let t=-2.3;t<=2.3;t+=1.15)cyl([xx,y, z+t],[xx,y+.92,z+t],.065,.06,MAT.BRIDGE,5);cyl([xx,y+.81,z-2.45],[xx,y+.81,z+2.45],.065,.06,MAT.BRIDGE,6);}}
+// Trail wooden bird markers: vertical stakes with colored carved plaques, one at each turn.
+for(const [z,sign] of [[-26,1],[-3,-1],[18,1]]){const x=trailX(z)+sign*2.1,y=height(x,z);cyl([x,y,z],[x,y+2,z],.1,.085,MAT.BRIDGE);crown(x,y+1.89,z,.46,.28,.16,MAT.BIRD);cyl([x-.35,y+1.88,z+.04],[x+.43,y+1.9,z],.03,.03,MAT.BIRD,4);}
+// Fork: paths connecting around a single stump. Draw two genuine branching routes through the undergrowth.
+for(let k=0;k<95;k++){let z=13+k*.22,x=trailX(z)+(k/95)*7,yy=height(x,z)+.025;box(x,yy,z,.70,.027,.28,MAT.TRAIL);}
+meshBaked('bridges_markers');
+// Leaves resting on ground: less than in HEADLAND, more like fine print speckles.
+const leaves=[];for(let i=0;i<1000;i++){let x=-32+rnd()*65,z=-25+rnd()*75;if(trailD(x,z)<.8&&rnd()<.6)continue;leaves.push([x,height(x,z)+.02,z,rnd()*TAU,rnd()*2]);}
+for(const l of leaves){const [x,y,z,a,s]=l,r=.07+.065*s;tri([x-r,y,z],[x+r,y,z+.05],[x+Math.cos(a)*r,y+.025,z+Math.sin(a)*r],MAT.LEAF,s);}
+meshBaked('fallen_leaves');
+// Loose leaf silhouettes fall through the canopy in three-dimensional space.
+for(let i=0;i<190;i++){const x=-24+rnd()*48,z=-26+rnd()*77,y=2.5+rnd()*12,r=.08+.12*rnd();tri([x-r,y,z],[x+r,y+.025,z+.06],[x,y+r*.45,z+.11],15,rnd());}
+meshBaked('falling_leaves');
+// Actual sculptural subject: dark knot, asymmetric right-arching branch, low roots and dead vertical leaders.
+let tx=clearCenter[0],tz=clearCenter[1],ty=height(tx,tz),T=(x,y,z=0)=>[tx+x,ty+y,tz+z];
+for(let k=0;k<13;k++){let theta=k*TAU/13+.22,r=1.15+.38*rnd(),p=T(.15*Math.cos(theta),.24,.15*Math.sin(theta)),q=T(Math.cos(theta)*r,.02,Math.sin(theta)*r);cyl(p,q,.19,.05,MAT.TREE,5);}
+const BR=(points,thick)=>{for(let k=1;k<points.length;k++){cyl(T(...points[k-1]),T(...points[k]),Math.max(.035,thick*Math.pow(.79,k-1)),Math.max(.02,thick*Math.pow(.79,k)),MAT.TREE,9);}};
+BR([[0,.2,0],[-.13,1.3,.1],[.38,2.55,.13],[.72,3.8,.0],[1.67,5.1,.0],[3.3,6.15,-.13],[5.25,6.94,-.15],[7.4,7.15,-.1],[9.8,6.98,.1]],.89);
+BR([[0,1,0],[-.9,2.25,.35],[-1.22,3.9,.45],[-2.65,5.2,.3],[-3.05,7.3,.38],[-3.7,8.55,.22]],.66);
+BR([[.28,2.4,.08],[.7,3.0,-.65],[.21,4.15,-.65],[.82,5.1,-1.0],[.55,6.9,-.92]],.46);
+BR([[1.55,5.08,0],[1.6,6.05,1.2],[2.22,7.4,1.6],[2.3,8.3,2]],.34);
+BR([[4.6,6.7,-.2],[5.4,7.5,.7],[6.5,8.2,.95]],.26);
+BR([[-2.4,5.1,.3],[-4.4,5.9,.3],[-5.25,6.55,.42]],.3);
+BR([[.9,4.7,-.75],[.7,5.7,-1.8],[1.3,6.4,-2.9]],.25);
+for(let i=0;i<8;i++){let x=.45+.48*Math.sin(i*2.43),z=.23+.3*Math.cos(i*1.7);cyl(T(x,.52+i*.44,z),T(x+.14,1.15+i*.44,z),.16,.09,MAT.TREE,5);}
+meshBaked('twisted_tree');
+// Hiker geometry, with world motion as per-object model matrix; original creature is symbolic rather than a replica of the child.
+box(0,1,0,.5,1,.25,MAT.HIKER);crown(0,1.83,0,.26,.30,.24,MAT.HIKER);
+cyl([-.19,.82,0],[-.23,.18,0],.12,.11,MAT.BARK);cyl([.19,.82,0],[.24,.18,0],.12,.11,MAT.BARK);box(-.23,.15,-.1,.29,.27,.48,MAT.TREE);box(.24,.15,-.1,.29,.27,.48,MAT.TREE);
+cyl([-.36,1.4,0],[-.46,.83,0],.08,.065,MAT.HIKER);cyl([.36,1.4,0],[.47,.83,0],.08,.065,MAT.HIKER);box(0,1.48,-.16,.61,.10,.12,MAT.SUN);
+meshBaked('hiker');
+// birds in flight and falling geometric leaflets (small independent draw batches)
+for(let j=0;j<16;j++){let z=-25+rnd()*77,x=-27+rnd()*54,y=8+rnd()*7;let b=[x,y,z];cyl(b,add(b,[-.55,.12,-.18]),.032,.005,MAT.BIRD,4);cyl(b,add(b,[.55,.12,-.18]),.032,.005,MAT.BIRD,4);}
+meshBaked('birds');
+// ----- shaders: encode shade, material, anchored hatch and accent into data target -----
+const VERT=`#version 300 es
+precision highp float;layout(location=0)in vec3 p;layout(location=1)in vec3 n;layout(location=2)in float matId;layout(location=3)in float accent;
+uniform mat4 viewProj;uniform vec3 translate;uniform float time;
+out vec3 vW;out vec3 vN;flat out float vMat;out float vAccent;
+void main(){vec3 q=p+translate;float flutter=matId==4.0?sin(q.x*.8+q.z*.57+time*.9)*.09:0.0;q.x+=flutter;
+if(matId==15.0){q.y=mod(q.y-time*(.39+.07*sin(p.x*.6)),14.0)+.3;q.x+=sin(time*.49+p.z*.4)*.25;}
+vW=q;vN=n;vMat=matId;vAccent=accent;gl_Position=viewProj*vec4(q,1.0);}`;
+const FRAG=`#version 300 es
+precision highp float;in vec3 vW;in vec3 vN;flat in float vMat;in float vAccent;uniform float time;uniform vec3 sun;uniform float glow;uniform float pauseAmt;layout(location=0)out vec4 packed;
+float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+void main(){vec3 n=normalize(vN);float sunlit=clamp(abs(dot(n,normalize(sun)))*.61+.30,.10,1.0);float shade=sunlit;
+if(vMat==5.0||vMat==11.0){shade=clamp(.22+sunlit*.38+hash(floor(vW*2.4))*.18,0.,1.);}
+if(vMat==4.0){shade=.33+sunlit*.45+.14*hash(floor(vW*.8));}
+if(vMat==6.0)shade=.32+sunlit*.44;
+if(vMat==7.0)shade=.3+sunlit*.38;
+if(vMat==13.0)shade=.23+sunlit*.22;
+if(vMat==14.0)shade=.83; if(vMat==15.0)shade=.62+sunlit*.18;
+vec2 tangent=(vMat==5.0||vMat==11.0||vMat==3.0)?vec2(vW.y*.92+vW.x*.24,vW.z*.4):vMat==4.0?vec2(vW.x*.37+vW.y*.63,vW.z*.72):vec2(vW.x*.35+vW.z*.56,vW.y*.44+vW.z*.33);
+float engrave=sin(20.0*tangent.x+8.*sin(tangent.y*.25));float lines=engrave>.39?.79:.12;
+// The current object's hatch is WORLD anchored, never recomputed from pixel position.
+float accentVal=clamp(vAccent*.1+lines*.72,0.,1.);
+float dist=length(vW.xz-vec2(${clearCenter[0].toFixed(1)},${clearCenter[1].toFixed(1)}));
+if(vMat==6.0&&dist<8.0){shade+=smoothstep(9.,0.,dist)*(.23+glow*.22);}
+packed=vec4(clamp(shade,0.,1.),vMat/32.0,accentVal,1.);}`;
+const QUADVERT=`#version 300 es
+precision highp float;out vec2 uv;void main(){vec2 p=vec2(gl_VertexID==1?3.0:-1.0,gl_VertexID==2?3.0:-1.0);uv=p*.5+.5;gl_Position=vec4(p,0,1);}`;
+const PRINT=`#version 300 es
+precision highp float;in vec2 uv;out vec4 frag;uniform sampler2D tex;uniform vec2 resolution;uniform vec3 inks[6];uniform vec3 prevInks[6];uniform float fade;uniform float grain;uniform float eventGlow;
+float hash(vec2 x){return fract(sin(dot(x,vec2(127.1,311.7)))*43758.5453);}
+vec3 take(float k){int i=int(clamp(k,0.,5.));return mix(prevInks[i],inks[i],fade);}
+void main(){vec2 pix=floor(gl_FragCoord.xy);vec4 s=texture(tex,uv);float m=floor(s.g*32.0+.5),shade=s.r,lines=s.b;
+float pap=hash(floor(pix/1.7));float ordered=mod(pix.x+pix.y*3.0,4.0)/4.0;
+float dither=shade+.065*(ordered-.5)+.035*(pap-.5);
+float dark=0.,mid=1.,lit=5.;
+if(m==1.){dark=1.;mid=2.;lit=5.;}else if(m==2.){dark=0.;mid=3.;lit=5.;}
+else if(m==3.||m==8.){dark=0.;mid=3.;lit=4.;}
+else if(m==4.){dark=1.;mid=2.;lit=5.;}else if(m==5.||m==11.){dark=0.;mid=1.;lit=3.;}
+else if(m==6.){dark=1.;mid=2.;lit=4.;}else if(m==7.){dark=0.;mid=1.;lit=5.;}
+else if(m==9.){dark=0.;mid=3.;lit=4.;}else if(m==12.){dark=3.;mid=4.;lit=5.;}
+else if(m==13.){dark=0.;mid=1.;lit=3.;}else if(m==14.){dark=3.;mid=4.;lit=5.;}else if(m==15.){dark=1.;mid=3.;lit=4.;}
+float period=shade<.37?.85:shade<.64?.55:.19;float carve=step(.41,lines)*period;
+float idx=dither>.70?lit:dither>.34?mid:dark;
+if(carve>.2&&dither<.85)idx=dark;
+vec2 pixStep=1.0/resolution;
+float objectEdge=step(.022,abs(texture(tex,uv+vec2(pixStep.x,0.0)).g-s.g))+step(.022,abs(texture(tex,uv+vec2(0.0,pixStep.y)).g-s.g));
+if(objectEdge>.5)idx=dark;
+vec3 col=take(idx);
+// The paper grain is fixed to the printed sheet; ink selections stay inside the six exact colours.
+if(m<.5){col=take(5.);}
+frag=vec4(col,1.);}`;
+function shader(type,code){let s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+function program(v,f){let p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,v));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
+bootStatus('COMPILING SIX-INK PRINT');const sceneProg=program(VERT,FRAG),postProg=program(QUADVERT,PRINT);
+const loc=(p,s)=>gl.getUniformLocation(p,s);
+const camU={viewProj:loc(sceneProg,'viewProj'),translate:loc(sceneProg,'translate'),time:loc(sceneProg,'time'),sun:loc(sceneProg,'sun'),glow:loc(sceneProg,'glow'),pauseAmt:loc(sceneProg,'pauseAmt')};
+const postU={tex:loc(postProg,'tex'),resolution:loc(postProg,'resolution'),inks:loc(postProg,'inks[0]'),prevInks:loc(postProg,'prevInks[0]'),fade:loc(postProg,'fade'),grain:loc(postProg,'grain')};
+function color3(s){return [parseInt(s.slice(1,3),16)/255,parseInt(s.slice(3,5),16)/255,parseInt(s.slice(5,7),16)/255];}
+function colset(i){return new Float32Array(palette[i].slice(1).flatMap(color3));}
+const bgTex=gl.createTexture(),fbo=gl.createFramebuffer(),depth=gl.createRenderbuffer(),emptyVao=gl.createVertexArray();let W=0,H=0;
+function resize(){const rect=canvas.getBoundingClientRect();const vw=Math.max(1,rect.width),vh=Math.max(1,rect.height);const pixel=Math.max(320,Math.min(1080,Number(param.get('lines'))||(Math.min(vw,vh)<550?500:720)));const ratio=Math.min(pixel/Math.max(vw,vh),1.5);const w=Math.max(180,Math.round(vw*ratio)),h=Math.max(130,Math.round(vh*ratio));if(w===W&&h===H)return;W=w;H=h;canvas.width=w;canvas.height=h;gl.bindTexture(gl.TEXTURE_2D,bgTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,bgTex,0);gl.bindRenderbuffer(gl.RENDERBUFFER,depth);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,W,H);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,depth);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('FBO incomplete');gl.bindFramebuffer(gl.FRAMEBUFFER,null);}resize();window.addEventListener('resize',resize);window.addEventListener('orientationchange',()=>setTimeout(resize,160));window.visualViewport?.addEventListener('resize',resize);new ResizeObserver(resize).observe(canvas);
+// Camera subjects: clearing first so the actual tree is visible immediately.
+const crew=[
+{name:'CLEARING / WIDE',p:()=>[15,5.8,16],t:()=>[7,4.3,29],fov:49},
+{name:'TREE / ROOTS',p:()=>[10,2.1,22],t:()=>[6,2.2,29],fov:53},
+{name:'BRANCH / PROFILE',p:()=>[15,7.3,28],t:()=>[8.2,5.3,29],fov:55},
+{name:'TRAIL / APPROACH',p:()=>[trailX(14)+2.8,3.2,12],t:()=>[trailX(29),2.0,28],fov:59},
+{name:'DRY CREEK',p:()=>[trailX(-13)+5,2.2,-16],t:()=>[trailX(-13),-.1,-13],fov:64},
+{name:'WOODEN BIRDS',p:()=>[trailX(18)+2.5,2.3,14],t:()=>[trailX(18)+2.2,1.7,18],fov:49},
+{name:'CANOPY / HIGH',p:()=>[8,15,17],t:()=>[5,1.9,29],fov:65},
+{name:'HIKER / DISTANT',p:()=>[trailX(3)+5,3.2,-1],t:()=>[trailX(12),1.2,12],fov:56}
+];
+// Mouse drag: look around the held operator; does not control the autonomous subject.
+let angX=0,angY=0,dragStart=null;const walk={x:trailX(-31),z:-31,yaw:0,keys:new Set(),axes:[0,0]};
+canvas.addEventListener('pointerdown',e=>{dragStart=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(!dragStart)return;if(walkMode)walk.yaw+=(e.clientX-dragStart[0])*.005;else angX=clamp(angX+(e.clientX-dragStart[0])*.004,-1.3,1.3);angY=clamp(angY+(e.clientY-dragStart[1])*.003,-.6,.55);dragStart=[e.clientX,e.clientY];});
+canvas.addEventListener('pointerup',()=>{dragStart=null;});
+function ink(i){cwPrev=cw;cw=((i%palette.length)+palette.length)%palette.length;cwMix=0;cwCounts[cw]=(cwCounts[cw]||0)+1;record('PRINT RE-INKS · '+palette[cw][0]);}
+function event(name){let labels={lemon:'LEMON SNOWBALL',birds:'WOODEN BIRDS TURN',river:'DRY RIVER REMEMBERS',tree:'TWISTED TREE HOLD'};memory.events.push({name,hour:simHour,wind:weather.wind,wet:weather.wet,at:worldT});memory.events=memory.events.slice(-40);memory.lastEvent=worldT;memory.current={name,until:worldT+12+8*rnd()};record('NOW · '+(labels[name]||name));tension+=.07;}
+function rupture(){record('HUSH / PRINT TURNS');tension=0;epoch++;let weighted=palette.map((p,i)=>[i,1/(1+(cwCounts[i]||0))]);let mass=weighted.reduce((v,x)=>v+x[1],0),r=rnd()*mass;for(let [i,w] of weighted){if((r-=w)<=0){ink(i);break;}}memory.current={name:'hush',until:worldT+6};}
+let hikerPos=V(0,0,0);
+function modelHiker(t){const whole=125,cycle=(t+34)%whole;
+let z,phase;if(cycle<64){z=-32+cycle*.96;phase='OUTWARD';}else if(cycle<86){z=29;phase='AT THE TREE';treePause+=Math.max(0,scrollW);}
+else{z=29-(cycle-86)*1.59;phase='RETURN';}
+let x=trailX(z);const enter=clamp((cycle-57)/12,0,1),leave=1-clamp((cycle-82)/10,0,1);x+=(clearCenter[0]-trailX(z)-2.8)*enter*leave;let y=height(x,z)+.18;hikerPos=[x,y,z];hikerState=phase;
+if(cycle>=64&&cycle<86&&!memory.flagged){memory.visits++;memory.pauses++;record('HIKER NOTICES THE TREE');memory.flagged=true;}if(cycle<3)memory.flagged=false;return hikerPos;}
+let last=performance.now(),frame=0,audio=null,soundOn=false;
+function initAudio(){if(audio){soundOn=!soundOn;audio.master.gain.setTargetAtTime(soundOn?.26:0,audio.ctx.currentTime,.3);return;}
+try{const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC(),master=ctx.createGain(),hp=ctx.createBiquadFilter(),lp=ctx.createBiquadFilter(),comp=ctx.createDynamicsCompressor();master.gain.value=.2;hp.type='highpass';hp.frequency.value=26;lp.type='lowpass';lp.frequency.value=1200;comp.threshold.value=-22;comp.ratio.value=2.5;master.connect(hp);hp.connect(lp);lp.connect(comp);comp.connect(ctx.destination);let dr=ctx.createOscillator(),d=ctx.createGain(),f=ctx.createBiquadFilter();dr.type='sine';dr.frequency.value=73.42;f.type='lowpass';f.frequency.value=240;d.gain.value=.43;dr.connect(f);f.connect(d);d.connect(master);dr.start();let cricket=ctx.createOscillator(),cg=ctx.createGain();cricket.type='sine';cricket.frequency.value=760;cg.gain.value=.002;cricket.connect(cg);cg.connect(master);cricket.start();audio={ctx,master,dr,cricket,cg};soundOn=true;ctx.resume();}catch(e){record('AUDIO UNAVAILABLE');}}
+function tickAudio(){if(!audio||!soundOn)return;const t=audio.ctx.currentTime;audio.dr.frequency.setTargetAtTime(70+4*Math.round(hikerPos[2]/8),t,.6);audio.cg.gain.setTargetAtTime(.0015+Math.sin(worldT*17)*.0015,t,.08);}
+function render(t){
+ resize();const position=camFixed>=0?camFixed:camIndex,crewCam=crew[position]||crew[0];let pos=crewCam.p(),target=crewCam.t(),yaw=angX,down=angY;
+ if(!capture){pos[0]+=.14*Math.sin(t*.12);pos[1]+=.07*Math.sin(t*.19);pos[2]+=.11*Math.cos(t*.16);}
+ const eye=pos,to=[target[0]+Math.sin(yaw)*8,target[1]+down*7,target[2]+(Math.cos(yaw)-1)*8];
+ if(walkMode){pos=[walk.x,height(walk.x,walk.z)+1.62,walk.z];to[0]=pos[0]+Math.sin(walk.yaw)*15;to[1]=pos[1]-Math.sin(angY)*10;to[2]=pos[2]+Math.cos(walk.yaw)*15;}
+ const proj=perspective((walkMode?74:crewCam.fov)*Math.PI/180,W/H,.1,230),vp=matMul(proj,lookAt(pos,to));
+ gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.viewport(0,0,W,H);gl.enable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
+ gl.clearColor(.11,.19,.18,1);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.useProgram(sceneProg);gl.uniformMatrix4fv(camU.viewProj,false,vp);gl.uniform1f(camU.time,t);gl.uniform3f(camU.sun,-.5,.91,-.25);gl.uniform1f(camU.glow,memory.current?.name==='lemon'&&memory.current.until>t?1:0);gl.uniform1f(camU.pauseAmt,0);
+ for(const part of shapes){gl.bindBuffer(gl.ARRAY_BUFFER,part.buffer);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,32,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,32,12);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,1,gl.FLOAT,false,32,24);gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,1,gl.FLOAT,false,32,28);let translate=part.name==='hiker'?hikerPos:[0,0,0];gl.uniform3fv(camU.translate,translate);gl.drawArrays(gl.TRIANGLES,0,part.vertices);}
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);gl.disable(gl.DEPTH_TEST);gl.useProgram(postProg);gl.bindVertexArray(emptyVao);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,bgTex);gl.uniform1i(postU.tex,0);gl.uniform2f(postU.resolution,W,H);gl.uniform3fv(postU.inks,colset(cw));gl.uniform3fv(postU.prevInks,colset(cwPrev));gl.uniform1f(postU.fade,cwMix);gl.drawArrays(gl.TRIANGLES,0,3);
+ }
+function infoUpdate(){const box=document.querySelector('#hud');box.hidden=!info;document.querySelector('#readout').textContent=`EPOCH ${epoch} · ${palette[cw][0]}\nWIND ${(weather.wind*6).toFixed(1)} m/s (SIM) → leaves / bar ${(5.8-weather.wind*1.6).toFixed(1)} s\nGROUND ${Math.round(weather.wet*100)}% WET (SIM) → grass / mud\nSUN 09:${String(Math.floor((simHour%1)*60)).padStart(2,'0')} (SIM) → clearing\nHIKER ${hikerState} → bass / path\n${walkMode?'VIEW WALK / HUMAN EYE':'CAM '+(camIndex+1)+' '+crew[(camFixed<0?camIndex:camFixed)].name}\nPAUSES ${memory.pauses} · LITTER ${memory.leafLitter.toFixed(1)} · TENSION ${tension.toFixed(2)}\n${memory.current?.until>worldT?'NOW '+memory.current.name.toUpperCase():''}`;document.querySelector('#log').textContent=memory.log.slice(0,3).join('  /  ');}
+function step(dt){
+ if(walkMode){const fore=(walk.keys.has('w')||walk.keys.has('ArrowUp')?1:0)-(walk.keys.has('s')||walk.keys.has('ArrowDown')?1:0)-walk.axes[1];const sideways=(walk.keys.has('d')||walk.keys.has('ArrowRight')?1:0)-(walk.keys.has('a')||walk.keys.has('ArrowLeft')?1:0)+walk.axes[0];const speed=4.4*dt;walk.x=clamp(walk.x+(fore*Math.sin(walk.yaw)+sideways*Math.cos(walk.yaw))*speed,-62,62);walk.z=clamp(walk.z+(fore*Math.cos(walk.yaw)-sideways*Math.sin(walk.yaw))*speed,-38,52);}
+ worldT+=dt;simHour=(9.67+worldT/2100)%24;weather.wind=clamp(.39+.21*Math.sin(worldT*.043)+.05*Math.sin(worldT*.13),0,1);memory.leafLitter=clamp(memory.leafLitter+dt*.0007,0,36);weather.wet=Math.max(.22,memory.wet*Math.exp(-worldT/20000));tension=clamp(tension+dt/(65*60),0,1.01);if(tension>=1)rupture();cwMix=Math.min(1,cwMix+dt*.17);modelHiker(worldT);
+ if(!walkMode&&camFixed<0&&worldT>camNext){camIndex=(camIndex+1)%crew.length;camNext=worldT+8+rnd()*8;angX=angY=0;}
+ if(worldT-memory.lastEvent>840){let nearTree= hikerPos[2]>17;
+ if(rnd()<dt*.03){if(nearTree&&simHour>9&&weather.wind<.6)event(rnd()<.57?'lemon':'tree');else if(camIndex===4&&weather.wet>.5)event('river');else if(camIndex===5)event('birds');}}
+ if(memory.current&&memory.current.until<worldT)memory.current=null;tickAudio();}
+function loop(ms){let dt=clamp((ms-last)/1000,0,.09);last=ms;if(!capture)step(dt*(Number(param.get('rate'))||1));try{render(worldT);}catch(e){console.error(e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;return;}if(frame++%16===0)infoUpdate();try{render(worldT);requestAnimationFrame(loop);}catch(e){console.error('Initial render failed',e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;}}
+// public camera/runtime API (candidate, not a broadcast-approved build)
+window.MZ={tick(dt){step(dt);render(worldT)},advance(sec){let count=Math.ceil(sec/1);for(let i=0;i<count;i++)step(sec/count);render(worldT)},force(name){if(name==='rupture')rupture();else if(['lemon','river','birds','tree'].includes(name))event(name);else return false;render(worldT);return true;},cam(i){camFixed=i===-1?-1:clamp(i|0,0,crew.length-1);angX=angY=0;render(worldT);},look(p,t,fov){camFixed=0;crew[0]={...crew[0],p:()=>p,t:()=>t,fov:fov||55};render(worldT);},ink, get state(){return{worldT,epoch,tension,cw,palette:palette[cw][0],memory:{...memory},hiker:hikerPos,simHour,weather}},setWx(o){Object.assign(weather,o)},analyser(){return null},h:height,grammar(o){record('PRINT GRAMMAR · PREVIEW');return o;},get keeper(){return hikerPos},get geo(){return{region:'woodland / school edge',provisional:true}}};
+if(walkMode){document.querySelector('#modeBtn').textContent='WALK / LOOK AROUND';document.querySelector('#treeBtn').textContent='GO TO TREE';document.querySelector('#trailBtn').textContent='TRAIL START';document.querySelector('.hint').textContent='Walk with WASD / arrow keys; drag to look. No quests or scoring. This is a separate experimental visitor view.';}
+ window.addEventListener('message',e=>{if(e.source!==window.parent||!e.data||e.data.kind!=='mz-walk-input')return;walk.axes=[clamp(Number(e.data.x)||0,-1,1),clamp(Number(e.data.z)||0,-1,1)];});
+ window.addEventListener('keyup',e=>walk.keys.delete(e.key));
+ const pickCam=i=>{camFixed=i;camIndex=i;angX=angY=0;record('OPERATOR '+crew[i].name);};
+document.querySelector('#modeBtn').onclick=()=>{if(camFixed<0){camFixed=camIndex;document.querySelector('#modeBtn').textContent='CAMERAS: HELD';}else{camFixed=-1;document.querySelector('#modeBtn').textContent='CAMERAS: AUTO';}};
+document.querySelector('#treeBtn').onclick=()=>{if(walkMode){walk.x=clearCenter[0]+2;walk.z=21;walk.yaw=0;}else pickCam(1);};
+document.querySelector('#trailBtn').onclick=()=>{if(walkMode){walk.x=trailX(-31);walk.z=-31;walk.yaw=0;}else pickCam(3);};
+document.querySelector('#muteBtn').onclick=()=>{initAudio();document.querySelector('#muteBtn').textContent=soundOn?'MUTE SOUND':'ENABLE SOUND';};
+document.querySelector('#infoBtn').onclick=()=>{info=!info;infoUpdate();};
+document.querySelector('#storyBtn').onclick=()=>document.querySelector('#storyPanel').hidden=!document.querySelector('#storyPanel').hidden;
+document.querySelector('#closeStory').onclick=()=>document.querySelector('#storyPanel').hidden=true;
+window.addEventListener('keydown',e=>{if(walkMode&&['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){walk.keys.add(e.key);e.preventDefault();}if(e.key==='i'||e.key==='I'){info=!info;infoUpdate()}if(e.key==='m'||e.key==='M'){initAudio();document.querySelector('#muteBtn').textContent=soundOn?'MUTE SOUND':'ENABLE SOUND';}if(e.key==='r'||e.key==='R'){tension+=.16;record('HUMAN HAND / RUPTURE');if(tension>=1)rupture();}});
+record('THE WOOD HOLDS A CLEARING');bootStatus('SIMULATED AUTUMN MORNING');if(param.has('cam')){camFixed=clamp(Number(param.get('cam'))||0,0,crew.length-1);camIndex=camFixed;}if(param.has('ff')){let sec=Math.max(0,Math.min(6*3600,(Number(param.get('ff'))||0)*60));for(let i=0;i<sec;i+=1)step(1);}infoUpdate();try{render(worldT);requestAnimationFrame(loop);}catch(e){console.error('Initial render failed',e);document.getElementById('fatalTitle').textContent='RENDERER ERROR';document.getElementById('fatalDetail').textContent=e.message||String(e);document.getElementById('noWebgl').hidden=false;}
+})();
+</script></body></html>
