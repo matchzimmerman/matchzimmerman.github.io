@@ -16,11 +16,11 @@ Canonical source library for MZTV broadcast experiments, OBS control scripts, li
 
 **Edition boundary:** This is a web-film prototype, not an exported MP4 or finished 8.2 multichannel WAV master. No MZ WORLD broadcast source was changed.
 
-## MZ WORLD · TWISTED TREE (BIT FIELD 035 · public experimental preview)
+## MZ WORLD · TWISTED TREE (BIT FIELD 035 · Study 003 review candidate)
 
-An autonomous six-ink woodland world drawn from a fourth-grade writer's original story *The Day I Found the Beauty of Nature*. Includes a twist-branched tree, dry creek and bridges, bird markers, hiker, subtle events and responsive controls. This is a **first visual-test candidate**, not a validated broadcast source; geography is provisional and WebGL rendering has not been verified on a real device.
+An autonomous six-ink woodland world after a fourth-grade writer's original story *The Day I Found the Beauty of Nature*. Study 003 rebuilds the piece on SRUTHÁN v3's engine (surface-carved linocut print, printed depth of field, observational crew, dub audio, memory and rupture): a leafless licorice-black tree in a clearing, a canopy gap whose lemon patch of sun walks across the clearing, a dry creek with two footbridges, painted wooden birds at the turns. No figure. Sun and weather are simulated because the real place is unverified. **Not visually approved; not a broadcast source until MZ.Human signs off.** Study 002 is kept as `v2.html`.
 
-[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/) · [Walk view](https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/walk.html) · [README](sources/bit-field-035-twisted-tree/README.md)
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/) · [Walk view](https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/walk/) · [README](sources/bit-field-035-twisted-tree/README.md)
 
 ## Working lineages
 
