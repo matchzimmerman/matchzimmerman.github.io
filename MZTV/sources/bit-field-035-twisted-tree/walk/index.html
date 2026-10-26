@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MZ World Twisted Tree · Walk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* WALK: a visitor's way into the woods. It drives the world only through window.MZ, with its own memory; the broadcast page is untouched. */
+:root { --ink:#1f1a33; --paper:#f3ecd2; --mono:"JetBrains Mono", ui-monospace, Menlo, monospace; color-scheme: dark }
+html, body { margin:0; height:100%; height:100dvh; background:var(--ink); overflow:hidden; font:400 11px/1.5 var(--mono); color:var(--ink) }
+iframe { position:fixed; inset:0; width:100%; height:100%; border:0; touch-action:none }
+#cap { position:fixed; left:calc(14px + env(safe-area-inset-left,0px)); top:calc(12px + env(safe-area-inset-top,0px)); background:color-mix(in srgb, var(--paper) 88%, transparent); border:2px solid var(--ink); padding:6px 9px; letter-spacing:.06em; pointer-events:none; max-width:min(420px, 70vw) }
+#cap b { font-weight:600 }
+a.back { position:fixed; left:calc(14px + env(safe-area-inset-left,0px)); bottom:calc(14px + env(safe-area-inset-bottom,0px)); background:var(--paper); color:var(--ink); border:2px solid var(--ink); padding:7px 10px; text-decoration:none; font-weight:600; letter-spacing:.08em }
+#pad { position:fixed; right:calc(16px + env(safe-area-inset-right,0px)); bottom:calc(16px + env(safe-area-inset-bottom,0px)); width:132px; height:132px; display:grid; grid-template:repeat(3,1fr)/repeat(3,1fr); gap:4px; touch-action:none }
+#pad button { font:600 16px var(--mono); background:color-mix(in srgb, var(--paper) 85%, transparent); color:var(--ink); border:2px solid var(--ink); touch-action:none }
+#pad button:active { background:var(--ink); color:var(--paper) }
+#pad [data-k=f]{grid-area:1/2} #pad [data-k=l]{grid-area:2/1} #pad [data-k=r]{grid-area:2/3} #pad [data-k=b]{grid-area:3/2}
+@media (hover:hover) and (pointer:fine) { #pad { display:none } }
+</style>
+</head>
+<body>
+<iframe id="w" title="MZ WORLD · TWISTED TREE, walk" src="../index.html?walk=1&info=0&lines=540"></iframe>
+<div id="cap"><b>WALK · TWISTED TREE</b><br>WASD or arrows to walk · drag to look · no quests, no score</div>
+<a class="back" href="../index.html">THE WORLD ↗</a>
+<div id="pad"><button data-k="f" aria-label="Forward">↑</button><button data-k="l" aria-label="Left">←</button><button data-k="r" aria-label="Right">→</button><button data-k="b" aria-label="Back">↓</button></div>
+<script>
+const frame = document.getElementById('w');
+const keys = new Set(), pad = new Set();
+let MZ = null, x = 0, z = -40, yaw = 0, pitch = 0.05, last = performance.now();
+frame.addEventListener('load', () => { const wait = () => { MZ = frame.contentWindow.MZ; if (!MZ) return setTimeout(wait, 100); x = MZ.trailX(z); requestAnimationFrame(loop); }; wait(); });
+addEventListener('keydown', e => { keys.add(e.key.toLowerCase()); });
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+document.querySelectorAll('#pad button').forEach(b => { const k = b.dataset.k; b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); pad.add(k); }); for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => pad.delete(k)); });
+// drag to look: listen on the iframe's document (same origin)
+frame.addEventListener('load', () => { const d = frame.contentWindow.document; let drag = null;
+  d.addEventListener('pointerdown', e => drag = [e.clientX, e.clientY]);
+  d.addEventListener('pointermove', e => { if (!drag) return; yaw += (e.clientX - drag[0]) * 0.005; pitch = Math.max(-0.6, Math.min(0.9, pitch - (e.clientY - drag[1]) * 0.004)); drag = [e.clientX, e.clientY]; });
+  d.addEventListener('pointerup', () => drag = null); d.addEventListener('keydown', e => keys.add(e.key.toLowerCase())); d.addEventListener('keyup', e => keys.delete(e.key.toLowerCase())); });
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const f = (keys.has('w') || keys.has('arrowup') || pad.has('f') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') || pad.has('b') ? 1 : 0);
+  const t = (keys.has('d') || keys.has('arrowright') || pad.has('r') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') || pad.has('l') ? 1 : 0);
+  if (pad.has('l') || pad.has('r')) yaw += t * dt * 1.4; else { x += Math.cos(yaw) * t * dt * 1.4; z -= Math.sin(yaw) * t * dt * 1.4; }
+  x += Math.sin(yaw) * f * dt * 1.4; z += Math.cos(yaw) * f * dt * 1.4;   // a walking pace
+  x = Math.max(-60, Math.min(70, x)); z = Math.max(-58, Math.min(80, z));
+  const y = MZ.h(x, z) + 1.3;   // a fourth-grader's eye height
+  MZ.look([x, y, z], [x + Math.sin(yaw) * Math.cos(pitch) * 10, y + Math.sin(pitch) * 10, z + Math.cos(yaw) * Math.cos(pitch) * 10], 58, 8, 0.05);
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
