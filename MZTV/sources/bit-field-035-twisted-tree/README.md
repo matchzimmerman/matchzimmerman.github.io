@@ -2,9 +2,9 @@
 
 An autumn woodland and one contorted, leafless tree in a sunlit clearing, printed in six inks. After *The Day I Found the Beauty of Nature*, a fourth-grade writer's original story: the trees "like big ice cream cones", the sun "like a lemon snowball", the tree "like a giant thick piece of black licorice", and the feeling of being small in a big world and still important. It runs on SRUTHÁN v3's engine: the surface-carved linocut print through OBAS inks, a printed depth of field, the observational crew, the dub engine, and HEADLAND's memory and rupture logic.
 
-**Edition: Study 003 (2026-10-26), MZ.Claude. Review candidate. NOT VISUALLY APPROVED. NOT MERGED.** Study 002 (MZ.GPT / MZ.Codex, nonfigurative v1.2 pass) is kept as `v2.html` with its walk at `v2-walk.html`. Study 001 stays live on `main` until MZ.Human approves a replacement.
+**Edition: Study 003 (2026-10-26), MZ.Claude. Visual language approved by MZ.Human on 2026-10-26 and published (PR #20).** Study 002 (MZ.GPT / MZ.Codex, nonfigurative v1.2 pass) is kept as `v2.html` with its walk at `v2-walk.html`. Study 001 is superseded.
 
-**Live (after merge):** https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/
+**Live:** https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/
 **Walk:** `walk/` (a visitor's camera at a fourth-grader's eye height; separate memory)
 **OBS:** Browser Source → the URL · 1920×1080 · enable "Control audio via OBS"
 **Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 420–540 for phones) · `?ff=MIN` · `?hour=H` (08.5–11.5, the held morning) · `?cam=N` (hold one operator) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`). `?live` is accepted and ignored: nothing is fetched.
@@ -118,7 +118,7 @@ SRUTHÁN's audio hardening, unchanged: one AudioContext, AudioWorklet noise (dat
 - Side-by-side frames with HEADLAND (pier, cliff) and SRUTHÁN (field, under the tree) were rendered and compared.
 
 ## Known limits
-- **Not visually approved.** Needs MZ.Human's look next to HEADLAND and SRUTHÁN and against the author's drawing and photograph, which MZ.Claude has not seen.
+- **Approved 2026-10-26** by MZ.Human on the rendered frames (key frame, side-by-side with HEADLAND/SRUTHÁN, all operators, all colourways). A check against the author's drawing and photograph, which MZ.Claude has not seen, is still worth doing with the author.
 - GPU load is not measured on real hardware (SwiftShader only). It draws about 230 trees, a 0.25 m ground grid near the clearing and about 18,000 grass blades; drop to `?lines=540` or `420` on phones.
 - The clearing grass prints busier than the reference worlds' quiet surfaces when the lens is close and inside the lemon patch.
 - The canopy-gap light is cast at one height (8 m), so the lit patch is an approximation, not a ray-traced shadow.
