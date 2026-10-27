@@ -9,7 +9,10 @@ A stream at the back of a field in Inverin, filmed through a macro lens and prin
 **Console:** `MZ.force('reverse' | 'breath' | 'rupture')` · `MZ.rain(mm)`
 
 ## Versions
-- `index.html` is **v3** (current, 2026-10-23):
+- `index.html` is **v4** (current, 2026-10-27), collisions:
+  - **Leaves stay on the water.** Floating leaves now steer around every stone at the waterline, not only the ones in the main flow, and are pushed back toward the channel wherever the bank comes within a few millimetres of the surface. They also ride just above the ripple, so they stay visible from a distance. Measured over 10 simulated minutes, 21% of floating-leaf positions in v3 were inside a stone; in v4 none were.
+  - **The lens stays out of the bank.** Low cameras are held over the water instead of entering the bank and its grass, and they rise smoothly over any bank lip between the lens and what it is following. Over 400 frames of the LEAF operator, v3 was inside the bank or grass for 97 frames and v4 for none.
+- `v3.html` is **v3** (2026-10-23):
   - **Still things keep still patterns.** The linocut hatching is carved into each surface rather than laid over the screen. When the lens drifts past a stone, wall or trunk, the lines move with the surface (perspective, parallax) and never slide across it. Line spacing follows distance in octaves, so the print keeps its density on screen. Moving things (grass, canopy, floating leaves, the wagtail) carry their pattern with them, and the water's lines are bent by its own advected flow. The print pass no longer computes lines from screen position. The paper grain and ordered dither stay fixed to the print, like paper.
   - **A new tree.** The ash has an old, fluted, buttressed trunk that leans from low down and forks at about 1.7 m into two leaders. There are thirteen flat, half-buried roots leaving the buttress lobes, and burls and ridges in the bark. The ROOTS operator now looks along the roots to the water instead of up the trunk.
   - Tested headless: a 4 cm sideways camera move matches best at the parallax shift in v3 and at zero shift in v2 (screen-anchored). All cameras render with no errors.

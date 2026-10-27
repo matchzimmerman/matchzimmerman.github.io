@@ -993,7 +993,7 @@ const OUT_GAIN = 0.4;
 /* ====================================================================== macro crew: operators hold, rack focus, the mixer cuts */
 const wp = (x, s, up) => V(x, Ez(x) + up, cz(x) + s * wz(x));
 function focusLeaf() { let best = null, bd = 1e9; for (const L of LEAVES) { if (L.state !== 'float') continue; const d = L.pos.distanceTo(camera.position); if (d < bd) { bd = d; best = L; } } return best; }
-let followLeaf = null;
+let followLeaf = null; let LEAF_OBST = null;
 const MOSSY = STONES.filter(s => s.r > 0.1 && s.top > Ebase(s.x) + 0.07 && Math.abs(s.z - cz(s.x)) < wz0(s.x) * 1.05 && Math.abs(s.x) < 8).sort((a, b) => b.r - a.r);
 const CREW = [
   { name: 'WALL HOLE', fov: 42, aper: 0.55, upd(c, t) { c.p.copy(wp(-7.75, 0.25, 0.09)); c.tgt.copy(wp(-8.6, 0, 0.12)).add(V(0, 0.02 * Math.sin(t / 9), 0)); c.focus = lerp(0.9, 0.45, 0.5 + 0.5 * Math.sin(t / 13)); } },
@@ -1063,8 +1063,11 @@ function leafTick(dt, t) {
       const vr = flowAt(L.pos.x + e, L.pos.z), vu = flowAt(L.pos.x, L.pos.z + e); const curl = ((vu[0] - v[0]) - (vr[1] - v[1])) / e;
       L.pos.x += v[0] * dt * live.calm; L.pos.z += v[1] * dt * live.calm; L.yaw += -curl * dt * 0.5 * live.calm;
       const c = cz(L.pos.x), w = wz(L.pos.x); const s = (L.pos.z - c) / w; if (Math.abs(s) > 0.93) { L.pos.z = c + Math.sign(s) * 0.93 * w; L.stuck += dt; } else L.stuck = Math.max(0, L.stuck - dt * 0.5);
+      if (!LEAF_OBST) LEAF_OBST = STONES.filter(s => s.r > 0.03 && s.top > Ez(s.x) && Math.abs(s.z - cz(s.x)) < wz0(s.x) * 1.35).map(s => [s.x, s.z, s.r * 1.05]);   /* v4: every stone at the waterline, not only the ones in the flow */
+      for (const st of LEAF_OBST) { const d = Math.hypot(L.pos.x - st[0], L.pos.z - st[1]); if (d < st[2]) { const k = st[2] / Math.max(d, 1e-3); L.pos.x = st[0] + (L.pos.x - st[0]) * k; L.pos.z = st[1] + (L.pos.z - st[1]) * k; L.stuck += dt * 0.5; } }
       for (const st of FLOW_STONES) { const d = Math.hypot(L.pos.x - st[0], L.pos.z - st[1]); if (d < st[2]) { const k = st[2] / Math.max(d, 1e-3); L.pos.x = st[0] + (L.pos.x - st[0]) * k; L.pos.z = st[1] + (L.pos.z - st[1]) * k; L.stuck += dt * 0.5; } }
-      const wl = Ez(L.pos.x); const prevY = L.pos.y; L.pos.y = wl + 0.003 + 0.003 * Math.sin(t * 2 + L.i);
+      { const wl0 = Ez(L.pos.x); let k = 0; while (k < 14 && terrainH(L.pos.x, L.pos.z) > wl0 - 0.008) { L.pos.z += (c - L.pos.z) * 0.18; k++; } if (k) L.stuck += dt; }   /* v4: never under the bank */
+      const wl = Ez(L.pos.x); const prevY = L.pos.y; L.pos.y = wl + 0.009 + 0.002 * Math.sin(t * 2 + L.i);   /* v4: ride above the ripple so leaves stay visible */
       if (prevY - L.pos.y > 0.2) { S.overFalls++; const l = AUD.lens(L.pos); AUD.pend.push({ s: 0.75, v: l.g * 1.2, pan: l.pan }); spawnSpray(L.pos, 0.6, 14, 0.04);
         if (t - leafLogT > 300) { leafLogT = t; logEv(`a leaf went over the fall (${S.overFalls} so far)`); } }
       if (L.stuck > 150 && rnd() < dt / 60) { L.state = 'litter'; L.age = 0; }
@@ -1126,7 +1129,14 @@ function step(dt) {
 
 /* ====================================================================== render */
 function applyLook(dt) {
-  const c = DIR.look || CREW[DIR.cur]; camera.position.copy(c.p);
+  const c = DIR.look || CREW[DIR.cur];
+  { /* v4: low cameras stay over the water, never inside the bank or its grass */ const P = c.p, c0 = cz(P.x), w0 = wz0(P.x), off = P.z - c0;
+    if (Math.abs(off) > w0 - 0.04 && P.y - terrainH(P.x, P.z) < 0.7) P.z = c0 + Math.sign(off) * (w0 - 0.04); }
+  camera.position.copy(c.p);
+  { /* v4: rise over any bank lip between the lens and what it looks at */ let need = 0; const P = camera.position, T = c.tgt;
+    for (let i = 1; i < 10; i++) { const u = i / 10, x = P.x + (T.x - P.x) * u, z = P.z + (T.z - P.z) * u, y = P.y + (T.y - P.y) * u; const dist = Math.abs(z - cz(x)) - wz0(x);
+      const top = terrainH(x, z) + (dist > 0 ? 0.03 + 0.3 * Math.exp(-dist / 1.4) : 0.01); if (y < top) need = Math.max(need, (top - y) / (1 - u)); }
+    DIR.lift = lerp(DIR.lift || 0, Math.min(need, 1.2), 1 - Math.exp(-dt * 5)); if (need > DIR.lift) DIR.lift = lerp(DIR.lift, need, 0.5); camera.position.y += DIR.lift; }
   const floor = Math.max(terrainH(camera.position.x, camera.position.z), Math.abs(camera.position.z - cz(camera.position.x)) < wz(camera.position.x) ? Ez(camera.position.x) : -9) + 0.03;
   if (camera.position.y < floor) camera.position.y = floor;
   for (const st of STONES) { if (st.r < 0.03) continue; const d = camera.position.distanceTo(V(st.x, st.y, st.z)); const R = st.r * 1.25 + 0.02; if (d < R) camera.position.add(camera.position.clone().sub(V(st.x, st.y, st.z)).setLength(R - d + 1e-3)); }
@@ -1166,7 +1176,7 @@ function hudUpdate() {
   if (!INFO) return; const g = localParts(simMs); const el = Math.asin(clamp(SUND.y, -1, 1)) / D2R; const az = (Math.atan2(SUND.z, SUND.x) / D2R + 360) % 360;
   const bpm = (240 / AUD.barSec).toFixed(0); const fl = LEAVES.filter(l => l.state === 'float').length, lit = LEAVES.filter(l => l.state === 'litter').length;
   const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
-  hud.innerHTML = `<div class="t"><span>MZ WORLD · SRUTHÁN · v3</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · SRUTHÁN · v4</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
   <div class="r"><span>INVERIN ${g.str} · sun ${el.toFixed(0)}° ${compass(az)} · always day</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
   <div class="r"><span>STREAM flow ${QN.toFixed(2)} · level ${LEVEL >= 0 ? '+' : ''}${(LEVEL * 100).toFixed(0)} cm${REV < 0 ? ' · RUNNING BACKWARDS' : ''}</span><span>→ current, foam, roar, bar ${AUD.barSec.toFixed(1)} s (${bpm} bpm)</span></div>
   <div class="r"><span>RAIN ${WX.precip.toFixed(1)} mm · held in the ground ${S.rain.toFixed(1)} mm</span><span>→ rings, flow over hours</span></div>
