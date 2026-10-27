@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>MZCMG Desktop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a broadcast desktop. Looping world excerpt fills the screen; draggable windows and folders sit on top. */
+:root{
+  --ink:#05090a; --deep:#0c2a3a; --teal:#1d6b66; --phos:#7cf29a; --amber:#f2a93b; --paper:#d8e3dc;
+  --dim:#86a19b; --line:rgba(216,227,220,.24); --glass:rgba(5,9,10,.86);
+  --display:"Archivo","Arial Narrow",Impact,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--paper);font:13px/1.55 var(--mono);overflow:hidden}
+#bg{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0}
+.crt{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px),
+  radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%)}
+.desk{position:fixed;inset:0;z-index:2;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+.mast{position:absolute;top:calc(22px + env(safe-area-inset-top,0px));left:max(24px,env(safe-area-inset-left,0px));pointer-events:none}
+.mast h1{margin:0;font-family:var(--display);font-stretch:125%;font-weight:800;font-size:clamp(30px,5.2vw,68px);
+  line-height:.9;letter-spacing:-.01em;color:var(--paper);text-shadow:0 0 18px rgba(5,9,10,.8)}
+.mast .sub{margin:.5em 0 0;font-size:clamp(11px,1.1vw,14px);letter-spacing:.42em;color:var(--amber);font-weight:600}
+
+.live{position:absolute;top:calc(26px + env(safe-area-inset-top,0px));right:max(24px,env(safe-area-inset-right,0px));
+  display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);background:var(--glass);
+  color:var(--paper);text-decoration:none;font-size:11px;letter-spacing:.18em;font-weight:600}
+.live .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.live .state{color:var(--dim)}
+.live.on{border-color:var(--amber)}
+.live.on .dot{background:var(--amber);box-shadow:0 0 10px var(--amber);animation:pulse 1.6s infinite}
+.live.on .state{color:var(--amber)}
+.live:hover,.live:focus-visible{border-color:var(--phos);outline:none}
+@keyframes pulse{50%{opacity:.35}}
+
+.icons{position:absolute;top:calc(92px + env(safe-area-inset-top,0px));right:max(18px,env(safe-area-inset-right,0px));
+  display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,78px);grid-auto-columns:92px;gap:2px 6px;
+  max-height:calc(100% - 150px);direction:rtl}
+.icons > *{direction:ltr}
+.app{width:36px;height:36px;margin-top:2px;border:1px solid var(--amber);
+  background:var(--ink) repeating-linear-gradient(90deg,var(--amber) 0 2px,transparent 2px 7px);background-size:100% 60%;background-repeat:no-repeat;background-position:bottom}
+.icon{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 2px}
+.icon .lbl{font-size:10px;letter-spacing:.14em;background:rgba(5,9,10,.75);padding:1px 5px;text-align:center}
+.icon:hover .lbl,.icon:focus-visible .lbl,.icon.sel .lbl{background:var(--amber);color:var(--ink)}
+.fold{position:relative;width:46px;height:32px;margin-top:6px;background:var(--deep);border:1px solid var(--paper)}
+.fold::before{content:"";position:absolute;left:-1px;top:-7px;width:20px;height:6px;background:var(--deep);border:1px solid var(--paper);border-bottom:0}
+.fold::after{content:"";position:absolute;inset:5px 5px auto;height:1px;background:var(--teal);box-shadow:0 4px 0 var(--teal),0 8px 0 var(--teal)}
+.file{width:30px;height:38px;background:var(--paper);clip-path:polygon(0 0,70% 0,100% 24%,100% 100%,0 100%);position:relative}
+.file::after{content:"";position:absolute;left:5px;right:6px;top:14px;height:2px;background:var(--ink);box-shadow:0 5px 0 var(--ink),0 10px 0 var(--ink),0 15px 0 var(--ink)}
+
+.wins{position:absolute;inset:0;pointer-events:none}
+.win{position:absolute;pointer-events:auto;background:var(--glass);border:1px solid var(--line);
+  box-shadow:6px 6px 0 rgba(0,0,0,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.win.focus{border-color:rgba(216,227,220,.55)}
+.bar{display:flex;align-items:center;gap:8px;height:28px;padding:0 4px 0 10px;border-bottom:1px solid var(--line);
+  cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+.bar:active{cursor:grabbing}
+.bar .t{font-size:11px;font-weight:600;letter-spacing:.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bar .rule{flex:1;height:9px;min-width:12px;background:repeating-linear-gradient(0deg,var(--line) 0 1px,transparent 1px 3px)}
+.win.focus .bar .rule{background:repeating-linear-gradient(0deg,var(--paper) 0 1px,transparent 1px 3px);opacity:.5}
+.bar button{all:unset;cursor:pointer;width:22px;height:22px;display:grid;place-items:center;font-size:14px;color:var(--dim)}
+.bar button:hover,.bar button:focus-visible{color:var(--ink);background:var(--amber)}
+.bar .back{width:auto;height:20px;padding:0 7px;flex:none;font-size:10px;letter-spacing:.14em;color:var(--amber);border:1px solid var(--amber);margin-left:-4px}
+.win.shade .body{display:none}
+.body.swap{animation:swap .28s steps(4)}
+@keyframes swap{from{opacity:.2;transform:translateX(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.body.swap{animation:none}}
+.body{padding:12px;display:flex;flex-direction:column;gap:10px}
+.body p{margin:0;max-width:62ch;color:var(--paper)}
+.body .meta{font-size:10px;letter-spacing:.2em;color:var(--amber)}
+.screen{position:relative;margin:-12px -12px 0;border-bottom:1px solid var(--line)}
+.screen canvas{display:block;width:100%;aspect-ratio:16/9;image-rendering:pixelated;background:var(--ink)}
+.screen .tag{position:absolute;left:8px;bottom:6px;font-size:10px;letter-spacing:.16em;color:var(--phos);background:rgba(5,9,10,.7);padding:1px 5px}
+.screen .card{position:absolute;inset:auto 0 22%;text-align:center;font-size:11px;letter-spacing:.3em;color:var(--paper)}
+.screen .card span{background:var(--ink);padding:3px 8px}
+.stage{position:relative;margin:-12px -12px 0;border-bottom:1px solid var(--line)}
+.stage canvas,.stage iframe{display:block;width:100%;border:0;image-rendering:pixelated;background:var(--ink)}
+.stage.s canvas,.stage.s iframe{aspect-ratio:9/14}
+.stage.m canvas,.stage.m iframe{aspect-ratio:4/3}
+.stage.l canvas,.stage.l iframe{aspect-ratio:16/9}
+.stage .tag{position:absolute;left:8px;bottom:6px;font-size:10px;letter-spacing:.16em;color:var(--phos);background:rgba(5,9,10,.7);padding:1px 5px}
+body.dragging iframe{pointer-events:none}
+.stage .cover{position:absolute;inset:0;display:grid;place-items:center;background:rgba(5,9,10,.35)}
+.stage .play{all:unset;cursor:pointer;font-size:12px;letter-spacing:.2em;font-weight:600;background:var(--paper);color:var(--ink);padding:8px 14px}
+.stage .play:hover,.stage .play:focus-visible{background:var(--amber)}
+.stage .paused{position:absolute;right:8px;top:6px;font-size:10px;letter-spacing:.16em;color:var(--amber);background:rgba(5,9,10,.85);padding:1px 5px}
+.stage:fullscreen{margin:0;background:var(--ink)}
+.stage:fullscreen iframe{width:100%;height:100%;aspect-ratio:auto}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn.ghost{background:transparent;color:var(--paper);border:1px solid var(--line)}
+.btn.ghost:hover,.btn.ghost:focus-visible{background:var(--amber);color:var(--ink);border-color:var(--amber)}
+button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);padding:6px 10px;font-size:11px;letter-spacing:.14em;font-weight:600}
+.pending{align-self:flex-start;font-size:10px;letter-spacing:.16em;color:var(--dim);border:1px dashed var(--line);padding:5px 9px}
+.fname{font-size:11px;color:var(--phos)}
+.drive{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:12px 6px}
+.drive .sect{grid-column:1/-1;font-size:10px;letter-spacing:.2em;color:var(--dim);border-bottom:1px solid var(--line);padding-bottom:4px}
+.dicon{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 2px;min-width:0}
+.dicon .lbl{font-size:10px;line-height:1.3;text-align:center;word-break:break-all;padding:1px 4px}
+.dicon:hover .lbl,.dicon:focus-visible .lbl{background:var(--amber);color:var(--ink)}
+.drive .fold{width:34px;height:24px;margin-top:7px}
+.drive .fold::after{inset:4px 4px auto;box-shadow:0 3px 0 var(--teal),0 6px 0 var(--teal)}
+.drive .file{width:24px;height:30px}
+.drive .file::after{left:4px;right:5px;top:11px;box-shadow:0 4px 0 var(--ink),0 8px 0 var(--ink)}
+.status{font-size:10px;letter-spacing:.16em;color:var(--dim);border-top:1px solid var(--line);padding-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-size:10px;letter-spacing:.12em;border:1px solid var(--line);padding:1px 6px;color:var(--dim)}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.list button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:12px;width:100%;box-sizing:border-box;padding:7px 4px;border-bottom:1px dashed var(--line)}
+.list button span{color:var(--dim);font-size:11px;text-align:right}
+.list button:hover,.list button:focus-visible{background:var(--amber);color:var(--ink)}
+.list button:hover span,.list button:focus-visible span{color:var(--ink)}
+.clocks{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border:1px solid var(--line);padding:8px}
+.clocks div{display:flex;flex-direction:column;font-size:10px;letter-spacing:.14em;color:var(--dim)}
+.clocks b{font-size:17px;letter-spacing:.02em;color:var(--phos);font-weight:400;font-variant-numeric:tabular-nums}
+.btn{align-self:flex-start;color:var(--ink);background:var(--paper);text-decoration:none;padding:6px 10px;font-size:11px;letter-spacing:.14em;font-weight:600}
+.btn:hover,.btn:focus-visible{background:var(--amber);outline:none}
+.quote{font-family:var(--display);font-stretch:125%;font-weight:800;font-size:18px;line-height:1.05;color:var(--amber);text-transform:uppercase}
+
+.np{position:fixed;z-index:3;left:0;bottom:0;display:flex;align-items:center;gap:12px;
+  padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px)) max(24px,env(safe-area-inset-left,0px));
+  font-size:11px;letter-spacing:.16em;pointer-events:none}
+.np .rec{width:8px;height:8px;background:var(--phos);box-shadow:0 0 8px var(--phos)}
+.np .k{color:var(--dim)}
+.np b{color:var(--paper);font-weight:600}
+.np .tc{color:var(--phos);font-variant-numeric:tabular-nums}
+.np > *{background:rgba(5,9,10,.6)}
+
+:focus-visible{outline:1px solid var(--phos);outline-offset:2px}
+
+/* Phone: the desktop becomes a scrolling stack */
+@media (max-width:760px){
+  body{overflow:auto}
+  .desk{position:relative;inset:auto;min-height:100%;display:flex;flex-direction:column;gap:18px;padding-block:20px 80px}
+  .mast,.live,.icons,.wins{position:static}
+  .mast{padding-left:0}
+  .live{align-self:flex-start}
+  .icons{display:flex;flex-direction:row;flex-wrap:wrap;width:auto;gap:4px;max-height:none;direction:ltr}
+  .win{max-width:100%}
+  .icon{width:72px}
+  .wins{display:flex;flex-direction:column;gap:16px}
+  .win{position:relative;left:auto!important;top:auto!important;width:auto!important}
+  .bar{cursor:default}
+  .np{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .np .k{display:none}
+}
+@media (prefers-reduced-motion:reduce){.live.on .dot{animation:none}}
+</style>
+
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="crt" aria-hidden="true"></div>
+
+<div class="desk">
+  <header class="mast">
+    <h1>MATCH<br>ZIMMERMAN</h1>
+    <p class="sub">CREATIVE MEDIA GROUP</p>
+  </header>
+
+  <a class="live" id="live" href="https://www.twitch.tv/matchzimmerman" target="_blank" rel="noopener">
+    <span class="dot"></span><span>MZTV</span><span class="state" id="liveState">OFF AIR</span>
+  </a>
+
+  <nav class="icons" id="icons" aria-label="Desktop folders"></nav>
+  <div class="wins" id="wins"></div>
+</div>
+
+<footer class="np" aria-live="polite">
+  <span class="rec"></span>
+  <span class="k">NOW PLAYING</span>
+  <b id="npTitle">EXCERPT 0074 · HEADLAND</b>
+  <span class="tc" id="npTc">00:00:00</span>
+</footer>
+
+<script>
+/* ---------- settings ---------- */
+const MZTV_LIVE = false;           // later: set from a Twitch status check
+const FPS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 2 : 20;
+const BG_SCALE = 4;                // background renders at 1/4 resolution
+const ROTATE_S = 45;               // seconds per background excerpt
+
+/* ---------- inks + noise ---------- */
+const hash = n => { n = Math.sin(n * 127.1 + 311.7) * 43758.5453; return n - Math.floor(n); };
+const noise1 = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash(i) * (1 - u) + hash(i + 1) * u; };
+const fbm = x => noise1(x) * .6 + noise1(x * 2.3) * .28 + noise1(x * 5.1) * .12;
+const BAYER = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v + .5) / 16);
+const u32 = hex => { const n = parseInt(hex.slice(1), 16); return (0xff000000 | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0; };
+const P = { k:u32('#05090a'), d:u32('#0c2a3a'), d2:u32('#123f4a'), t:u32('#1d6b66'), p:u32('#7cf29a'), a:u32('#f2a93b'), w:u32('#d8e3dc'), br:u32('#4a3312') };
+
+function ensure(c, w, h, s){
+  if (!s.img || s.w !== w || s.h !== h){
+    s.img = c.createImageData(w, h); s.buf = new Uint32Array(s.img.data.buffer);
+    s.w = w; s.h = h; s.init = false;
+  }
+}
+
+/* ---------- simplified world excerpts ---------- */
+const SCENES = {
+  headland(c, w, h, t, s){
+    ensure(c, w, h, s);
+    const y0 = Math.floor(h * .62);
+    if (!s.init){
+      s.top = new Float32Array(w); let tip = 0;
+      for (let x = 0; x < w; x++){
+        const u = x / w, mass = u < .5 ? 1 : Math.max(0, 1 - (u - .5) / .14);
+        s.top[x] = mass > 0 ? y0 - mass * (h * .1 + h * .2 * fbm(u * 3.2 + 1.7)) : y0 + 1;
+        if (s.top[x] < y0 - 2) tip = x;
+      }
+      s.tipX = Math.max(0, tip - 1); s.tipY = Math.max(0, Math.floor(s.top[s.tipX]) - 2); s.init = true;
+    }
+    const buf = s.buf, SKY = [P.k, P.d, P.d2, P.t], SEA = [P.k, P.d, P.t, P.w];
+    const lit = (t % 5.5) < .45;
+    for (let y = 0; y < h; y++){
+      const row = y * w, by = (y & 3) * 4, cloudRow = Math.floor(y / 5) * 7.31;
+      for (let x = 0; x < w; x++){
+        const b = BAYER[by + (x & 3)], top = s.top[x]; let col;
+        if (y < top){
+          const sh = (y / y0) * 1.9 + noise1(x * .035 + t * .25 + cloudRow) * 1.1 - .55;
+          const i = Math.floor(sh + b); col = SKY[i < 0 ? 0 : i > 3 ? 3 : i];
+        } else if (y <= y0 && top < y0){
+          const e = y - top;
+          if (e < 1.5) col = b < .6 ? P.p : P.t;
+          else if (e < 3) col = b < .35 ? P.t : P.k;
+          else col = ((y + Math.floor(noise1(x * .07) * 5)) % 6 === 0 && b < .55) ? P.d : P.k;
+        } else {
+          const d = (y - y0) / (h - y0);
+          const wv = noise1(x * .05 * (1 + d * 2) + t * (.5 + d) + y * 1.9);
+          const i = Math.floor((wv * 1.3 + (1 - d) * .55 - .35) * 2 + b - .4);
+          col = SEA[i < 0 ? 0 : i > 3 ? 3 : i];
+          if (lit && Math.abs(x - s.tipX) < 1 + d * 3 && b < .5 && wv > .4) col = P.a;
+        }
+        buf[row + x] = col;
+      }
+    }
+    if (lit){ for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++){ const i = (s.tipY + dy) * w + s.tipX + dx; if (i < buf.length) buf[i] = P.a; } }
+    c.putImageData(s.img, 0, 0);
+  },
+
+  bog(c, w, h, t, s){
+    ensure(c, w, h, s);
+    const buf = s.buf, INK = [P.d, P.k, P.br, P.k, P.d2, P.k, P.t, P.k];
+    for (let y = 0; y < h; y++){
+      const row = y * w, by = (y & 3) * 4;
+      for (let x = 0; x < w; x++){
+        const b = BAYER[by + (x & 3)];
+        const n = noise1(x * .03 + t * .04 + y * .013) * 2.2 + noise1(x * .11 - t * .02 + y * .31) * .5;
+        const i = Math.floor(y / h * 9 + n + b * .9);
+        buf[row + x] = (n > 2.35 && b < .3) ? P.p : INK[((i % 8) + 8) % 8];
+      }
+    }
+    c.putImageData(s.img, 0, 0);
+  },
+
+  magpie(c, w, h, t, s){
+    if (!s.nodes){ s.nodes = []; for (let i = 0; i < 28; i++) s.nodes.push([.06 + hash(i + 3) * .88, .08 + hash(i * 7 + 1) * .84]); }
+    c.fillStyle = '#05090a'; c.fillRect(0, 0, w, h);
+    const g = Math.max(6, Math.round(w / 24));
+    c.fillStyle = '#0c2a3a';
+    for (let x = (t * 4) % g; x < w; x += g) c.fillRect(Math.floor(x), 0, 1, h);
+    for (let y = 0; y < h; y += g) c.fillRect(0, y, w, 1);
+    const px = (.5 + .36 * Math.sin(t * .23)) * w, py = (.5 + .32 * Math.sin(t * .31 + 1.3)) * h, r = Math.min(w, h) * .34;
+    c.fillStyle = 'rgba(29,107,102,.2)'; c.beginPath(); c.arc(px, py, r, 0, 7); c.fill();
+    const on = [];
+    c.fillStyle = '#123f4a';
+    for (const [nx, ny] of s.nodes){ const x = nx * w, y = ny * h; if (Math.hypot(x - px, y - py) < r) on.push([x, y]); else c.fillRect(x | 0, y | 0, 1, 1); }
+    c.strokeStyle = 'rgba(124,242,154,.5)'; c.lineWidth = 1; c.beginPath();
+    for (let i = 0; i < on.length; i++) for (let j = i + 1; j < on.length; j++)
+      if (Math.hypot(on[i][0] - on[j][0], on[i][1] - on[j][1]) < r * .7){ c.moveTo(on[i][0], on[i][1]); c.lineTo(on[j][0], on[j][1]); }
+    c.stroke();
+    c.fillStyle = '#7cf29a'; for (const [x, y] of on) c.fillRect((x | 0) - 1, (y | 0) - 1, 3, 3);
+    const a = t * 1.4; c.strokeStyle = 'rgba(242,169,59,.85)'; c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(a) * r, py + Math.sin(a) * r); c.stroke();
+    c.fillStyle = '#f2a93b'; c.fillRect((px | 0) - 1, (py | 0) - 1, 3, 3);
+  },
+
+  mzbrdz(c, w, h, t){
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#05090a'); g.addColorStop(.55, '#0c2a3a'); g.addColorStop(.84, '#4a3312'); g.addColorStop(1, '#f2a93b');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#05090a'; c.fillRect(0, h * .9 | 0, w, h);
+    for (let i = 0; i < 46; i++){
+      const sp = 6 + hash(i) * 10;
+      const x = ((hash(i + 11) * (w + 40) + t * sp) % (w + 40)) - 20;
+      const y = h * (.15 + .55 * hash(i * 3 + 5)) + Math.sin(t * .9 + i) * h * .04 + (noise1(t * .2 + i) - .5) * h * .1;
+      const up = Math.sin(t * 8 + i * 1.7) > 0, X = x | 0, Y = y | 0;
+      c.fillStyle = i % 9 === 0 ? '#d8e3dc' : '#05090a';
+      c.fillRect(X, Y, 1, 1); c.fillRect(X - 1, up ? Y - 1 : Y, 1, 1); c.fillRect(X + 1, up ? Y - 1 : Y, 1, 1);
+    }
+  },
+
+  rings(c, w, h, t){
+    c.fillStyle = '#05090a'; c.fillRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2, inks = ['#f2a93b', '#7cf29a', '#1d6b66'];
+    c.lineWidth = 1;
+    for (let i = 0; i < 9; i++){
+      const f = (t * .18 + i / 9) % 1, r = f * R;
+      c.strokeStyle = inks[i % 3]; c.globalAlpha = 1 - f; c.beginPath();
+      for (let a = 0; a <= 6.3; a += .2){
+        const k = r * (1 + .06 * Math.sin(a * 3 + t + i)), x = cx + Math.cos(a) * k, y = cy + Math.sin(a) * k * .8;
+        a ? c.lineTo(x, y) : c.moveTo(x, y);
+      }
+      c.closePath(); c.stroke();
+    }
+    c.globalAlpha = 1;
+  },
+
+  bars(c, w, h, t){
+    c.fillStyle = '#05090a'; c.fillRect(0, 0, w, h);
+    const n = 24, bw = w / n, beat = Math.max(0, 1 - ((t * 2.1) % 1) * 3);
+    for (let i = 0; i < n; i++){
+      const v = noise1(i * .7 + t * 1.3) * .7 + (i < 4 ? beat * .6 : 0), bh = Math.floor(v * h * .85);
+      c.fillStyle = i < 4 ? '#f2a93b' : '#1d6b66';
+      for (let y = 0; y < bh; y += 3) c.fillRect(Math.floor(i * bw) + 1, h - 2 - y, Math.max(1, Math.floor(bw) - 2), 2);
+    }
+  },
+
+  lanes(c, w, h, t){
+    c.fillStyle = '#05090a'; c.fillRect(0, 0, w, h);
+    const L = 8, hy = h * .18, by = h * .86, cx = w / 2;
+    c.strokeStyle = '#123f4a'; c.lineWidth = 1; c.beginPath();
+    for (let i = 0; i <= L; i++){ const xb = (i / L) * w; c.moveTo(cx + (xb - cx) * .12, hy); c.lineTo(xb, by); }
+    c.stroke();
+    c.fillStyle = '#1d6b66'; c.fillRect(0, by | 0, w, 1);
+    for (let k = 0; k < 14; k++){
+      const lane = Math.floor(hash(k * 3.3) * L), p = (t * .35 + hash(k)) % 1, z = p * p;
+      const y = hy + (by - hy) * z, xb = ((lane + .5) / L) * w, x = cx + (xb - cx) * (.12 + .88 * z), s = 1 + z * (w / L * .5);
+      c.fillStyle = lane % 2 ? '#7cf29a' : '#f2a93b';
+      c.fillRect((x - s / 2) | 0, y | 0, Math.max(1, s | 0), Math.max(1, (s * .35) | 0));
+    }
+    c.fillStyle = '#d8e3dc';
+    for (let i = 0; i < L; i++) c.fillRect(((i + .5) / L * w - 2) | 0, (by + 2) | 0, 4, 1);
+  },
+
+  testcard(c, w, h, t){
+    const cols = ['#d8e3dc','#f2a93b','#7cf29a','#1d6b66','#123f4a','#0c2a3a','#05090a'], bw = w / cols.length;
+    cols.forEach((cl, i) => { c.fillStyle = cl; c.fillRect(Math.floor(i * bw), 0, Math.ceil(bw), h * .7); });
+    for (let x = 0; x < w; x += 2){ c.fillStyle = hash(x + Math.floor(t * 12) * 31) > .5 ? '#d8e3dc' : '#05090a'; c.fillRect(x, h * .7 | 0, 2, h); }
+  }
+};
+
+function staticNoise(c, w, h, t){
+  for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2){
+    const v = hash(x * 3.1 + y * 17.7 + Math.floor(t * 30) * 13);
+    c.fillStyle = v > .7 ? '#d8e3dc' : v > .4 ? '#1d6b66' : '#05090a'; c.fillRect(x, y, 2, 2);
+  }
+}
+
+/* ---------- render loop ---------- */
+const screens = [];
+function addScreen(cv, scene){ const s = { cv, ctx: cv.getContext('2d'), scene, st: {} }; screens.push(s); return s; }
+
+const bgCv = document.getElementById('bg');
+const bg = addScreen(bgCv, 'headland');
+function sizeBg(){ bgCv.width = Math.ceil(innerWidth / BG_SCALE); bgCv.height = Math.ceil(innerHeight / BG_SCALE); bg.st = {}; }
+sizeBg(); addEventListener('resize', sizeBg);
+
+const PROGRAM = [
+  { scene: 'headland', name: 'HEADLAND' },
+  { scene: 'magpie',   name: 'FIELD STATION: MAGPIE' },
+  { scene: 'bog',      name: 'BOG STUDIES' },
+  { scene: 'mzbrdz',   name: 'MZBRDZ' }
+];
+let progIdx = 0, excerpt = 74, segStart = performance.now() / 1000, cutUntil = 0;
+const npTitle = document.getElementById('npTitle'), npTc = document.getElementById('npTc');
+const pad = (n, l = 2) => String(n).padStart(l, '0');
+function setNP(){ npTitle.textContent = `EXCERPT ${pad(excerpt, 4)} · ${PROGRAM[progIdx].name}`; }
+setNP();
+
+let last = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  if (document.hidden || now - last < 1000 / FPS) return;
+  last = now; const t = now / 1000;
+
+  if (t - segStart > ROTATE_S){
+    segStart = t; cutUntil = t + .35;
+    progIdx = (progIdx + 1) % PROGRAM.length; excerpt += 1 + Math.floor(hash(excerpt) * 40);
+    bg.scene = PROGRAM[progIdx].scene; bg.st = {}; setNP();
+  }
+  const el = t - segStart;
+  npTc.textContent = `${pad(Math.floor(el / 60))}:${pad(Math.floor(el % 60))}:${pad(Math.floor((el % 1) * 24))}`;
+
+  for (let i = screens.length - 1; i >= 0; i--){
+    const s = screens[i];
+    if (!s.cv.isConnected){ screens.splice(i, 1); continue; }
+    if (s.cv.offsetParent === null && s !== bg) continue;   // minimized or hidden
+    const w = s.cv.width, h = s.cv.height;
+    if (s === bg && t < cutUntil) staticNoise(s.ctx, w, h, t);
+    else SCENES[s.scene](s.ctx, w, h, t + (s.offset || 0), s.st);
+  }
+}
+requestAnimationFrame(frame);
+
+/* ---------- live badge ---------- */
+if (MZTV_LIVE){ document.getElementById('live').classList.add('on'); document.getElementById('liveState').textContent = 'LIVE NOW'; }
+
+/* ---------- content ---------- */
+let excSeed = 112;
+const viewer = (scene, tag, card) => `<div class="screen"><canvas width="192" height="108" data-scene="${scene}"></canvas>
+  <span class="tag">${tag || 'EXC ' + pad(excSeed += 17, 4) + ' · LOOP'}</span>${card ? `<div class="card"><span>${card}</span></div>` : ''}</div>`;
+const item = (id, name, note) => `<li><button data-open="${id}">${name}<span>${note}</span></button></li>`;
+const chips = a => `<div class="chips">${a.map(x => `<span>${x}</span>`).join('')}</div>`;
+
+const DEFS = {
+  magpie: { title: 'FIELD STATION: MAGPIE', w: 420, body: () => viewer('magpie') + `
+    <span class="meta">WORLD · GAME</span>
+    <p>An inhabitable narrative about the Grid, the system of algorithmic control, and the Field, the zones where free thought survives.</p>
+    ${chips(['BAUN','JEAN-LUC','CASSIE','M3RØ'])}
+    <p>Exhibited at Tuttle Gallery. A first-person Godot build, FIELD STATION 01, is in progress.</p>` },
+
+  mztv: { title: 'MZTV', w: 420, body: () => (EMBED ? `<div class="stage l"><canvas width="192" height="108" data-scene="magpie"></canvas>
+      <span class="tag">TWITCH · MATCHZIMMERMAN</span>
+      <div class="cover"><button class="play" data-play="https://player.twitch.tv/?channel=matchzimmerman&parent=www.matchzimmerman.com&parent=matchzimmerman.com&muted=false">▶ WATCH MZTV</button></div></div>` : '') + `
+    <span class="meta">BROADCAST · TWITCH</span>
+    <p>Long-form generative audiovisual systems, streamed live. The first program, <b>Three Cities, One Field</b>, turns live weather and time in Baltimore, Galway and London into sound and image, with the mapping shown on screen.</p>
+    <div class="clocks"><div>BALTIMORE<b data-tz="America/New_York">--:--</b></div><div>GALWAY<b data-tz="Europe/Dublin">--:--</b></div><div>LONDON<b data-tz="Europe/London">--:--</b></div></div>
+    <a class="btn" href="https://www.twitch.tv/matchzimmerman" target="_blank" rel="noopener">OPEN MZTV ON TWITCH</a>` },
+
+  inverin: { title: 'INVERIN', w: 340, body: () => viewer('headland') + `
+    <span class="meta">WORLD</span>
+    <p>A world set on the Galway coast, built from printed land, weather and memory.</p>
+    <ul class="list">${item('headland','HEADLAND','excerpt')}${item('bog','BOG STUDIES','excerpt')}${item('sheepdog','SHEEPDOG','in preparation')}${item('water','WATER STUDIES','in preparation')}</ul>` },
+
+  readme: { title: 'README.TXT', w: 320, body: () => `
+    <p class="quote">Orientation inside complexity</p>
+    <p>Match Zimmerman is an artist, researcher and educator based in Baltimore, shaped by years in Galway and London. The work spans interactive media, computational design, generative art, curriculum and practice-based research into human–AI interaction.</p>
+    <p style="color:var(--dim)">“I develop and study adaptive networks of distributed meaning over time.”</p>` },
+
+  headland: { title: 'HEADLAND · INVERIN', w: 360, body: () => viewer('headland') + `
+    <p>A printed, six-ink place on the coast, watched by an observational crew. Live weather, uncanny events, memory and rupture.</p>` },
+  bog: { title: 'BOG STUDIES · INVERIN', w: 340, body: () => viewer('bog') + `<p>Part of INVERIN. Notes coming.</p>` },
+  sheepdog: { title: 'SHEEPDOG · INVERIN', w: 320, body: () => viewer('testcard', 'NO SIGNAL', 'IN PREPARATION') + `<p>Part of INVERIN.</p>` },
+  water: { title: 'WATER STUDIES · INVERIN', w: 320, body: () => viewer('testcard', 'NO SIGNAL', 'IN PREPARATION') + `<p>Part of INVERIN.</p>` },
+  mzbrdz: { title: 'MZBRDZ', w: 340, body: () => viewer('mzbrdz') + `<span class="meta">WORLD</span><p>World in progress.</p>` },
+  earhart: { title: 'EARHART', w: 320, body: () => viewer('testcard', 'NO SIGNAL', 'IN PREPARATION') + `<span class="meta">WORLD</span><p>A new world, in preparation.</p>` },
+  warren: { title: 'WARREN', w: 320, body: () => viewer('testcard', 'NO SIGNAL', 'IN PREPARATION') + `<span class="meta">WORLD</span><p>Built from research with MZ.GPT and artifacts made with MZ.Claude.</p>` },
+
+  orbit: { title: 'BIT FIELD 017 · ORBIT SCORE', w: 330, body: () => `<span class="meta">MZTV PIECE</span><p>The ISS on its real orbit over a NASA public-domain relief map. The ground passing below becomes the score.</p>` },
+  sounding: { title: 'BIT FIELD 014 · SOUNDING', w: 320, body: () => `<span class="meta">MZTV PIECE</span><p>A generative audiovisual piece from the MZTV system.</p>` },
+  plant48: { title: '48 PLANT', w: 320, body: () => `<span class="meta">MZTV PIECE</span><p>The first test of interactive MZTV, where Twitch chat activity changes the piece on screen.</p>` },
+  seals: { title: 'TO SEE WHAT SEALS SEE', w: 330, body: () => `<span class="meta">POETRY · PHOTOGRAPHY · SOUND</span><p>A series rooted in a family farm near Galway.</p>` },
+  jcp: { title: 'JOURNAL OF CURRICULUM AND PEDAGOGY', w: 330, body: () => `<span class="meta">ARTICLE</span><p>Co-authored with Stephanie Flores-Koulish.</p>` },
+
+  worlds: { title: 'WORLDS', w: 300, body: () => `<ul class="list">${item('inverin','INVERIN','4 studies')}${item('magpie','FIELD STATION: MAGPIE','game')}${item('mzbrdz','MZBRDZ','world')}${item('earhart','EARHART','new')}${item('warren','WARREN','world')}</ul>` },
+  tv: { title: 'MZTV', w: 300, body: () => `<ul class="list">${item('mztv','THREE CITIES, ONE FIELD','program')}${item('orbit','BIT FIELD 017','orbit score')}${item('sounding','BIT FIELD 014','sounding')}${item('plant48','48 PLANT','interactive')}</ul>` },
+  sonic: { title: 'SONIC LAB', w: 320, body: () => `<ul class="list">${item('squish','SQUISH//SYNTH 001','S · mobile')}${item('gull','GULL','M')}${item('banger','BANGER','M')}${item('serial','SERIAL','M')}${item('typefield','TYPE//FIELD','M')}${item('deckav','DECK//AV 001','L · video')}</ul>` },
+  arcade: { title: 'ARCADE', w: 320, body: () => `<ul class="list">${item('homekey','HOMEKEY HERO','L')}${item('signal6','SIGNAL 6','S')}${item('recon','MAGPIE · RECON','L')}${item('battery','BATTERY SORT','S')}${item('beatdef','OBAS BEAT DEFENSE','M')}${item('madlib','MADLIB 001','L')}</ul>` },
+  archive: { title: 'ARCHIVE', w: 440, body: () => {
+    const subs = [['fal','FIELD AUDIO LAB'],['obas','OBAS STUDIES'],['pre2026','PRE-2026 WORK'],['client','CLIENT WORK']];
+    const loose = Object.keys(TOOLS).filter(k => TOOLS[k].loose);
+    return `<div class="drive"><span class="sect">FOLDERS</span>
+      ${subs.map(([id, n]) => `<button class="dicon" data-open="${id}"><span class="fold"></span><span class="lbl">${n}</span></button>`).join('')}
+      <span class="sect">LOOSE FILES</span>
+      ${loose.map((id, i) => `<button class="dicon" data-open="${id}" style="transform:translate(${Math.round((hash(i * 5.7) - .5) * 14)}px,${Math.round((hash(i * 2.3) - .5) * 10)}px) rotate(${((hash(i * 9.1) - .5) * 8).toFixed(1)}deg)"><span class="file"></span><span class="lbl">${TOOLS[id].file}</span></button>`).join('')}
+      </div><div class="status">${subs.length} FOLDERS · ${loose.length} FILES</div>`; } },
+  fal: { title: 'FIELD AUDIO LAB', w: 320, body: () => `<span class="meta">SOUND AS MOVEMENT, PLACE AND MEMORY</span><ul class="list">${item('fas001','FIELD AUDIO SCAN 001','place → sound')}${item('zones','RESONANT ZONES','experiment')}${item('slice','SLICE SCANNER','experiment')}${item('memtrail','MEMORY TRAIL','experiment')}${item('direction','DIRECTIONAL FIELD','experiment')}${item('autowalk','AUTOWALK','experiment')}</ul>` },
+  obas: { title: 'OBAS STUDIES', w: 320, body: () => `<span class="meta">VOICE + TILE LINEAGES</span><ul class="list">${item('voicetype','OBAS VOICE TYPE FIELD','lineage')}${item('tilepulse','OBAS TILE PULSE 004','study')}</ul>` },
+  pre2026: { title: 'PRE-2026 WORK', w: 300, body: () => `<p style="color:var(--dim)">This folder is empty for now.</p>` },
+  client: { title: 'CLIENT WORK', w: 300, body: () => `<p style="color:var(--dim)">This folder is empty for now.</p>` },
+  writing: { title: 'WRITING', w: 300, body: () => `<ul class="list">${item('seals','TO SEE WHAT SEALS SEE','series')}${item('jcp','CURRICULUM + PEDAGOGY','article')}${item('readme','README.TXT','about')}</ul>` }
+};
+
+/* ---------- playable tools + archive files ----------
+   On matchzimmerman.com each tool window embeds the live page; elsewhere it shows a preview loop and an OPEN link. */
+const SITE = 'https://www.matchzimmerman.com';
+const EMBED = /(^|\.)matchzimmerman\.com$/.test(location.hostname);
+const SIZES = { s: { w: 300, cw: 108, ch: 168 }, m: { w: 440, cw: 160, ch: 120 }, l: { w: 720, cw: 192, ch: 108 } };
+const TOOLS = {
+  squish:   { title: 'SQUISH//SYNTH 001', size: 's', scene: 'rings', kind: 'SONIC LAB · INSTRUMENT · MOBILE BEST', href: '/sonic-lab/squish-synth-001/', text: 'Hold a note in D Phrygian, squish to swell it, and swipe one rail through octave, tone, delay, echo and space with a single thumb.' },
+  gull:     { title: 'GULL', size: 'm', scene: 'mzbrdz', kind: 'SONIC LAB · SYNTHESIZER', href: '/mz-audio-tools/magpie/', text: 'A generative synthesizer for metallic calls, fluttering phrases and strange field recordings.' },
+  banger:   { title: 'BANGER', size: 'm', scene: 'bars', kind: 'SONIC LAB · LOW END', href: '/mz-audio-tools/banger/', text: 'Kick and sub as one event, with tuned handoff, sequencing and loop bounce.' },
+  serial:   { title: 'SERIAL', size: 'm', scene: 'bars', kind: 'SONIC LAB · LEARNING', href: '/mz-audio-tools/serial/', text: 'Drag, snap and reorder real audio effects to hear why their order changes the result.' },
+  typefield:{ title: 'TYPE//FIELD', size: 'm', scene: 'lanes', kind: 'SONIC LAB · INSTRUMENT', text: 'A typing instrument. Keys you already know how to touch-type play notes and chords.' },
+  deckav:   { title: 'DECK//AV 001 · DUB FIELD', size: 'l', scene: 'bog', video: true, kind: 'SONIC LAB · STEAM DECK INSTRUMENT', text: 'An autonomous audiovisual instrument for the Steam Deck, built in Godot. The Deck’s controls shape sound and image through one shared parameter system.' },
+
+  homekey:  { title: 'HOMEKEY HERO', size: 'l', scene: 'lanes', kind: 'ARCADE · RHYTHM GAME', text: 'Each home-row key is a lane. Notes travel toward you, and typing them in time plays the song.' },
+  signal6:  { title: 'SIGNAL 6', size: 's', scene: 'testcard', kind: 'ARCADE · CARD GAME · MAGPIE', text: 'Build a tower and a radio, then race to confirm a transmission before your opponent jams it.' },
+  recon:    { title: 'FIELD STATION: MAGPIE · RECON', size: 'l', scene: 'magpie', kind: 'ARCADE · MAGPIE', text: 'Leave the bunker, scavenge parts, avoid the drone and build signal nodes that map the field.' },
+  battery:  { title: 'BATTERY SORT', size: 's', scene: 'testcard', kind: 'ARCADE · MAGPIE', text: 'A charge-sorting puzzle from the station’s power subsystem.' },
+  beatdef:  { title: 'OBAS BEAT DEFENSE', size: 'm', scene: 'lanes', kind: 'ARCADE · KEYBOARD', href: '/mz-audio-tools/obas-sector-defense/', text: 'A keyboard rhythm game where beat placement and timing become a defense.' },
+  madlib:   { title: 'MADLIB 001 · INVERTED FAIRGROUND', size: 'l', scene: 'testcard', kind: 'ARCADE · 3D WORLD', href: '/MZTV/sources/madlib-001-inverted-fairground/', text: 'An abandoned fairground, a mechanical bird and a glowing key. Examine the key and gravity reverses.' },
+
+  fas001:   { title: 'FIELD AUDIO SCAN 001', kind: 'FIELD AUDIO LAB', href: '/field-audio-scan-001/', text: 'A LiDAR-derived place translated into a procedural sound environment.' },
+  zones:    { title: 'RESONANT ZONES', kind: 'FIELD AUDIO LAB', href: '/field-audio-lab/zones/', text: 'Eight spatial regions become persistent voices.' },
+  slice:    { title: 'SLICE SCANNER', kind: 'FIELD AUDIO LAB', href: '/field-audio-lab/slice/', text: 'A moving plane reads a scanned environment as a score.' },
+  memtrail: { title: 'MEMORY TRAIL', kind: 'FIELD AUDIO LAB', href: '/field-audio-lab/memory/', text: 'Places you visit stay audible as accumulated tones.' },
+  direction:{ title: 'DIRECTIONAL FIELD', kind: 'FIELD AUDIO LAB', href: '/field-audio-lab/direction/', text: 'Where you look decides what enters the mix.' },
+  autowalk: { title: 'AUTOWALK', kind: 'FIELD AUDIO LAB', href: '/field-audio-lab/autowalk/', text: 'A repeatable walk through the field, performed as a composition.' },
+  voicetype:{ title: 'OBAS VOICE TYPE FIELD', kind: 'OBAS STUDIES', href: '/mz-audio-tools/obas-voice-type-field/versions/', text: 'Voice-response studies moving through reactive field, pixel text and live transcript.' },
+  tilepulse:{ title: 'OBAS TILE PULSE 004', kind: 'OBAS STUDIES', href: '/mz-audio-tools/obas-voice-field/', text: 'Voice energy sets off tile events that spread out from the center.' },
+
+  nightfield:{ loose: true, file: 'night_field_v003/', kind: 'MZTV · AMBIENT', href: '/mzsite/mztv-night-field-v003/', text: 'A real-time night sky with procedural sleep audio, in three preserved versions.' },
+  coasts:   { loose: true, file: 'coasts.html', kind: 'STUDY', href: '/mz-audio-tools/coasts/', text: 'East Coast subtractive synthesis next to West Coast complex timbre, playable side by side.' },
+  spectral: { loose: true, file: 'spectral_particles.html', kind: 'STUDY', href: '/mz-audio-tools/spectral-particles/', text: 'A track or the microphone drives particle behavior across the audible spectrum.' },
+  clubfield:{ loose: true, file: 'club_field_v0.1.html', kind: 'EXPERIMENT', href: '/mz-audio-tools/club-field/', text: 'Morph rhythm, timbre and space among Baltimore, London, Kingston, Berlin and Detroit.' },
+  rings:    { loose: true, file: 'sonic_rings.html', kind: 'VISUALIZER', text: 'Hand-drawn rings grow outward from the sound in a room.' },
+  sprite:   { loose: true, file: 'sprite_jumper.html', kind: 'GAME', text: 'Draw a character, then jump it up a scrolling tower of platforms.' },
+  corridor: { loose: true, file: 'corridor_soccer.html', kind: 'GAME', text: 'Hallway soccer against the CPU.' },
+  avvseq:   { loose: true, file: 'avv-seq.html', kind: 'SEQUENCER', text: 'A glyph sequencer.' },
+  slowgarden:{ loose: true, file: 'slowgarden/', kind: 'SIMULATION', text: 'Procedural growth simulations.' },
+  optic:    { loose: true, file: 'optic_flight_001.html', kind: 'FLIGHT', text: 'A lo-fi cockpit flight through an endless abstract field.' },
+  collage:  { loose: true, file: 'orientation_inside_complexity.html', kind: 'LOOP', text: 'A moving collage built from a painting’s palette.' },
+  ember:    { loose: true, file: 'ember.src', src: true, kind: 'SOURCE ONLY', href: 'https://github.com/matchzimmerman/mz-instruments', text: 'A polyphonic subtractive synth with a spatial XY field.' },
+  carrier:  { loose: true, file: 'carrier.src', src: true, kind: 'SOURCE ONLY', href: 'https://github.com/matchzimmerman/mz-instruments', text: 'A radio-tuning instrument with degrading tape-feedback loops.' },
+  substrate:{ loose: true, file: 'substrate.src', src: true, kind: 'SOURCE ONLY', href: 'https://github.com/matchzimmerman/mz-instruments', text: 'A generative drum machine with genre macros and key-aware randomization.' }
+};
+
+const internal = o => o.href && !o.href.startsWith('http');
+const canEmbed = o => EMBED && internal(o) && !o.video;
+
+function toolBody(o){
+  let stage = '';
+  if (o.scene){
+    const sz = SIZES[o.size];
+    stage = `<div class="stage ${o.size}"><canvas width="${sz.cw}" height="${sz.ch}" data-scene="${o.scene}"></canvas>
+      <span class="tag">${o.video ? 'DEMO VIDEO · COMING' : 'PREVIEW LOOP'}</span>
+      ${canEmbed(o) ? `<div class="cover"><button class="play" data-play="${o.href}">▶ PLAY</button></div>` : ''}</div>`;
+  }
+  const link = o.href
+    ? `<a class="btn${canEmbed(o) ? ' ghost' : ''}" href="${internal(o) ? SITE + o.href : o.href}" target="_blank" rel="noopener">${o.src ? 'VIEW SOURCE ↗' : 'OPEN IN NEW TAB ↗'}</a>`
+    : `<span class="pending">${o.video ? 'VIDEO NOT POSTED YET' : 'NOT ON THE SITE YET'}</span>`;
+  const full = canEmbed(o) ? `<button class="btn ghost" data-full="${o.href}">FULL SCREEN</button>` : '';
+  return stage + `<span class="meta">${o.kind}</span><p>${o.text}</p><div class="row">${link}${full}</div>`;
+}
+Object.entries(TOOLS).forEach(([id, o]) => {
+  if (!o.scene && internal(o)){ o.size = 'm'; o.scene = 'testcard'; }   // every hosted page gets a playable window
+  DEFS[id] = { title: o.file || o.title, w: o.size ? SIZES[o.size].w : 320, body: () => toolBody(o) };
+});
+
+/* ---------- embedded pages: load on demand, one sound at a time ---------- */
+function loadFrame(win, stage, src){
+  const f = document.createElement('iframe');
+  f.src = src; f.title = win.getAttribute('aria-label') || 'Embedded page';
+  f.allow = 'autoplay; microphone; fullscreen; accelerometer; gyroscope; encrypted-media; picture-in-picture';
+  f._ctxs = new Set();
+  f.addEventListener('load', () => { hookAudio(f); try { f.contentWindow.focus(); } catch (_){} });
+  stage.innerHTML = ''; stage.appendChild(f);
+  win._tool = f; focusWin(win);
+  return f;
+}
+/* Same-origin pages: watch their AudioContexts so background windows can be paused. */
+function hookAudio(f){
+  try {
+    const w = f.contentWindow;
+    const AN = w.AudioNode && w.AudioNode.prototype;
+    if (AN && !AN._mz){ const c0 = AN.connect; AN.connect = function(){ try { f._ctxs.add(this.context); } catch (_){} return c0.apply(this, arguments); }; AN._mz = 1; }
+    const AC = w.AudioContext && w.AudioContext.prototype;
+    if (AC && !AC._mz){ const r0 = AC.resume; AC.resume = function(){ f._ctxs.add(this); return r0.apply(this, arguments); }; AC._mz = 1; }
+  } catch (_){}
+}
+function setSuspended(win, on){
+  const f = win._tool; if (!f || !f.isConnected || !f._ctxs) return;
+  f._ctxs.forEach(c => { try {
+    if (on && c.state === 'running'){ c.suspend(); c._mzPaused = true; }
+    else if (!on && c._mzPaused){ c.resume(); c._mzPaused = false; }
+  } catch (_){} });
+  const st = f.parentElement; let tag = st.querySelector('.paused');
+  if (on && [...f._ctxs].some(c => c._mzPaused)){
+    if (!tag){ tag = document.createElement('span'); tag.className = 'paused'; tag.textContent = 'SOUND PAUSED'; st.appendChild(tag); }
+  } else if (!on && tag) tag.remove();
+}
+function soloSound(win){ open.forEach(w => { if (w !== win) setSuspended(w, true); }); setSuspended(win, false); }
+/* Clicking inside an iframe never reaches this page, so watch for focus moving into one. */
+addEventListener('blur', () => setTimeout(() => {
+  const a = document.activeElement;
+  if (a && a.tagName === 'IFRAME'){ const w = a.closest('.win'); if (w) focusWin(w); }
+}, 0));
+
+const ICONS = [['worlds','WORLDS','fold'],['tv','MZTV','fold'],['sonic','SONIC LAB','fold'],['arcade','ARCADE','fold'],
+  ['writing','WRITING','fold'],['archive','ARCHIVE','fold'],['readme','README.TXT','file'],['homekey','HOMEKEY HERO','app']];
+
+/* ---------- window manager ---------- */
+const winsEl = document.getElementById('wins');
+const open = new Map();
+let z = 10, cascade = 0;
+const isDesk = () => matchMedia('(min-width: 761px)').matches;
+
+function focusWin(el){
+  open.forEach(w => w.classList.remove('focus')); el.classList.add('focus'); el.style.zIndex = ++z;
+  if (el._tool && el._tool.isConnected) soloSound(el);
+}
+
+function clampPos(el){
+  if (!isDesk()) return;
+  const W = innerWidth, H = innerHeight, r = el.getBoundingClientRect();
+  let x = parseFloat(el.style.left) || 0, y = parseFloat(el.style.top) || 0;
+  x = Math.min(Math.max(x, 80 - r.width), W - 80);
+  y = Math.min(Math.max(y, 0), H - 40);
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+}
+
+/* Each window keeps a history stack: links inside a window open in place, Back returns. */
+function render(el, animate){
+  const stack = el._stack, id = stack[stack.length - 1], d = DEFS[id];
+  el.querySelector('.t').textContent = d.title;
+  const back = el.querySelector('.back');
+  back.hidden = stack.length < 2;
+  if (stack.length > 1){ const prev = DEFS[stack[stack.length - 2]].title; back.textContent = '‹ ' + prev; back.setAttribute('aria-label', 'Back to ' + prev); }
+  el.setAttribute('aria-label', d.title);
+  el.querySelector('.min').setAttribute('aria-label', 'Minimize ' + d.title);
+  el.querySelector('.x').setAttribute('aria-label', 'Close ' + d.title);
+  const body = el.querySelector('.body');
+  el._tool = null;
+  body.innerHTML = d.body();
+  if (animate){ body.classList.remove('swap'); void body.offsetWidth; body.classList.add('swap'); }
+  el.style.width = Math.min(d.w, innerWidth - 150) + 'px';
+  body.querySelectorAll('canvas[data-scene]').forEach((cv, i) => { const s = addScreen(cv, cv.dataset.scene); s.offset = hash(id.length * 9 + i) * 300; });
+  tickClocks(); clampPos(el);
+  if (!isDesk() && animate && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openWin(id, pos){
+  if (open.has(id)){ const el = open.get(id); el.classList.remove('shade'); focusWin(el); return el; }
+  const d = DEFS[id]; if (!d) return;
+  const el = document.createElement('section');
+  el.className = 'win'; el.dataset.id = id; el._stack = [id];
+  el.innerHTML = `<div class="bar"><button class="back" hidden></button><span class="t"></span><span class="rule"></span>
+    <button class="min">–</button><button class="x">×</button></div><div class="body"></div>`;
+  const W = innerWidth, H = innerHeight;
+  const p = pos || [Math.max(40, W * .24) + (cascade % 6) * 30, 150 + (cascade++ % 6) * 30];
+  el.style.left = p[0] + 'px'; el.style.top = Math.min(p[1], H - 120) + 'px';
+  if (isDesk() || pos) winsEl.appendChild(el); else winsEl.prepend(el);   // portrait: new windows land at the top
+  open.set(id, el); render(el, false); focusWin(el);
+  return el;
+}
+
+winsEl.addEventListener('click', e => {
+  const win = e.target.closest('.win'); if (!win) return;
+  if (e.target.closest('.x')){ open.delete(win.dataset.id); win.remove(); return; }
+  if (e.target.closest('.min')){ const s = win.classList.toggle('shade'); setSuspended(win, s); return; }
+  const pl = e.target.closest('[data-play]');
+  if (pl){ loadFrame(win, pl.closest('.stage'), pl.dataset.play); return; }
+  const fs = e.target.closest('[data-full]');
+  if (fs){
+    const st = win.querySelector('.stage');
+    if (!st.querySelector('iframe')) loadFrame(win, st, fs.dataset.full);
+    if (st.requestFullscreen) st.requestFullscreen().catch(() => window.open(SITE + fs.dataset.full, '_blank'));
+    else window.open(SITE + fs.dataset.full, '_blank');
+    return;
+  }
+  if (e.target.closest('.back')){ win._stack.pop(); render(win, true); return; }
+  const o = e.target.closest('[data-open]');
+  if (o && DEFS[o.dataset.open]){ win._stack.push(o.dataset.open); render(win, true); }
+});
+winsEl.addEventListener('pointerdown', e => {
+  const win = e.target.closest('.win'); if (!win) return;
+  focusWin(win);
+  const bar = e.target.closest('.bar');
+  if (!bar || e.target.closest('button') || !isDesk()) return;
+  e.preventDefault();
+  const sx = e.clientX, sy = e.clientY, ox = parseFloat(win.style.left), oy = parseFloat(win.style.top);
+  bar.setPointerCapture(e.pointerId);
+  document.body.classList.add('dragging');
+  const move = ev => { win.style.left = ox + ev.clientX - sx + 'px'; win.style.top = oy + ev.clientY - sy + 'px'; clampPos(win); };
+  const up = () => { document.body.classList.remove('dragging'); bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); };
+  bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
+});
+addEventListener('resize', () => open.forEach(clampPos));
+
+/* folders */
+const iconsEl = document.getElementById('icons');
+ICONS.forEach(([id, label, kind]) => {
+  const b = document.createElement('button');
+  b.className = 'icon'; b.innerHTML = `<span class="${kind}"></span><span class="lbl">${label}</span>`;
+  b.setAttribute('aria-label', 'Open ' + label);
+  b.addEventListener('click', () => {
+    iconsEl.querySelectorAll('.icon').forEach(i => i.classList.remove('sel')); b.classList.add('sel');
+    const el = openWin(id);
+    if (!el) return;
+    if (el._stack.length > 1){ el._stack = [id]; render(el, true); }   // a folder always opens at its top level
+    if (!isDesk()){ winsEl.prepend(el); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
+  iconsEl.appendChild(b);
+});
+
+/* clocks for the MZTV window */
+const fmt = {};
+function tickClocks(){
+  document.querySelectorAll('[data-tz]').forEach(el => {
+    const tz = el.dataset.tz;
+    fmt[tz] ||= new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    el.textContent = fmt[tz].format(new Date());
+  });
+}
+setInterval(tickClocks, 1000);
+
+/* opening layout */
+(function boot(){
+  const W = innerWidth, H = innerHeight, L = Math.max(24, W * .03);
+  const cols = Math.max(1, Math.ceil(ICONS.length * 80 / Math.max(240, H - 150)));
+  const right = W - 40 - cols * 98;
+  const order = [['magpie', [L, Math.max(170, H * .24)]],
+                 ['mztv', [Math.min(L + 450, right - 340), 120]],
+                 ['inverin', [Math.min(L + 480, right - 340), Math.min(H - 380, 380)]],
+                 ['readme', [Math.max(L + 40, right - 330), Math.max(180, H - 300)]]];
+  order.forEach(([id, p]) => openWin(id, p));
+  focusWin(open.get('magpie'));
+})();
+</script>
+
+</body>
+</html>
