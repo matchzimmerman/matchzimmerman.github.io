@@ -147,16 +147,16 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
 /* Sticky note: pinned to the desktop, under every window */
 .sticky{position:absolute;top:calc(200px + env(safe-area-inset-top,0px));left:max(24px,env(safe-area-inset-left,0px));
   width:236px;max-height:calc(100% - 270px);overflow:auto;padding:12px 14px 14px;
-  background:var(--sticky);color:var(--sticky-ink);transform:rotate(-1.2deg);
+  background:var(--sticky);color:var(--sticky-ink);
   box-shadow:4px 6px 0 rgba(0,0,0,.4);clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%);
   font-size:11px;line-height:1.4;scrollbar-width:thin}
 .sticky{background:linear-gradient(315deg,transparent 0 11px,var(--sticky-fold) 11px 23px,var(--sticky) 23px)}
-.sticky h2{margin:0;font-size:12px;letter-spacing:.2em;font-weight:600}
-.sticky .when{display:block;margin:2px 0 8px;font-size:9px;letter-spacing:.16em;opacity:.7}
-.sticky ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.sticky li{display:grid;grid-template-columns:11px 1fr;gap:7px}
-.sticky li::before{content:"";width:9px;height:9px;margin-top:3px;border:1px solid var(--sticky-ink)}
-.sticky .n{margin-top:10px;padding-top:6px;border-top:1px solid rgba(43,34,0,.3);font-size:9px;letter-spacing:.16em}
+.sticky h2{margin:0;font-size:11px;line-height:1.35;letter-spacing:.14em;font-weight:600;text-wrap:balance}
+.sticky .when{display:block;margin:3px 0 9px;font-size:9px;letter-spacing:.16em;opacity:.7}
+.sticky ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.sticky li{padding:5px 0;border-top:1px solid rgba(43,34,0,.22)}
+.sticky li.done{text-decoration:line-through;text-decoration-thickness:1px;opacity:.5}
+.sticky .f{font-weight:600}
 
 /* Phone: the desktop becomes a scrolling stack */
 @media (max-width:760px){
@@ -207,7 +207,7 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
 
 <script>
 /* ---------- settings ---------- */
-const MZTV_LIVE = false;           // later: set from a Twitch status check
+const MZTV_LIVE = true;            // MZTV is usually on air; later: set from a Twitch status check
 const FPS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 2 : 20;
 const BG_SCALE = 4;                // background renders at 1/4 resolution
 const ROTATE_S = 45;               // seconds per background excerpt
@@ -424,7 +424,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 /* ---------- live badge ---------- */
-if (MZTV_LIVE){ document.getElementById('live').classList.add('on'); document.getElementById('liveState').textContent = 'LIVE NOW'; }
+if (MZTV_LIVE){ document.getElementById('live').classList.add('on'); document.getElementById('liveState').textContent = 'ON AIR'; }
 
 /* ---------- content ---------- */
 let excSeed = 112;
@@ -453,7 +453,7 @@ const DEFS = {
     <p>A world set on the Galway coast, built from printed land, weather and memory.</p>
     <ul class="list">${item('headland','HEADLAND','excerpt')}${item('bog','BOG STUDIES','excerpt')}${item('sheepdog','SHEEPDOG','in preparation')}${item('water','WATER STUDIES','in preparation')}</ul>` },
 
-  readme: { title: 'README.TXT', w: 320, body: () => `
+  readme: { title: 'README.TXT', w: 380, body: () => `
     <p class="quote">Orientation inside complexity</p>
     <p>Match Zimmerman is an artist, researcher and educator based in Baltimore, shaped by years in Galway and London. The work spans interactive media, computational design, generative art, curriculum and practice-based research into human–AI interaction.</p>
     <p style="color:var(--dim)">“I develop and study adaptive networks of distributed meaning over time.”</p>` },
@@ -566,29 +566,29 @@ Object.entries(TOOLS).forEach(([id, o]) => {
   const noPage = ids => ids.filter(id => !TOOLS[id].href && !TOOLS[id].video).map(id => TOOLS[id].title);
   const inPreview = Object.values(TOOLS).filter(o => o.href && o.href.startsWith('/preview/')).map(o => o.title);
   const looseNoPage = Object.values(TOOLS).filter(o => o.loose && !o.href).length;
-  const unbuilt = noPage(['signal6', 'recon', 'battery', 'squish', 'gull', 'banger', 'serial', 'beatdef', 'madlib']);
-  const items = [
-    'Swap the code-drawn background loops for real world excerpts, starting with HEADLAND',
-    !MZTV_LIVE && 'Connect the MZTV badge to Twitch. Right now it always reads OFF AIR',
-    'Add the FIELD STATION: MAGPIE tour video to its window',
-    TOOLS.deckav.video && 'Post the DECK//AV 001 demo video',
-    unbuilt.length && `Put ${names(unbuilt)} on the site`,
-    inPreview.length && `Move ${names(inPreview)} out of the preview folder`,
-    'Write real copy for SHEEPDOG, WATER STUDIES, EARHART, WARREN, MZBRDZ and BOG STUDIES',
-    'Decide whether OFF + ON PAVILION becomes a world',
-    'Fill the PRE-2026 WORK and CLIENT WORK folders',
-    looseNoPage && `Host the ${looseNoPage} loose archive files that have no page yet`,
-    'Link To See What Seals See and the Curriculum and Pedagogy article in WRITING',
-    'Add a contact and commissions route',
-    'Confirm which tool is the inward-rings beat maker and move it into SONIC LAB',
-    'Build the archive Easter eggs',
-    'Test sound pausing in each embedded tool on phone and desktop',
-    'Apply the walkthrough notes',
-    'Launch: move this desktop from the preview address to the homepage'
+  const f = s => `<span class="f">${s}</span>`;
+  const games = { signal6: 'signal_6', recon: 'magpie_recon', battery: 'battery_sort' };
+  const unbuilt = Object.keys(games).filter(id => !TOOLS[id].href).map(id => f(games[id]));
+  const done = [
+    'Desktop front page',
+    'Worlds, MZTV, Sonic Lab, Arcade and Archive folders',
+    `Tools play inside their windows`,
+    `${f('homekey_hero')} + ${f('type_field')} wired in`
+  ];
+  const todo = [
+    'Field Station: Magpie: embed the exhibition tour video, with a link to it on YouTube',
+    'Real world footage in the background loops, starting with HEADLAND',
+    'Mobile: suggest landscape orientation',
+    unbuilt.length && `Arcade: ${names(unbuilt)}`,
+    TOOLS.deckav.video && `${f('deck_av_001')} demo video`,
+    'Copy for SHEEPDOG, EARHART, WARREN and the rest',
+    `Archive: pre-2026 + client work; ${f('optic_flight_001')} and friends still offline`,
+    'Contact + commissions',
+    'Easter eggs (shh)'
   ].filter(Boolean);
   document.getElementById('sticky').innerHTML =
-    `<h2>SITE TO-DO</h2><span class="when">UPDATED 28 OCT 2026</span>
-     <ul>${items.map(t => `<li>${t}</li>`).join('')}</ul><div class="n">${items.length} OPEN</div>`;
+    `<h2>MATCH (MZ.HUMAN)<br>SITE TO-DO LIST</h2><span class="when">UPDATED 28 OCT 2026</span>
+     <ul>${done.map(t => `<li class="done">${t}</li>`).join('')}${todo.map(t => `<li>${t}</li>`).join('')}</ul>`;
 })();
 
 /* ---------- embedded pages: load on demand, one sound at a time ---------- */
@@ -753,12 +753,12 @@ setInterval(tickClocks, 1000);
   const W = innerWidth, H = innerHeight, L0 = Math.max(24, W * .03), L = W >= 1200 ? L0 + 270 : L0;   // leave the sticky note visible
   const cols = Math.max(1, Math.ceil(ICONS.length * 80 / Math.max(240, H - 150)));
   const right = W - 40 - cols * 98;
-  const order = [['magpie', [L, Math.max(170, H * .24)]],
-                 ['mztv', [Math.min(L + 450, right - 420), 120]],
-                 ['inverin', [Math.min(L + 480, right - 340), Math.min(H - 380, 380)]],
-                 ['readme', [Math.max(L + 40, right - 330), Math.max(180, H - 300)]]];
-  order.forEach(([id, p]) => openWin(id, p));
-  focusWin(open.get('magpie'));
+  // Launch with only the README, centered in the space between the sticky note and the folders.
+  const el = openWin('readme', [0, 0]);
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.max(16, ((W >= 1200 ? L0 + 260 : 0) + right - r.width) / 2) + 'px';
+  el.style.top = Math.max(150, (H - r.height) / 2) + 'px';
+  clampPos(el);
 })();
 </script>
 
