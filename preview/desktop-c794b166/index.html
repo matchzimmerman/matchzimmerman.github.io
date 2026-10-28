@@ -20,6 +20,7 @@ img{max-width:100%}
 :root{
   --ink:#05090a; --deep:#0c2a3a; --teal:#1d6b66; --phos:#7cf29a; --amber:#f2a93b; --paper:#d8e3dc;
   --dim:#86a19b; --line:rgba(216,227,220,.24); --glass:rgba(5,9,10,.86);
+  --sticky:#f2d660; --sticky-ink:#2b2200; --sticky-fold:#c9ac3c;
   --display:"Archivo","Arial Narrow",Impact,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
   color-scheme:dark;
@@ -143,6 +144,20 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
 
 :focus-visible{outline:1px solid var(--phos);outline-offset:2px}
 
+/* Sticky note: pinned to the desktop, under every window */
+.sticky{position:absolute;top:calc(200px + env(safe-area-inset-top,0px));left:max(24px,env(safe-area-inset-left,0px));
+  width:236px;max-height:calc(100% - 270px);overflow:auto;padding:12px 14px 14px;
+  background:var(--sticky);color:var(--sticky-ink);transform:rotate(-1.2deg);
+  box-shadow:4px 6px 0 rgba(0,0,0,.4);clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%);
+  font-size:11px;line-height:1.4;scrollbar-width:thin}
+.sticky{background:linear-gradient(315deg,transparent 0 11px,var(--sticky-fold) 11px 23px,var(--sticky) 23px)}
+.sticky h2{margin:0;font-size:12px;letter-spacing:.2em;font-weight:600}
+.sticky .when{display:block;margin:2px 0 8px;font-size:9px;letter-spacing:.16em;opacity:.7}
+.sticky ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sticky li{display:grid;grid-template-columns:11px 1fr;gap:7px}
+.sticky li::before{content:"";width:9px;height:9px;margin-top:3px;border:1px solid var(--sticky-ink)}
+.sticky .n{margin-top:10px;padding-top:6px;border-top:1px solid rgba(43,34,0,.3);font-size:9px;letter-spacing:.16em}
+
 /* Phone: the desktop becomes a scrolling stack */
 @media (max-width:760px){
   body{overflow:auto}
@@ -152,6 +167,7 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
   .live{align-self:flex-start}
   .icons{display:flex;flex-direction:row;flex-wrap:wrap;width:auto;gap:4px;max-height:none;direction:ltr}
   .win{max-width:100%}
+  .sticky{position:relative;top:auto;left:auto;width:auto;max-height:none;transform:none}
   .icon{width:72px}
   .wins{display:flex;flex-direction:column;gap:16px}
   .win{position:relative;left:auto!important;top:auto!important;width:auto!important}
@@ -178,6 +194,7 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
   </a>
 
   <nav class="icons" id="icons" aria-label="Desktop folders"></nav>
+  <aside class="sticky" id="sticky" aria-label="Website to-do list"></aside>
   <div class="wins" id="wins"></div>
 </div>
 
@@ -485,10 +502,10 @@ const TOOLS = {
   gull:     { title: 'GULL', size: 'm', scene: 'mzbrdz', kind: 'SONIC LAB · SYNTHESIZER', href: '/mz-audio-tools/magpie/', text: 'A generative synthesizer for metallic calls, fluttering phrases and strange field recordings.' },
   banger:   { title: 'BANGER', size: 'm', scene: 'bars', kind: 'SONIC LAB · LOW END', href: '/mz-audio-tools/banger/', text: 'Kick and sub as one event, with tuned handoff, sequencing and loop bounce.' },
   serial:   { title: 'SERIAL', size: 'm', scene: 'bars', kind: 'SONIC LAB · LEARNING', href: '/mz-audio-tools/serial/', text: 'Drag, snap and reorder real audio effects to hear why their order changes the result.' },
-  typefield:{ title: 'TYPE//FIELD', size: 'm', scene: 'lanes', kind: 'SONIC LAB · INSTRUMENT', text: 'A typing instrument. Keys you already know how to touch-type play notes and chords.' },
+  typefield:{ title: 'TYPE//FIELD', size: 'm', scene: 'lanes', kind: 'SONIC LAB · INSTRUMENT', href: '/preview/type-field/', text: 'A typing instrument. Keys you already know how to touch-type play notes and chords.' },
   deckav:   { title: 'DECK//AV 001 · DUB FIELD', size: 'l', scene: 'bog', video: true, kind: 'SONIC LAB · STEAM DECK INSTRUMENT', text: 'An autonomous audiovisual instrument for the Steam Deck, built in Godot. The Deck’s controls shape sound and image through one shared parameter system.' },
 
-  homekey:  { title: 'HOMEKEY HERO', size: 'l', scene: 'lanes', kind: 'ARCADE · RHYTHM GAME', text: 'Each home-row key is a lane. Notes travel toward you, and typing them in time plays the song.' },
+  homekey:  { title: 'HOMEKEY HERO', size: 'l', scene: 'lanes', kind: 'ARCADE · RHYTHM GAME', href: '/preview/homekey-hero/', text: 'Each home-row key is a lane. Notes travel toward you, and typing them in time plays the song.' },
   signal6:  { title: 'SIGNAL 6', size: 's', scene: 'testcard', kind: 'ARCADE · CARD GAME · MAGPIE', text: 'Build a tower and a radio, then race to confirm a transmission before your opponent jams it.' },
   recon:    { title: 'FIELD STATION: MAGPIE · RECON', size: 'l', scene: 'magpie', kind: 'ARCADE · MAGPIE', text: 'Leave the bunker, scavenge parts, avoid the drone and build signal nodes that map the field.' },
   battery:  { title: 'BATTERY SORT', size: 's', scene: 'testcard', kind: 'ARCADE · MAGPIE', text: 'A charge-sorting puzzle from the station’s power subsystem.' },
@@ -541,6 +558,38 @@ Object.entries(TOOLS).forEach(([id, o]) => {
   if (!o.scene && internal(o)){ o.size = 'm'; o.scene = 'testcard'; }   // every hosted page gets a playable window
   DEFS[id] = { title: o.file || o.title, w: o.size ? SIZES[o.size].w : 320, body: () => toolBody(o) };
 });
+
+/* ---------- sticky note: open site work ----------
+   Items about missing pages are derived from TOOLS, so adding an href removes them automatically. */
+(function sticky(){
+  const names = a => a.length < 3 ? a.join(' and ') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const noPage = ids => ids.filter(id => !TOOLS[id].href && !TOOLS[id].video).map(id => TOOLS[id].title);
+  const inPreview = Object.values(TOOLS).filter(o => o.href && o.href.startsWith('/preview/')).map(o => o.title);
+  const looseNoPage = Object.values(TOOLS).filter(o => o.loose && !o.href).length;
+  const unbuilt = noPage(['signal6', 'recon', 'battery', 'squish', 'gull', 'banger', 'serial', 'beatdef', 'madlib']);
+  const items = [
+    'Swap the code-drawn background loops for real world excerpts, starting with HEADLAND',
+    !MZTV_LIVE && 'Connect the MZTV badge to Twitch. Right now it always reads OFF AIR',
+    'Add the FIELD STATION: MAGPIE tour video to its window',
+    TOOLS.deckav.video && 'Post the DECK//AV 001 demo video',
+    unbuilt.length && `Put ${names(unbuilt)} on the site`,
+    inPreview.length && `Move ${names(inPreview)} out of the preview folder`,
+    'Write real copy for SHEEPDOG, WATER STUDIES, EARHART, WARREN, MZBRDZ and BOG STUDIES',
+    'Decide whether OFF + ON PAVILION becomes a world',
+    'Fill the PRE-2026 WORK and CLIENT WORK folders',
+    looseNoPage && `Host the ${looseNoPage} loose archive files that have no page yet`,
+    'Link To See What Seals See and the Curriculum and Pedagogy article in WRITING',
+    'Add a contact and commissions route',
+    'Confirm which tool is the inward-rings beat maker and move it into SONIC LAB',
+    'Build the archive Easter eggs',
+    'Test sound pausing in each embedded tool on phone and desktop',
+    'Apply the walkthrough notes',
+    'Launch: move this desktop from the preview address to the homepage'
+  ].filter(Boolean);
+  document.getElementById('sticky').innerHTML =
+    `<h2>SITE TO-DO</h2><span class="when">UPDATED 28 OCT 2026</span>
+     <ul>${items.map(t => `<li>${t}</li>`).join('')}</ul><div class="n">${items.length} OPEN</div>`;
+})();
 
 /* ---------- embedded pages: load on demand, one sound at a time ---------- */
 function loadFrame(win, stage, src){
@@ -701,11 +750,11 @@ setInterval(tickClocks, 1000);
 
 /* opening layout */
 (function boot(){
-  const W = innerWidth, H = innerHeight, L = Math.max(24, W * .03);
+  const W = innerWidth, H = innerHeight, L0 = Math.max(24, W * .03), L = W >= 1200 ? L0 + 270 : L0;   // leave the sticky note visible
   const cols = Math.max(1, Math.ceil(ICONS.length * 80 / Math.max(240, H - 150)));
   const right = W - 40 - cols * 98;
   const order = [['magpie', [L, Math.max(170, H * .24)]],
-                 ['mztv', [Math.min(L + 450, right - 340), 120]],
+                 ['mztv', [Math.min(L + 450, right - 420), 120]],
                  ['inverin', [Math.min(L + 480, right - 340), Math.min(H - 380, 380)]],
                  ['readme', [Math.max(L + 40, right - 330), Math.max(180, H - 300)]]];
   order.forEach(([id, p]) => openWin(id, p));
