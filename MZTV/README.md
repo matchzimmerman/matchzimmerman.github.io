@@ -22,6 +22,12 @@ An autonomous six-ink woodland world after a fourth-grade writer's original stor
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/) · [Walk view](https://matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/walk/) · [README](sources/bit-field-035-twisted-tree/README.md)
 
+## MZ WORLD · TO SEE WHAT SEALS SEE (BIT FIELD 036, published 2026-10-28)
+
+A world made from the opening poem of Match Zimmerman's chapbook *To See What Seals See*: the Inverin shore of Galway Bay seen from the water, the farm's fields, walls and haystacks rising behind, an Irish Naval patrol ship at anchor in the bay. A message in a plastic bottle drifts on live wind, swell and the bay's modelled tide; two of us turn stones at low water, find it, leave a cairn and put it back to sea; a call brings the ship's inflatable in to take us out to tea, to see what seals see daily: a view of our home from the bay. New: seal's-eye operators on the waterline, printed over-under with a meniscus across the frame. **Awaiting MZ.Human's review.**
+
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-036-seals-see/) · [README](sources/bit-field-036-seals-see/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
@@ -317,6 +323,15 @@ Path:
 
 Status:
 `mz-world/loch-raven-034` branch only — see its `README.md` for limitations and test gate.
+
+### BIT FIELD 036 — MZ WORLD · TO SEE WHAT SEALS SEE
+The opening poem of the chapbook *To See What Seals See*, as a living print of the Inverin shore seen from Galway Bay. Damp sand and seaweed-draped rocks under a live tide (Open-Meteo's sea-level model, or two harmonics when it doesn't answer — labelled, never a prediction); the farm's fields rising behind with drystone walls, a painted green gate, eleven haystacks, the house and the green hay barn; an unnamed Irish Naval patrol vessel riding to her anchor. The thread is a plastic bottle with a rolled sheet of ship's stationery (never readable): it drifts on wind, swell and tidal current, strands, refloats, goes out of sight past the ship and comes back, and where it is picks the bass. Two of us come down at low water to turn stones (crabs and eels), find the bottle, leave a cairn of turned stones that stands for two days, put it back to sea; later a call brings the ship's inflatable in to the slip, clipping peaks and skipping troughs, and takes us out to tea. Seals haul out on the reef as the tide uncovers it, spy in the water, and remember where they were disturbed. Ten observational operators include DECK (the home from the bay) and the seal's eye: lenses on the waterline, printed over-under with a meniscus, the sound going under with them. Rarely, the seals all turn to look at the home, a lamp on the ship and a lamp in the house speak across the bay, the haystacks bow to the bay, or the bay fills with bottles adrift. Tension ends in a still bay and a rupture into new inks (new: Wrack, Stationery, Haystack), line grammar and harmonic centre. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-036-seals-see/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-036-seals-see/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
