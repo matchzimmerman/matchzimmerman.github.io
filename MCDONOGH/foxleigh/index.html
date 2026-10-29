@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FOXLEIGH / MZ WORLDS — Field Study 001</title>
+<meta name="theme-color" content="#071419">
+<meta name="description" content="A provisional geolocated camera-view study of Foxleigh Mansion at McDonogh School. Not a verified reconstruction.">
+<style>
+:root{--ink:#e7eee9;--muted:#a5b6b6;--cyan:#80d6ce;--gold:#e6c388;--bg:#071419}
+*{box-sizing:border-box}html,body{padding:0;margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Arial,sans-serif}
+#camera,#render,#shade{position:fixed;inset:0;width:100%;height:100%}
+#camera{object-fit:cover;display:none;background:#000;transform:scaleX(1)}
+#shade{pointer-events:none;background:radial-gradient(ellipse at center,transparent 30%,#07141980 100%);z-index:1}
+#render{z-index:2;touch-action:none;display:block}
+header{position:fixed;z-index:4;top:0;left:0;right:0;padding:max(16px,env(safe-area-inset-top)) 16px 12px;display:flex;justify-content:space-between;gap:12px;align-items:start;background:linear-gradient(#081318dc,#08131800)}
+.kicker{letter-spacing:.18em;font-size:9px;font-weight:750;color:var(--gold)}h1{font:400 28px/1.07 Georgia,serif;margin:7px 0 5px}header small{font-size:10px;color:#bed2cd}
+.tag{font-size:9px;color:#dcbf8a;border:1px solid #ab8b58aa;background:#101e22dd;padding:7px 10px;border-radius:99px;white-space:nowrap}
+#readout{position:fixed;top:111px;left:14px;z-index:4;pointer-events:none;display:flex;flex-direction:column;gap:5px;max-width:90vw}
+.pill{width:max-content;max-width:100%;background:#0a191dcc;border:1px solid #31525b;font-size:11px;padding:6px 9px;border-radius:3px;color:#c2ddd7;font-variant-numeric:tabular-nums}
+#controls{position:fixed;bottom:0;left:0;right:0;z-index:5;background:#0b1a20ee;border-top:1px solid #466067;box-shadow:0 -10px 45px #0008;max-height:62dvh;overflow-y:auto;padding:12px 15px max(15px,env(safe-area-inset-bottom))}
+.actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+button{border-radius:4px;border:1px solid #456569;color:var(--ink);background:#163037;padding:10px 12px;min-height:41px;font-size:12px;font-weight:650;cursor:pointer}
+button.primary,button.on{background:#c8e0d6;color:#071719;border-color:#d1ece0}button:disabled{opacity:.46}
+#expand{margin-left:auto}#details{display:none;padding-top:10px}#details.open{display:block}
+.note{color:var(--muted);font-size:11px;line-height:1.55}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:9px}
+.field label{display:flex;justify-content:space-between;color:#c8d9d5;font-size:11px;margin-bottom:4px;gap:4px}
+input[type=range]{width:100%;accent-color:#c6dcd5}
+.coords{background:#0b1417;border:1px solid #39515a;color:#b6d9cf;border-radius:3px;font:11px/1.4 ui-monospace,Menlo,monospace;padding:8px;overflow-wrap:anywhere}
+.links{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:11px}a{color:#bee5dc}
+#hint{position:fixed;bottom:87px;left:50%;transform:translateX(-50%);z-index:3;border:1px solid #52686f;border-radius:4px;padding:8px 10px;background:#0d1e23c9;color:#e2e7df;white-space:nowrap;font-size:11px;pointer-events:none;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:460px){h1{font-size:24px}#readout{top:99px}.grid{gap:7px 12px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"}}</script>
+</head><body>
+<video id="camera" autoplay muted playsinline webkit-playsinline></video><div id="shade"></div><canvas id="render"></canvas>
+<header><div><div class="kicker">MZ WORLDS / MCDONOGH / FIELD STUDY 001</div><h1>Foxleigh Mansion</h1><small>Pre-1873–1914 · provisional spatial reconstruction</small></div><div class="tag">UNVERIFIED GEOMETRY</div></header>
+<div id="readout"><div class="pill" id="status">3D preview ready</div><div class="pill" id="gps">GPS not requested</div><div class="pill" id="bearing">Compass not requested</div><div class="pill" id="distance">Anchor: Rollins reference / approximate</div></div>
+<div id="hint">Drag to orbit · pinch to zoom</div>
+<div id="controls">
+<div class="actions">
+<button id="orbit" class="on">3D Preview</button>
+<button id="field" class="primary">Start Camera + GPS</button>
+<button id="setHere" disabled>Anchor at My Location</button>
+<button id="expand">Adjust ▴</button>
+</div>
+<div id="details">
+<div class="note">Rollins Hall mapped center: 39.39584, −76.77606. Initial display point is an <b>illustrative 20 m south</b> of that coordinate, NOT a surveyed Foxleigh site. Stand near the 2024 Foxleigh marker and tap <b>Anchor at My Location</b> to replace the provisional location. GPS + compass overlay is not ARKit SLAM; expect drift.</div>
+<div class="grid">
+<div class="field"><label for="east">East adjustment <span id="eastV"></span></label><input id="east" type="range" min="-100" max="100" step="1" value="0"></div>
+<div class="field"><label for="north">North adjustment <span id="northV"></span></label><input id="north" type="range" min="-100" max="100" step="1" value="0"></div>
+<div class="field"><label for="rotate">Model orientation <span id="rotateV"></span></label><input id="rotate" type="range" min="-180" max="180" step="5" value="0"></div>
+<div class="field"><label for="scale">Model scale <span id="scaleV"></span></label><input id="scale" type="range" min="40" max="160" step="5" value="100"></div>
+<div class="field"><label for="heading">Heading correction <span id="headingV"></span></label><input id="heading" type="range" min="-180" max="180" step="1" value="0"></div>
+<div class="field"><label for="tilt">Tilt correction <span id="tiltV"></span></label><input id="tilt" type="range" min="-60" max="60" step="1" value="0"></div>
+</div>
+<div class="actions" style="margin-top:9px">
+<button id="reset">Use Rollins Reference</button><button id="save">Download Site JSON</button><button id="ghost">Ghost 48%</button>
+</div>
+<div style="margin-top:10px" class="coords" id="site">Site anchor loading...</div>
+<div class="links"><a href="https://www.mcdonogh.org/about/news-photos/news/photo-essays/2024/foxleigh-mansion-memorialized" target="_blank" rel="noopener">Foxleigh marker source</a><a href="https://150.mcdonogh.org/did-you-know/students-enlisted-to-provide-weather-reports/" target="_blank" rel="noopener">Rollins site history</a><a href="https://mapcarta.com/W84969228" target="_blank" rel="noopener">Mapped Rollins Hall</a></div>
+<div class="note" style="margin-top:9px">Historical site area documented; exact original footprint, elevation, building dimensions and orientation unknown. Current building is a generic 25 × 16 × 12 m illustration. Camera and GPS stay in this browser; site adjustments save on this device only. For reliable location-locked 6DoF AR, use native ARKit or a visual-anchor tracking system.</div>
+</div></div>
+<script type="module">
+import * as THREE from 'three';
+const el=(id)=>document.getElementById(id);
+const R={lat:39.39584,lon:-76.77606};
+const earthLat=111132.92, earthLon=(lat)=>111319.49*Math.cos(lat*Math.PI/180);
+const D=(a,b)=>a*Math.PI/180,bnorm=(v)=>((v%360)+360)%360;
+const initial={lat:R.lat-20/earthLat,lon:R.lon,kind:'rollins-south-illustration',east:0,north:0,rotate:0,scale:100,heading:0,tilt:0,ghost:1};
+let state={...initial};
+try{let saved=JSON.parse(localStorage.getItem('mz_foxleigh_site_v1')||'null');if(saved&&Number.isFinite(saved.lat)&&Number.isFinite(saved.lon))state={...state,...saved}}catch(e){}
+const persist=()=>{try{localStorage.setItem('mz_foxleigh_site_v1',JSON.stringify(state))}catch(e){}};
+let field=false,position=null,headingValue=null,betaValue=null,gammaValue=null,videoStream=null;
+let manualYaw=.63,orbitPitch=.44,orbitRadius=56,drag=null,oldPinch=0;
+const renderer=new THREE.WebGLRenderer({canvas:el('render'),antialias:true,alpha:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.setClearColor(0,0);
+const scene=new THREE.Scene();scene.add(new THREE.HemisphereLight('#def5ea','#40535a',2.2));
+const sun=new THREE.DirectionalLight('#fff4d3',2.2);sun.position.set(-20,30,28);scene.add(sun);
+const cam=new THREE.PerspectiveCamera(64,1,.07,1000);
+const model=new THREE.Group();scene.add(model);
+const wall=new THREE.MeshStandardMaterial({color:0xced8c9,roughness:.83,transparent:true,opacity:1,side:THREE.DoubleSide});
+const roof=new THREE.MeshStandardMaterial({color:0x7d9b9a,roughness:.86,transparent:true,opacity:1,side:THREE.DoubleSide});
+const glass=new THREE.MeshStandardMaterial({color:0x274c5a,metalness:.13,roughness:.25,transparent:true,opacity:1});
+const trim=new THREE.MeshStandardMaterial({color:0xe9e1cf,roughness:.93,transparent:true,opacity:1});
+const mats=[wall,roof,glass,trim];
+function cube(w,h,d,x,y,z,mat,group=model){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);group.add(m);return m}
+cube(25,8.5,16,0,4.25,0,wall);
+const roofShape=new THREE.BufferGeometry();
+const v=[-12.9,8.5,-8.5, 12.9,8.5,-8.5, 12.9,12,0,-12.9,12,0, -12.9,8.5,8.5,12.9,8.5,8.5];
+roofShape.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+roofShape.setIndex([0,1,2,0,2,3,3,2,5,3,5,4,0,3,4,0,4,1,1,4,5,1,5,2]);roofShape.computeVertexNormals();model.add(new THREE.Mesh(roofShape,roof));
+cube(7.5,4.4,2.8,0,2.2,9.15,wall);cube(9,.19,3.1,0,4.65,9.15,trim);
+for(const x of [-10,-5,0,5,10]){for(const y of [2.8,6.2]){cube(1.65,1.6,.075,x,y,8.055,glass);cube(1.65,1.6,.075,x,y,-8.055,glass);cube(.08,1.65,.09,x,y,8.13,trim);cube(1.7,.08,.09,x,y,8.13,trim)}}
+cube(2.2,3.3,.08,0,1.65,10.59,glass);
+const grid=new THREE.GridHelper(140,28,0x54786f,0x355057);grid.material.transparent=true;grid.material.opacity=.42;scene.add(grid);
+const footprint=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-12.5,.08,-8),new THREE.Vector3(12.5,.08,-8),new THREE.Vector3(12.5,.08,8),new THREE.Vector3(-12.5,.08,8)]),new THREE.LineBasicMaterial({color:0xe6c388}));model.add(footprint);
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();draw()}
+addEventListener('resize',resize);resize();
+function controls(){for(let key of ['east','north','rotate','scale','heading','tilt']){el(key).value=state[key];el(key+'V').textContent=state[key]+(key==='scale'?'%':key==='east'||key==='north'?' m':'°');}}
+function anchor(){return {lat:state.lat+state.north/earthLat,lon:state.lon+state.east/earthLon(state.lat)}}
+function apply(){const a=anchor();model.rotation.y=D(state.rotate);model.scale.setScalar(state.scale/100);mats.forEach(m=>{m.opacity=state.ghost;m.depthWrite=state.ghost>=.99});if(position&&field){const east=(a.lon-position.lon)*earthLon(position.lat);const north=(a.lat-position.lat)*earthLat;model.position.set(east,0,-north);el('distance').textContent='Site: '+Math.round(Math.hypot(east,north))+' m away';}else{model.position.set(0,0,0)}el('site').textContent='Provisional anchor: '+a.lat.toFixed(7)+', '+a.lon.toFixed(7)+' | reference: '+state.kind+' | geometry: assumed 25×16×12 m';grid.visible=!field;controls();draw()}
+function draw(){if(field){const h=bnorm((headingValue??0)+state.heading);cam.position.set(0,1.65,0);cam.rotation.order='YXZ';cam.rotation.y=D(h);cam.rotation.x=D(Math.max(-80,Math.min(80,(betaValue===null?0:90-betaValue)+state.tilt)));cam.rotation.z=D(gammaValue===null?0:-gammaValue*.3);cam.fov=63;el('bearing').textContent=headingValue===null?'No compass: use heading adjustment':'Heading '+Math.round(bnorm(h))+'° (approx)';}else{cam.position.set(orbitRadius*Math.sin(manualYaw)*Math.cos(orbitPitch),6+orbitRadius*Math.sin(orbitPitch),orbitRadius*Math.cos(manualYaw)*Math.cos(orbitPitch));cam.lookAt(0,5,0);cam.fov=52;}cam.updateProjectionMatrix();renderer.render(scene,cam)}
+function tick(){if(field)draw();requestAnimationFrame(tick)}tick();
+function show(msg){el('status').textContent=msg}
+function setMode(b){field=b;el('orbit').classList.toggle('on',!b);el('field').classList.toggle('on',b);el('hint').textContent=b?'Move gently · GPS and heading approximate':'Drag to orbit · pinch to zoom';if(!b&&videoStream){videoStream.getTracks().forEach(t=>t.stop());videoStream=null;el('camera').style.display='none'}apply()}
+el('orbit').onclick=()=>{setMode(false);show('3D preview');};
+el('expand').onclick=()=>{el('details').classList.toggle('open');el('expand').textContent=el('details').classList.contains('open')?'Adjust ▾':'Adjust ▴'};
+for(let key of ['east','north','rotate','scale','heading','tilt']){el(key).oninput=(e)=>{state[key]=+e.target.value;persist();apply()}}
+el('reset').onclick=()=>{Object.assign(state,initial);persist();apply();show('Rollins reference restored')};
+el('ghost').onclick=()=>{state.ghost=state.ghost===1?.48:1;el('ghost').textContent=state.ghost===1?'Ghost 48%':'Solid model';persist();apply()};
+el('setHere').onclick=()=>{if(!position){show('GPS fix not ready');return}state.lat=position.lat;state.lon=position.lon;state.east=0;state.north=0;state.kind='visitor-placed / GPS ±'+Math.round(position.accuracy)+' m';persist();apply();show('Site anchor saved on this phone — walk back to view')};
+el('save').onclick=()=>{const a=anchor();const data={type:'Feature',geometry:{type:'Point',coordinates:[a.lon,a.lat]},properties:{name:'Foxleigh Mansion preliminary site',confidence:'PROVISIONAL — NOT HISTORICALLY SURVEYED',anchor_kind:state.kind,estimated_building_dimensions_m:[25,16,12],orientation_deg_unverified:state.rotate,source:'McDonogh / 2024 Foxleigh marker; OSM Lillian Rollins Hall reference'}};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/geo+json'});const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download='foxleigh-provisional-site.geojson';link.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+function geoStart(){if(!navigator.geolocation){show('GPS unavailable');return}navigator.geolocation.watchPosition(p=>{position={lat:p.coords.latitude,lon:p.coords.longitude,accuracy:p.coords.accuracy};el('gps').textContent='GPS ±'+Math.round(position.accuracy)+' m (live)';el('setHere').disabled=false;apply()},e=>{el('gps').textContent='GPS unavailable: '+e.message},{enableHighAccuracy:true,maximumAge:1000,timeout:18000})}
+function orientation(e){if(Number.isFinite(e.webkitCompassHeading))headingValue=e.webkitCompassHeading;else if(e.absolute&&Number.isFinite(e.alpha))headingValue=360-e.alpha;else if(Number.isFinite(e.alpha))headingValue=360-e.alpha;if(Number.isFinite(e.beta))betaValue=e.beta;if(Number.isFinite(e.gamma))gammaValue=e.gamma}
+async function startField(){setMode(true);show('Requesting camera / GPS / motion');try{if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')show('Motion permission denied — heading manual')}addEventListener('deviceorientation',orientation,true)}catch(e){show('Motion permission unavailable: '+e.message)}geoStart();try{videoStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});el('camera').srcObject=videoStream;el('camera').style.display='block';await el('camera').play();show('Camera live · field overlay')}catch(e){show('Camera unavailable: '+e.message)}apply()}
+el('field').onclick=startField;
+const canvas=el('render');canvas.addEventListener('pointerdown',e=>{if(field)return;drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointermove',e=>{if(!drag||field)return;manualYaw-=(e.clientX-drag[0])*.008;orbitPitch=Math.max(-.12,Math.min(1.35,orbitPitch+(e.clientY-drag[1])*.006));drag=[e.clientX,e.clientY];draw()});
+canvas.addEventListener('pointerup',()=>drag=null);canvas.addEventListener('pointercancel',()=>drag=null);
+canvas.addEventListener('wheel',e=>{if(field)return;e.preventDefault();orbitRadius=Math.max(22,Math.min(135,orbitRadius*(e.deltaY>0?1.07:.93)));draw()},{passive:false});
+canvas.addEventListener('touchstart',e=>{if(e.touches.length===2)oldPinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)},{passive:true});
+canvas.addEventListener('touchmove',e=>{if(field||e.touches.length!==2)return;const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(oldPinch)orbitRadius=Math.max(22,Math.min(135,orbitRadius*oldPinch/d));oldPinch=d;draw()},{passive:true});
+controls();apply();
+</script></body></html>
