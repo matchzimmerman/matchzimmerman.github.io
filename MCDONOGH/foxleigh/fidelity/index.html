@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FOXLEIGH / Architectural Fidelity Study 001 — MZ WORLDS</title>
+<meta name="description" content="Interactive, evidence-led architectural study of the lost Foxleigh Mansion. Work in progress, not a verified reconstruction.">
+<style>
+:root{--bg:#081318;--panel:#10232a;--line:#34545a;--gold:#e4c68e;--mint:#aad8cc;--text:#e5ece8;--muted:#a4b7b3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.52 system-ui,-apple-system,sans-serif}a{color:#a6dfd1}
+header{padding:17px clamp(14px,3vw,36px);border-bottom:1px solid var(--line);display:flex;gap:18px;justify-content:space-between;align-items:center}
+.k{color:var(--gold);font-size:10px;letter-spacing:.18em;font-weight:750}h1{font:normal clamp(28px,4vw,42px)/1.1 Georgia,serif;margin:4px 0}header p{margin:2px 0;color:var(--muted);font-size:12px}.badge{border:1px solid #968057;color:var(--gold);padding:7px 10px;border-radius:25px;white-space:nowrap;font-size:10px}
+main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(340px,.75fr);height:calc(100dvh - 119px);min-height:540px}
+#stage{position:relative;background:radial-gradient(circle at 55% 30%,#2b3737,#0b1920 66%);min-height:460px;overflow:hidden}
+#render{width:100%;height:100%;display:block;touch-action:none}
+.hud{position:absolute;top:17px;left:17px;right:17px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}.chip{padding:6px 9px;background:#0b1920dd;border:1px solid #4a6266;border-radius:4px;font-size:11px}
+.bottom{position:absolute;bottom:15px;left:15px;right:15px;background:#0b1b21d9;border:1px solid #42616a;padding:10px 12px;border-radius:6px;font-size:11px;color:#c8d3cd;max-width:730px}
+aside{border-left:1px solid var(--line);overflow-y:auto;background:var(--panel);padding:16px 18px 35px}
+h2{font:normal 25px Georgia,serif;margin:5px 0 8px}h3{font:normal 18px Georgia,serif;margin:0 0 7px}.tiny{font-size:11px;color:var(--muted)}.note{padding:10px 12px;border-left:2px solid var(--gold);background:#292b25;color:#e5d4b2;font-size:11px;margin:10px 0}
+button{cursor:pointer;border:1px solid #597275;background:#19343b;color:var(--text);border-radius:4px;padding:8px 11px;font:600 12px system-ui;min-height:36px}button:hover,button.active{background:#d4e4d9;color:#081a1b}
+.bar{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0}.card{border:1px solid var(--line);border-radius:5px;padding:12px;margin:12px 0;background:#0a1c22}
+.photo{position:relative;min-height:170px;background:#0c191d;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.photo img{width:100%;height:230px;object-fit:contain;filter:grayscale(1)}
+.caption{color:var(--muted);font-size:11px;margin-top:6px}
+dl{display:grid;grid-template-columns:40% 1fr;gap:7px 9px;margin:8px 0;font-size:11px}dt{color:#b5ccc5}dd{margin:0;color:#e7e7da}
+#selection{font-size:12px;color:#d2ebe2;min-height:40px}
+label{display:block;color:#b8d0c6;font-size:11px;margin:10px 0 4px}input[type=range]{width:100%;accent-color:#cddfcf}
+footer{display:flex;gap:11px;flex-wrap:wrap;margin:12px 0 0;font-size:11px}
+@media(max-width:850px){header{padding:14px}.badge{font-size:9px}main{display:flex;flex-direction:column;height:auto}#stage{height:52dvh;min-height:360px}aside{border-left:0;border-top:1px solid var(--line)}.hud{top:10px;left:10px}.bottom{font-size:10px;bottom:8px;left:8px;right:8px;padding:7px 9px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"}}</script>
+</head><body>
+<header><div><div class="k">MZ WORLDS / MCDONOGH / ARCHITECTURAL FIDELITY STUDY 001</div><h1>Foxleigh Mansion</h1><p>An evidence-led digital reconstruction laboratory · reconstructed form is provisional</p></div><span class="badge">RESEARCH MODEL — NOT VERIFIED</span></header>
+<main><section id="stage"><canvas id="render" aria-label="Interactive three-dimensional preliminary Foxleigh Mansion reconstruction"></canvas>
+<div class="hud"><span class="chip">ARCHITECTURAL COMPONENTS</span><span class="chip" id="viewState">Orbit study</span><span class="chip">Dimensions not surveyed</span></div>
+<div class="bottom">Drag to orbit · scroll/pinch to zoom · Select a building section to examine. Brick main block, east frame addition and Trustees' Extension are documented; their exact proportions and architectural details are not yet established.</div>
+</section>
+<aside>
+<div class="k">PROTOTYPE / FOR ARCHIVAL REVIEW</div><h2>From evidence to geometry</h2>
+<p class="tiny">A more detailed working study than the earlier anonymous mansion placeholder. It explores reusable window assemblies, recessed glazing, sills, lintels, brick courses, porch elements and differentiated building phases.</p>
+<div class="bar"><button class="active" data-view="all">Whole building</button><button data-view="core">Brick mansion</button><button data-view="east">East addition</button><button data-view="detail">Window detail</button></div>
+<div class="bar"><button id="materials" class="active">Material study</button><button id="wireframe">Inspect geometry</button><button id="download">Export GLB</button><button id="snapshot">Save image</button></div>
+<div class="card"><div class="k">EVIDENCE / ARCHITECTURAL SEQUENCE</div>
+<dl><dt>Original mansion</dt><dd>Brick, three stories + attic and full basement, circa 1850 <b>[documented]</b></dd>
+<dt>Eastern addition</dt><dd>Frame construction, classrooms and dormitory <b>[documented]</b></dd>
+<dt>Trustees' Extension</dt><dd>Added from July 1873; dining room below, classrooms above <b>[documented]</b></dd>
+<dt>Rear service wing</dt><dd>L-shaped service addition including washroom, bakery and kitchen <b>[documented as use/layout]</b></dd>
+<dt>Model geometry</dt><dd>Dimensions, exact fenestration, sills, roof form and colors <b>[provisional]</b></dd></dl>
+<div id="selection">Selected: whole building. Choose Brick mansion, East addition or Window detail to inspect the component strategy.</div>
+</div>
+<div class="card"><div class="k">SOURCE IMAGE / ARCHIVE</div><h3 id="sourceTitle">Foxleigh Mansion photograph</h3>
+<div class="photo"><img id="sourceImg" alt="Archival Foxleigh source photograph" referrerpolicy="no-referrer"><span class="tiny" id="imageFallback">If the school server blocks this preview, use Open source image below.</span></div>
+<div class="bar"><button class="active" data-source="mansion">Mansion</button><button data-source="estate">Estate</button><button data-source="plan">1873 floor plan</button></div>
+<p class="caption">Photographs and retrospective plan are from McDonogh's 150 Stories collection. Third-party image previews are never used as uncredited project assets. The plan was reconstructed by alumni, not drawn as a contemporary survey.</p>
+<a id="sourceLink" target="_blank" rel="noopener noreferrer" href="https://150.mcdonogh.org/not-forgotten/foxleigh-estate-becomes-mcdonogh-school/">Open historical source at McDonogh</a>
+</div>
+<div class="card"><div class="k">PROCEDURAL DETAIL / EXPERIMENT</div>
+<label for="pane">Illustrative panes per sash (not yet confirmed): <strong id="paneVal">6</strong></label><input type="range" id="pane" min="2" max="12" step="2" value="6">
+<label for="recess">Illustrative recess depth: <strong id="recessVal">0.18 m</strong></label><input type="range" id="recess" min="0.04" max="0.36" step="0.02" value="0.18">
+<p class="tiny">These controls intentionally demonstrate reconstruction parameters, not historical measurements. A single window component is repeated in the brick core; after archival verification we can replace guessed parameters without rebuilding the façade.</p></div>
+<div class="note">Historical accuracy status: this is a parameterized <b>research hypothesis</b>, not a calibrated photogrammetric model. No image-based measurements have yet been performed, and the location/alignment remains unverified. It is designed to make uncertainty visible during your meeting, not conceal it.</div>
+<footer><a href="../images/">Source image index</a><a href="../align/">Site alignment lab</a><a href="../ar/">Existing iPhone AR study</a><a href="https://150.mcdonogh.org/not-forgotten/foxleigh-estate-becomes-mcdonogh-school/" target="_blank" rel="noopener">McDonogh history</a></footer>
+</aside></main>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+const $=s=>document.querySelector(s), canvas=$('#render');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();scene.background=new THREE.Color('#18262b');
+scene.fog=new THREE.Fog('#18262b',90,190);
+const cam=new THREE.PerspectiveCamera(43,1,.1,340);cam.position.set(43,24,53);
+const controls=new OrbitControls(cam,canvas);controls.enableDamping=true;controls.dampingFactor=.07;controls.target.set(8,6,0);controls.maxPolarAngle=Math.PI*.50;controls.minDistance=6;controls.maxDistance=130;
+scene.add(new THREE.HemisphereLight('#edf7ff','#5b5041',2.4));
+const sun=new THREE.DirectionalLight('#fff1d9',3.2);sun.position.set(-27,40,26);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-70;sun.shadow.camera.right=70;sun.shadow.camera.top=70;sun.shadow.camera.bottom=-70;scene.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(300,300),new THREE.MeshStandardMaterial({color:0x515b51,roughness:1}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;ground.position.y=-.12;scene.add(ground);
+const historyRoot=new THREE.Group();scene.add(historyRoot);
+const core=new THREE.Group(),east=new THREE.Group(),trustees=new THREE.Group(),service=new THREE.Group(),details=new THREE.Group();
+historyRoot.add(core,east,trustees,service,details);
+function material(color,roughness=.86){return new THREE.MeshStandardMaterial({color,roughness})}
+const ivory=material('#d9cbb1'),stone=material('#baa78e'),timber=material('#c8b89d'),glass=material('#364955',.22),shade=material('#232b30'),slate=material('#454d55'),wood=material('#ae9a7e'),dark=material('#51483f'),metal=material('#615c53');
+let rng=7283;function rnd(){rng=(1664525*rng+1013904223)>>>0;return rng/4294967296}
+function brickTexture(){const c=document.createElement('canvas');c.width=512;c.height=512;const g=c.getContext('2d');g.fillStyle='#b5a69a';g.fillRect(0,0,512,512);const rows=24,hh=512/rows,ww=48;for(let row=0;row<rows;row++){const shift=(row%2)*ww/2;for(let x=-ww;x<560;x+=ww){const hue=Math.round(88+rnd()*43);g.fillStyle='rgb('+hue+','+Math.round(hue*.63)+','+Math.round(hue*.54)+')';g.fillRect(Math.round(x+shift+1),Math.round(row*hh+1),ww-2,hh-2);g.fillStyle='rgba(10,4,3,.08)';g.fillRect(Math.round(x+shift+1),Math.round(row*hh+hh-5),ww-2,2)}}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;return t}
+const brick= new THREE.MeshStandardMaterial({map:brickTexture(),roughness:1,color:0xffffff});const concrete=material('#9a8e7e');const siding=material('#a99d88');
+function box(g,w,h,d,x,y,z,mat){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;g.add(m);return m}
+function roofHip(g,x,w,z,d,y,rise,mat){const e=w/2,f=d/2,s=Math.min(w,d)*.28;const vs=[x-e,y,z-f,x+e,y,z-f,x+e,y,z+f,x-e,y,z+f,x-e+s,y+rise,z,x+e-s,y+rise,z];
+const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vs,3));geo.setIndex([0,1,5,0,5,4,3,4,5,3,5,2,0,4,3,1,2,5]);geo.computeVertexNormals();const m=new THREE.Mesh(geo,mat);m.material.side=THREE.DoubleSide;m.castShadow=true;g.add(m);return m}
+function roofGable(g,x,w,z,d,y,rise,mat){const e=w/2,f=d/2;const v=[x-e,y,z-f,x+e,y,z-f,x-e,y,z+f,x+e,y,z+f,x-e,y+rise,z,x+e,y+rise,z];const geom=new THREE.BufferGeometry();geom.setAttribute('position',new THREE.Float32BufferAttribute(v,3));geom.setIndex([0,1,5,0,5,4,2,4,5,2,5,3,0,4,2,1,3,5]);geom.computeVertexNormals();const m=new THREE.Mesh(geom,mat);m.material.side=THREE.DoubleSide;m.castShadow=true;g.add(m);return m}
+function cyl(g,r,h,x,y,z,mat){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,10),mat);m.position.set(x,y,z);m.castShadow=true;g.add(m);return m}
+function panelWall(group,x,w,y,h,zFront,wallDepth,openingXs,openW,openH,centerY,mat){const bottom=centerY-openH/2,top=centerY+openH/2;if(bottom>y)box(group,w,bottom-y,wallDepth,x,(y+bottom)/2,zFront-wallDepth/2,mat);if(y+h>top)box(group,w,y+h-top,wallDepth,x,(top+y+h)/2,zFront-wallDepth/2,mat);const xs=openingXs.map(px=>[px-openW/2,px+openW/2]);let left=x-w/2;for(const [a,b] of xs){if(a>left)box(group,a-left,openH,wallDepth,(a+left)/2,centerY,zFront-wallDepth/2,mat);left=b}if(left<x+w/2)box(group,x+w/2-left,openH,wallDepth,(x+w/2+left)/2,centerY,zFront-wallDepth/2,mat)}
+function sashAssembly(w,h,paneRows=3,columns=2){const group=new THREE.Group();box(group,w,h,.025,0,0,-.035,shade);box(group,w-.14,h-.14,.03,0,0,0,glass);
+const thick=.085;for(const xx of [-w/2+thick/2,w/2-thick/2])box(group,thick,h,.11,xx,0,.045,ivory);
+for(const yy of [-h/2+thick/2,h/2-thick/2,0])box(group,w,thick,.11,0,yy,.045,ivory);
+for(let c=1;c<columns;c++)box(group,.045,h-.16,.055,-w/2+w*c/columns,0,.05,ivory);
+for(let p=1;p<paneRows*2;p++){const yy=-h/2+h*p/(paneRows*2);box(group,w-.16,.04,.045,0,yy,.06,ivory)}
+box(group,w+.33,.13,.45,0,-h/2-.09,.17,stone);
+box(group,w+.30,.16,.28,0,h/2+.12,.16,stone);
+box(group,w+.09,.11,.09,0,-h/2+.1,.06,ivory);
+return group}
+function facade(group,x,w,h,z,levels,winPositions,winW,winH,isBrick,roofY){const f=0.43,lh=h/levels,opening=winPositions.map(p=>x+p);for(let i=0;i<levels;i++){const y=i*lh,cy=y+lh*.52;panelWall(group,x,w,y,lh,z,f,opening,winW,winH,cy,isBrick?brick:siding)}
+box(group,w,.19,1.15,x,.17,z-.40,stone);
+box(group,w,.17,.7,x,h-.10,z-.28,ivory);
+return {levelHeight:lh,zFront:z,opening:opening.map((px)=>px),winW,winH}}
+function addWindows(group,facadeInfo,levels,rows=3,columns=2,door=true,recess=.18){const {levelHeight,zFront,opening,winW,winH}=facadeInfo;const master=sashAssembly(winW-.04,winH-.04,rows,columns);for(let i=0;i<levels;i++){for(let j=0;j<opening.length;j++){const xx=opening[j],cy=i*levelHeight+levelHeight*.52;const isDoor=door&&i===0&&j===Math.floor(opening.length/2);if(isDoor){box(group,winW-.1,winH-.06,.06,xx,cy,zFront-recess,wood);box(group,.08,winH,.13,xx,cy,zFront-recess+.08,ivory);box(group,winW,.09,.12,xx,cy+winH*.5,zFront-recess+.1,ivory);const knob=new THREE.Mesh(new THREE.SphereGeometry(.045,10,8),metal);knob.position.set(xx+.38,cy-.18,zFront-recess+.09);group.add(knob)}else{const instance=master.clone(true);instance.position.set(xx,cy,zFront-recess);group.add(instance)}}}}
+function clapboard(group,x,w,h,d,y=0){for(let p=.3;p<h;p+=.29){box(group,w,.043,.09,x,y+p,d+.05,stone)}}
+function rebuild(paneCount=6,recess=.18){core.clear();east.clear();trustees.clear();service.clear();details.clear();
+const width=18,depth=10.6,z=5.30,he=10.35;
+box(core,width,.45,depth,0,.10,0,concrete);
+const front=facade(core,0,width,he,z,3,[-6.65,-3.30,0,3.30,6.65],1.54,2.18,true);
+addWindows(core,front,3,paneCount/2,2,true,recess);
+box(core,width,he,.43,0,he/2,-z+.21,brick);
+box(core,.43,he,depth,-width/2+.21,he/2,0,brick);box(core,.43,he,depth,width/2-.21,he/2,0,brick);
+for(let i=0;i<4;i++){const x=-7.5+i*4.5;for(let fl=0;fl<3;fl++){const g=sashAssembly(1.45,2.16,paneCount/2,2);g.rotation.y=Math.PI;g.position.set(x,1.65+fl*3.12,-z+.18);core.add(g)}}
+box(core,width+.3,.27,depth+.3,0,he-.13,0,stone);
+roofHip(core,0,18.7,0,11.25,he,3.25,slate);
+box(core,1.15,3.5,1.0,-6.7,13.9,-1.8,brick);box(core,1.35,.18,1.2,-6.7,15.65,-1.8,stone);
+box(core,1.0,2.9,1.0,6.9,13.5,-1.8,brick);box(core,1.2,.17,1.2,6.9,15.01,-1.8,stone);
+// Front portico, bay projections and cornice: visually suggested, exact forms not validated.
+box(details,5.6,.25,2.45,0,3.18,6.22,stone);
+for(const x of [-2.38,2.38]){cyl(details,.16,3.05,x,1.67,6.15,ivory);box(details,.48,.15,.44,x,3.18,6.15,stone);box(details,.55,.17,.55,x,.22,6.15,stone)}
+box(details,5.8,.24,2.50,0,3.42,6.22,slate);
+for(const x of [-7.32,7.32]){box(details,2.35,2.45,1.05,x,1.70,5.64,brick);const bay=sashAssembly(1.76,1.88,paneCount/2,2);bay.position.set(x,1.79,6.20-recess);details.add(bay)}
+// Documented east frame addition; actual massing and opening pattern remains to be determined.
+const ef=facade(east,14.4,10,6.80,3.65,2,[-3.1,0,3.1],1.42,2.03,false);
+addWindows(east,ef,2,paneCount/2,2,false,recess);
+box(east,10,6.8,.35,14.4,3.4,-3.7,siding);
+box(east,.35,6.8,7.6,9.58,3.4,0,siding);box(east,.35,6.8,7.6,19.22,3.4,0,siding);
+clapboard(east,14.4,10,6.8,3.65);roofGable(east,14.4,10,0,8.5,6.8,2.0,slate);
+// Trustees' Extension: documented to east in 1873; speculative dimensions and cladding.
+const tf=facade(trustees,24.65,10.5,6.20,3.6,2,[-3.0,0,3.0],1.40,1.97,false);
+addWindows(trustees,tf,2,paneCount/2,2,false,recess);
+box(trustees,10.5,6.2,.35,24.65,3.1,-3.5,siding);box(trustees,.35,6.2,7.35,29.73,3.1,0,siding);
+clapboard(trustees,24.65,10.5,6.2,3.6);roofGable(trustees,24.65,10.5,0,8.4,6.2,1.45,slate);
+// The historically documented rear L-shaped service complex: reduced conceptual masses.
+box(service,5.8,4.2,9.3,26.7,2.15,-8.6,siding);roofHip(service,26.7,6.3,-8.6,9.6,4.25,1.12,slate);
+box(service,5.3,3.15,5.4,21.2,1.63,-11.0,stone);roofHip(service,21.2,5.4,-11.0,5.7,3.17,.9,slate);
+historyRoot.userData.modelStatus='Research hypothesis; architectural organization from McDonogh 150 Stories #38. Dimensions and details unverified.';
+}
+let pane=6,recess=.18;rebuild(pane,recess);
+function moveView(k){const targets={all:[[43,24,53],[8,6,0]],core:[[19,13,26],[0,6,0]],east:[[27,12,26],[18,4,0]],detail:[[3.6,5.4,10],[3.3,5.05,5.2]]};const c=targets[k];cam.position.set(...c[0]);controls.target.set(...c[1]);controls.update();$('#viewState').textContent=k==='detail'?'Window study':k==='core'?'Brick mansion':k==='east'?'1873 additions':'Orbit study';$('#selection').textContent=({all:'Selected: all phases. The original brick core and extensions are differentiated but not yet photogrammetrically aligned.',core:'Selected: brick mansion. Three stories and brick construction are documented; displayed windows and exact sizes are illustrative.',east:'Selected: additions. Eastward frame construction and 1873 Trustees’ Extension are documented; the illustrated forms and spacing are provisional.',detail:'Selected: reusable window assembly. Recess, pane count, sill and trim are adjustable parameters, NOT verified Foxleigh measurements.'})[k]}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-view]').forEach(x=>x.classList.remove('active'));b.classList.add('active');moveView(b.dataset.view)});
+const sources={mansion:['Foxleigh Mansion photograph','https://150.mcdonogh.org/wp-content/uploads/2023/09/Foxleigh-Mansion.jpg'],estate:['Foxleigh Estate photograph','https://150.mcdonogh.org/wp-content/uploads/2023/09/Foxleigh-Estate.jpg'],plan:['Retrospective 1873 first-floor plan','https://150.mcdonogh.org/wp-content/uploads/2023/09/Foxleigh-1873-first-floor-plan-1.jpeg']};
+function source(which){const [title,url]=sources[which];$('#sourceTitle').textContent=title;const img=$('#sourceImg');$('#imageFallback').textContent='Loading original source preview…';img.onerror=()=>{$('#imageFallback').textContent='Image preview blocked. Use Open historical source at McDonogh below.';img.style.display='none'};img.onload=()=>{$('#imageFallback').textContent='School-hosted archival image · linked for research only';img.style.display='block'};img.src='https://i0.wp.com/'+url.slice(8)+'?w=1000';$('#sourceLink').href=url;document.querySelectorAll('[data-source]').forEach(b=>b.classList.toggle('active',b.dataset.source===which))}
+document.querySelectorAll('[data-source]').forEach(b=>b.onclick=()=>source(b.dataset.source));source('mansion');
+$('#pane').oninput=e=>{pane=+e.target.value;$('#paneVal').textContent=pane;rebuild(pane,recess)};
+$('#recess').oninput=e=>{recess=+e.target.value;$('#recessVal').textContent=recess.toFixed(2)+' m';rebuild(pane,recess)};
+$('#wireframe').onclick=()=>{const active=$('#wireframe').classList.toggle('active');historyRoot.traverse(o=>{if(o.isMesh){o.userData.originalMaterial=o.userData.originalMaterial||o.material;if(active){o.material=o.material.clone();o.material.wireframe=true}else{o.material.dispose();o.material=o.userData.originalMaterial}}});$('#wireframe').textContent=active?'Solid geometry':'Inspect geometry'};
+$('#materials').onclick=()=>{const enabled=$('#materials').classList.toggle('active');historyRoot.traverse(o=>{if(o.isMesh){if(!o.userData.originalMaterial)o.userData.originalMaterial=o.material; if(!$('#wireframe').classList.contains('active'))o.material=enabled?o.userData.originalMaterial:stone}});$('#materials').textContent=enabled?'Material study':'Neutral material'};
+$('#snapshot').onclick=()=>{const a=document.createElement('a');a.download='Foxleigh_Architectural_Fidelity_Study_001.png';a.href=renderer.domElement.toDataURL('image/png');a.click()};
+$('#download').onclick=async()=>{const b=$('#download');b.disabled=true;b.textContent='Exporting…';try{const glb=await new GLTFExporter().parseAsync(historyRoot,{binary:true,onlyVisible:true});const url=URL.createObjectURL(new Blob([glb],{type:'model/gltf-binary'}));const a=document.createElement('a');a.href=url;a.download='foxleigh_architecture_provisional_001.glb';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}catch(e){alert('GLB export did not complete: '+e.message)}finally{b.disabled=false;b.textContent='Export GLB'}};
+function resize(){const d=canvas.parentElement.getBoundingClientRect();renderer.setSize(d.width,d.height,false);cam.aspect=d.width/d.height;cam.updateProjectionMatrix()}
+window.addEventListener('resize',resize);new ResizeObserver(resize).observe(canvas.parentElement);resize();
+function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,cam)}animate();
+</script></body></html>
