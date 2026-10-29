@@ -22,7 +22,7 @@ header{position:fixed;top:0;left:0;right:0;height:75px;z-index:30;background:#0b
 @media(max-width:600px){header{height:67px;padding:0 10px}.title{font-size:23px}#map,#g3d{top:67px}#panel{left:7px;bottom:7px;max-width:calc(100vw - 14px);width:100%;max-height:47vh}#mapTip{top:78px;left:10px;right:auto}.sub{font-size:9px}.header-actions button{padding:8px;font-size:11px}}
 </style></head>
 <body>
-<header><div><div class="eyebrow">MZ WORLDS / MCDONOGH / RESEARCH 001</div><div class="title">Foxleigh Alignment Lab</div><div class="sub">SITE HYPOTHESIS · NOT A SURVEYED HISTORICAL FOOTPRINT</div></div><div class="header-actions"><button id="mapMode" class="active">Satellite</button><button id="threeMode">Google 3D</button></div></header>
+<header><div><div class="eyebrow">MZ WORLDS / MCDONOGH / RESEARCH 001</div><div class="title">Foxleigh Alignment Lab</div><div class="sub">SITE HYPOTHESIS · NOT A SURVEYED HISTORICAL FOOTPRINT</div></div><div class="header-actions"><button id="mapMode" class="active">Satellite</button><button id="preview3d" onclick="location.href='../'">3D Preview</button><button id="threeMode">Google 3D (key)</button></div></header>
 <div id="map"></div><div id="g3d"><div id="g3dMap"></div><div id="threeStatus"></div></div>
 <div id="mapTip">Gold footprint = assumed 25 × 16 m. <b>Drag the gold center marker</b> or tap <b>Place</b> to set the center.</div>
 <aside id="panel">
@@ -50,7 +50,7 @@ header{position:fixed;top:0;left:0;right:0;height:75px;z-index:30;background:#0b
 </div>
 <div class="small">Google coverage and 3D ground model may vary at McDonogh. No Google key is bundled. The free satellite base uses Esri imagery; user positioning uses your browser GPS.</div>
 <div class="divider"></div>
-<div class="small">Sources: <a target="_blank" rel="noopener" href="https://www.mcdonogh.org/about/news-photos/news/photo-essays/2024/foxleigh-mansion-memorialized">Foxleigh marker</a> · <a target="_blank" rel="noopener" href="https://150.mcdonogh.org/did-you-know/students-enlisted-to-provide-weather-reports/">Old House &amp; Rollins</a> · <a target="_blank" rel="noopener" href="https://developers.google.com/maps/documentation/javascript/3d/models">Google's 3D model API</a> · <a href="../" target="_blank" rel="noopener">Camera AR experiment</a></div>
+<div class="small"><a href="../images/" target="_blank" rel="noopener" style="color:#dcbd7a;font-weight:700">Open Foxleigh historical image index + 1873 floor plan</a></div><div class="small">Sources: <a target="_blank" rel="noopener" href="https://www.mcdonogh.org/about/news-photos/news/photo-essays/2024/foxleigh-mansion-memorialized">Foxleigh marker</a> · <a target="_blank" rel="noopener" href="https://150.mcdonogh.org/did-you-know/students-enlisted-to-provide-weather-reports/">Old House &amp; Rollins</a> · <a target="_blank" rel="noopener" href="https://developers.google.com/maps/documentation/javascript/3d/models">Google's 3D model API</a> · <a href="../" target="_blank" rel="noopener">Camera AR experiment</a></div>
 </div></aside>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -93,7 +93,7 @@ $('export').onclick=()=>{const blob=new Blob([JSON.stringify(geojson(),null,2)],
 $('share').onclick=async()=>{const u=new URL(location.href);for(const k of ['lat','lng','bearing','length','width'])u.searchParams.set(k,String(data[k]));try{await navigator.clipboard.writeText(u.href);say('Alignment link copied to clipboard')}catch(e){prompt('Copy alignment URL',u.href)}};
 $('collapse').onclick=()=>{const closed=$('panel').classList.toggle('closed');$('collapse').textContent=closed?'Expand':'Minimize'};
 $('mapMode').onclick=()=>{$('g3d').classList.remove('open');$('mapMode').classList.add('active');$('threeMode').classList.remove('active');$('mapTip').style.display='block';setTimeout(()=>map.invalidateSize(),50)};
-$('threeMode').onclick=()=>{$('googleConfig').style.display='block';$('panel').classList.remove('closed');$('collapse').textContent='Minimize';say('Enter browser-restricted Google Maps JS API key below, then Load 3D map.')};
+$('threeMode').onclick=()=>{$('googleConfig').style.display='block';$('panel').classList.remove('closed');$('collapse').textContent='Minimize';say('Google 3D requires an API key. Enter it below, then select Load 3D map. For keyless 3D choose 3D Preview in the header.');$('apiKey').scrollIntoView({block:'center',behavior:'smooth'});$('apiKey').focus({preventScroll:true})};
 $('back').onclick=()=>$('mapMode').click();
 async function enableGoogle(){const key=$('apiKey').value.trim();if(!key){say('Google key needed for live 3D, satellite alignment still works');return}
 $('startGoogle').disabled=true;say('Loading Google Maps 3D…');try{if(!window.google?.maps?.importLibrary){await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly&loading=async';script.onload=resolve;script.onerror=()=>reject(new Error('Google API script failed; check browser key restrictions / billing'));document.head.append(script)})}
