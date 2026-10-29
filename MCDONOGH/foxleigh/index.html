@@ -39,11 +39,13 @@ input[type=range]{width:100%;accent-color:#c6dcd5}
 <div id="controls">
 <div class="actions">
 <button id="orbit" class="on">3D Preview</button>
-<button id="field" class="primary">Start Camera + GPS</button>
-<button id="setHere" disabled>Anchor at My Location</button>
+<button id="ar" class="primary">PLACE IN AR (iPHONE)</button>
+<button id="field">GPS Camera (experimental)</button>
+<button id="setHere" disabled>Change Site to My GPS (overwrites map)</button>
 <button id="expand">Adjust ▴</button>
 </div>
 <div id="details">
+<div class="note" style="color:#f0dbaa"><b>Recommended:</b> use PLACE IN AR (iPHONE) for visually tracked manual ground placement. This older GPS Camera mode is only a compass/sensor sketch. It cannot lock the model to the ground, and it hides remote models over 120 metres away.</div>
 <div class="note">Rollins Hall mapped center: 39.39584, −76.77606. Initial display point is an <b>illustrative 20 m south</b> of that coordinate, NOT a surveyed Foxleigh site. Stand near the 2024 Foxleigh marker and tap <b>Anchor at My Location</b> to replace the provisional location. GPS + compass overlay is not ARKit SLAM; expect drift.</div>
 <div class="grid">
 <div class="field"><label for="east">East adjustment <span id="eastV"></span></label><input id="east" type="range" min="-100" max="100" step="1" value="0"></div>
@@ -98,8 +100,8 @@ function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);c
 addEventListener('resize',resize);resize();
 function controls(){for(let key of ['east','north','rotate','scale','heading','tilt']){el(key).value=state[key];el(key+'V').textContent=state[key]+(key==='scale'?'%':key==='east'||key==='north'?' m':'°');}}
 function anchor(){return {lat:state.lat+state.north/earthLat,lon:state.lon+state.east/earthLon(state.lat)}}
-function apply(){const a=anchor();model.rotation.y=D(state.rotate);model.scale.setScalar(state.scale/100);mats.forEach(m=>{m.opacity=state.ghost;m.depthWrite=state.ghost>=.99});if(position&&field){const east=(a.lon-position.lon)*earthLon(position.lat);const north=(a.lat-position.lat)*earthLat;model.position.set(east,0,-north);el('distance').textContent='Site: '+Math.round(Math.hypot(east,north))+' m away';}else{model.position.set(0,0,0)}el('site').textContent='Provisional anchor: '+a.lat.toFixed(7)+', '+a.lon.toFixed(7)+' | reference: '+state.kind+' | geometry: assumed 25×16×12 m';grid.visible=!field;controls();draw()}
-function draw(){if(field){const h=bnorm((headingValue??0)+state.heading);cam.position.set(0,1.65,0);cam.rotation.order='YXZ';cam.rotation.y=D(h);cam.rotation.x=D(Math.max(-80,Math.min(80,(betaValue===null?0:90-betaValue)+state.tilt)));cam.rotation.z=D(gammaValue===null?0:-gammaValue*.3);cam.fov=63;el('bearing').textContent=headingValue===null?'No compass: use heading adjustment':'Heading '+Math.round(bnorm(h))+'° (approx)';}else{cam.position.set(orbitRadius*Math.sin(manualYaw)*Math.cos(orbitPitch),6+orbitRadius*Math.sin(orbitPitch),orbitRadius*Math.cos(manualYaw)*Math.cos(orbitPitch));cam.lookAt(0,5,0);cam.fov=52;}cam.updateProjectionMatrix();renderer.render(scene,cam)}
+function apply(){const a=anchor();model.rotation.y=D(state.rotate);model.scale.setScalar(state.scale/100);mats.forEach(m=>{m.opacity=state.ghost;m.depthWrite=state.ghost>=.99});if(position&&field){const east=(a.lon-position.lon)*earthLon(position.lat);const north=(a.lat-position.lat)*earthLat;const d=Math.hypot(east,north);model.position.set(east,0,-north);model.visible=d<=120;el('distance').textContent='Site: '+Math.round(d)+' m away'+(d>120?' — hidden until closer':' — GPS estimate');if(d>120)el('hint').textContent='Site is far away. Model hidden to prevent a misleading floating overlay.';}else{model.position.set(0,0,0);model.visible=!field}el('site').textContent='Provisional anchor: '+a.lat.toFixed(7)+', '+a.lon.toFixed(7)+' | reference: '+state.kind+' | geometry: assumed 25×16×12 m';grid.visible=!field;controls();draw()}
+function draw(){if(field){const h=bnorm((headingValue??0)+state.heading);cam.position.set(0,1.65,0);cam.rotation.order='YXZ';cam.rotation.y=-D(h);cam.rotation.x=D(Math.max(-80,Math.min(80,(betaValue===null?0:90-betaValue)+state.tilt)));cam.rotation.z=D(gammaValue===null?0:-gammaValue*.3);cam.fov=63;el('bearing').textContent=headingValue===null?'No compass: use heading adjustment':'Heading '+Math.round(bnorm(h))+'° (approx)';}else{cam.position.set(orbitRadius*Math.sin(manualYaw)*Math.cos(orbitPitch),6+orbitRadius*Math.sin(orbitPitch),orbitRadius*Math.cos(manualYaw)*Math.cos(orbitPitch));cam.lookAt(0,5,0);cam.fov=52;}cam.updateProjectionMatrix();renderer.render(scene,cam)}
 function tick(){if(field)draw();requestAnimationFrame(tick)}tick();
 function show(msg){el('status').textContent=msg}
 function setMode(b){field=b;el('orbit').classList.toggle('on',!b);el('field').classList.toggle('on',b);el('hint').textContent=b?'Move gently · GPS and heading approximate':'Drag to orbit · pinch to zoom';if(!b&&videoStream){videoStream.getTracks().forEach(t=>t.stop());videoStream=null;el('camera').style.display='none'}apply()}
@@ -114,6 +116,7 @@ function geoStart(){if(!navigator.geolocation){show('GPS unavailable');return}na
 function orientation(e){if(Number.isFinite(e.webkitCompassHeading))headingValue=e.webkitCompassHeading;else if(e.absolute&&Number.isFinite(e.alpha))headingValue=360-e.alpha;else if(Number.isFinite(e.alpha))headingValue=360-e.alpha;if(Number.isFinite(e.beta))betaValue=e.beta;if(Number.isFinite(e.gamma))gammaValue=e.gamma}
 async function startField(){setMode(true);show('Requesting camera / GPS / motion');try{if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')show('Motion permission denied — heading manual')}addEventListener('deviceorientation',orientation,true)}catch(e){show('Motion permission unavailable: '+e.message)}geoStart();try{videoStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});el('camera').srcObject=videoStream;el('camera').style.display='block';await el('camera').play();show('Camera live · field overlay')}catch(e){show('Camera unavailable: '+e.message)}apply()}
 el('field').onclick=startField;
+el('ar').onclick=()=>{location.href='./ar/'};
 const canvas=el('render');canvas.addEventListener('pointerdown',e=>{if(field)return;drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)});
 canvas.addEventListener('pointermove',e=>{if(!drag||field)return;manualYaw-=(e.clientX-drag[0])*.008;orbitPitch=Math.max(-.12,Math.min(1.35,orbitPitch+(e.clientY-drag[1])*.006));drag=[e.clientX,e.clientY];draw()});
 canvas.addEventListener('pointerup',()=>drag=null);canvas.addEventListener('pointercancel',()=>drag=null);
