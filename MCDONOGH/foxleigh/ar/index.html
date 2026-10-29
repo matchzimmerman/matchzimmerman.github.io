@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07161c">
+<title>FOXL EIGH / Ground-Tracked AR Test — MZ WORLDS</title>
+<meta name="description" content="Foxleigh Mansion provisional 3D site study. Open in iPhone Safari to place a schematic mansion on the ground with Apple's AR Quick Look, without downloading a model file.">
+<style>
+:root{--bg:#07161c;--paper:#e6ede7;--sea:#c5e7db;--muted:#adbdba;--gold:#e3c27f;--line:#425d63}*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--paper);font-family:system-ui,-apple-system,sans-serif}
+main{max-width:1060px;margin:0 auto;padding:20px 16px 36px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:2px 0 13px}
+.kicker{font-size:10px;font-weight:750;letter-spacing:.16em;color:var(--gold)}h1{font:400 clamp(29px,5vw,45px)/1.09 Georgia,serif;margin:17px 0 6px}
+.sub{font-size:13px;color:var(--muted);line-height:1.55;margin:0 0 12px}
+.tag{border:1px solid #816f4b;color:var(--gold);border-radius:99px;padding:6px 9px;font-size:9px;letter-spacing:.07em;white-space:nowrap}
+a{color:var(--sea);text-decoration:none}.back{font-size:11px;line-height:1.5;color:var(--sea)}
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(245px,.85fr);gap:14px}
+.viewer{position:relative;border:1px solid var(--line);background:radial-gradient(ellipse at 50% 20%,#20373a 0%,#0c1d23 68%);min-height:470px;overflow:hidden;border-radius:6px}
+model-viewer{width:100%;height:470px;background:transparent;--poster-color:transparent;touch-action:pan-y}
+.hud{position:absolute;z-index:2;top:12px;left:12px;border:1px solid #44656d;color:#c3d9d5;font:10px/1.6 ui-monospace,Menlo,monospace;padding:7px 9px;background:#0b1b21dd;pointer-events:none}
+.ar-button{position:absolute;z-index:3;left:50%;transform:translateX(-50%);bottom:20px;padding:16px 22px;border:1px solid #d0e5dc;border-radius:5px;background:#d5ece0;color:#0a2324;font:700 14px system-ui;min-width:min(86%,330px);box-shadow:0 10px 30px #0008}
+.ar-button:focus-visible{outline:3px solid #efc26b;outline-offset:3px}
+.panel{border:1px solid var(--line);background:#10252b;border-radius:6px;padding:15px;display:flex;flex-direction:column;gap:13px}
+h2{font:400 23px Georgia,serif;margin:0}.step{border-bottom:1px solid #3a525b;padding-bottom:11px}.step:last-child{border-bottom:0;padding-bottom:0}
+.step b{font-size:13px}.step p{font-size:12px;color:var(--muted);margin:5px 0;line-height:1.56}
+.status{font:12px/1.5 ui-monospace,monospace;color:var(--sea);border:1px solid #4c6b70;background:#0a1b20;padding:9px}
+.warning{margin:14px 0;border-left:3px solid var(--gold);background:#24251e;padding:11px 12px;font-size:12px;line-height:1.6;color:#e2d5b6}
+.links{display:flex;gap:9px;flex-wrap:wrap;margin:10px 0}.links a{border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:11px}
+small{font-size:11px;color:var(--muted);line-height:1.5}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.viewer{min-height:52dvh}model-viewer{height:52dvh;min-height:345px}.panel{gap:8px}.tag{font-size:8px}}
+</style>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js"></script>
+</head>
+<body><main>
+<header><div><div class="kicker">MZ WORLDS / MCDONOGH / FIELD STUDY 002</div><div class="back">FOXL EIGH · GROUNDED AR EXPERIMENT</div></div><div class="tag">UNVERIFIED / PROVISIONAL</div></header>
+<h1>Place Foxleigh on the ground</h1>
+<p class="sub">Use Apple's native AR tracking for a more stable walk-around experience. Unlike our GPS-compass camera overlay, this lets your iPhone recognize a real surface and track the model as you move.</p>
+<div class="layout"><div class="viewer">
+<div class="hud">25 × 16 × 12 m · ILLUSTRATIVE<br>PHOTOS / PLAN NOT YET MODELED<br>MANUAL PLACEMENT — NO GPS ANCHOR</div>
+<model-viewer id="model" src="../align/foxleigh_massing.glb" alt="Illustrative 3D massing model of Foxleigh Mansion, not historically accurate" ar ar-modes="quick-look" ar-placement="floor" ar-scale="auto" camera-controls auto-rotate rotation-per-second="5deg" shadow-intensity="0.9" exposure="1.1" environment-image="neutral" camera-orbit="-35deg 69deg 72m" min-camera-orbit="auto auto 25m" max-camera-orbit="auto auto 150m" field-of-view="35deg" interaction-prompt="auto">
+<button class="ar-button" slot="ar-button" aria-label="Place Foxleigh in AR on iPhone">PLACE IN AR ON iPHONE ↗</button>
+<div slot="progress-bar" style="height:3px;background:#c0d9cd"></div>
+</model-viewer>
+</div>
+<aside class="panel"><h2>iPhone field test</h2>
+<div class="status" id="status">Loading the provisional model…</div>
+<div class="step"><b>1. Open this page in Safari.</b><p>If you're inside the ChatGPT browser, use its menu or Share control to open the page in Safari. No ZIP, USDZ download, or Files app is needed.</p></div>
+<div class="step"><b>2. Tap PLACE IN AR ON iPHONE.</b><p>The viewer automatically creates a USDZ from this GLB and opens Apple's AR Quick Look. In Quick Look, select <b>AR</b> if it starts in Object mode.</p></div>
+<div class="step"><b>3. At Foxleigh's site, scan the ground.</b><p>Stand a safe distance from where you want the mansion, pan the phone slowly to detect a surface, then move/rotate/pinch to align the model manually.</p></div>
+<div class="step"><b>4. Walk around carefully.</b><p>ARKit should hold the object in place better than the browser GPS sketch, but tracking can still fail if the surroundings lack visible features.</p></div>
+</aside></div>
+<div class="warning"><b>Important:</b> This is a model placement test, not historically located GPS AR. The building's dimensions, geometry, façades and rotation remain hypothetical. A mansion-scale model may open very large or initially scaled down: use the AR viewer's gestures and choose an unobstructed outdoor area. Don't look at the screen while walking near obstacles or traffic.</div>
+<div class="links"><a href="../">Older GPS camera experiment</a><a href="../align/">Satellite location editor</a><a href="../images/">Archival image index</a></div>
+<small>Implementation: GLB interchange geometry + model-viewer (iOS Quick Look USDZ generation). The iOS AR content is created at launch, so there is no separate downloadable USDZ file. Compatible iPhone/iOS browser behavior must be tested on device. This AR experience does not read or alter saved Foxleigh map coordinates.</small>
+</main>
+<script>
+const model=document.getElementById('model'),status=document.getElementById('status');
+model.addEventListener('load',()=>{status.textContent='3D model loaded. On iPhone Safari, use PLACE IN AR to launch ground-tracked placement.'});
+model.addEventListener('error',e=>{status.textContent='Model failed to load. Try Safari and refresh; if this persists report the browser and screenshot.';console.error('Foxleigh model error',e)});
+model.addEventListener('ar-status',e=>{status.textContent='AR: '+String(e.detail?.status||'status changed')});
+setTimeout(()=>{if(!customElements.get('model-viewer'))status.textContent='3D viewer library did not load; check network and reload in Safari.'},11000);
+</script>
+</body></html>
