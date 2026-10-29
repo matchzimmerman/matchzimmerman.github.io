@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0a1920">
+<title>FOXLEIGH / SITE ALIGNMENT LAB — MZ WORLDS</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#09181e;--text:#e9eee7;--muted:#a7b7b7;--gold:#e7c783;--green:#90d7c4}
+*{box-sizing:border-box}html,body{height:100%;margin:0;color:var(--text);background:var(--bg);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}button{border:1px solid #4a686c;background:#17343b;color:#e3e8e1;border-radius:5px;padding:10px 12px;cursor:pointer;font-weight:600;min-height:39px}button.primary{background:#d5ebe0;color:#09201f;border-color:#d5ebe0}button.active{background:#214f50;color:#fff}button:disabled{opacity:.5}
+#map{position:fixed;inset:75px 0 0;background:#182b2d}#g3d{position:fixed;inset:75px 0 0;background:#192930;display:none;z-index:2}#g3d.open{display:block}#g3dMap{width:100%;height:100%;display:block}
+header{position:fixed;top:0;left:0;right:0;height:75px;z-index:30;background:#0b1a1fee;border-bottom:1px solid #45636a;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px}
+.eyebrow{color:var(--gold);letter-spacing:.18em;font-size:9px;font-weight:750}.title{font:27px Georgia,serif;margin:1px 0}.sub{font-size:10px;color:#abc0bd}.header-actions{display:flex;gap:6px;align-items:center}
+#panel{position:fixed;z-index:22;bottom:12px;left:12px;width:350px;max-width:calc(100vw - 24px);max-height:min(72vh,620px);overflow:auto;padding:15px;background:#0c1c21f2;border:1px solid #557079;box-shadow:0 20px 50px #0008;border-radius:9px}
+#panel.closed{max-height:65px;overflow:hidden}.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.bar strong{font:20px Georgia,serif}.eyewitness{color:var(--gold);font-size:9px;letter-spacing:.1em}
+.info{font-size:11px;color:var(--muted);margin:8px 0 11px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}.ctrl label{font-size:11px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#ccd9d4;margin-bottom:3px}.ctrl output{color:var(--gold);font-size:10px}input[type=range]{width:100%;accent-color:#9fdbcd}
+.row{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0}input[type=text],input[type=password]{width:100%;background:#0a1116;border:1px solid #49646b;color:#e9eee7;border-radius:5px;padding:10px;font-size:12px}
+.status{background:#102930;border:1px solid #3b5b5e;padding:9px;border-radius:4px;font-size:11px;color:#d1ded9;margin:8px 0}.small{font-size:10px;color:#9bb5b4}a{color:#abdfd5}.divider{border-top:1px solid #39525b;margin:12px 0}
+#coords{font:11px/1.6 ui-monospace,Menlo,monospace;color:#d2d5b7;overflow-wrap:anywhere}
+#panel note{font-size:11px}
+.leaflet-container{font:inherit}.leaflet-tooltip{background:#10232e;color:#ece7cc;border:1px solid #55736e}.leaflet-control-attribution{font-size:10px}
+#mapTip{position:fixed;top:88px;right:12px;z-index:5;background:#0c1c21df;border:1px solid #455c64;border-radius:5px;padding:9px;font-size:11px;max-width:min(290px,90vw)}
+#threeStatus{position:fixed;z-index:4;top:90px;right:12px;background:#0b1a1eee;border:1px solid #4c6c72;color:#d4ece4;padding:9px;max-width:300px;display:none}
+#googleConfig{display:none}.hide{display:none!important}
+@media(max-width:600px){header{height:67px;padding:0 10px}.title{font-size:23px}#map,#g3d{top:67px}#panel{left:7px;bottom:7px;max-width:calc(100vw - 14px);width:100%;max-height:47vh}#mapTip{top:78px;left:10px;right:auto}.sub{font-size:9px}.header-actions button{padding:8px;font-size:11px}}
+</style></head>
+<body>
+<header><div><div class="eyebrow">MZ WORLDS / MCDONOGH / RESEARCH 001</div><div class="title">Foxleigh Alignment Lab</div><div class="sub">SITE HYPOTHESIS · NOT A SURVEYED HISTORICAL FOOTPRINT</div></div><div class="header-actions"><button id="mapMode" class="active">Satellite</button><button id="threeMode">Google 3D</button></div></header>
+<div id="map"></div><div id="g3d"><div id="g3dMap"></div><div id="threeStatus"></div></div>
+<div id="mapTip">Gold footprint = assumed 25 × 16 m. <b>Drag the gold center marker</b> or tap <b>Place</b> to set the center.</div>
+<aside id="panel">
+<div class="bar"><div><div class="eyewitness">GEOREFERENCING / EXPERIMENTAL</div><strong>Placement controls</strong></div><button id="collapse">Minimize</button></div>
+<div id="bodyPanel">
+<div class="status" id="status">Starting satellite map…</div>
+<div id="coords"></div>
+<div class="row"><button id="place" class="primary">Place: tap map</button><button id="locate">My GPS</button><button id="reset">Reset site</button></div>
+<div class="cols">
+<div class="ctrl"><label for="bearing">Long-axis bearing <output id="bearingVal"></output></label><input type="range" id="bearing" min="0" max="180" step="1"></div>
+<div class="ctrl"><label for="length">Length <output id="lengthVal"></output></label><input type="range" id="length" min="8" max="60" step="1"></div>
+<div class="ctrl"><label for="width">Width <output id="widthVal"></output></label><input type="range" id="width" min="6" max="45" step="1"></div>
+<div class="ctrl"><label for="opacity">Footprint fill <output id="opacityVal"></output></label><input type="range" id="opacity" min="10" max="90" step="5"></div>
+</div>
+<p class="info">Bearing is clockwise from <b>true north</b> (0° = N–S, 90° = E–W). Historic bearing and dimensions remain <b>unknown</b>; these are editable illustration values.</p>
+<div class="row"><button id="sendToAR" class="primary">Use in camera viewer</button><button id="export">Export GeoJSON</button></div>
+<div class="row"><button id="share">Copy alignment link</button><button id="loadSaved">Load saved</button></div>
+<div class="divider"></div>
+<div><strong>Google 3D model overlay</strong></div>
+<p class="info">The Google Maps JavaScript 3D library can ground a GLB and rotate it in real geographic space. Requires a Google Maps Platform API key with Maps JavaScript API enabled and billing configured. Restrict the key to this website.</p>
+<div id="googleConfig">
+<label for="apiKey" class="small">Google Maps JavaScript API key (used only in this session)</label>
+<input type="password" id="apiKey" placeholder="Paste your browser-restricted Google API key" autocomplete="off" spellcheck="false">
+<div class="row"><button id="startGoogle" class="primary">Load 3D map</button><button id="back">Back to satellite</button></div>
+</div>
+<div class="small">Google coverage and 3D ground model may vary at McDonogh. No Google key is bundled. The free satellite base uses Esri imagery; user positioning uses your browser GPS.</div>
+<div class="divider"></div>
+<div class="small">Sources: <a target="_blank" rel="noopener" href="https://www.mcdonogh.org/about/news-photos/news/photo-essays/2024/foxleigh-mansion-memorialized">Foxleigh marker</a> · <a target="_blank" rel="noopener" href="https://150.mcdonogh.org/did-you-know/students-enlisted-to-provide-weather-reports/">Old House &amp; Rollins</a> · <a target="_blank" rel="noopener" href="https://developers.google.com/maps/documentation/javascript/3d/models">Google's 3D model API</a> · <a href="../" target="_blank" rel="noopener">Camera AR experiment</a></div>
+</div></aside>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(()=>{'use strict';
+const R={lat:39.39584,lng:-76.77606};
+const M=111132.92,metersLng=lat=>111319.49*Math.cos(lat*Math.PI/180);
+const init={lat:R.lat-20/M,lng:R.lng,bearing:90,length:25,width:16,opacity:35,source:'illustrative point 20 m south of Rollins mapped center',accuracy:null};
+const KEY='mz_foxleigh_alignment_v1',ARKEY='mz_foxleigh_site_v1';
+const $=id=>document.getElementById(id);
+let data={...init},placing=false,googleMap=null,googleModel=null,geoCircle=null,geoDot=null;
+const clamp=(v,low,high)=>Math.max(low,Math.min(high,v));
+const safe=(v,low,high,d)=>Number.isFinite(+v)?clamp(+v,low,high):d;
+try{const q=new URLSearchParams(location.search);const saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&Number.isFinite(saved.lat)&&Number.isFinite(saved.lng))data={...init,...saved};if(q.has('lat')&&q.has('lng')){data={...data,lat:safe(q.get('lat'),-90,90,init.lat),lng:safe(q.get('lng'),-180,180,init.lng),bearing:safe(q.get('bearing'),0,180,90),length:safe(q.get('length'),8,60,25),width:safe(q.get('width'),6,45,16),source:'shared alignment URL (unverified)'}}}catch(e){}
+function say(m){$('status').textContent=m}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+function point(east,north){return [data.lat+north/M,data.lng+east/metersLng(data.lat)]}
+function polygon(){const t=data.bearing*Math.PI/180,ex=Math.sin(t),ny=Math.cos(t),sx=Math.cos(t),sy=-Math.sin(t),out=[];for(const [a,b] of [[-1,-1],[1,-1],[1,1],[-1,1]]){const e=a*data.length*.5*ex+b*data.width*.5*sx,n=a*data.length*.5*ny+b*data.width*.5*sy;out.push(point(e,n))}return out}
+const map=L.map('map',{zoomControl:false,maxZoom:21}).setView([R.lat,R.lng],19);
+L.control.zoom({position:'topright'}).addTo(map);
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community'}).addTo(map);
+const streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'© OpenStreetMap contributors'});
+L.control.layers({'Satellite imagery':sat,'Street map':streets},null,{position:'topright'}).addTo(map);
+const shape=L.polygon(polygon(),{weight:3,color:'#f5cf7b',fillColor:'#eed99b',fillOpacity:data.opacity/100,dashArray:'7 5'}).addTo(map);
+const centerMarker=L.marker([data.lat,data.lng],{draggable:true,title:'Drag the assumed Foxleigh center'}).addTo(map).bindTooltip('Foxleigh — provisional center',{direction:'top'});
+const rollins=L.circleMarker([R.lat,R.lng],{radius:5,color:'#bcebe8',fillColor:'#6abfba',fillOpacity:.9}).addTo(map).bindTooltip('Rollins Hall mapped center (not Foxleigh)',{direction:'top'});
+const outlined=L.polyline([], {color:'#f6e4b0',weight:2,opacity:.9}).addTo(map);
+const changed=(who)=>{save();update();if(who)say(who)};
+function position(lat,lng,why){data.lat=lat;data.lng=lng;data.source=why;changed('Moved provisional center — not historically confirmed')}
+centerMarker.on('dragend',()=>{const p=centerMarker.getLatLng();position(p.lat,p.lng,'manually dragged marker')});
+map.on('click',e=>{if(placing){placing=false;$('place').classList.remove('active');position(e.latlng.lat,e.latlng.lng,'manual map click')}})
+function update(){const pts=polygon();shape.setLatLngs(pts);outlined.setLatLngs([...pts,pts[0]]);centerMarker.setLatLng([data.lat,data.lng]);const p=pts.map(t=>t.map(n=>n.toFixed(6)).join(',')).join(' | ');$('coords').textContent=data.lat.toFixed(7)+', '+data.lng.toFixed(7)+' · '+data.source;$('bearing').value=data.bearing;$('bearingVal').textContent=data.bearing+'°';$('length').value=data.length;$('lengthVal').textContent=data.length+' m';$('width').value=data.width;$('widthVal').textContent=data.width+' m';$('opacity').value=data.opacity;$('opacityVal').textContent=data.opacity+'%';shape.setStyle({fillOpacity:data.opacity/100});if(googleModel){googleModel.position={lat:data.lat,lng:data.lng,altitude:0};googleModel.orientation={heading:(data.bearing+270)%360,tilt:0,roll:0};googleModel.scale={x:data.length/25,y:1,z:data.width/16}}}
+for(const prop of ['bearing','length','width','opacity'])$(prop).oninput=e=>{data[prop]=+e.target.value;changed()};
+$('place').onclick=()=>{placing=!placing;$('place').classList.toggle('active',placing);say(placing?'Tap satellite map to place building center.':'Placement canceled')};
+$('reset').onclick=()=>{data={...init};save();map.setView([R.lat,R.lng],19);changed('Reset to illustrative position (not Foxleigh surveyed site)')};
+$('locate').onclick=()=>{if(!navigator.geolocation){say('GPS not supported in this browser');return}say('Requesting your location…');navigator.geolocation.getCurrentPosition(p=>{const q=p.coords;if(geoDot)map.removeLayer(geoDot);if(geoCircle)map.removeLayer(geoCircle);geoDot=L.circleMarker([q.latitude,q.longitude],{color:'#5ae8e0',radius:7,fillOpacity:.9}).addTo(map).bindTooltip('Your GPS position');geoCircle=L.circle([q.latitude,q.longitude],{radius:q.accuracy,color:'#5ae8e0',fillOpacity:.05,weight:1}).addTo(map);map.panTo([q.latitude,q.longitude]);say('GPS accuracy ±'+Math.round(q.accuracy)+' m. GPS shows your location; it does not move the historic site.')},e=>say('GPS: '+e.message),{enableHighAccuracy:true,timeout:20000,maximumAge:2000})};
+$('sendToAR').onclick=()=>{try{const transform={lat:data.lat,lon:data.lng,east:0,north:0,rotate:90-data.bearing,scale:Math.round(data.length/25*100),kind:'map-aligned hypothesis; '+data.source,heading:0,tilt:0,ghost:0.48};localStorage.setItem(ARKEY,JSON.stringify(transform));say('Saved to camera viewer on this browser. Note: depth/width and altitude are not synced; field AR remains approximate.');}catch(e){say('Could not save: '+e.message)}};
+$('loadSaved').onclick=()=>{try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d&&Number.isFinite(d.lat)){data={...init,...d};update();map.panTo([data.lat,data.lng]);say('Saved footprint loaded')}else say('No saved alignment yet')}catch(e){say('Saved alignment unavailable')}};
+function geojson(){const p=polygon();return {type:'FeatureCollection',features:[{type:'Feature',properties:{name:'Foxleigh Mansion / hypothetical reconstruction',status:'UNVERIFIED — SITE INFERENCE / ASSUMED FOOTPRINT',anchor_source:data.source,dimensions_m:{length:data.length,width:data.width,height_assumed:12},long_axis_true_bearing_deg:data.bearing,reference:'McDonogh 2024 Foxleigh Memorial; school 150th history; Rollins mapped center'},geometry:{type:'Polygon',coordinates:[[...p,p[0]].map(v=>[v[1],v[0]])]}},{type:'Feature',properties:{name:'hypothetical footprint center',status:'UNVERIFIED'},geometry:{type:'Point',coordinates:[data.lng,data.lat]}}]}}
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify(geojson(),null,2)],{type:'application/geo+json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='FOXLEIGH_alignment_provisional.geojson';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);say('GeoJSON downloaded — location, rotated polygon, uncertainty metadata')};
+$('share').onclick=async()=>{const u=new URL(location.href);for(const k of ['lat','lng','bearing','length','width'])u.searchParams.set(k,String(data[k]));try{await navigator.clipboard.writeText(u.href);say('Alignment link copied to clipboard')}catch(e){prompt('Copy alignment URL',u.href)}};
+$('collapse').onclick=()=>{const closed=$('panel').classList.toggle('closed');$('collapse').textContent=closed?'Expand':'Minimize'};
+$('mapMode').onclick=()=>{$('g3d').classList.remove('open');$('mapMode').classList.add('active');$('threeMode').classList.remove('active');$('mapTip').style.display='block';setTimeout(()=>map.invalidateSize(),50)};
+$('threeMode').onclick=()=>{$('googleConfig').style.display='block';$('panel').classList.remove('closed');$('collapse').textContent='Minimize';say('Enter browser-restricted Google Maps JS API key below, then Load 3D map.')};
+$('back').onclick=()=>$('mapMode').click();
+async function enableGoogle(){const key=$('apiKey').value.trim();if(!key){say('Google key needed for live 3D, satellite alignment still works');return}
+$('startGoogle').disabled=true;say('Loading Google Maps 3D…');try{if(!window.google?.maps?.importLibrary){await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly&loading=async';script.onload=resolve;script.onerror=()=>reject(new Error('Google API script failed; check browser key restrictions / billing'));document.head.append(script)})}
+const {Map3DElement,Model3DElement}=await google.maps.importLibrary('maps3d');
+if(!googleMap){googleMap=new Map3DElement({center:{lat:data.lat,lng:data.lng,altitude:110},range:180,tilt:67,heading:15,mode:'HYBRID'});$('g3dMap').append(googleMap);}
+if(!googleModel){googleModel=new Model3DElement({src:new URL('foxleigh_massing.glb',location.href).href,position:{lat:data.lat,lng:data.lng,altitude:0},orientation:{heading:0,tilt:0,roll:0},scale:1,altitudeMode:'CLAMP_TO_GROUND'});googleMap.append(googleModel)}
+update();$('g3d').classList.add('open');$('mapMode').classList.remove('active');$('threeMode').classList.add('active');$('mapTip').style.display='none';say('Google 3D loaded. Adjust orientation and footprint sliders; model placement is schematic, subject to terrain and model-axis differences.')}
+catch(e){say('Google 3D unavailable: '+e.message+'; satellite mode is still ready');$('g3d').classList.remove('open')}finally{$('startGoogle').disabled=false}}
+$('startGoogle').onclick=enableGoogle;
+update();map.setView([data.lat,data.lng],19);say('Satellite footprint ready. Drag center or use Place, then adjust bearing and dimensions.');
+})();
+</script></body></html>
