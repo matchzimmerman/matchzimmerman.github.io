@@ -34,6 +34,12 @@ A painted garden lane after the paintings of Bryson Iacoboni: a road between a h
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/) · [README](sources/bit-field-037-skate-garden/README.md)
 
+## MZ WORLD · FLOWER BOWL (BIT FIELD 038, branch `mz-world/flower-bowl-038`, 2026-10-30)
+
+A second world after Bryson Iacoboni's paintings: a brick-red bowl sunk in a field of round lilac, pink and white blooms over a navy ground; a skater rides wall to wall and grabs backside airs above the coping over the flowers. A fork of SKATE GARDEN's engine (object-space paint, V1–V5 looks, MZCAM). **On its branch, not merged, not live. Awaiting MZ.Human's review.**
+
+[README](sources/bit-field-038-flower-bowl/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
