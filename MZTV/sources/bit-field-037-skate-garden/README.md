@@ -2,9 +2,23 @@
 
 A painted garden lane after the paintings of **Bryson Iacoboni**: a grey road between a high hedge full of red poppies and pink stalks and a low wall whose cap is a ledge, a pink funbox, a manual pad, a crosswalk, a peach house with a porch, lamps, round-crowned trees in the gardens. One skater keeps his own errands on it. It runs on TWISTED TREE's engine (SRUTHÁN v3's surface-carved linocut print through OBAS inks, a printed depth of field, the dub engine, HEADLAND's memory and rupture), and it is filmed by an **MZCAM** drone crew (`../../lib/mzcam.js`, the crew from 48 PLANT and TRACKSIDE) instead of fixed operators.
 
-**Edition: Study 002 (2026-10-30), MZ.Claude. Painted by default; the linocut print is kept (`?print=lino`, key **P**). Awaiting MZ.Human's review, and Bryson's.**
+**Edition: Study 003 (2026-10-30), MZ.Claude. Three looks, switchable live with the V1 / V2 / V3 buttons (top left, tappable on a phone), keys **1 2 3** or **P**, or `?v=N`. The choice is remembered in this browser (`mzworld-skate-garden-style`), never in the world's memory. Default V3. Awaiting MZ.Human's review, and Bryson's.**
 
-## Painted, not printed (Study 002)
+| Look | What it is |
+|---|---|
+| **V1 · LINOCUT** | the house six-ink linocut (HEADLAND / SRUTHÁN print), with oil-stick dabs and the teal figure contour |
+| **V2 · PAINT · SCREEN STROKES** | Study 002 below: strokes laid on the screen, re-laid five times a second. Kept for comparison. MZ.Human: the stop-motion is distracting, and strokes bleeding across edges flatten the space |
+| **V3 · PAINT · ON THE OBJECTS** | Study 003: the paint is on the objects, and the sloppy edges are structure |
+
+## V3 · paint on the objects (Study 003)
+Imagine a three-dimensional painting: he painted the house as an object.
+- **Strokes live on each surface**, in that surface's own coordinates (the same frame the linocut carves its lines in): rows of strokes laid along the surface's direction (the road along its length, walls diagonally, limbs along the bone, crowns round their form, the sky across), each stroke one tone, with ragged sides, bristle streaks and dry-brush tails that show the primed canvas. Stroke size steps in octaves of distance, so a stroke stays about 12 px on screen and still things keep still paint. **Nothing swims, nothing re-lays.**
+- **No bleeding between objects.** Each pixel takes its own object's mixed paint; foreground and background stay separate, so the space reads. Out of focus is a real blur of the painted colour, not bigger strokes.
+- **Sloppy edges are geometry.** Every built thing (house walls, roofs, windows, doors, porch, posts, the wall and its ledge, the curb, the pad, lamps) carries a rim of paint in the plane of each face that runs past its edge, ragged and brushed, its reach scaled to the object (about 4 cm on a window frame, up to 32 cm on a roof). It belongs to the object, so it is the same from every drone. Roofs are now two painted slabs and gable ends instead of a prism.
+- Figures get flatter paint and keep the wobbly teal contour; the contour no longer flickers.
+
+
+## V2 · painted in screen strokes (Study 002)
 At MZ.Human's request the world is no longer printed in the usual six-ink linocut. Each frame is **laid down as brush strokes**, after Bryson Iacoboni's gestural paint:
 - The scene still renders to the data target, but in paint mode each fragment stores its **surface's stroke direction on screen** (the road along its length, the grass across, crowns round their form, limbs along the bone, the sky across the view) instead of a carved line.
 - An edge pass marks where the picture changes. The paint pass then lays three layers of strokes on jittered grids: **big strokes everywhere, medium and small strokes only where the picture changes** (edges, figures, flowers), so flat areas stay broad and the figures get worked.
@@ -17,9 +31,9 @@ At MZ.Human's request the world is no longer printed in the usual six-ink linocu
 **Live:** https://matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/
 **OBS:** Browser Source → the URL · 1920×1080 · enable "Control audio via OBS"
 **Phone:** opens at `?lines=480` automatically on small screens; tap the info box to hide it, the round **i** brings it back; tap anywhere for sound.
-**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 480 on phones) · `?ff=MIN` · `?hour=H` (16.7–19.75, the held golden hour) · `?cam=N` (hold drone N) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`) · `?print=lino` (the six-ink linocut instead of paint). `?live` is accepted and ignored: nothing is fetched.
-**Keys:** **I** info · **M** mute · **P** paint / linocut · **R** a hand on the lane (pushes toward rupture; logged as human intervention)
-**Console:** `MZ.force('poppies' | 'hang' | 'shadow' | 'repaint' | 'hush' | 'rupture')` · `MZ.shot(kind)` (put a drone on a shot kind, framed, and hold it; `MZ.shot('x')` lists the kinds) · `MZ.cam(i)` / `MZ.cam(-1)` (hold a drone / hand back to the director) · `MZ.skate(x, dir)` · `MZ.walker()` · `MZ.wax(v)` · `MZ.rain(mm)` · `MZ.seekHour(h)` · `MZ.ink(i)` · `MZ.grammar({period, dith, wob, outline, hatch, dab})` · `MZ.look(p, t, fov, focus, aper)` · `MZ.h(x, z)` · `MZ.geo` · `MZ.crew` · `MZ.state` · `MZ.setWx(o)` · `MZ.analyser()`
+**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 480 on phones) · `?ff=MIN` · `?hour=H` (16.7–19.75, the held golden hour) · `?cam=N` (hold drone N) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`) · `?v=1|2|3` (look; `?print=lino` = V1). `?live` is accepted and ignored: nothing is fetched.
+**Keys:** **I** info · **M** mute · **1 / 2 / 3** or **P** look · **R** a hand on the lane (pushes toward rupture; logged as human intervention)
+**Console:** `MZ.force('poppies' | 'hang' | 'shadow' | 'repaint' | 'hush' | 'rupture')` · `MZ.shot(kind)` (put a drone on a shot kind, framed, and hold it; `MZ.shot('x')` lists the kinds) · `MZ.cam(i)` / `MZ.cam(-1)` (hold a drone / hand back to the director) · `MZ.style(v)` · `MZ.skate(x, dir)` · `MZ.walker()` · `MZ.wax(v)` · `MZ.rain(mm)` · `MZ.seekHour(h)` · `MZ.ink(i)` · `MZ.grammar({period, dith, wob, outline, hatch, dab})` · `MZ.look(p, t, fov, focus, aper)` · `MZ.h(x, z)` · `MZ.geo` · `MZ.crew` · `MZ.state` · `MZ.setWx(o)` · `MZ.analyser()`
 
 ## Rule broken on purpose
 **Rule 1 (a real place with coordinates, live weather).** The lane is a painter's place: it is built from the paintings, not from a location, and no coordinates are invented. So the sun is a **simulated held golden hour** and the weather is **simulated**, and the info box says SIMULATED (same decision as TWISTED TREE). The lane is sculpted to suggest the paintings, not any street.
