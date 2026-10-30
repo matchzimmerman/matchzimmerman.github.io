@@ -35,7 +35,7 @@ canvas { display:block; position:fixed; inset:0; width:100vw; height:100vh; heig
 </style>
 
 <div id="hud" hidden role="button" tabindex="0" aria-label="World info. Tap to hide."></div>
-<div id="vsw" role="group" aria-label="Look"><button type="button" data-v="1" aria-pressed="false">V1</button><button type="button" data-v="2" aria-pressed="false">V2</button><button type="button" data-v="3" aria-pressed="false">V3</button><button type="button" data-v="4" aria-pressed="false">V4</button><span id="vname"></span></div>
+<div id="vsw" role="group" aria-label="Look"><button type="button" data-v="1" aria-pressed="false">V1</button><button type="button" data-v="2" aria-pressed="false">V2</button><button type="button" data-v="3" aria-pressed="false">V3</button><button type="button" data-v="4" aria-pressed="false">V4</button><button type="button" data-v="5" aria-pressed="false">V5</button><span id="vname"></span></div>
 <button id="tap" class="btn" type="button" hidden>TAP FOR SOUND</button>
 <button id="ib" class="btn" type="button" hidden aria-label="Show world info">i</button>
 
@@ -231,6 +231,36 @@ vec3 strokeS(float s, float t, float dist, float graze, float bw, float bl){
   float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float w0=exp2(floor(L));
   vec3 a=strokeOct(s,t,w0,bl), b=strokeOct(s,t,w0*2.,bl);
   return f<0.5?vec3(mix(a.x,b.x,f),a.yz):vec3(mix(a.x,b.x,f),b.yz); }
+// V5 (Study 005), from the second set of paintings: round swirled dabs (the flower fields) and dry-scraped blocks (the cream blocks on red)
+uniform float uV5; uniform float uBK[16];
+vec3 dabOct(float s,float t,float w){
+  float cs=w*1.7; vec2 p=vec2(s,t)/cs; vec2 c=floor(p);
+  float best=-1.; vec3 res=vec3(0.,0.12,0.5);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 n=c+vec2(float(i),float(j)); vec2 ctr=n+0.5+(vec2(hash(n),hash(n+5.3))-0.5)*0.7;
+    vec2 q=p-ctr; float r=0.48+0.32*hash(n+2.1); float d=length(q)/r; float ang=atan(q.y,q.x);
+    if(d>1.+(vn(vec2(ang*1.6+n.x*3.,n.y))-0.5)*0.35) continue;
+    float pri=hash(n+8.8); if(pri<best) continue; best=pri;
+    float sw=ang+d*(2.+2.*hash(n+4.4))*(hash(n+6.6)>0.5?1.:-1.);   // the brush swirled round
+    float br=0.2+0.8*vn(vec2(sw*2.2,d*7.+n.x));
+    if(d>0.72&&br<0.38) br=0.12;   // dry at the rim: the ground shows
+    res=vec3(hash(n+1.3)-0.5,br,hash(n+3.9));
+  }
+  return res; }
+vec3 blockOct(float s,float t,float w){
+  vec2 cs=vec2(w*2.4,w*3.2); float row=floor(s/cs.x); float t1=t/cs.y+hash(vec2(row,1.1))*5.; float cell=floor(t1);
+  vec2 f=vec2(fract(s/cs.x),fract(t1)); vec2 n=vec2(row,cell);
+  vec2 lo=vec2(0.03,0.03)+0.1*vec2(hash(n),hash(n+1.7)), hi=vec2(0.88,0.9)+0.12*vec2(hash(n+2.9),hash(n+3.3));
+  if(!(f.x>lo.x&&f.x<hi.x&&f.y>lo.y&&f.y<hi.y)) return vec3(0.,0.12,0.5);
+  float dr=vn(vec2(s/(w*0.06),t/(w*2.8)+n.x*2.)), dry=0.25+0.4*hash(n+5.5);   // dragged dry: the ground shows in streaks
+  float br=dr<dry*0.62?0.12:0.25+0.75*vn(vec2(s/(w*0.1),t/(w*1.5)));
+  return vec3(hash(n+7.1)-0.5,br,hash(n+9.2)); }
+vec3 brushS(float s,float t,float dist,float graze,int ii){
+  float bk=uBK[ii]; if(uV5<0.5||bk<0.5) return strokeS(s,t,dist,graze,uBW[ii],uBL[ii]);
+  float per=uStrokePx*uBW[ii]*max(dist,0.01)*uPxK*mix(1.,graze,0.5)*(1.+0.8*smoothstep(14.,70.,dist));
+  float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float w0=exp2(floor(L));
+  vec3 a=bk<1.5?dabOct(s,t,w0):blockOct(s,t,w0), b=bk<1.5?dabOct(s,t,w0*2.):blockOct(s,t,w0*2.);
+  return f<0.5?vec3(mix(a.x,b.x,f),a.yz):vec3(mix(a.x,b.x,f),b.yz); }
 float cocAt(float dist){ return clamp(abs(dist-uFocus)/max(dist,0.005)*uAper,0.,1.); }
 vec4 pack(float sh, float id, float line, float acc, float dist){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., clamp(line,0.,1.), step(0.5,acc)*0.5+0.49*cocAt(dist)); }
 // the hatching is carved into each surface (SRUTHÁN v3) and here breaks into oil-stick dabs: each carved line is cut into short strokes
@@ -260,7 +290,9 @@ const SH = {   // shared uniforms
   uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 120 }, uFogShade: { value: 0.66 },
   uBreath: { value: 0 }, uFocus: { value: 1 }, uAper: { value: 0.2 }, uLemon: { value: 0 },
   uPerPx: { value: 6 }, uWobPx: { value: 7 }, uPxK: { value: .0012 }, uDab: { value: 0.3 }, uWindL: { value: V() }, uCalm: { value: 1 },
-  uPaint: { value: 2 }, uV4: { value: 1 }, uStrokePx: { value: 9 },
+  uPaint: { value: 2 }, uV4: { value: 1 }, uV5: { value: 1 },
+  //                        sky sun hedge poppy road plast conc dark skin white black board grass cloud cross roof   (0 pulls, 1 round dabs, 2 scraped blocks)
+  uBK: { value: [0, 0, 1, 1, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2] }, uStrokePx: { value: 9 },
   // each material's brush, from the paintings: broad flat bands for sky and ground, long pulls on the road, upright flames in the hedge, small strokes on the figures
   //                        sky  sun hedge poppy road plast conc dark skin white black board grass cloud cross roof
   uBW: { value: [4.5, 1.0, 1.05, 0.8, 2.0, 1.35, 1.15, 0.9, 0.55, 0.7, 0.7, 0.65, 2.3, 3.0, 1.5, 1.25] },
@@ -363,7 +395,9 @@ void main(){
   else { vec3 A=cross(N,T); if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.)); if(dot(A,A)<1e-6) A=vec3(1.,0.,0.); A=normalize(A); vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B); s0=dot(vL,A); t0=dot(vL,B); }
   float outB;
   float pv=0.5;
-  if(uPaint>1.5&&uV4>0.5){ int ii=int(id+0.5); vec3 sv=strokeS(s0,t0,dist,gz,uBW[ii],uBL[ii]); float fg=(id>7.5&&id<11.5)?0.45:1.; sh+=sv.x*0.17*fg*(1.-fog); outB=fg<1.?max(sv.y,0.3):sv.y; pv=sv.z; }
+  if(uPaint>1.5&&uV4>0.5){ int ii=int(id+0.5);
+    if(uV5>0.5&&uBK[ii]>1.5&&useG<0.5&&uPC<0.5){ vec3 Tb=abs(N.y)>0.9?vec3(1.,0.,0.):vec3(0.,1.,0.); vec3 A=normalize(cross(N,Tb)+vec3(1e-5)); vec3 B=normalize(cross(A,N)+vec3(1e-5)); s0=dot(vL,A); t0=dot(vL,B); }   // blocks sit square
+    vec3 sv=brushS(s0,t0,dist,gz,ii); float fg=(id>7.5&&id<11.5)?(uV5>0.5?0.25:0.45):1.; sh+=sv.x*0.17*fg*(1.-fog); outB=fg<1.?max(sv.y,0.3):sv.y; pv=sv.z; }
   else if(uPaint>1.5){ vec2 sv=strokeS3(s0,t0,dist,gz); float fg=(id>7.5&&id<11.5)?0.4:1.; sh+=sv.x*0.22*fg*(1.-fog); outB=mix(0.6,sv.y,fg); }   // figures: flatter paint, as he paints them
   else if(uPaint>0.5) outB=angOf(vW,normalize(T+vec3(1e-5)));
   else outB=lineS(s0,t0,dist,gz,0.);
@@ -623,7 +657,7 @@ const paint3Mat_s003 = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragm
 const PAINT3_FRAG = /* glsl */`
 uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uPC[48];
 uniform float uSeed, uScale, uRain, uTime, uBlurR; uniform vec2 uRainDir;
-uniform vec3 uAlt[32], uUnder[16]; uniform float uAltP[16];
+uniform vec3 uAlt[32], uUnder[16], uCont, uCont2; uniform float uAltP[16];
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
@@ -654,7 +688,7 @@ void main(){
   vec2 o=vec2(1.8,-1.3)*uScale+vec2(vn(fc*0.04)-0.5, vn(fc*0.045+9.1)-0.5)*3.6*uScale; vec2 sp=fc+o; float r=1.6*uScale;
   vec4 b1=texture2D(uData,(sp+vec2(r,0.))/uRes), b2=texture2D(uData,(sp-vec2(r,0.))/uRes), b3=texture2D(uData,(sp+vec2(0.,r))/uRes), b4=texture2D(uData,(sp-vec2(0.,r))/uRes);
   int a1=idOf(b1), a2=idOf(b2), a3=idOf(b3), a4=idOf(b4);
-  if((a1!=a2||a3!=a4) && coc<0.35 && vn(fc*0.09)<0.88 && (fig(a1)||fig(a2)||fig(a3)||fig(a4))) col=mix(col,(vn(fc*0.013)>0.78)?uPal[0]:uPal[2],0.94);
+  if((a1!=a2||a3!=a4) && coc<0.35 && vn(fc*0.09)<0.88 && (fig(a1)||fig(a2)||fig(a3)||fig(a4))) col=mix(col,(vn(fc*0.013)>0.78)?uCont2:uCont,0.94);
   if(uRain>0.01){
     vec2 rp=vec2(dot(fc,vec2(-uRainDir.y,uRainDir.x)), dot(fc,uRainDir)+uTime*520.);
     vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
@@ -665,7 +699,7 @@ void main(){
   if(m<edge) col=canvasAt(fc);
   gl_FragColor=vec4(col,1.);
 }`;
-const P3U = { uAlt: { value: Array.from({ length: 32 }, () => V()) }, uUnder: { value: Array.from({ length: 16 }, () => V()) },
+const P3U = { uCont: { value: V() }, uCont2: { value: V() }, uAlt: { value: Array.from({ length: 32 }, () => V()) }, uUnder: { value: Array.from({ length: 16 }, () => V()) },
   //                       sky  sun hedge poppy road plast conc dark skin white black board grass cloud cross roof
   uAltP: { value: [0.07, 0, 0.12, 0.14, 0.07, 0.05, 0.06, 0, 0.08, 0.09, 0.08, 0.08, 0.13, 0.08, 0.03, 0.07] } };
 // accents and underpaintings per material, after the paintings (computed from the colourway's six paints)
@@ -679,11 +713,11 @@ const PACC = (P) => { const m = (a, b, t) => P[a].clone().lerp(P[b], t), I = (a)
   const under = [m(GLOW, PAPER, 0.4), I(GLOW), m(HOT, DEEP, 0.35), I(DEEP), m(GLOW, PAPER, 0.25), m(SEA, PAPER, 0.3), m(INK, SEA, 0.5), I(INK),
     m(HOT, GLOW, 0.4), m(SEA, PAPER, 0.4), I(DEEP), m(INK, HOT, 0.4), m(HOT, GLOW, 0.2), I(PAPER), m(INK, SEA, 0.5), I(DEEP)];
   return { alt, under }; };
-const paint3Mat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PAINT3_FRAG, uniforms: { uAlt: P3U.uAlt, uUnder: P3U.uUnder, uAltP: P3U.uAltP, uData: PU.uData, uRes: PU.uRes, uPal: PU.uPal, uPC: PAINTU.uPC, uSeed: PU.uSeed, uScale: PAINTU.uScale, uRain: PU.uRain, uRainDir: PU.uRainDir, uTime: PU.uTime, uBlurR: PU.uBlurR }, depthTest: false, depthWrite: false });
+const paint3Mat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PAINT3_FRAG, uniforms: { uCont: P3U.uCont, uCont2: P3U.uCont2, uAlt: P3U.uAlt, uUnder: P3U.uUnder, uAltP: P3U.uAltP, uData: PU.uData, uRes: PU.uRes, uPal: PU.uPal, uPC: PAINTU.uPC, uSeed: PU.uSeed, uScale: PAINTU.uScale, uRain: PU.uRain, uRainDir: PU.uRainDir, uTime: PU.uTime, uBlurR: PU.uBlurR }, depthTest: false, depthWrite: false });
 // three ways of making the same lane, switchable while you watch: V1 the six-ink linocut, V2 paint laid in screen strokes, V3 paint on the objects
 const STYLE_KEY = 'mzworld-skate-garden-style';
-const STYLES = { 1: 'V1 · LINOCUT', 2: 'V2 · PAINT · SCREEN STROKES', 3: 'V3 · PAINT · ON THE OBJECTS', 4: 'V4 · PAINT · HIS BRUSHES' };
-let STYLE = Q.has('v') ? clamp(Math.round(+Q.get('v')) || 4, 1, 4) : Q.get('print') === 'lino' ? 1 : (() => { try { const v = +localStorage.getItem(STYLE_KEY); return v >= 1 && v <= 4 ? v : 4; } catch (e) { return 4; } })();
+const STYLES = { 1: 'V1 · LINOCUT', 2: 'V2 · PAINT · SCREEN STROKES', 3: 'V3 · PAINT · ON THE OBJECTS', 4: 'V4 · PAINT · HIS BRUSHES', 5: 'V5 · PAINT · DABS AND BLOCKS' };
+let STYLE = Q.has('v') ? clamp(Math.round(+Q.get('v')) || 5, 1, 5) : Q.get('print') === 'lino' ? 1 : (() => { try { const v = +localStorage.getItem(STYLE_KEY); return v >= 1 && v <= 5 ? v : 5; } catch (e) { return 5; } })();
 
 
 /* ====================================================================== world build */
@@ -1518,7 +1552,11 @@ function applyLook(dt) {
   const gm = S.grammar; PU.uPeriod.value = gm.period * IH / 720; PU.uDith.value = gm.dith; PU.uWob.value = gm.wob * IH / 720; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch; PU.uBlurR.value = 10 * IH / 720; SH.uPerPx.value = PU.uPeriod.value; SH.uWobPx.value = PU.uWob.value;
   SH.uDab.value = clamp(gm.dab + 0.25 * live.repaint, 0, 0.8);
   PU.uRain.value = clamp(WX.precip / 2, 0, 1); PU.uRainDir.value.set(Math.sin(wb) * 0.35, -1).normalize(); PU.uTime.value = simT;
-  boilT += dt * live.calm; PAINTU.uBoil.value = Math.floor(boilT * 5) % 997; PAINTU.uScale.value = IH / 720; SH.uPaint.value = STYLE === 1 ? 0 : STYLE === 2 ? 1 : 2; SH.uV4.value = STYLE === 4 ? 1 : 0; SH.uStrokePx.value = 12 * IH / 720; PAINTU.uDetail.value = 1; { const pc = PMAT(cwNow); for (let i = 0; i < 48; i++) PAINTU.uPC.value[i].copy(pc[i]); } if (STYLE === 4) { const ac = PACC(cwNow); for (let i = 0; i < 32; i++) P3U.uAlt.value[i].copy(ac.alt[i]); for (let i = 0; i < 16; i++) P3U.uUnder.value[i].copy(ac.under[i]); }
+  boilT += dt * live.calm; PAINTU.uBoil.value = Math.floor(boilT * 5) % 997; PAINTU.uScale.value = IH / 720; SH.uPaint.value = STYLE === 1 ? 0 : STYLE === 2 ? 1 : 2; SH.uV4.value = STYLE >= 4 ? 1 : 0; SH.uV5.value = STYLE === 5 ? 1 : 0; SH.uStrokePx.value = 12 * IH / 720; PAINTU.uDetail.value = 1; { const pc = PMAT(cwNow); for (let i = 0; i < 48; i++) PAINTU.uPC.value[i].copy(pc[i]); } if (STYLE >= 4) { const ac = PACC(cwNow); for (let i = 0; i < 32; i++) P3U.uAlt.value[i].copy(ac.alt[i]); for (let i = 0; i < 16; i++) P3U.uUnder.value[i].copy(ac.under[i]);
+    const P = cwNow, m = (a, b, t) => P[a].clone().lerp(P[b], t);
+    if (STYLE === 5) {   // the second set: a navy ground under the dabs, brick red under the cream blocks, a dark green contour
+      [[2, m(INK, SEA, 0.25)], [3, m(INK, DEEP, 0.4)], [5, m(HOT, INK, 0.25)], [6, m(HOT, INK, 0.45)], [14, m(HOT, INK, 0.3)], [15, m(HOT, INK, 0.5)]].forEach(([i, c]) => P3U.uUnder.value[i].copy(c));
+      P3U.uCont.value.copy(m(INK, DEEP, 0.55)); P3U.uCont2.value.copy(P[SEA]); } else { P3U.uCont.value.copy(P[SEA]); P3U.uCont2.value.copy(P[INK]); } }
   const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1])); rs.setProperty('--sea', css(cwNow[2]));
   // the shadow projection: everything a figure is, thrown along the sun onto the ground
@@ -1538,7 +1576,7 @@ function applyLook(dt) {
 function render() {
   renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
   if (STYLE === 2) { quad.material = edgeMat; renderer.setRenderTarget(rtEdge); renderer.render(postScene, postCam); quad.material = paintMat; }
-  else quad.material = STYLE === 4 ? paint3Mat : STYLE === 3 ? paint3Mat_s003 : printMat;
+  else quad.material = STYLE >= 4 ? paint3Mat : STYLE === 3 ? paint3Mat_s003 : printMat;
   renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
   quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
 }
@@ -1547,7 +1585,7 @@ function render() {
 const hud = document.getElementById('hud'); hud.hidden = !INFO;
 const tapBtn = document.getElementById('tap'), ib = document.getElementById('ib'); ib.hidden = INFO;
 const vsw = document.getElementById('vsw'), vname = document.getElementById('vname');
-function setStyle(v, quiet) { STYLE = clamp(v, 1, 4); try { localStorage.setItem(STYLE_KEY, String(STYLE)); } catch (e) {}
+function setStyle(v, quiet) { STYLE = clamp(v, 1, 5); try { localStorage.setItem(STYLE_KEY, String(STYLE)); } catch (e) {}
   vsw.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === STYLE))); vname.textContent = STYLES[STYLE];
   if (!quiet) { logEv('the lane is shown as ' + STYLES[STYLE].toLowerCase()); hudUpdate(); } }
 vsw.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { e.stopPropagation(); setStyle(+b.dataset.v); } });
@@ -1566,7 +1604,7 @@ function hudUpdate() {
   <div class="r"><span>ROAD holds ${S.rain.toFixed(1)} mm${WX.precip > 0.05 ? ' · rain ' + WX.precip.toFixed(1) : ''}</span><span>→ wet road, the porch</span></div>
   <div class="r"><span>WAX on the ledge ${(S.wax * 100).toFixed(0)}% · ${S.scuffs.length} scuffs</span><span>→ more grinds</span></div>
   <div class="r"><span>TRICKS ${S.landed} landed · ${S.bails} bails · lap ${S.laps}</span><span>${WALKER.on ? 'a dog on the lane' : ''}</span></div>
-  <div class="r"><span>LOOK ${STYLES[STYLE]}</span><span>tap V1–V4 to compare</span></div>
+  <div class="r"><span>LOOK ${STYLES[STYLE]}</span><span>tap V1–V5 to compare</span></div>
   <div class="r"><span>MZCAM ${d.name} · ${d.shot ? d.shot.label : ''}</span><span>${crew.cuts} cuts · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
   ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
   <div class="cr"><span>after the paintings of Bryson Iacoboni</span><span>MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</span></div>`;
@@ -1592,7 +1630,7 @@ addEventListener('pagehide', save);
 addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
   if (k === 'i') setInfo(!INFO);
   if (k === 'm') AUD.mute();
-  if (k === 'p') setStyle(STYLE % 4 + 1); if (k === '1' || k === '2' || k === '3' || k === '4') setStyle(+k);
+  if (k === 'p') setStyle(STYLE % 5 + 1); if ('12345'.includes(k) && k.length === 1) setStyle(+k);
   if (k === 'r' && !live.ev) { logEv('a hand on the lane (human intervention)'); S.tension = 1; }
   AUD.start(); });
 addEventListener('pointerdown', () => AUD.start());

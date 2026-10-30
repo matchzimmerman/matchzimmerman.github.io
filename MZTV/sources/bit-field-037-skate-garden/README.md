@@ -2,14 +2,15 @@
 
 A painted garden lane after the paintings of **Bryson Iacoboni**: a grey road between a high hedge full of red poppies and pink stalks and a low wall whose cap is a ledge, a pink funbox, a manual pad, a crosswalk, a peach house with a porch, lamps, round-crowned trees in the gardens. One skater keeps his own errands on it. It runs on TWISTED TREE's engine (SRUTHÁN v3's surface-carved linocut print through OBAS inks, a printed depth of field, the dub engine, HEADLAND's memory and rupture), and it is filmed by an **MZCAM** drone crew (`../../lib/mzcam.js`, the crew from 48 PLANT and TRACKSIDE) instead of fixed operators.
 
-**Edition: Study 003 (2026-10-30), MZ.Claude. Three looks, switchable live with the V1 / V2 / V3 / V4 buttons (top left, tappable on a phone), keys **1 2 3 4** or **P**, or `?v=N`. The choice is remembered in this browser (`mzworld-skate-garden-style`), never in the world's memory. Default V4. Awaiting MZ.Human's review, and Bryson's.**
+**Edition: Study 003 (2026-10-30), MZ.Claude. Three looks, switchable live with the V1–V5 buttons (top left, tappable on a phone), keys **1–5** or **P**, or `?v=N`. The choice is remembered in this browser (`mzworld-skate-garden-style`), never in the world's memory. Default V5. Awaiting MZ.Human's review, and Bryson's.**
 
 | Look | What it is |
 |---|---|
 | **V1 · LINOCUT** | the house six-ink linocut (HEADLAND / SRUTHÁN print), with oil-stick dabs and the teal figure contour |
 | **V2 · PAINT · SCREEN STROKES** | Study 002 below: strokes laid on the screen, re-laid five times a second. Kept for comparison. MZ.Human: the stop-motion is distracting, and strokes bleeding across edges flatten the space |
 | **V3 · PAINT · ON THE OBJECTS** | Study 003: the paint is on the objects, and the sloppy edges are structure; one brush for everything |
-| **V4 · PAINT · HIS BRUSHES** | Study 004 (default): V3 with brushes after Bryson's paintings (below) |
+| **V4 · PAINT · HIS BRUSHES** | Study 004: V3 with brushes after Bryson's paintings (below) |
+| **V5 · PAINT · DABS AND BLOCKS** | Study 005 (default): V4 plus round swirled dabs and dry-scraped blocks, from the second set of paintings (below) |
 
 ## V3 · paint on the objects (Study 003)
 Imagine a three-dimensional painting: he painted the house as an object.
@@ -28,6 +29,13 @@ Nothing of Bryson Iacoboni's work could be found online, so the brushes are draw
 - **The contour is drawn after the paint, off the fill**: misregistered by about 2 px, wobbly, broken, teal (black now and then on the darkest figures).
 - **A canvas margin**: raw primer at the frame's edge, ragged where the paint stops.
 
+### V5 · dabs and blocks (Study 005, 2026-10-30)
+From a second set of Bryson's paintings shared by MZ.Human (a skater in the air over a field of flowers; a small portrait in palette-knife strokes; a skater on a brick-red ground under cream blocks):
+- **Round, swirled dabs** (`dabOct`) for the hedge, the flowers and the tree crowns: circular brush blobs of varied size, twisted as the brush turned, dry at the rim, overlapping, with a **navy ground** showing between them.
+- **Dry-scraped blocks** (`blockOct`) for walls, concrete, roofs and the crosswalk: square, overlapping rectangles dragged dry so a **brick-red ground** shows in streaks.
+- Each material picks its brush with `uBK` (0 pulls, 1 round dabs, 2 scraped blocks).
+- **Flatter figures** (one colour per part, little modelling) and a **dark green contour**, teal now and then.
+
 ## V2 · painted in screen strokes (Study 002)
 At MZ.Human's request the world is no longer printed in the usual six-ink linocut. Each frame is **laid down as brush strokes**, after Bryson Iacoboni's gestural paint:
 - The scene still renders to the data target, but in paint mode each fragment stores its **surface's stroke direction on screen** (the road along its length, the grass across, crowns round their form, limbs along the bone, the sky across the view) instead of a carved line.
@@ -41,8 +49,8 @@ At MZ.Human's request the world is no longer printed in the usual six-ink linocu
 **Live:** https://matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/
 **OBS:** Browser Source → the URL · 1920×1080 · enable "Control audio via OBS"
 **Phone:** opens at `?lines=480` automatically on small screens; tap the info box to hide it, the round **i** brings it back; tap anywhere for sound.
-**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 480 on phones) · `?ff=MIN` · `?hour=H` (16.7–19.75, the held golden hour) · `?cam=N` (hold drone N) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`) · `?v=1|2|3|4` (look; `?print=lino` = V1). `?live` is accepted and ignored: nothing is fetched.
-**Keys:** **I** info · **M** mute · **1 / 2 / 3 / 4** or **P** look · **R** a hand on the lane (pushes toward rupture; logged as human intervention)
+**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 480 on phones) · `?ff=MIN` · `?hour=H` (16.7–19.75, the held golden hour) · `?cam=N` (hold drone N) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`) · `?v=1–5` (look; `?print=lino` = V1). `?live` is accepted and ignored: nothing is fetched.
+**Keys:** **I** info · **M** mute · **1–5** or **P** look · **R** a hand on the lane (pushes toward rupture; logged as human intervention)
 **Console:** `MZ.force('poppies' | 'hang' | 'shadow' | 'repaint' | 'hush' | 'rupture')` · `MZ.shot(kind)` (put a drone on a shot kind, framed, and hold it; `MZ.shot('x')` lists the kinds) · `MZ.cam(i)` / `MZ.cam(-1)` (hold a drone / hand back to the director) · `MZ.style(v)` · `MZ.skate(x, dir)` · `MZ.walker()` · `MZ.wax(v)` · `MZ.rain(mm)` · `MZ.seekHour(h)` · `MZ.ink(i)` · `MZ.grammar({period, dith, wob, outline, hatch, dab})` · `MZ.look(p, t, fov, focus, aper)` · `MZ.h(x, z)` · `MZ.geo` · `MZ.crew` · `MZ.state` · `MZ.setWx(o)` · `MZ.analyser()`
 
 ## Rule broken on purpose
