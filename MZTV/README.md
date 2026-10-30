@@ -40,6 +40,12 @@ A second world after Bryson Iacoboni's paintings: a brick-red bowl sunk in a fie
 
 [README](sources/bit-field-038-flower-bowl/README.md)
 
+## MZ WORLD · FLOWER FIELD (BIT FIELD 039, branch `mz-world/flower-field-039`, 2026-10-30)
+
+A third world after Bryson Iacoboni's paintings: FLOWER BOWL's field without the bowl or the skater, kept as a place in itself, like TWISTED TREE. Its thread is the light. A gap in the clouds drifts across the flowers with the wind, and where it is picks the bass. A walker and a small white dog come along the path. It has one look (paint dabs and blocks) and no version switcher. **On its branch, not merged, not live. Awaiting MZ.Human's review.**
+
+[README](sources/bit-field-039-flower-field/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
