@@ -28,6 +28,12 @@ A world made from the opening poem of Match Zimmerman's chapbook *To See What Se
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-036-seals-see/) · [README](sources/bit-field-036-seals-see/README.md)
 
+## MZ WORLD · SKATE GARDEN (BIT FIELD 037, published 2026-10-30)
+
+A painted garden lane after the paintings of Bryson Iacoboni: a road between a high hedge of red poppies and a low wall with a ledge, a pink funbox, a manual pad, a crosswalk, a peach house with a porch. One skater rides lines down it (flips, 50-50s, manuals, the odd bail), sits on the wall at sunset, shelters on the porch in rain; a walker and a small white dog come down the lane. Printed on TWISTED TREE's engine with a new oil-stick grammar (carved lines broken into dabs, figures in Bryson's turquoise contour, long planar shadows down the lane), and filmed by seven **MZCAM** drones. The lane remembers wax on the ledge and scuffs from bails. Sun and weather are simulated: it is a painter's place. **Awaiting MZ.Human's review.**
+
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/) · [README](sources/bit-field-037-skate-garden/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
@@ -332,6 +338,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-036-seals-see/`
+
+### BIT FIELD 037 — MZ WORLD · SKATE GARDEN
+After the paintings of Bryson Iacoboni. A garden lane printed in six inks: a grey road brushed along its length, a high hedge full of red poppies and pink stalks, a low wall whose cap is a waxed ledge, a pink funbox, a manual pad, a crosswalk, a peach house with a porch, lamps that light at dusk. The central figure is a skater in a white shirt and black trousers on a pink board who rides lines and kickturns at each end; where he is on the lane picks the bass, and the wind in the hedge sets the bar. A held golden hour throws every figure's shadow down the lane. Memory: wax on the ledge (more wax, more grinds), scuffs from bails (48 h), tricks, laps, rain. Rarely the poppies turn to watch him, a trick hangs in the air, his shadow keeps skating while he sits on the wall, or the road is repainted. Filmed by seven MZCAM drones (`lib/mzcam.js`) with nine shot kinds, cutting on the 16th. New colourways: Garden Road, Orange Coast, Olive Room. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?capture=1
+
+Path:
+`sources/bit-field-037-skate-garden/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-037-skate-garden/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
