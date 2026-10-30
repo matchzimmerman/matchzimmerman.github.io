@@ -2,13 +2,23 @@
 
 A painted garden lane after the paintings of **Bryson Iacoboni**: a grey road between a high hedge full of red poppies and pink stalks and a low wall whose cap is a ledge, a pink funbox, a manual pad, a crosswalk, a peach house with a porch, lamps, round-crowned trees in the gardens. One skater keeps his own errands on it. It runs on TWISTED TREE's engine (SRUTHÁN v3's surface-carved linocut print through OBAS inks, a printed depth of field, the dub engine, HEADLAND's memory and rupture), and it is filmed by an **MZCAM** drone crew (`../../lib/mzcam.js`, the crew from 48 PLANT and TRACKSIDE) instead of fixed operators.
 
-**Edition: Study 001 (2026-10-30), MZ.Claude. Awaiting MZ.Human's review, and Bryson's.**
+**Edition: Study 002 (2026-10-30), MZ.Claude. Painted by default; the linocut print is kept (`?print=lino`, key **P**). Awaiting MZ.Human's review, and Bryson's.**
+
+## Painted, not printed (Study 002)
+At MZ.Human's request the world is no longer printed in the usual six-ink linocut. Each frame is **laid down as brush strokes**, after Bryson Iacoboni's gestural paint:
+- The scene still renders to the data target, but in paint mode each fragment stores its **surface's stroke direction on screen** (the road along its length, the grass across, crowns round their form, limbs along the bone, the sky across the view) instead of a carved line.
+- An edge pass marks where the picture changes. The paint pass then lays three layers of strokes on jittered grids: **big strokes everywhere, medium and small strokes only where the picture changes** (edges, figures, flowers), so flat areas stay broad and the figures get worked.
+- Each stroke is one colour, **mixed** from its material's dark / mid / light paints at the shade under its centre and softly posterised, as if mixed on a palette. Unlike the linocut, paint can mix: the road is a lavender grey, the sky a pale cream with a pink breath, the house peach (the `PMAT` table, computed from the colourway's six paints).
+- Strokes have ragged bristle edges, streaked bristle texture, **dry-brush tails that show the primed canvas**, and an occasional stray colour off the palette.
+- Figures get a **wobbly, broken teal contour**; built things get loose dark lines. Out of focus, only the big strokes are laid, so the depth of field reads as broader painting.
+- The strokes **re-lay five times a second** (and hold still in the hush), like a painting made frame by frame.
+- Rupture still re-inks: a new colourway changes all the paints. Other Study 002 changes: smaller, denser hedge clumps; finer pink stalks; a soft sun; the canvas pinned edge to edge on phones.
 
 **Live:** https://matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/
 **OBS:** Browser Source → the URL · 1920×1080 · enable "Control audio via OBS"
 **Phone:** opens at `?lines=480` automatically on small screens; tap the info box to hide it, the round **i** brings it back; tap anywhere for sound.
-**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 480 on phones) · `?ff=MIN` · `?hour=H` (16.7–19.75, the held golden hour) · `?cam=N` (hold drone N) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`). `?live` is accepted and ignored: nothing is fetched.
-**Keys:** **I** info · **M** mute · **R** a hand on the lane (pushes toward rupture; logged as human intervention)
+**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (default 720; 480 on phones) · `?ff=MIN` · `?hour=H` (16.7–19.75, the held golden hour) · `?cam=N` (hold drone N) · `?capture=1` (no rAF; drive with `MZ.tick` / `MZ.advance`) · `?print=lino` (the six-ink linocut instead of paint). `?live` is accepted and ignored: nothing is fetched.
+**Keys:** **I** info · **M** mute · **P** paint / linocut · **R** a hand on the lane (pushes toward rupture; logged as human intervention)
 **Console:** `MZ.force('poppies' | 'hang' | 'shadow' | 'repaint' | 'hush' | 'rupture')` · `MZ.shot(kind)` (put a drone on a shot kind, framed, and hold it; `MZ.shot('x')` lists the kinds) · `MZ.cam(i)` / `MZ.cam(-1)` (hold a drone / hand back to the director) · `MZ.skate(x, dir)` · `MZ.walker()` · `MZ.wax(v)` · `MZ.rain(mm)` · `MZ.seekHour(h)` · `MZ.ink(i)` · `MZ.grammar({period, dith, wob, outline, hatch, dab})` · `MZ.look(p, t, fov, focus, aper)` · `MZ.h(x, z)` · `MZ.geo` · `MZ.crew` · `MZ.state` · `MZ.setWx(o)` · `MZ.analyser()`
 
 ## Rule broken on purpose
@@ -83,7 +93,7 @@ TWISTED TREE's audio hardening, unchanged: one AudioContext, AudioWorklet noise 
 
 ## Known limits
 - **Not yet reviewed** by MZ.Human or by Bryson Iacoboni. The world works from the paintings Match shared in chat (skaters in white and lavender shirts, teal contours, hedges of red flowers, long shadows, a crosswalk, a figure walking a white dog). No painting is reproduced or used as a texture.
-- GPU load not measured on real hardware (SwiftShader only). About 7,000 flower instances, 9,000 grass blades (5,000 on phones), 130 trees and a 256×180 ground grid; drop to `?lines=420` if a phone struggles.
+- GPU load not measured on real hardware (SwiftShader only). The paint pass reads about 60 texels per pixel (three 3×3 stroke neighbourhoods plus the edge map and contour taps); on a slow phone use `?lines=420` or `?print=lino`. About 7,000 flower instances, 9,000 grass blades (5,000 on phones), 130 trees and a 256×180 ground grid; drop to `?lines=420` if a phone struggles.
 - The skater's body is tubes and balls: it reads as a painted figure at a distance and in the fisheye, but is crude in a long close-up.
 - Shadows are planar projections onto a flat ground plane: they don't climb the wall, the hedge or the funbox.
 - One skater only; the walker and the dog don't interact with him beyond his giving them room.

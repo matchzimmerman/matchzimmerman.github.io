@@ -8,7 +8,7 @@
 /* MZ WORLD · SKATE GARDEN — a painted lane printed in six inks; the skater keeps his own errands; drones film */
 :root { --ink:#1d1a24; --paper:#f0e7d6; --hot:#d6402e; --deep:#355a2e; --sea:#3fb7ae; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
 html, body { height:100%; margin:0; background:var(--ink); overflow:hidden; -webkit-tap-highlight-color:transparent }
-canvas { display:block; width:100%; height:100%; touch-action:manipulation }
+canvas { display:block; position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; touch-action:manipulation }
 #hud { position:fixed; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px));
   width:min(480px, calc(100vw - 40px)); box-sizing:border-box; padding:11px 13px 10px; font:400 11px/1.5 var(--mono);
   color:var(--ink); background:color-mix(in srgb, var(--paper) 90%, transparent); border:2px solid var(--ink); box-shadow:4px 4px 0 var(--sea);
@@ -169,7 +169,7 @@ const camera = new THREE.PerspectiveCamera(44, 16 / 9, 0.03, 4000);
 function resize() {
   W = innerWidth; H = innerHeight; renderer.setSize(W, H, false);
   IH = Math.min(LINES, H); IW = Math.round(IH * W / H);
-  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH);
+  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH); rtEdge.setSize(IW, IH);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   PU.uRes.value.set(IW, IH);
 }
@@ -177,7 +177,9 @@ function resize() {
 /* ====================================================================== shaders */
 const COMMON = /* glsl */`
 uniform mat4 uVP; uniform float uAspect; uniform float uFocus, uAper; uniform float uPerPx, uWobPx, uPxK, uDab;
-uniform vec3 uCamP; uniform vec3 uSunD; uniform float uLemon;
+uniform vec3 uCamP; uniform vec3 uSunD; uniform float uLemon, uPaint;
+// in paint mode the data target carries each surface's stroke direction on screen instead of a carved line
+float angOf(vec3 W, vec3 T){ vec4 a=uVP*vec4(W,1.); vec4 b=uVP*vec4(W+T*0.05,1.); vec2 d=b.xy/max(abs(b.w),1e-4)-a.xy/max(abs(a.w),1e-4); d.x*=uAspect; return fract(atan(d.y,d.x)/3.14159265+1.); }
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
@@ -210,7 +212,7 @@ const SH = {   // shared uniforms
   uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 120 }, uFogShade: { value: 0.66 },
   uBreath: { value: 0 }, uFocus: { value: 1 }, uAper: { value: 0.2 }, uLemon: { value: 0 },
   uPerPx: { value: 6 }, uWobPx: { value: 7 }, uPxK: { value: .0012 }, uDab: { value: 0.3 }, uWindL: { value: V() }, uCalm: { value: 1 },
-  uWet: { value: 0.2 }, uWax: { value: 0.2 }, uRepaint: { value: 0 }, uWatch: { value: 0 }, uWatchP: { value: V() },
+  uPaint: { value: 1 }, uWet: { value: 0.2 }, uWax: { value: 0.2 }, uRepaint: { value: 0 }, uWatch: { value: 0 }, uWatchP: { value: V() },
 };
 const OBJ_VERT = /* glsl */`
 uniform float uTime, uBreath, uBreathOn, uCloth, uMover, uCalm, uWatch; uniform vec3 uWindL, uWatchP;
@@ -265,12 +267,12 @@ void main(){
     float zx0=${f4(ZEB.x0)}-26.*uRepaint, zx1=${f4(ZEB.x1)}+26.*uRepaint;
     if(ld<wob*0.3-0.08){
       bool zeb=p.x>zx0&&p.x<zx1&&abs(p.y)<2.85+0.15*vn(p*3.)&&fract((p.x-zx0)/1.04+0.06*(vn(p*1.3)-0.5))<0.5;
-      if(zeb){ id=14.; useG=1.; gS=p.x+0.18*(vn(p*2.)-0.5); gT=p.y; sh+=0.18-0.12*uWet; }
-      else { id=4.; useG=1.; float ang=uRepaint*1.15; vec2 dr=vec2(cos(ang),sin(ang));
+      if(zeb){ id=14.; T=vec3(0.,0.,1.); useG=1.; gS=p.x+0.18*(vn(p*2.)-0.5); gT=p.y; sh+=0.18-0.12*uWet; }
+      else { id=4.; useG=1.; float ang=uRepaint*1.15; vec2 dr=vec2(cos(ang),sin(ang)); T=vec3(dr.x,0.,dr.y);
         gS=dot(p,vec2(-dr.y,dr.x))+0.38*(vn(p*0.45)-0.5)+0.12*(vn(p*1.7)-0.5); gT=dot(p,dr);
         sh+=0.07*(vn(p*0.6)-0.5)+0.05*(vn(p*3.1)-0.5)-0.2*uWet*(0.5+0.5*vn(p*0.9))-0.1;
         if(uWet>0.3) acc=step(0.994-0.012*uWet,hash(floor(p*18.)))*cl; }
-    } else { id=12.; useG=1.; gS=dot(p,vec2(0.6,0.8))+0.6*(vn(p*0.4)-0.5); gT=dot(p,vec2(0.8,-0.6)); sh+=0.08*(vn(p*2.3)-0.5)-0.05*uWet;
+    } else { id=12.; T=vec3(0.8,0.,-0.6); useG=1.; gS=dot(p,vec2(0.6,0.8))+0.6*(vn(p*0.4)-0.5); gT=dot(p,vec2(0.8,-0.6)); sh+=0.08*(vn(p*2.3)-0.5)-0.05*uWet;
       if(p.y>${f4(HEDGE.z0 - 0.3)}&&p.y<${f4(HEDGE.z1 + 0.4)}) sh-=0.14;
       if(N.y<0.7) gS=vW.y*2.2; }
   }
@@ -298,7 +300,7 @@ void main(){
   if(uEmit>0.){ sh=uEmit; fog*=0.4; }
   sh=mix(sh,uFogShade,fog);
   float line=useG>0.5?lineS(gS,gT,dist,grazeOf(N,vW,dist),0.):uPC>0.5?lineS(vP.y+pcBend,vP.x,dist,grazeOf(N,vW,dist),0.):lineAt(vL,vW,N,T,dist,0.);
-  gl_FragColor=pack(sh,id,line,acc*(1.-fog),dist);
+  gl_FragColor=pack(sh,id,uPaint>0.5?angOf(vW,normalize(T+vec3(1e-5))):line,acc*(1.-fog),dist);
 }`;
 function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
   return new THREE.ShaderMaterial({
@@ -329,7 +331,7 @@ void main(){
     float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
     if(cov>0.5&&id<0.5){ id=13.; sh=0.86-0.5*(cl-thr)+0.15*sg+0.1*band; T=normalize(vec3(1.,0.15*(cl-0.6),0.)); }
   }
-  gl_FragColor=pack(sh,id,lineAt(uCamP*0.02+d*100.,uCamP-d,-d,T,100.,0.),0.,1e5);
+  gl_FragColor=pack(sh,id,uPaint>0.5?angOf(uCamP+d*60.,normalize(cross(vec3(0.,1.,0.),d)+vec3(1e-4))):lineAt(uCamP*0.02+d*100.,uCamP-d,-d,T,100.,0.),0.,1e5);
 }`;
 const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
 const DISC_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); gl_Position.z=gl_Position.w*0.99998; }`;
@@ -338,6 +340,7 @@ ${COMMON}
 uniform float uDim; varying vec2 vUv;
 void main(){ vec2 p=vUv*2.-1.; float r=length(p); if(r>1.) discard;
   float sh=(0.9-0.3*smoothstep(0.5,1.,r))*uDim; float line=0.5+0.5*cos(r*38.+uLemon*r*20.);
+  if(uPaint>0.5){ sh=(0.92-0.25*smoothstep(0.55,1.,r))*uDim; line=fract(atan(p.y,p.x)/3.14159265+0.5); }
   gl_FragColor=pack(sh,1.,line,0.,1e5); }`;
 const PT_VERT = /* glsl */`attribute float aLife; uniform float uScale; varying float vLife; varying vec3 vW;
 void main(){ vLife=aLife; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; vec4 mv=viewMatrix*w; gl_Position=projectionMatrix*mv;
@@ -408,6 +411,105 @@ const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 
 const printMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PRINT_FRAG, uniforms: PU, depthTest: false, depthWrite: false });
 const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { uTex: { value: rtPrint.texture } }, depthTest: false, depthWrite: false });
 const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
+
+/* ---------- paint pass: the frame is laid down as brush strokes, after Bryson Iacoboni's paintings */
+// Three layers of strokes on a jittered grid in the data target: big strokes everywhere, then medium and small strokes only where
+// the picture changes (edges, figures, flowers). Each stroke takes one colour, mixed from its material's three paints at the
+// shade under its centre, and lies along that surface's own direction. Ragged bristle edges, dry-brush tails that show the primed
+// canvas, the odd stray colour, a wobbly teal contour round the figures. Out of focus, only the big strokes. The strokes re-lay a few
+// times a second, like a painting made frame by frame.
+const EDGE_FRAG = /* glsl */`
+uniform sampler2D uData; uniform vec2 uRes; uniform float uScale;
+void main(){ vec2 fc=gl_FragCoord.xy; vec4 h=texture2D(uData,fc/uRes); int id=int(floor(h.g*16.)); float e=0.;
+  for(int k=0;k<8;k++){ float a=float(k)*0.785398; vec2 o=vec2(cos(a),sin(a))*3.*uScale; vec4 q=texture2D(uData,(fc+o)/uRes);
+    e=max(e,abs(q.r-h.r)*2.6); if(int(floor(q.g*16.))!=id) e=1.; }
+  gl_FragColor=vec4(e,0.,0.,1.); }`;
+const PAINT_FRAG = /* glsl */`
+uniform sampler2D uData; uniform sampler2D uEdge; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uPC[48];
+uniform float uSeed, uBoil, uScale, uRain, uTime, uDetail; uniform vec2 uRainDir;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+int idOf(vec4 d){ return int(floor(d.g*16.)); }
+float cocOf(float a){ return clamp((a-(a>=0.5?0.5:0.))/0.49,0.,1.); }
+bool fig(int a){ return a==8||a==9||a==10||a==11; }
+bool lined(int a){ return a==5||a==6||a==7||a==15; }
+vec3 paintCol(vec4 d, float jit){
+  int k=idOf(d)*3; float s=clamp(d.r+jit,0.,1.);
+  float q=(floor(s*4.)+0.5)/4.; s=mix(s,q,0.5);   // mixed on the palette, not smoothly graded
+  vec3 c0=uPC[k], c1=uPC[k+1], c2=uPC[k+2];
+  return s<0.5? mix(c0,c1,smoothstep(0.1,0.5,s)) : mix(c1,c2,smoothstep(0.5,0.9,s)); }
+void main(){
+  vec2 fc=gl_FragCoord.xy; vec4 here=texture2D(uData,fc/uRes);
+  vec3 col=uPal[5]*(0.92+0.05*vn(fc*vec2(0.55,0.09))+0.04*vn(fc*vec2(0.09,0.55)));   // primed canvas
+  float best=-1.;
+  for(int L=0;L<3;L++){
+    float cs=(L==0?14.:(L==1?7.5:4.))*uScale;
+    vec2 c=floor(fc/cs);
+    for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+      vec2 n=c+vec2(float(i),float(j)); float sd=uBoil*7.13+float(L)*31.7;
+      vec2 p=(n+0.5+(vec2(hash(n+sd),hash(n+sd+17.3))-0.5)*0.9)*cs;
+      vec4 d=texture2D(uData,p/uRes); float coc=cocOf(d.a);
+      if(L>0){ float e=texture2D(uEdge,p/uRes).r; if(e<(L==1?0.12:0.4)*uDetail || coc>(L==1?0.5:0.22)) continue; }
+      float a=d.b*3.14159265+(hash(n+sd+3.1)-0.5)*0.4;
+      vec2 dir=vec2(cos(a),sin(a)); vec2 v=fc-p; vec2 q=vec2(dot(v,dir), dot(v,vec2(-dir.y,dir.x)));
+      float len=cs*(L==0?1.3:1.05)*(0.75+0.5*hash(n+sd+5.9))*(1.+0.7*coc);
+      float u=q.x/len; if(abs(u)>1.) continue;
+      float wid=cs*(L==0?0.62:0.52)*(0.8+0.4*hash(n+sd+9.1))*(1.+0.4*coc);
+      float rag=(vn(vec2(q.x/(cs*0.3)+n.x*3.1, n.y*1.7+sd))-0.5)*0.42;
+      if(abs(q.y)>wid*(1.-0.32*u*u+rag)) continue;
+      float br=vn(vec2(q.x/(cs*1.5)+n.x*1.3, q.y/(cs*0.075)+n.y*5.3+sd));
+      if(u>0.5 && br<(u-0.5)*1.1) continue;   // dry brush at the tail: the canvas shows
+      float pri=float(L)*10.+hash(n+sd+5.7);
+      if(pri>best){ best=pri;
+        vec3 pc=paintCol(d,(hash(n+sd+11.)-0.5)*0.13);
+        if(L>0 && hash(n+sd+23.)<0.03) pc=mix(pc,uPal[int(floor(hash(n+sd+29.)*5.99))],0.3);   // a stray colour off the palette
+        col=pc*(0.93+0.13*br); }
+    }
+  }
+  float hc=cocOf(here.a);
+  if(here.a>=0.5 && hc<0.3 && hash(floor(fc/(2.*uScale))+uBoil)>0.55) col=mix(col,uPal[5],0.85);   // wet glints, wax
+  // contours: wobbly, broken; teal round the figures, loose dark lines on built things
+  vec2 o=vec2(vn(fc*0.045+uBoil*1.3)-0.5, vn(fc*0.05+9.1+uBoil*0.7)-0.5)*3.4*uScale; vec2 sp=fc+o; float r=1.3*uScale;
+  int a1=idOf(texture2D(uData,(sp+vec2(r,0.))/uRes)), a2=idOf(texture2D(uData,(sp-vec2(r,0.))/uRes)), a3=idOf(texture2D(uData,(sp+vec2(0.,r))/uRes)), a4=idOf(texture2D(uData,(sp-vec2(0.,r))/uRes));
+  bool edge=a1!=a2||a3!=a4; float brk=vn(fc*0.11+uBoil*2.1);
+  if(edge && hc<0.35 && brk<0.86){
+    if(fig(a1)||fig(a2)||fig(a3)||fig(a4)) col=mix(col,uPal[2],0.92);
+    else if((lined(a1)||lined(a2)||lined(a3)||lined(a4)) && brk<0.55) col=mix(col,uPal[0],0.7); }
+  if(uRain>0.01){
+    vec2 rp=vec2(dot(fc,vec2(-uRainDir.y,uRainDir.x)), dot(fc,uRainDir)+uTime*520.);
+    vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
+    if(h>1.-uRain*0.05 && fract(rp.y/46.)<0.35 && fract(rp.x/5.)<0.3) col=mix(col,uPal[5],0.7);
+  }
+  gl_FragColor=vec4(col,1.);
+}`;
+const rtEdge = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, generateMipmaps: false });
+// paints: unlike the linocut's six flat inks, paint mixes. Each material gets [dark, mid, light] mixed from the colourway's six paints.
+const PMAT = (P) => { const m = (a, b, t) => P[a].clone().lerp(P[b], t), I = (a) => P[a].clone();
+  return [
+    [m(SEA, PAPER, 0.55), m(GLOW, PAPER, 0.62), I(PAPER)],                 // 0 sky: pale, a pink breath
+    [I(GLOW), m(GLOW, PAPER, 0.5), I(PAPER)],                              // 1 sun, lamps
+    [I(INK), I(DEEP), m(DEEP, SEA, 0.5)],                                  // 2 hedge, crowns
+    [m(DEEP, HOT, 0.55), I(HOT), m(HOT, GLOW, 0.5)],                       // 3 poppies, blossom
+    [m(INK, SEA, 0.45), m(SEA, GLOW, 0.5).lerp(P[PAPER], 0.12), m(GLOW, PAPER, 0.55)],   // 4 road: a lavender grey
+    [m(SEA, GLOW, 0.5), m(GLOW, PAPER, 0.25), m(GLOW, PAPER, 0.7)],        // 5 plaster, pink stalks
+    [m(INK, SEA, 0.5), m(SEA, PAPER, 0.45), I(PAPER)],                     // 6 concrete
+    [I(INK), I(INK), m(INK, DEEP, 0.5)],                                   // 7 dark
+    [m(SEA, GLOW, 0.45), m(GLOW, PAPER, 0.35), I(PAPER)],                  // 8 skin
+    [m(SEA, PAPER, 0.5), m(PAPER, GLOW, 0.12), I(PAPER)],                  // 9 white shirt, shoes, the dog
+    [I(INK), m(INK, DEEP, 0.3), m(INK, SEA, 0.5)],                         // 10 black trousers, coat, trunks
+    [m(INK, HOT, 0.5), I(HOT), m(HOT, GLOW, 0.6)],                         // 11 board, funbox
+    [m(INK, DEEP, 0.5), I(DEEP), m(DEEP, GLOW, 0.45)],                     // 12 grass
+    [m(GLOW, PAPER, 0.45), m(GLOW, PAPER, 0.75), I(PAPER)],                // 13 cloud
+    [m(SEA, PAPER, 0.5), I(PAPER), I(PAPER)],                              // 14 crosswalk
+    [m(DEEP, HOT, 0.5), I(HOT), m(HOT, GLOW, 0.5)],                        // 15 roofs
+  ].flat(); };
+const PAINTU = { uData: PU.uData, uEdge: { value: rtEdge.texture }, uRes: PU.uRes, uPal: PU.uPal, uPC: { value: Array.from({ length: 48 }, () => V()) }, uSeed: PU.uSeed, uRain: PU.uRain, uRainDir: PU.uRainDir, uTime: PU.uTime,
+  uBoil: { value: 0 }, uScale: { value: 1 }, uDetail: { value: 1 } };
+const edgeMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: EDGE_FRAG, uniforms: { uData: PU.uData, uRes: PU.uRes, uScale: PAINTU.uScale }, depthTest: false, depthWrite: false });
+const paintMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PAINT_FRAG, uniforms: PAINTU, depthTest: false, depthWrite: false });
+let PAINT = Q.get('print') !== 'lino', boilT = 0;
+
 
 /* ====================================================================== world build */
 function withT(g, T) { const n = g.attributes.position.count, t = new Float32Array(n * 3); for (let i = 0; i < n; i++) { t[i * 3] = T.x; t[i * 3 + 1] = T.y; t[i * 3 + 2] = T.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; }
@@ -506,16 +608,17 @@ for (const k of Object.keys(BX)) { const [id, mode] = k.split('|').map(Number); 
 /* ---------- the hedge: a high wall of clumps, full of poppies and pink stalks */
 {
   const hedge = [];
-  for (let x = -150; x < 150; x += pr(1.0, 1.5)) { const zc = (HEDGE.z0 + HEDGE.z1) / 2 + 0.35 + pr(-0.25, 0.25);
+  for (let x = -150; x < 150; x += pr(0.75, 1.05)) { const zc = (HEDGE.z0 + HEDGE.z1) / 2 + 0.35 + pr(-0.25, 0.25);
     const near = Math.abs(x - 5) < 70;
-    scoopInto(hedge, V(x, pr(0.8, 1.1), zc), pr(1.2, 1.6), pr(1.0, 1.3), pr(1.5, 1.9), x * 0.37, near ? 2 : 1);
-    scoopInto(hedge, V(x + pr(-0.5, 0.5), pr(2.2, 2.6), zc + pr(-0.3, 0.3)), pr(1.0, 1.4), pr(0.9, 1.1), pr(1.2, 1.6), x * 0.53 + 9, near ? 2 : 1); }
+    scoopInto(hedge, V(x, pr(0.7, 0.95), zc), pr(0.85, 1.15), pr(0.8, 1.05), pr(1.3, 1.7), x * 0.37, near ? 2 : 1);
+    scoopInto(hedge, V(x + pr(-0.4, 0.4), pr(1.6, 1.9), zc + pr(-0.3, 0.2)), pr(0.8, 1.1), pr(0.7, 0.9), pr(1.1, 1.5), x * 0.71 + 4, near ? 2 : 1);
+    scoopInto(hedge, V(x + pr(-0.5, 0.5), pr(2.5, 2.8), zc + pr(-0.3, 0.3)), pr(0.75, 1.05), pr(0.7, 0.9), pr(1.0, 1.4), x * 0.53 + 9, near ? 2 : 1); }
   scene.add(new THREE.Mesh(mergeGeometries(hedge), objMat(2, 6, V(0, 1, 0), { uCloth: { value: 5 }, uPC: { value: 1 } })));
 }
 const flowerMats = [];
 {
   const pop = (() => { const g = new THREE.CircleGeometry(0.075, 7); g.translate(0, 0, 0.01); return withT(clean(g), V(0, 1, 0)); })();
-  const stalk = (() => { const g = new THREE.ConeGeometry(0.035, 0.42, 5); g.translate(0, 0.21, 0); return withT(clean(g), V(0, 1, 0)); })();
+  const stalk = (() => { const g = new THREE.ConeGeometry(0.022, 0.34, 5); g.translate(0, 0.17, 0); return withT(clean(g), V(0, 1, 0)); })();
   const place = (n, fn) => { const ms = []; for (let i = 0; i < n; i++) { const m = fn(i); if (m) ms.push(m); } return ms; };
   const face = (x, y, z, yaw, s) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.35, 0.35), yaw, pr(-0.3, 0.3), 'YXZ')), V(s, s, s));
   const N = SMALL ? 3600 : 5600;
@@ -523,7 +626,7 @@ const flowerMats = [];
     return face(x, y, z, Math.PI + pr(-0.5, 0.5), pr(0.7, 1.4)); });
   const topFlowers = place(SMALL ? 500 : 900, () => face(pr(-110, 120), HEDGE.top + pr(-0.25, 0.2), pr(HEDGE.z0 + 0.3, HEDGE.z1 - 0.3), pr(0, TAU), pr(0.7, 1.3)));
   const wallFlowers = place(SMALL ? 500 : 800, () => { const x = pr(-80, 90); if (x > 6 && x < 22) return null; return face(x, pr(0.25, 0.55), WALL.z - pr(0.5, 1.6), pr(-0.6, 0.6), pr(0.8, 1.2)); });
-  const stalks = place(SMALL ? 700 : 1100, () => { const x = pr(-110, 120), y = pr(0.2, 2.9); return new THREE.Matrix4().compose(V(x, y, HEDGE.z0 - 0.1 + pr(-0.1, 0.2)), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.4, 0.2), 0, pr(-0.3, 0.3))), V(1, pr(0.8, 1.6), 1)); });
+  const stalks = place(SMALL ? 450 : 700, () => { const x = pr(-110, 120), y = pr(0.2, 2.9); return new THREE.Matrix4().compose(V(x, y, HEDGE.z0 - 0.1 + pr(-0.1, 0.2)), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.4, 0.2), 0, pr(-0.3, 0.3))), V(1, pr(0.8, 1.6), 1)); });
   for (const [geo, id, list] of [[pop, 3, hedgeFlowers.concat(topFlowers, wallFlowers)], [stalk, 5, stalks]]) {
     const m = objMat(id, 4, V(0, 1, 0), { uCloth: { value: 6 }, uMover: { value: 1 } }); flowerMats.push(m);
     const im = new THREE.InstancedMesh(geo, m, list.length); list.forEach((q, k) => im.setMatrixAt(k, q)); im.frustumCulled = false; scene.add(im); }
@@ -1222,6 +1325,7 @@ function applyLook(dt) {
   const gm = S.grammar; PU.uPeriod.value = gm.period * IH / 720; PU.uDith.value = gm.dith; PU.uWob.value = gm.wob * IH / 720; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch; PU.uBlurR.value = 10 * IH / 720; SH.uPerPx.value = PU.uPeriod.value; SH.uWobPx.value = PU.uWob.value;
   SH.uDab.value = clamp(gm.dab + 0.25 * live.repaint, 0, 0.8);
   PU.uRain.value = clamp(WX.precip / 2, 0, 1); PU.uRainDir.value.set(Math.sin(wb) * 0.35, -1).normalize(); PU.uTime.value = simT;
+  boilT += dt * live.calm; PAINTU.uBoil.value = Math.floor(boilT * 5) % 997; PAINTU.uScale.value = IH / 720; SH.uPaint.value = PAINT ? 1 : 0; PAINTU.uDetail.value = 1; { const pc = PMAT(cwNow); for (let i = 0; i < 48; i++) PAINTU.uPC.value[i].copy(pc[i]); }
   const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1])); rs.setProperty('--sea', css(cwNow[2]));
   // the shadow projection: everything a figure is, thrown along the sun onto the ground
@@ -1240,7 +1344,9 @@ function applyLook(dt) {
 }
 function render() {
   renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
-  quad.material = printMat; renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
+  if (PAINT) { quad.material = edgeMat; renderer.setRenderTarget(rtEdge); renderer.render(postScene, postCam); quad.material = paintMat; }
+  else quad.material = printMat;
+  renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
   quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
 }
 
@@ -1254,7 +1360,7 @@ function hudUpdate() {
   const nf = SK.riding ? SK.nextFeat() : null; const d = crew.liveDrone;
   const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
   const sl = clamp(1.75 / Math.tan(Math.max(MORN.el, 0.05)), 0, 99);
-  hud.innerHTML = `<div class="t"><span>MZ WORLD · SKATE GARDEN</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · SKATE GARDEN</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name} · ${PAINT ? 'PAINT' : 'LINO'}</span></div>
   <div class="r"><span>HELD GOLDEN HOUR ${clockStr(MORN.clock)} · sun ${el.toFixed(0)}° ${compass(b)}</span><span>SIMULATED · shadows ${sl.toFixed(0)} m</span></div>
   <div class="r"><span>SKATER ${MODE_WORD[SK.mode] || SK.mode}${SK.riding ? ' ' + (SK.dir > 0 ? 'east' : 'west') + ' · ' + SK.v.toFixed(1) + ' m/s' : ''}${nf ? ' · next ' + FEAT_NAME[nf.f.k] : ''}</span><span>→ bass on ${NOTE[AUD.deg(AUD.skDeg()) % 12]}</span></div>
   <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · CLOUD ${(WX.cloud * 100).toFixed(0)}%</span><span>→ hedge, bar ${AUD.barSec.toFixed(1)} s</span></div>
@@ -1286,6 +1392,7 @@ addEventListener('pagehide', save);
 addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
   if (k === 'i') setInfo(!INFO);
   if (k === 'm') AUD.mute();
+  if (k === 'p') { PAINT = !PAINT; logEv(PAINT ? 'the lane was painted in strokes' : 'the lane was printed as a linocut'); hudUpdate(); }
   if (k === 'r' && !live.ev) { logEv('a hand on the lane (human intervention)'); S.tension = 1; }
   AUD.start(); });
 addEventListener('pointerdown', () => AUD.start());
