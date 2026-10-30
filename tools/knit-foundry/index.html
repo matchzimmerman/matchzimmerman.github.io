@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="MZ Knit Foundry 002: prepare four-color jacquard artwork studies for Printful knitwear.">
+<title>MZ KNIT FOUNDRY 002</title>
+<style>
+:root{--bg:#f4f2ed;--fg:#202724;--muted:#68716b;--edge:#d3d8ce;--accent:#116758;--inverse:#fcfcf7;--soft:#e8ebe4;--danger:#925138}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.4}
+header{border-bottom:1px solid var(--edge);padding:23px clamp(18px,4vw,62px);display:flex;align-items:center;gap:20px;justify-content:space-between}header .brand{font-size:12px;letter-spacing:.18em;font-weight:900}header .version{font-size:11px;color:var(--muted);letter-spacing:.12em}h1{font-size:clamp(42px,6.4vw,92px);letter-spacing:-.073em;line-height:.9;font-weight:750;margin:13px 0 22px}h2{font-size:16px;letter-spacing:-.025em;margin:0 0 14px}p{margin:0 0 12px}.eyebrow{color:var(--accent);font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:800}.sub{max-width:640px;font-size:17px;color:#4a574f}main{max-width:1590px;margin:auto;padding:32px clamp(16px,4vw,62px) 80px}.intro{display:flex;justify-content:space-between;gap:40px;align-items:end;margin-bottom:30px}.intro .meta{color:var(--muted);font-size:11px;text-transform:uppercase;max-width:250px;text-align:right;letter-spacing:.06em}
+.workspace{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:20px;align-items:start}.panel{border:1px solid var(--edge);background:#fffefa;border-radius:10px;padding:22px}.controls{display:grid;gap:24px;position:sticky;top:12px}.group{border-bottom:1px solid var(--edge);padding-bottom:22px}.group:last-child{border:0;padding:0}.group-head{font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;margin-bottom:13px;color:var(--muted)}.upload{display:flex;flex-direction:column;gap:14px;cursor:pointer;align-items:center;justify-content:center;border:2px dashed #9fb5a7;border-radius:10px;background:#f5f9f3;min-height:185px;padding:18px;text-align:center;transition:background .2s}.upload.drag{background:#dfeae0}.upload span{font-size:13px;color:#56685b}.upload strong{font-size:17px}.upload input{display:none}.icon{font-size:28px;color:var(--accent)}.buttons{display:flex;gap:8px;flex-wrap:wrap}.button{border:1px solid var(--fg);background:transparent;padding:11px 14px;border-radius:6px;font-size:13px;font-weight:700}.button.primary{background:var(--accent);border-color:var(--accent);color:white}.button.secondary{border-color:var(--edge);background:#f6f8f4}.button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #71b6a0;outline-offset:2px}.button.active{background:var(--fg);color:var(--inverse)}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.field{display:grid;gap:6px;margin:10px 0}.field label{font-size:12px;color:#536159;font-weight:650}.field select,.field input[type=number]{border:1px solid var(--edge);border-radius:6px;padding:9px;background:white;width:100%}.field input[type=range]{width:100%;accent-color:var(--accent)}.palette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.swatch{display:grid;gap:5px}.swatch input{appearance:none;width:100%;height:49px;border:1px solid var(--edge);border-radius:6px;padding:3px;background:white;cursor:pointer}.swatch small{font:10px ui-monospace,SFMono-Regular,monospace;color:var(--muted);text-align:center}.controls .note{font-size:11px;color:var(--muted)}.warning{font-size:12px;padding:12px 14px;background:#fff0df;border-left:3px solid #d68e48;color:#765027}.status{font:12px ui-monospace,SFMono-Regular,monospace;color:#42624e;min-height:20px}.output{display:grid;gap:20px}.topline{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:14px}.topline small{font-size:11px;color:var(--muted)}.source-preview{width:100%;aspect-ratio:16/6;display:grid;place-items:center;background:#e7e9e1;overflow:hidden;border:1px solid var(--edge);border-radius:5px}.source-preview img{display:block;width:100%;height:100%;object-fit:contain}.empty{color:#89958b;text-align:center;font-size:14px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}.tile{min-width:0}.tile .viewport{background:var(--soft);height:270px;display:grid;place-items:center;border-radius:6px;overflow:hidden;border:1px solid #dee3db}.tile canvas{display:block;max-width:100%;max-height:100%;object-fit:contain;image-rendering:auto}.tile .label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-top:9px}.tile .dim{color:var(--muted);font-size:10px;margin-top:3px}.caption{font-size:12px;color:var(--muted)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.metric{border:1px solid var(--edge);padding:14px;border-radius:5px;background:#f8faf6}.metric .n{display:block;font-size:23px;letter-spacing:-.05em;font-weight:750}.metric .l{font-size:11px;color:var(--muted)}.disabled-like{opacity:.68}.footnotes{font-size:11px;color:var(--muted);border-top:1px solid var(--edge);margin-top:20px;padding-top:14px}.checklist{margin:0;padding:0;list-style:none;font-size:12px}.checklist li{padding:7px 0;border-bottom:1px solid var(--edge);display:flex;gap:10px}.checklist li:before{content:'○';color:var(--danger)}#templateFile{display:none}.template-banner{color:var(--muted);font-size:11px}.error{color:#a5382f!important}
+@media(max-width:970px){.workspace{grid-template-columns:1fr}.controls{position:static}.intro{display:block}.intro .meta{display:none}}
+@media(max-width:650px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics{grid-template-columns:1fr 1fr}.panel{padding:15px}.tile .viewport{height:240px}}
+</style>
+</head>
+<body>
+<header><span class="brand">MZ / PRODUCT SYSTEMS</span><span class="version">KNIT FOUNDRY 002 · PRIVATE-BY-DESIGN</span></header>
+<main>
+  <section class="intro">
+    <div><div class="eyebrow">Jacquard artwork conversion instrument</div><h1>KNIT<br>FOUNDRY</h1><p class="sub">Drop in any image. Explore four-yarn translations, map the composition across a sweater, and export an editable production-prep package.</p></div>
+    <div class="meta">RELAXED FIT CREW NECK<br>PRINTFUL CATALOG #860<br>LOCAL CONVERSION · NO API KEY REQUIRED</div>
+  </section>
+  <div class="workspace">
+    <aside class="panel controls" aria-label="Foundry controls">
+      <section class="group"><div class="group-head">01 / Artwork input</div>
+        <label id="dropzone" class="upload" for="upload"><span class="icon">↥</span><strong>Drop or choose artwork</strong><span>PNG, JPG, WebP · processed on this device</span><input id="upload" type="file" accept="image/png,image/jpeg,image/webp"></label>
+        <p class="note" id="fileInfo">No artwork loaded. Your source image is never uploaded.</p>
+      </section>
+      <section class="group"><div class="group-head">02 / Composition mode</div>
+        <div class="buttons" role="group" aria-label="Layout mode"><button class="button active" data-layout="wrap" type="button">Wrap</button><button class="button" data-layout="repeat" type="button">Repeat</button><button class="button" data-layout="composed" type="button">Composed</button></div>
+        <p class="note" id="modeNote" style="margin-top:9px">Front and back sample adjacent halves of the source panorama; sleeves borrow narrow strips.</p>
+        <div class="field"><label for="seam">Horizontal position / seam offset <span id="seamVal">0%</span></label><input type="range" min="0" max="100" step="1" id="seam" value="0"></div>
+      </section>
+      <section class="group"><div class="group-head">03 / Four-color reduction</div>
+        <div class="palette" id="palette"><label class="swatch"><input type="color" value="#243f33" aria-label="Yarn color 1"><small>#243F33</small></label><label class="swatch"><input type="color" value="#237d96" aria-label="Yarn color 2"><small>#237D96</small></label><label class="swatch"><input type="color" value="#eda6b4" aria-label="Yarn color 3"><small>#EDA6B4</small></label><label class="swatch"><input type="color" value="#eddea4" aria-label="Yarn color 4"><small>#EDDEA4</small></label></div>
+        <div class="buttons" style="margin-top:12px"><button class="button secondary" type="button" id="autoPalette" disabled>Extract from image</button><button class="button secondary" type="button" id="resetPalette">Two Houses colors</button></div>
+        <p class="note">These HEX colors are artwork approximations. The tool does not certify they exist in Printful’s current 36-yarn catalog.</p>
+        <div class="field"><label for="reduction">Color reduction style</label><select id="reduction"><option value="pixelated">Pixelated / stitch-grid study</option><option value="solid">Solid / shape fidelity</option></select></div>
+        <div class="field" id="pixelWrap"><label for="pixelSize">Simulated pixel block <span id="pixelVal">8 px</span></label><input type="range" id="pixelSize" value="8" min="2" max="24" step="2"></div>
+        <div class="field"><label for="base">Base yarn color</label><select id="base"></select></div>
+        <div class="field"><label for="trim">Trim / collar / hem yarn</label><select id="trim"></select></div>
+      </section>
+      <section class="group"><div class="group-head">04 / Template study profile</div>
+        <p class="template-banner" id="templateStatus">Default concept artboards · not verified against Printful's size-specific template.</p>
+        <div class="buttons"><label class="button secondary" for="templateFile" tabindex="0">Import profile JSON</label><input id="templateFile" type="file" accept="application/json,.json"><button class="button secondary" type="button" id="restoreTemplate">Reset artboards</button></div>
+        <p class="note">Profile uses placement keys and artboard dimensions only. Official garment contours, stitch gauge, per-size alignment and available yarns must be validated in Printful.</p>
+      </section>
+      <section class="group"><div class="buttons"><button class="button primary" id="render" disabled>Build previews</button><button class="button" id="download" disabled>Export ZIP package ↓</button></div><p id="status" class="status" role="status" aria-live="polite"></p></section>
+    </aside>
+    <div class="output">
+      <section class="panel"><div class="topline"><h2>Source artwork</h2><small id="sourceDims">NO FILE</small></div><div class="source-preview" id="sourcePreview"><span class="empty">Artwork will appear here</span></div></section>
+      <section class="panel"><div class="topline"><h2>Four-panel translation</h2><small>CONCEPT PANELS · NOT PRODUCTION TEMPLATES</small></div>
+        <div class="grid" id="panels"><div class="tile"><div class="viewport"><span class="empty">Front</span></div><div class="label">Front</div></div><div class="tile"><div class="viewport"><span class="empty">Back</span></div><div class="label">Back</div></div><div class="tile"><div class="viewport"><span class="empty">Left sleeve</span></div><div class="label">Left sleeve</div></div><div class="tile"><div class="viewport"><span class="empty">Right sleeve</span></div><div class="label">Right sleeve</div></div></div>
+        <p class="caption" style="margin-top:16px">The display is a flat artwork-placement study, not an official Printful-generated garment mockup.</p>
+      </section>
+      <section class="panel"><div class="topline"><h2>Output integrity</h2><small id="renderInfo">AWAITING IMAGE</small></div>
+        <div class="metrics"><div class="metric"><span class="n">4</span><span class="l">Output yarn colors</span></div><div class="metric"><span class="n">4</span><span class="l">Separate artboards</span></div><div class="metric"><span class="n">0</span><span class="l">Products published</span></div></div>
+        <div class="warning" style="margin-top:18px">Prepress study only. Exact garment-specific artboard geometry, yarn availability, design position per size, and a Printful manufacturing mockup still require validation.</div>
+        <ul class="checklist" style="margin-top:14px"><li>Printful catalog yarn hex values verified</li><li>Printful size-specific template/placement dimensions verified</li><li>Official mockups reviewed on all available sizes</li><li>Product publication explicitly approved</li></ul>
+        <p class="footnotes">No Printful order or shop listing is created. Nothing is uploaded or stored on a server. Export includes four PNGs, original artwork, settings manifest, and a checklist. This tool is intentionally independent of the Squarespace migration.</p>
+      </section>
+    </div>
+  </div>
+</main>
+<script src="./engine.js"></script><script src="./app.js"></script>
+</body></html>
