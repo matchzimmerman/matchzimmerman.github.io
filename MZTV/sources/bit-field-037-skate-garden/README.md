@@ -18,6 +18,15 @@ Imagine a three-dimensional painting: he painted the house as an object.
 - Figures get flatter paint and keep the wobbly teal contour; the contour no longer flickers.
 
 
+### V3 brushes, after the paintings (Study 004, 2026-10-30)
+Nothing of Bryson Iacoboni's work could be found online, so the brushes are drawn from the twelve paintings MZ.Human shared:
+- **Each material has its own brush** (`uBW` width, `uBL` length, in the shader): broad flat bands for the sky and grass, long pulls along the road, upright flame strokes in the hedge (it no longer follows the clumps' curves), short strokes on figures. Within a row, strokes vary in width.
+- **The background is painted with a bigger brush**: strokes widen by up to 80% from 14 m to 70 m away, so far things read as broad wet-into-wet blobs and the figures stay crisp.
+- **Accents off the palette** (`PACC`): a share of strokes take another paint, per material: orange and pink flicks in the hedge and grass, lilac and the odd red line in the road's grey, rose in skin, lilac shade in the white shirt, maroon in the black.
+- **Underpainting shows between strokes**, an earlier colour rather than empty canvas: warm red-orange under the hedge and grass, pink under the road, teal under the pink house and the white shirt. Dry tails still show the primer.
+- **The contour is drawn after the paint, off the fill**: misregistered by about 2 px, wobbly, broken, teal (black now and then on the darkest figures).
+- **A canvas margin**: raw primer at the frame's edge, ragged where the paint stops.
+
 ## V2 · painted in screen strokes (Study 002)
 At MZ.Human's request the world is no longer printed in the usual six-ink linocut. Each frame is **laid down as brush strokes**, after Bryson Iacoboni's gestural paint:
 - The scene still renders to the data target, but in paint mode each fragment stores its **surface's stroke direction on screen** (the road along its length, the grass across, crowns round their form, limbs along the bone, the sky across the view) instead of a carved line.
