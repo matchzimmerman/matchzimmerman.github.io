@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MZ World Flower Field</title>
-<meta name="description" content="MZ WORLD · FLOWER FIELD — after the paintings of Bryson Iacoboni. A field of round lilac, pink and white flowers on a navy ground under a held golden hour; a gap in the clouds drifts across it with the wind. Painted, and filmed by a crew of drones.">
+<meta name="description" content="MZ WORLD · FLOWER FIELD — after the paintings of Bryson Iacoboni. A field of round flowers under a held golden hour; a gap in the clouds drifts across it with the wind. Painted in his colours, and filmed by a crew of drones.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -25,11 +25,26 @@ canvas { display:block; position:fixed; inset:0; width:100vw; height:100vh; heig
   #hud .r { grid-template-columns:1fr } #hud .r span:last-child { text-align:left; padding-left:1.2em } #hud .log div:nth-child(n+3) { display:none } }
 .btn { position:fixed; font:600 11px/1 var(--mono); color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:9px 11px; letter-spacing:.08em; cursor:pointer; box-shadow:3px 3px 0 var(--sea) }
 #tap { right:calc(16px + env(safe-area-inset-right,0px)); top:calc(16px + env(safe-area-inset-top,0px)) }
+#mix { position:fixed; left:calc(16px + env(safe-area-inset-left,0px)); top:calc(16px + env(safe-area-inset-top,0px)); display:flex; flex-wrap:wrap; gap:8px; max-width:calc(100vw - 32px); z-index:2 }
+#mix .g { display:flex; align-items:stretch; background:var(--paper); border:2px solid var(--ink); box-shadow:3px 3px 0 var(--sea) }
+#mix button { font:600 11px/1 var(--mono); letter-spacing:.08em; color:var(--ink); background:transparent; border:0; padding:0 11px; min-height:40px; min-width:34px; cursor:pointer }
+#mix button:active { background:color-mix(in srgb, var(--ink) 12%, transparent) }
+#mix .nm { min-width:15ch; text-align:left; border-left:2px solid var(--ink); border-right:2px solid var(--ink); padding:6px 10px }
+#mix .k { display:block; font-size:9px; opacity:.65; margin-bottom:4px }
+#mix .sw { display:flex; gap:2px; margin-top:4px } #mix .sw i { width:10px; height:6px; display:block; border:1px solid var(--ink) }
+#mix .one button { padding:0 12px }
+#mix button:focus-visible { outline:3px solid var(--hot); outline-offset:-3px }
+@media (max-width:560px) { #mix { gap:6px } #mix .nm { min-width:12.5ch } #mix button { font-size:10px } }
 #ib { right:calc(16px + env(safe-area-inset-right,0px)); bottom:calc(16px + env(safe-area-inset-bottom,0px)); width:40px; height:40px; padding:0; border-radius:50%; font-size:16px }
 .btn:focus-visible, #hud:focus-visible { outline:3px solid var(--hot); outline-offset:3px }
 </style>
 
 <div id="hud" hidden role="button" tabindex="0" aria-label="World info. Tap to hide."></div>
+<div id="mix" hidden role="group" aria-label="Colours and brushes">
+  <div class="g"><button type="button" data-a="c-" aria-label="Previous colours">‹</button><button type="button" class="nm" data-a="c+" aria-label="Next colours"><span class="k">INKS</span><span id="cName">FLOWER FIELD</span><span class="sw" id="cSw"></span></button><button type="button" data-a="c+" aria-label="Next colours">›</button></div>
+  <div class="g"><button type="button" data-a="t-" aria-label="Previous brush">‹</button><button type="button" class="nm" data-a="t+" aria-label="Next brush"><span class="k">BRUSH</span><span id="tName">DABS AND BLOCKS</span></button><button type="button" data-a="t+" aria-label="Next brush">›</button></div>
+  <div class="g one"><button type="button" data-a="r" aria-label="Shuffle colours and brush">SHUFFLE</button></div>
+</div>
 <button id="tap" class="btn" type="button" hidden>TAP FOR SOUND</button>
 <button id="ib" class="btn" type="button" hidden aria-label="Show world info">i</button>
 
@@ -105,15 +120,27 @@ const f4 = (n) => (+n).toFixed(4);
 // (it also carries the road's grey and the shade on skin and white shirts); poppy-red HOT; a smudged pink GLOW; a primed-canvas PAPER.
 // FLOWER FIELD is built from the paintings: a navy ground (INK), a brick red (DEEP), lilac (SEA), an orange-red (HOT),
 // pink (GLOW) and cream (PAPER). There is no green ink: the field is navy and lilac, as in the painting of the skater over the flowers.
+// Every colourway is taken from Bryson's paintings (the photos Match shared, 2026-10-30), in the six-ink roles:
+// INK the darkest ground, DEEP a second dark (roofs, blossom), SEA a cool middle (lilac blooms, sky), HOT the accent (red crowns),
+// GLOW a warm light (pink blooms), PAPER the light ground.
 const COLORWAYS = [
-  { name: 'FLOWER FIELD',     c: ['#1e2747', '#8f3a2a', '#b6b3ea', '#e9543c', '#f3b9c9', '#f1ece0'] },
-  { name: 'BRICK ROOM',       c: ['#22191a', '#8e3424', '#3fcfb0', '#2b4fc0', '#e8443a', '#efe4c6'] },
-  { name: 'PORTRAIT',         c: ['#1f2a44', '#4a5a6a', '#9a9ae8', '#e2552e', '#f3c4a8', '#eae6dc'] },
-  { name: 'SIGNAL FLARE',     c: ['#24123a', '#5b3fd1', '#6fd3c1', '#ff7a8a', '#ffd24a', '#fbf3e4'] },
-  { name: 'PISTACHIO NIGHT',  c: ['#10202b', '#1f4a6e', '#b6d97a', '#ff5a7a', '#f9e7b0', '#eef4ea'] },
-  { name: 'ULTRAMARINE',      c: ['#0c1440', '#1f3bb3', '#44b8e8', '#ff6a1a', '#ffd0a1', '#fff7ec'] },
-  { name: 'LICHEN',           c: ['#22261d', '#4b5b3a', '#a7c5a0', '#d9475b', '#e8d27c', '#f3eedf'] },
-  { name: 'ATLANTIC PRINT',   c: ['#1b1f3a', '#2c3e7a', '#3f9aa6', '#f0603f', '#f2c14e', '#efe6cf'] },
+  { name: 'FLOWER FIELD',   from: 'the skater over the flowers',     c: ['#1e2747', '#8f3a2a', '#b6b3ea', '#e9543c', '#f3b9c9', '#f1ece0'] },
+  { name: 'ORANGE SEA',     from: 'the sitter by the orange shore',  c: ['#1b2442', '#41658f', '#93b4d4', '#ec6a1c', '#f39ac0', '#f3ecdc'] },
+  { name: 'POPPY HEDGE',    from: 'the lilac shirt in the poppies',  c: ['#1f2b20', '#3f6b35', '#c4a4e2', '#ef6b28', '#f2a6b8', '#e9eef0'] },
+  { name: 'RED WALL',       from: 'the red wall and the teal line',  c: ['#20263a', '#5a6620', '#33c3b6', '#d42a2a', '#e8c4e4', '#f7f0dd'] },
+  { name: 'GREEN WALL',     from: 'the kickflip by the tulips',      c: ['#1c2a21', '#24523a', '#d9dbe6', '#da3a3a', '#f09fb8', '#eee1c8'] },
+  { name: 'MINT SCRIBBLE',  from: 'the black line on mint and moss', c: ['#151515', '#5b4a1f', '#41c19c', '#cc2f29', '#83d06d', '#eff0ea'] },
+  { name: 'OLIVE GARDEN',   from: 'the white shirt in the garden',   c: ['#1f2419', '#5c6c33', '#8f9ca2', '#c9332b', '#e7a4a7', '#ece6d3'] },
+  { name: 'AROUND, ABOVE',  from: 'the walker and the white dog',    c: ['#1d1a1f', '#6b6a2e', '#9f92b6', '#e1b72a', '#d9cbc2', '#eeeae0'] },
+  { name: 'SLATE ROOM',     from: 'the portrait on the pink floor',  c: ['#26333f', '#2f5530', '#4b6c86', '#9b3b22', '#e58ba7', '#e8e3dc'] },
+  { name: 'CROSSWALK',      from: 'the skater on the white stripes', c: ['#0f2236', '#4c5b24', '#5088a8', '#d9342e', '#f2b18b', '#eef0ea'] },
+  { name: 'MUSTARD SLIDE',  from: 'the plaid shirt on mustard',      c: ['#1a1414', '#5f5a2b', '#607e8b', '#7b2023', '#e0a32a', '#efe8da'] },
+  { name: 'PINK ROOM',      from: 'the figure in the pink room',     c: ['#1b1519', '#7b3b6b', '#aaa5b9', '#e86b1f', '#ef90b2', '#f2ece5'] },
+  { name: 'YELLOW SINGER',  from: 'the singer on yellow',            c: ['#2a241f', '#c79b1f', '#70a7b1', '#d1462f', '#b9b2c7', '#efe4c3'] },
+  { name: 'LIME HOUSE',     from: 'the skater off the house',        c: ['#1f1b2d', '#2f6b6b', '#a0b7c0', '#c3344b', '#d0d95b', '#efe8d6'] },
+  { name: 'COBALT',         from: 'the blue canvas',                 c: ['#0c1a5c', '#1e40ae', '#7c98d7', '#e15b2b', '#f2b7c7', '#f1efe9'] },
+  { name: 'BRICK ROOM',     from: 'the skater on the brick ground',  c: ['#22191a', '#8e3424', '#3fcfb0', '#2b4fc0', '#e8443a', '#efe4c6'] },
+  { name: 'PORTRAIT',       from: 'the small portrait',              c: ['#1f2a44', '#4a5a6a', '#9a9ae8', '#e2552e', '#f3c4a8', '#eae6dc'] },
 ];
 const hexV = (h) => { const n = parseInt(h.slice(1), 16); return V(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
 const INK = 0, DEEP = 1, SEA = 2, HOT = 3, GLOW = 4, PAPER = 5;
@@ -128,15 +155,16 @@ const MAT = [
 
 /* ====================================================================== persistent state (memory) */
 const DEF = () => ({
-  v: 1, born: Date.now(), epoch: 1, epochStart: 0, epochLen: rr(50, 95) * 60, tension: 0, colorway: 0, cwVisits: [1, 0, 0, 0, 0, 0, 0, 0],
+  v: 1, born: Date.now(), epoch: 1, epochStart: 0, epochLen: rr(50, 95) * 60, tension: 0, colorway: 0, cwVisits: [1],
   grammar: { period: 6.4, dith: 0.12, wob: 7, outline: 1, hatch: 1.0, dab: 0.3 }, center: 38,
   uncanny: { next: rr(6, 12) * 60, counts: {}, last: {}, mem: {} }, rain: 0.4, at: Date.now(),
-  gaps: 0, walks: 0, sunC: 0, light: null, log: [], runSec: 0
+  gaps: 0, sunC: 0, texture: 0, light: null, log: [], runSec: 0
 });
 let S = DEF();
 try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEF(), o); } } catch (e) {}
 { const away = clamp((Date.now() - (S.at || Date.now())) / 1000, 0, 14 * 86400); S.rain *= Math.exp(-away / (8 * 3600)); S._away = away; }   // the ground dried while the source was dark
-for (const k of ['tension', 'rain', 'gaps', 'walks', 'sunC']) if (!isFinite(S[k])) S[k] = DEF()[k];
+for (const k of ['tension', 'rain', 'gaps', 'sunC', 'texture']) if (!isFinite(S[k])) S[k] = DEF()[k];
+if (!(S.colorway >= 0 && S.colorway < COLORWAYS.length)) S.colorway = 0;
 if (!S.grammar || !isFinite(S.grammar.dab)) S.grammar = Object.assign(DEF().grammar, S.grammar || {});
 simT = S.runSec || 0;
 function save() { try { S.runSec = simT; S.at = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
@@ -687,7 +715,18 @@ const PACC = (P) => { const m = (a, b, t) => P[a].clone().lerp(P[b], t), I = (a)
     I(HOT), m(SEA, PAPER, 0.4), m(INK, DEEP, 0.4), I(INK), I(INK), I(INK), m(SEA, INK, 0.3), I(DEEP)];
   return { alt, under }; };
 const paint3Mat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PAINT3_FRAG, uniforms: { uCont: P3U.uCont, uCont2: P3U.uCont2, uAlt: P3U.uAlt, uUnder: P3U.uUnder, uAltP: P3U.uAltP, uData: PU.uData, uRes: PU.uRes, uPal: PU.uPal, uPC: PAINTU.uPC, uSeed: PU.uSeed, uScale: PAINTU.uScale, uRain: PU.uRain, uRainDir: PU.uRainDir, uTime: PU.uTime, uBlurR: PU.uBlurR }, depthTest: false, depthWrite: false });
-const STYLE = 5;   // one look: paint on the objects, round dabs and scraped blocks (SKATE GARDEN's Study 005)
+const STYLE = 5;   // paint on the objects (SKATE GARDEN's Study 005 engine); the brush is chosen below
+// Brushes after his: which brush each material gets (0 long pulls, 1 round swirled dabs, 2 dry-scraped blocks), and the brush size.
+// The small blooms always keep the cheap pull (too many for dabs).  ids: sky sun crown pink-bloom - lilac-bloom cottage dark - - - - field white-bloom path roof
+const TEXTURES = [
+  { name: 'DABS AND BLOCKS', v5: 1, px: 1.0,  bk: [0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2] },
+  { name: 'LONG STROKES',    v5: 0, px: 1.0,  bk: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { name: 'ROUND DABS',      v5: 1, px: 1.0,  bk: [0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1] },
+  { name: 'SCRAPED',         v5: 1, px: 1.15, bk: [0, 0, 2, 0, 0, 0, 2, 2, 0, 0, 0, 0, 2, 0, 2, 2] },
+  { name: 'BIG BRUSH',       v5: 1, px: 1.9,  bk: [0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 2] },
+  { name: 'SMALL BRUSH',     v5: 1, px: 0.55, bk: [0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2] },
+];
+const TEX = () => TEXTURES[((S.texture | 0) % TEXTURES.length + TEXTURES.length) % TEXTURES.length];
 
 
 /* ====================================================================== world build */
@@ -835,53 +874,9 @@ const DUST = (() => { const n = 200; const g = new THREE.BufferGeometry(); const
   const m = new THREE.Points(g, new THREE.ShaderMaterial({ vertexShader: PT_VERT, fragmentShader: PT_FRAG, uniforms: Object.assign({}, SH, { uScale: { value: 1.6 }, uPtId: { value: 13 } }) })); m.frustumCulled = false; scene.add(m);
   for (let i = 0; i < n; i++) { pos[i * 3] = rr(-14, 14); pos[i * 3 + 1] = rr(0.4, 3.0); pos[i * 3 + 2] = rr(-12, 12); life[i] = 1; } return { g, pos, life, n }; })();
 
-/* ---------- figures: rigs of tubes and balls, each with a planar shadow thrown down the lane */
+/* ---------- shapes for the drones */
 const GEO = { cyl: withT(clean(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true)), V(0, 1, 0)), ball: withT(clean(new THREE.IcosahedronGeometry(1, 2)), V(0, 1, 0)), box: withT(clean(new THREE.BoxGeometry(1, 1, 1)), V(1, 0, 0)) };
 const FIGMAT = {}; const figMat = id => FIGMAT[id] || (FIGMAT[id] = objMat(id, 4, V(0, 1, 0), { uMover: { value: 2 } }));
-const SHADOW_MAT = objMat(7, 0, V(1, 0, 0)); SHADOW_MAT.uniforms.uEmit.value = 0.1; SHADOW_MAT.polygonOffset = true; SHADOW_MAT.polygonOffsetFactor = -2; SHADOW_MAT.polygonOffsetUnits = -4;
-const SPM = new THREE.Matrix4();   // shadow projection onto the field along the sun
-const _v = V(), _m4 = new THREE.Matrix4();
-function basisQ(x, y) { const z = V().crossVectors(x, y).normalize(); const yy = V().crossVectors(z, x).normalize(); _m4.makeBasis(x.clone().normalize(), yy, z); return new THREE.Quaternion().setFromRotationMatrix(_m4); }
-class Rig {
-  constructor(show = true) { this.parts = {}; this.show = show; this.shadowOn = true; }
-  part(name, kind, id) { let p = this.parts[name];
-    if (!p) { const m = new THREE.Mesh(GEO[kind], figMat(id)); m.frustumCulled = false; scene.add(m);
-      const s = new THREE.Mesh(GEO[kind], SHADOW_MAT); s.matrixAutoUpdate = false; s.frustumCulled = false; scene.add(s); p = this.parts[name] = { m, s }; }
-    p.used = true; return p.m; }
-  seg(name, a, b, r, id) { const m = this.part(name, 'cyl', id); _v.subVectors(b, a); const L = _v.length(); m.position.addVectors(a, b).multiplyScalar(0.5);
-    m.quaternion.setFromUnitVectors(_Y, L > 1e-5 ? _v.divideScalar(L) : _Y); m.scale.set(r, Math.max(L, 1e-4), r); }
-  ball(name, p, r, id, sx = 1, sy = 1, sz = 1, q = null) { const m = this.part(name, 'ball', id); m.position.copy(p); if (q) m.quaternion.copy(q); else m.quaternion.identity(); m.scale.set(r * sx, r * sy, r * sz); }
-  box(name, p, q, sx, sy, sz, id) { const m = this.part(name, 'box', id); m.position.copy(p); m.quaternion.copy(q); m.scale.set(sx, sy, sz); }
-  begin() { for (const k in this.parts) this.parts[k].used = false; }
-  end(visible = true) { for (const k in this.parts) { const p = this.parts[k]; const on = p.used && visible; p.m.visible = this.show && on; p.m.updateMatrix(); p.m.updateMatrixWorld();
-      p.s.visible = on && this.shadowOn; if (p.s.visible) { p.s.matrix.multiplyMatrices(this.spm || SPM, p.m.matrixWorld); p.s.matrixWorldNeedsUpdate = true; } } }
-}
-function knee3(h, f, L, bend) { const d = V().subVectors(f, h); const D0 = d.length() || 1; const D = Math.min(D0, 2 * L * 0.999); const e = Math.sqrt(Math.max(0, L * L - (D / 2) ** 2)); d.divideScalar(D0);
-  const n = bend.clone().addScaledVector(d, -bend.dot(d)); if (n.lengthSq() < 1e-6) n.set(1, 0, 0); n.normalize();
-  return h.clone().addScaledVector(d, D / 2).addScaledVector(n, e); }
-function drawHuman(rig, J, look) {
-  rig.seg('thL', J.hipL, J.kL, 0.072, look.pants); rig.seg('shinL', J.kL, J.fL, 0.058, look.shorts ? look.skin : look.pants); rig.ball('kneeL', J.kL, 0.066, look.pants);
-  rig.seg('thR', J.hipR, J.kR, 0.072, look.pants); rig.seg('shinR', J.kR, J.fR, 0.058, look.shorts ? look.skin : look.pants); rig.ball('kneeR', J.kR, 0.066, look.pants);
-  rig.ball('pelvis', J.hip, 0.145, look.pants, 1, 0.85, 1);
-  const chest = J.hip.clone().addScaledVector(J.U, 0.4); rig.seg('torso', J.hip.clone().addScaledVector(J.U, 0.04), chest, look.coat ? 0.16 : 0.15, look.shirt); rig.ball('chest', chest, 0.165, look.shirt, 1, 0.8, 1);
-  if (look.coat) rig.seg('hem', J.hip.clone().addScaledVector(J.U, -0.12), J.hip.clone().addScaledVector(J.U, 0.1), 0.165, look.shirt);
-  for (const s of ['L', 'R']) { rig.seg('ua' + s, J['sh' + s], J['e' + s], 0.052, look.shirt); rig.ball('sh' + s, J['sh' + s], 0.066, look.shirt); rig.ball('el' + s, J['e' + s], 0.05, look.shirt);
-    rig.seg('fa' + s, J['e' + s], J['h' + s], 0.04, look.coat ? look.shirt : look.skin); rig.ball('hand' + s, J['h' + s], 0.047, look.skin);
-    const toe = J.toe, f = J['f' + s]; rig.box('shoe' + s, f.clone().addScaledVector(toe, 0.04).add(V(0, 0.035, 0)), basisQ(toe, _Y), 0.28, 0.085, 0.105, look.shoe); }
-  rig.seg('neck', J.neck0, J.head, 0.047, look.skin);
-  const hq = basisQ(J.face, J.U);
-  rig.ball('head', J.head, 0.104, look.skin, 1, 1.13, 1, hq);
-  rig.ball('hair', J.head.clone().addScaledVector(J.U, 0.042).addScaledVector(J.face, -0.03), 0.11, look.hairId, 1.04, look.long ? 1.0 : 0.82, 1.04, hq);
-  if (look.long) rig.ball('hairB', J.head.clone().addScaledVector(J.U, -0.06).addScaledVector(J.face, -0.06), 0.1, look.hairId, 1.1, 1.0, 0.8, hq);
-  rig.ball('eye', J.head.clone().addScaledVector(J.face, 0.098).addScaledVector(J.U, 0.012), 0.013, 7);
-  if (look.cap) { rig.ball('cap', J.head.clone().addScaledVector(J.U, 0.052).addScaledVector(J.face, -0.005), 0.113, look.cap, 1.02, 0.72, 1.02, hq); rig.box('brim', J.head.clone().addScaledVector(J.U, 0.07).addScaledVector(J.face, 0.13), hq, 0.15, 0.016, 0.16, look.cap); }
-}
-function drawBoard(rig, c, q) {
-  rig.box('deck', c, q, 0.8, 0.024, 0.21, 11);
-  for (const [i, x] of [[0, 0.27], [1, -0.27]]) { rig.box('truck' + i, c.clone().add(V(x, -0.035, 0).applyQuaternion(q)), q, 0.05, 0.03, 0.17, 7);
-    for (const [j, z] of [[0, 0.085], [1, -0.085]]) rig.ball('wheel' + i + j, c.clone().add(V(x, -0.058, z).applyQuaternion(q)), 0.03, 9, 1, 1, 0.8, q); }
-}
-
 /* ---------- MZCAM drones: small quadcopters, visible in each other's shots */
 const DRONE_SPEC = [
   { name: 'CAM 1', col: '#f4dc2a' }, { name: 'CAM 2', col: '#6fd3c1' }, { name: 'CAM 3', col: '#ff7a8a' }, { name: 'CAM 4', col: '#f0a2b4' },
@@ -903,7 +898,7 @@ function synthWx(ms) { const h = ms / 3600e3;
 const WXT = synthWx(simMs); Object.assign(WX, WXT);
 let WX_HELD = false;
 
-/* ====================================================================== the light, the walker and the dog */
+/* ====================================================================== the light */
 // The light: a gap in the clouds, drifting across the field with the wind. On a clear evening the whole field is in sun;
 // the more cloud there is, the smaller the gap and the deeper the shade round it.
 const LIGHT = { x: 0, z: 0, r: 12, vx: 0, vz: 0, inC: false, stop: 0, lastLog: -1e9 };
@@ -921,52 +916,6 @@ function lightTick(dt) {
   if (inC && MORN.el > 0.02) S.sunC += dt;
 }
 const lightShade = () => clamp(smoothstep(0.12, 0.5, WX.cloud) + (live.ev === 'hang' ? 0.25 : 0), 0, 1);
-let WALKER;
-WALKER = { on: false, x: 0, z: PATHZ - 0.25, dir: 1, a: 0, ph: 0, v: 1.2, next: rr(1.5, 5) * 60, stop: 0, nextStop: rr(12, 25), dog: { x: 0, z: PATHZ + 0.6, a: 0, ph: 0, amp: 1, sniff: false } };
-function walkerTick(dt) {
-  const W_ = WALKER;
-  if (!W_.on) { if (simT > W_.next && WX.precip < 1.0 && live.ev !== 'hush') { W_.on = true; S.walks++; W_.dir = rnd() < 0.5 ? 1 : -1; W_.x = -W_.dir * 60; W_.a = W_.dir > 0 ? 0 : Math.PI; W_.dog.x = W_.x + W_.dir * 1.5; logEv('someone came along the path with a small white dog'); } return; }
-  W_.nextStop -= dt; if (W_.nextStop < 0 && W_.stop <= 0) { W_.stop = rr(3, 7); W_.nextStop = rr(14, 30); }
-  const sniff = W_.stop > 0; if (sniff) W_.stop -= dt;
-  const v = sniff ? 0 : W_.v; W_.x += W_.dir * v * dt; W_.ph += dt * v / 1.2;
-  const d = W_.dog; d.sniff = sniff; d.a = W_.a; const want = W_.x + W_.dir * (sniff ? 1.2 : 1.6);
-  const dv = clamp((want - d.x) * W_.dir * 1.5, 0, 2.2); d.x += W_.dir * dv * dt; d.amp = clamp(dv / 1.2, 0, 1); d.ph += dt * 2.6 * d.amp;
-  d.z = lerp(d.z, sniff ? PATHZ + 1.45 : PATHZ + 0.55 + 0.15 * Math.sin(simT * 0.7), 1 - Math.exp(-dt * 1.5));
-  if (W_.x * W_.dir > 62) { W_.on = false; W_.next = simT + rr(6, 14) * 60; }
-}
-
-/* ---------- poses */
-function walkPose(x, z, a, ph, amp) {
-  const F = V(Math.cos(a), 0, Math.sin(a)), Sd = V(F.z, 0, -F.x); const g = terrainH(x, z); const s = Math.sin(ph * TAU), c2 = Math.cos(ph * TAU);
-  const base = V(x, g, z), hip = base.clone().add(V(0, 0.93 + 0.022 * Math.cos(ph * 2 * TAU) * amp, 0));
-  const hipL = hip.clone().addScaledVector(Sd, -0.09), hipR = hip.clone().addScaledVector(Sd, 0.09);
-  const fL = base.clone().addScaledVector(Sd, -0.1).addScaledVector(F, 0.27 * s * amp).add(V(0, 0.04 + 0.07 * Math.max(0, c2) * amp, 0));
-  const fR = base.clone().addScaledVector(Sd, 0.1).addScaledVector(F, -0.27 * s * amp).add(V(0, 0.04 + 0.07 * Math.max(0, -c2) * amp, 0));
-  const U = _Y.clone(), b2 = hip.clone().addScaledVector(U, 0.46);
-  const shL = b2.clone().addScaledVector(Sd, -0.18), shR = b2.clone().addScaledVector(Sd, 0.18);
-  const eL = shL.clone().add(V(0, -0.27, 0)).addScaledVector(F, -0.1 * s * amp).addScaledVector(Sd, -0.03), hL = eL.clone().add(V(0, -0.24, 0)).addScaledVector(F, -0.12 * s * amp + 0.05);
-  const eR = shR.clone().add(V(0, -0.27, 0)).addScaledVector(F, 0.1 * s * amp).addScaledVector(Sd, 0.03), hR = eR.clone().add(V(0, -0.24, 0)).addScaledVector(F, 0.12 * s * amp + 0.05);
-  return { hip, hipL, hipR, kL: knee3(hipL, fL, 0.47, F), kR: knee3(hipR, fR, 0.47, F), fL, fR, U, shL, shR, eL, eR, hL, hR, neck0: hip.clone().addScaledVector(U, 0.5), head: hip.clone().addScaledVector(U, 0.67), face: F, toe: F, F, Sd };
-}
-const WALK_LOOK = { shirt: 10, pants: 10, skin: 8, hairId: 3, shoe: 7, coat: true, long: true };
-const walkRig = new Rig(true), dogRig = new Rig(true);
-function drawWalker(t) {
-  const W_ = WALKER; walkRig.begin(); dogRig.begin();
-  if (W_.on) {
-    const J = walkPose(W_.x, W_.z, W_.a, W_.ph, W_.stop > 0 ? 0 : 1); drawHuman(walkRig, J, WALK_LOOK);
-    const d = W_.dog, F = V(Math.cos(d.a), 0, Math.sin(d.a)), Sd = V(F.z, 0, -F.x), ph = d.ph * TAU, q = basisQ(F, _Y);
-    const body = V(d.x, 0.34 + terrainH(d.x, d.z) + 0.015 * Math.abs(Math.sin(ph)) * d.amp, d.z); dogRig.ball('body', body, 1, 9, 0.29, 0.15, 0.14, q);
-    const head = body.clone().addScaledVector(F, 0.3).add(V(0, d.sniff ? -0.12 : 0.13, 0)).addScaledVector(Sd, d.sniff ? 0.18 : 0);
-    dogRig.ball('head', head, 0.095, 9, 1, 1, 1, q); dogRig.ball('snout', head.clone().addScaledVector(F, 0.09).add(V(0, -0.025, 0)), 0.05, 9, 1.3, 1, 1, q); dogRig.ball('nose', head.clone().addScaledVector(F, 0.15).add(V(0, -0.02, 0)), 0.018, 7);
-    dogRig.ball('earL', head.clone().addScaledVector(Sd, 0.06).add(V(0, 0.06, -0.01)), 0.035, 9, 1, 1.4, 0.7, q); dogRig.ball('earR', head.clone().addScaledVector(Sd, -0.06).add(V(0, 0.06, -0.01)), 0.035, 9, 1, 1.4, 0.7, q);
-    dogRig.ball('eye', head.clone().addScaledVector(F, 0.07).add(V(0, 0.03, 0)), 0.013, 7);
-    [[0.17, 0.07, 0], [0.17, -0.07, Math.PI], [-0.17, 0.07, Math.PI], [-0.17, -0.07, 0]].forEach(([fx, sx, o], i) => { const hp = body.clone().addScaledVector(F, fx).addScaledVector(Sd, sx).add(V(0, -0.05, 0));
-      const ft = V(hp.x, 0.02 + terrainH(hp.x, hp.z), hp.z).addScaledVector(F, 0.09 * Math.sin(ph + o) * d.amp).add(V(0, 0.04 * Math.max(0, Math.cos(ph + o)) * d.amp, 0)); dogRig.seg('leg' + i, hp, ft, 0.026, 9); });
-    const tb = body.clone().addScaledVector(F, -0.27).add(V(0, 0.04, 0)); dogRig.seg('tail', tb, tb.clone().addScaledVector(F, -0.1).add(V(0, 0.15, 0)).addScaledVector(Sd, 0.05 * Math.sin(t * 9)), 0.018, 9);
-    walkRig.seg('leash', J.hR, head.clone().addScaledVector(F, -0.06).add(V(0, -0.05, 0)), 0.006, 7);
-  }
-  walkRig.end(W_.on); dogRig.end(W_.on);
-}
 
 /* ====================================================================== the uncanny */
 const EVT = {
@@ -1004,7 +953,7 @@ function uncannyTick(dt) {
   if (!opts.length) return;
   let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; for (const [n, w] of opts) { r -= w; if (r <= 0) { startEvent(n); return; } }
 }
-let cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
+let cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1, cwFade = 45;
 function rupture(reason) {
   S.epoch++; const prev = S.colorway;
   const w = COLORWAYS.map((_, i) => i === prev ? 0 : 1 / (1 + (S.cwVisits[i] || 0) * 0.8)); let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot, pick = 0;
@@ -1013,7 +962,7 @@ function rupture(reason) {
   S.grammar = { period: rr(5, 9), dith: rr(0.05, 0.22), wob: rr(2, 11), outline: rnd() < 0.8 ? 1 : 0, hatch: rr(0.75, 1.25), dab: rr(0.12, 0.45) };
   const centers = [38, 33, 36, 31, 41, 35]; S.center = centers[(centers.indexOf(S.center) + 1 + Math.floor(rnd() * 3)) % centers.length];
   S.tension = 0; S.epochStart = simT; S.epochLen = rr(50, 95) * 60; S.uncanny.next = simT + rr(5, 12) * 60;
-  cwFrom = cwNow.map(v => v.clone()); cwMix = 0;
+  cwFrom = cwNow.map(v => v.clone()); cwMix = 0; cwFade = 45; mixUpdate();
   logEv(`RUPTURE → epoch ${S.epoch} · inks ${COLORWAYS[pick].name} · centre ${NOTE[S.center % 12]}` + (reason ? ' · ' + reason : ''));
   AUD.rupture(); save();
 }
@@ -1219,14 +1168,10 @@ const KINDS = {
     const away = V(-hs.x, 0, -hs.z).normalize(), p = V(hs.x, 0, hs.z).addScaledVector(away, rr(62, 78)); p.x += rr(-6, 6); p.y = terrainH(p.x, p.z) + rr(1.6, 2.4);
     return { kind: 'LONG LENS', label: 'LONG LENS · across the field to a cottage', pan: 3, minHold: 8, maxHold: 19, aper: 0.05, mark: { pos: C3(p) },
       aim: () => ({ look: C3(V(hs.x, hs.h * 0.45, hs.z)), fov: 15 }), want: () => 0.8, done: () => simT - t0 > life }; } },
-  'THE PATH': { base: () => 0.7 + (WALKER.on ? 0.4 : 0), make() { const t0 = simT, life = rr(30, 45), dir = rnd() < 0.5 ? 1 : -1, x0 = rr(-24, 24);
+  'THE PATH': { base: () => 0.9, make() { const t0 = simT, life = rr(30, 45), dir = rnd() < 0.5 ? 1 : -1, x0 = rr(-24, 24);
     const p = V(x0, terrainH(x0, PATHZ) + 1.2, PATHZ + rr(-0.3, 0.3));
     return { kind: 'THE PATH', label: 'THE PATH · down the mown path', pan: 2, minHold: 8, maxHold: 19, aper: 0.1, mark: { pos: C3(p) },
-      aim: () => ({ look: C3(V(x0 + dir * 22, 0.7, PATHZ - 1.5)), fov: 42 }), want: () => 0.7 + (WALKER.on ? 0.4 : 0), done: () => simT - t0 > life }; } },
-  'DOG WALK': { base: () => WALKER.on ? 1.8 : 0, make() { const t0 = simT;
-    return { kind: 'DOG WALK', label: 'DOG WALK · along the path', pan: 3, minHold: 8, maxHold: 18, aper: 0.15,
-      pose: () => { const F = V(Math.cos(WALKER.a), 0, Math.sin(WALKER.a)); return { pos: C3(V(WALKER.x, 1.1 + terrainH(WALKER.x, PATHZ - 2.6), PATHZ - 2.6).addScaledVector(F, 1.6)) }; },
-      aim: () => ({ look: C3(V((WALKER.x + WALKER.dog.x) / 2, 0.6 + terrainH(WALKER.x, PATHZ), (WALKER.z + WALKER.dog.z) / 2)), fov: 50 }), want: () => WALKER.on ? 1.8 : 0, done: () => !WALKER.on && simT - t0 > 3 }; } },
+      aim: () => ({ look: C3(V(x0 + dir * 22, 0.7, PATHZ - 1.5)), fov: 42 }), want: () => 0.9, done: () => simT - t0 > life }; } },
   'UNDER THE TREES': { base: () => 0.8 + (MORN.el < 8 * D2R ? 0.5 : 0), make() { const t0 = simT, life = rr(30, 50);
     const near = TREES.filter(t => { const d = Math.hypot(t.x, t.z); return d > 18 && d < 40; }); const tr = near.length ? near[Math.floor(rnd() * near.length)] : TREES[0];
     const inn = V(-tr.x, 0, -tr.z).normalize(), side = V(inn.z, 0, -inn.x), p = V(tr.x, 0, tr.z).addScaledVector(inn, tr.rad * 0.4 + 1.2).addScaledVector(side, rr(-1.5, 1.5)); p.y = terrainH(p.x, p.z) + 1.5;
@@ -1234,14 +1179,13 @@ const KINDS = {
     return { kind: 'UNDER THE TREES', label: 'UNDER THE TREES · out from the edge', pan: 2, minHold: 8, maxHold: 19, aper: 0.08, mark: { pos: C3(p) },
       aim: () => ({ look: C3(tgt), fov: 52 }), want: () => 0.8 + (MORN.el < 8 * D2R ? 0.5 : 0), done: () => simT - t0 > life }; } },
 };
-// keep drones above the field, out of the cottages, the crowns and the walker
+// keep drones above the field, out of the cottages and the crowns
 function avoid(p) {
   let x = p.x, y = p.y, z = p.z; { const g = terrainH(x, z) + 0.3; if (y < g) y = g; }
   for (const hs of HOUSES) { const hx = hs.w / 2 + 0.4, hz = hs.d / 2 + 0.4; if (Math.abs(x - hs.x) < hx && Math.abs(z - hs.z) < hz && y < hs.h + hs.d * 0.45 + 0.5) {
     const dx = hx - Math.abs(x - hs.x), dz = hz - Math.abs(z - hs.z); if (dz < dx) z = hs.z + Math.sign(z - hs.z || 1) * hz; else x = hs.x + Math.sign(x - hs.x || 1) * hx; } }
   for (const t of TREES) { if (!t.crownC) continue; const dx = x - t.crownC.x, dy = y - t.crownC.y, dz = z - t.crownC.z, dd = Math.hypot(dx, dy, dz), R = t.rad * 1.25 + 0.5;
     if (dd < R) { const k = R / Math.max(dd, 1e-3); x = t.crownC.x + dx * k; y = t.crownC.y + dy * k; z = t.crownC.z + dz * k; } }
-  if (WALKER.on) for (const r of [{ x: WALKER.x, y: 0, z: WALKER.z }]) { const dx = x - r.x, dz = z - r.z, dd = Math.hypot(dx, dz); if (dd < 1.05 && Math.abs(y - r.y) < 2.2) { x = r.x + dx / Math.max(dd, 1e-3) * 1.05; z = r.z + dz / Math.max(dd, 1e-3) * 1.05; } }
   return MZCam.V(x, y, z);
 }
 const DIR = { seen16: -1, look: null, focus: 3, aper: 0.1 };
@@ -1272,7 +1216,7 @@ function step(dt) {
   MORN = goldenAt(simMs); SUND.copy(sunVec(MORN.b, MORN.el));
   groundTick(sdt);
   const fdt = sdt * live.calm;   // during the hush the field holds still
-  lightTick(fdt); walkerTick(fdt); lifeTick(sdt, simT);
+  lightTick(fdt); lifeTick(sdt, simT);
   live.hangOn = live.ev === 'hang' ? 1 : 0;
   S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1); if (!isFinite(S.tension)) S.tension = 0;
   uncannyTick(sdt);
@@ -1310,24 +1254,19 @@ function applyLook(dt) {
   skyU.uCloud.value = WX.cloud; const wb = (WX.windDir + 180) * D2R; skyU.uWind.value.set(Math.sin(wb), Math.cos(wb)).multiplyScalar(WX.wind);
   sky.position.copy(camera.position);
   sunM.position.copy(camera.position).addScaledVector(SUND, 2000); sunM.quaternion.copy(camera.quaternion); const s = 2 * 2000 * Math.tan((2.8 + 1.6 * live.watch) * D2R); sunM.scale.set(s, s, 1); sunM.material.uniforms.uDim.value = 1 - 0.4 * cloud;
-  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
+  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / cwFade);
   const target = COLORWAYS[S.colorway].c.map(hexV);
   for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
   const gm = S.grammar; PU.uPeriod.value = gm.period * IH / 720; PU.uDith.value = gm.dith; PU.uWob.value = gm.wob * IH / 720; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch; PU.uBlurR.value = 10 * IH / 720; SH.uPerPx.value = PU.uPeriod.value; SH.uWobPx.value = PU.uWob.value;
   SH.uDab.value = clamp(gm.dab + 0.25 * live.repaint, 0, 0.8);
   PU.uRain.value = clamp(WX.precip / 2, 0, 1); PU.uRainDir.value.set(Math.sin(wb) * 0.35, -1).normalize(); PU.uTime.value = simT;
-  boilT += dt * live.calm; PAINTU.uBoil.value = Math.floor(boilT * 5) % 997; PAINTU.uScale.value = IH / 720; SH.uPaint.value = STYLE === 1 ? 0 : STYLE === 2 ? 1 : 2; SH.uV4.value = STYLE >= 4 ? 1 : 0; SH.uV5.value = STYLE === 5 ? 1 : 0; SH.uStrokePx.value = 12 * IH / 720; PAINTU.uDetail.value = 1; { const pc = PMAT(cwNow); for (let i = 0; i < 48; i++) PAINTU.uPC.value[i].copy(pc[i]); } if (STYLE >= 4) { const ac = PACC(cwNow); for (let i = 0; i < 32; i++) P3U.uAlt.value[i].copy(ac.alt[i]); for (let i = 0; i < 16; i++) P3U.uUnder.value[i].copy(ac.under[i]);
+  boilT += dt * live.calm; PAINTU.uBoil.value = Math.floor(boilT * 5) % 997; PAINTU.uScale.value = IH / 720; SH.uPaint.value = STYLE === 1 ? 0 : STYLE === 2 ? 1 : 2; SH.uV4.value = STYLE >= 4 ? 1 : 0; SH.uV5.value = TEX().v5; SH.uBK.value = TEX().bk; SH.uStrokePx.value = 12 * IH / 720 * TEX().px; PAINTU.uDetail.value = 1; { const pc = PMAT(cwNow); for (let i = 0; i < 48; i++) PAINTU.uPC.value[i].copy(pc[i]); } if (STYLE >= 4) { const ac = PACC(cwNow); for (let i = 0; i < 32; i++) P3U.uAlt.value[i].copy(ac.alt[i]); for (let i = 0; i < 16; i++) P3U.uUnder.value[i].copy(ac.under[i]);
     const P = cwNow, m = (a, b, t) => P[a].clone().lerp(P[b], t);
     if (STYLE === 5) {   // the second set: a navy ground under the dabs, brick red under the cream blocks, a dark green contour
       [[4, m(DEEP, INK, 0.6)], [6, P[DEEP].clone()], [12, P[INK].clone()]].forEach(([i, c]) => P3U.uUnder.value[i].copy(c));
       P3U.uCont.value.copy(P[INK]); P3U.uCont2.value.copy(P[SEA]); } else { P3U.uCont.value.copy(P[SEA]); P3U.uCont2.value.copy(P[INK]); } }
   const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1])); rs.setProperty('--sea', css(cwNow[2]));
-  // the shadow projection: everything a figure is, thrown along the sun onto the ground
-  { const L = SUND.clone(); L.y = Math.max(L.y, 0.065); const g0 = 0.016, kx = L.x / L.y, kz = L.z / L.y;
-    SPM.set(1, -kx, 0, kx * g0, 0, 0, 0, g0, 0, -kz, 1, kz * g0, 0, 0, 0, 1); }
-  // figures
-  drawWalker(simT);
   // drones
   crew.drones.forEach((dr, i) => { const m = droneMeshes[i]; const p = T3(dr.pos); m.g.position.copy(p);
     if (dr.cam) { const f = V(dr.cam.f.x, 0, dr.cam.f.z); if (f.lengthSq() > 1e-6) m.g.rotation.set(0, Math.atan2(-f.z, f.x), 0); }
@@ -1345,6 +1284,18 @@ function render() {
 /* ====================================================================== info box */
 const hud = document.getElementById('hud'); hud.hidden = !INFO;
 const tapBtn = document.getElementById('tap'), ib = document.getElementById('ib'); ib.hidden = INFO;
+// colours and brushes, by hand
+const mixEl = document.getElementById('mix'), cNameEl = document.getElementById('cName'), cSwEl = document.getElementById('cSw'), tNameEl = document.getElementById('tName');
+mixEl.hidden = CAPTURE || Q.get('controls') === '0';
+function mixUpdate() { const cw = COLORWAYS[S.colorway]; cNameEl.textContent = cw.name; cSwEl.innerHTML = cw.c.map(h => `<i style="background:${h}"></i>`).join(''); tNameEl.textContent = TEX().name; }
+function setInks(i, quiet) { const n = COLORWAYS.length; i = ((i % n) + n) % n; if (i === S.colorway) return; cwFrom = cwNow.map(v => v.clone()); cwMix = 0; cwFade = 1.6; S.colorway = i; S.cwVisits[i] = (S.cwVisits[i] || 0) + 1;
+  if (!quiet) logEv(`by hand: inks ${COLORWAYS[i].name} (${COLORWAYS[i].from})`); mixUpdate(); hudUpdate(); save(); }
+function setBrush(i, quiet) { const n = TEXTURES.length; S.texture = ((i % n) + n) % n; if (!quiet) logEv(`by hand: brush ${TEX().name.toLowerCase()}`); mixUpdate(); hudUpdate(); save(); }
+mixEl.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; e.stopPropagation(); const a = b.dataset.a;
+  if (a === 'c+') setInks(S.colorway + 1); if (a === 'c-') setInks(S.colorway - 1); if (a === 't+') setBrush((S.texture | 0) + 1); if (a === 't-') setBrush((S.texture | 0) - 1);
+  if (a === 'r') { let c = S.colorway, t = S.texture | 0; while (c === S.colorway) c = Math.floor(rnd() * COLORWAYS.length); while (t === (S.texture | 0)) t = Math.floor(rnd() * TEXTURES.length); setBrush(t, true); setInks(c, true); logEv(`by hand: shuffled to ${COLORWAYS[c].name} with ${TEX().name.toLowerCase()}`); hudUpdate(); }
+  AUD.start(); });
+mixUpdate();
 function setInfo(on) { INFO = on; hud.hidden = !INFO; ib.hidden = INFO; if (INFO) hudUpdate(); }
 function hudUpdate() {
   if (!INFO) return; const el = MORN.el / D2R, b = MORN.b / D2R; const d = crew.liveDrone;
@@ -1356,8 +1307,8 @@ function hudUpdate() {
   <div class="r"><span>HELD GOLDEN HOUR ${clockStr(MORN.clock)} · sun ${el.toFixed(0)}° ${compass(b)}</span><span>SIMULATED · shadows ${sl.toFixed(0)} m</span></div>
   <div class="r"><span>LIGHT ${lw}</span><span>→ bass on ${NOTE[AUD.deg(AUD.skDeg()) % 12]}</span></div>
   <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · CLOUD ${(WX.cloud * 100).toFixed(0)}%</span><span>→ the flowers sway, the gap drifts, bar ${AUD.barSec.toFixed(1)} s</span></div>
-  <div class="r"><span>GROUND holds ${S.rain.toFixed(1)} mm${WX.precip > 0.05 ? ' · rain ' + WX.precip.toFixed(1) : ''}</span><span>→ wet flowers, nobody walks in heavy rain</span></div>
-  <div class="r"><span>FIELD ${S.gaps} gaps crossed the middle · ${(S.sunC / 60).toFixed(0)} min of sun there · ${S.walks} walks</span><span>${WALKER.on ? 'a dog on the path' : ''}</span></div>
+  <div class="r"><span>GROUND holds ${S.rain.toFixed(1)} mm${WX.precip > 0.05 ? ' · rain ' + WX.precip.toFixed(1) : ''}</span><span>→ wet flowers, a heavier sky</span></div>
+  <div class="r"><span>FIELD ${S.gaps} gaps crossed the middle · ${(S.sunC / 60).toFixed(0)} min of sun there</span><span>INKS ${COLORWAYS[S.colorway].name} · BRUSH ${TEX().name}</span></div>
   <div class="r"><span>MZCAM ${d.name} · ${d.shot ? d.shot.label : ''}</span><span>${crew.cuts} cuts · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
   ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
   <div class="cr"><span>after the paintings of Bryson Iacoboni</span><span>MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</span></div>`;
@@ -1383,6 +1334,7 @@ addEventListener('pagehide', save);
 addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
   if (k === 'i') setInfo(!INFO);
   if (k === 'm') AUD.mute();
+  if (k === 'c') setInks(S.colorway + 1); if (k === 'b') setBrush((S.texture | 0) + 1);
   if (k === 'r' && !live.ev) { logEv('a hand in the flowers (human intervention)'); S.tension = 1; }
   AUD.start(); });
 addEventListener('pointerdown', () => AUD.start());
@@ -1398,15 +1350,15 @@ window.MZ = {
   force(name) { name = ({ field: 'poppies', sun: 'poppies', bloom: 'repaint', still: 'hang', hold: 'hang' })[name] || name; if (live.ev) endEvent(); if (name === 'rupture') { rupture('forced by hand'); return; } if (!EVT[name]) return false; startEvent(name, true); },
   cam(i) { if (i == null || i < 0) { CAMHOLD = -1; return; } CAMHOLD = ((i % crew.drones.length) + crew.drones.length) % crew.drones.length; crew.cutTo(crew.drones[CAMHOLD]); },
   look(p, t, fov = 44, focus = 6, aper = 0.1) { DIR.look = p ? { p: V(...p), tgt: V(...t), fov, focus, aper } : null; },
-  ink(i) { S.colorway = ((i % COLORWAYS.length) + COLORWAYS.length) % COLORWAYS.length; cwMix = 1; cwFrom = COLORWAYS[S.colorway].c.map(hexV); },
+  ink(i) { S.colorway = ((i % COLORWAYS.length) + COLORWAYS.length) % COLORWAYS.length; cwMix = 1; cwFrom = COLORWAYS[S.colorway].c.map(hexV); mixUpdate(); },
+  brush(i) { if (i === undefined) return TEX().name; setBrush(i, true); return TEX().name; },
   grammar(g) { if (!g) return { ...S.grammar }; for (const k of Object.keys(S.grammar)) if (typeof g[k] === 'number' && isFinite(g[k])) S.grammar[k] = g[k]; return { ...S.grammar }; },
   rain(mm) { S.rain += mm; },
   light(x, z, r) { if (x === undefined) return { x: LIGHT.x, z: LIGHT.z, r: LIGHT.r, shade: lightShade() }; LIGHT.x = x; LIGHT.z = z ?? LIGHT.z; if (r) LIGHT.r = r; return { x: LIGHT.x, z: LIGHT.z, r: LIGHT.r }; },
   seekHour(h) { seekPh(clamp((h - 16.67) / 3.08, 0, 1)); MORN = goldenAt(simMs); SUND.copy(sunVec(MORN.b, MORN.el)); },
-  walker() { WALKER.next = simT; },
   shot(kind) { if (!KINDS[kind]) return Object.keys(KINDS); const d = crew.drones.find(x => x.id !== crew.live) || crew.drones[0]; crew.assign(d, KINDS[kind].make()); const g = crew._goal(d, simT); if (g) d.pos = g.pos; d.arrivedAt = simT; d.vel = MZCam.V(); CAMHOLD = d.id; crew.update(0.02, simT); crew.cutTo(d); return d.name; },
-  get state() { return { S: { epoch: S.epoch, tension: S.tension, rain: S.rain, gaps: S.gaps, walks: S.walks, sunMin: S.sunC / 60, colorway: COLORWAYS[S.colorway].name, events: { ...S.uncanny.counts }, log: S.log.slice(0, 6) },
-    live: { ...live }, WX: { ...WX }, golden: { ...MORN }, light: { x: LIGHT.x, z: LIGHT.z, r: LIGHT.r, vx: LIGHT.vx, vz: LIGHT.vz, shade: lightShade() }, walker: WALKER.on,
+  get state() { return { S: { epoch: S.epoch, tension: S.tension, rain: S.rain, gaps: S.gaps, sunMin: S.sunC / 60, colorway: COLORWAYS[S.colorway].name, events: { ...S.uncanny.counts }, log: S.log.slice(0, 6) },
+    live: { ...live }, WX: { ...WX }, golden: { ...MORN }, light: { x: LIGHT.x, z: LIGHT.z, r: LIGHT.r, vx: LIGHT.vx, vz: LIGHT.vz, shade: lightShade() }, texture: TEX().name,
     cam: crew.liveDrone.name + ' · ' + (crew.liveDrone.shot ? crew.liveDrone.shot.kind : ''), crew: crew.drones.map(d => [d.name, d.shot ? d.shot.kind : '', d.status]), cuts: crew.cuts }; },
   setWx(o) { if (!o) { WX_HELD = false; return; } WX_HELD = true; Object.assign(WXT, o); Object.assign(WX, o); },
   analyser() { return AUD.an; }, audio: AUD, crew,

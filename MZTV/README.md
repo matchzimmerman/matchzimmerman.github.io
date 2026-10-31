@@ -36,7 +36,7 @@ A painted garden lane after the paintings of Bryson Iacoboni: a road between a h
 
 ## MZ WORLD · FLOWER FIELD (BIT FIELD 039, published 2026-10-30)
 
-A field after Bryson Iacoboni's paintings: round lilac, pink and white blooms on a navy ground, red-crowned trees round the edge, two cottages far off, a mown path. Like TWISTED TREE, the place is the subject. Its thread is the light: a gap in the clouds drifts across the flowers with the wind, and where it is picks the bass. A walker and a small white dog come along the path. Painted on the objects in round dabs and scraped blocks, filmed by seven **MZCAM** drones. Sun and weather are simulated: it is a painter's place. **Awaiting MZ.Human's review.**
+A field after Bryson Iacoboni's paintings: round lilac, pink and white blooms on a navy ground, red-crowned trees round the edge, two cottages far off, a mown path. Like TWISTED TREE, the place is the subject. Its thread is the light: a gap in the clouds drifts across the flowers with the wind, and where it is picks the bass. There are no figures. Every colourway comes from Bryson's paintings (17 of them), and buttons switch the colours and the brush (six brushes) while it plays. Filmed by seven **MZCAM** drones. Sun and weather are simulated: it is a painter's place. **Awaiting MZ.Human's review.**
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-039-flower-field/) · [README](sources/bit-field-039-flower-field/README.md)
 
@@ -355,7 +355,7 @@ Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-037-skate-garden/`
 
 ### BIT FIELD 039 — MZ WORLD · FLOWER FIELD
-After the paintings of Bryson Iacoboni. A flower field of navy clumps and 14,000 round blooms (lilac, pink, white), red-crowned trees round the edge, two cottages and a mown path with two lamps. No central figure but the light: a gap in the clouds drifts downwind across the field (its size and the depth of the shade round it follow the cloud; on a clear evening the whole field is in sun), and where it is picks the bass. A walker and a small white dog come along the path. Memory: gaps across the middle, minutes of sun there, walks, rain. Rarely the flowers turn to face the sun, the light stands still on the field, or the field blooms. Filmed by seven MZCAM drones with nine shot kinds. One look: paint on the objects, round dabs and scraped blocks. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?capture=1
+After the paintings of Bryson Iacoboni. A flower field of navy clumps and 14,000 round blooms (lilac, pink, white), red-crowned trees round the edge, two cottages and a mown path with two lamps. No central figure but the light: a gap in the clouds drifts downwind across the field (its size and the depth of the shade round it follow the cloud; on a clear evening the whole field is in sun), and where it is picks the bass. No figures. Memory: gaps across the middle, minutes of sun there, rain, the colours and brush last chosen. Rarely the flowers turn to face the sun, the light stands still on the field, or the field blooms. Filmed by seven MZCAM drones with eight shot kinds. Seventeen colourways, all from Bryson's paintings, and six brushes (dabs and blocks, long strokes, round dabs, scraped, big, small), switchable by buttons or C / B. Params: ?controls=0 ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?capture=1
 
 Path:
 `sources/bit-field-039-flower-field/index.html`
