@@ -34,6 +34,12 @@ A painted garden lane after the paintings of Bryson Iacoboni: a road between a h
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/) · [README](sources/bit-field-037-skate-garden/README.md)
 
+## MZ WORLD · FLOWER FIELD (BIT FIELD 039, published 2026-10-30)
+
+A field after Bryson Iacoboni's paintings: round lilac, pink and white blooms on a navy ground, red-crowned trees round the edge, two cottages far off, a mown path. Like TWISTED TREE, the place is the subject. Its thread is the light: a gap in the clouds drifts across the flowers with the wind, and where it is picks the bass. A walker and a small white dog come along the path. Painted on the objects in round dabs and scraped blocks, filmed by seven **MZCAM** drones. Sun and weather are simulated: it is a painter's place. **Awaiting MZ.Human's review.**
+
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-039-flower-field/) · [README](sources/bit-field-039-flower-field/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
@@ -347,6 +353,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-037-skate-garden/`
+
+### BIT FIELD 039 — MZ WORLD · FLOWER FIELD
+After the paintings of Bryson Iacoboni. A flower field of navy clumps and 14,000 round blooms (lilac, pink, white), red-crowned trees round the edge, two cottages and a mown path with two lamps. No central figure but the light: a gap in the clouds drifts downwind across the field (its size and the depth of the shade round it follow the cloud; on a clear evening the whole field is in sun), and where it is picks the bass. A walker and a small white dog come along the path. Memory: gaps across the middle, minutes of sun there, walks, rain. Rarely the flowers turn to face the sun, the light stands still on the field, or the field blooms. Filmed by seven MZCAM drones with nine shot kinds. One look: paint on the objects, round dabs and scraped blocks. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?capture=1
+
+Path:
+`sources/bit-field-039-flower-field/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-039-flower-field/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
