@@ -40,6 +40,12 @@ A field after Bryson Iacoboni's paintings: round lilac, pink and white blooms on
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-039-flower-field/) · [README](sources/bit-field-039-flower-field/README.md)
 
+## MZ WORLD · OUTBUILDING (BIT FIELD 040, published 2026-11-01)
+
+A corrugated outbuilding on a rise that keeps to itself: sheltered and reclusive, an intentional isolation for safety. A cracked lot falls toward it, a bank of utility poles hums behind it, and a treeline holds the edge. Its window unit and burner cycle with the real weather, one window lights at dusk and goes dark when it chooses, and nobody is ever seen; the crew keeps its distance and the glass shows only sky. New: the corrugation is the line grammar, and rust is a second hatch that creeps across the roof with every wet hour while the lot cracks on every real freeze-thaw. Sound is the place first, with no kick and no walking bass. Unlocated by design. **Awaiting MZ.Human's review.**
+
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/) · [README](sources/bit-field-040-outbuilding/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
@@ -362,6 +368,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-039-flower-field/`
+
+### BIT FIELD 040 — MZ WORLD · OUTBUILDING
+A corrugated outbuilding, its cracked lot, a bank of poles and a treeline, printed in six inks on HEADLAND's engine with SRUTHÁN v3's surface-anchored hatching. The building is the central figure and keeps its own hours: the window unit and burner cycle with the live temperature, the flue ticks and steams, the tin roof pops as it heats and cools, one window lights at dusk and goes dark at a time of its own choosing, a floodlight works dusk to dawn, and the door never opens. A car comes and goes on weekdays, crows sit on the wires, deer graze the lawn at dawn and dusk. The lines sag with the heat, and their sway period sets the bar. Memory: rust and peeling paint with every wet hour, lot cracks with every real freeze-thaw, a wet store that drains over hours. Rarely the lines sing (a ♭II chord), every window lights at once, or the treeline leans in. Tension ends in a stillness and a rupture into new inks (new: Galvanised, Creosote, Red Oxide, Window Unit), line grammar, rib pitch and harmonic centre. Sound is environment first: traffic, wind, leaves, rain on tin, the machines and one held hum, with sparse tuned birds, insects and drips; no kick, no walking bass. Unlocated by design: town-level coordinates drive sun, moon and weather only. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-040-outbuilding/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-040-outbuilding/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.

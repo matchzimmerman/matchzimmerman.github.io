@@ -2,8 +2,8 @@
 
 A corrugated outbuilding on a rise, with a cracked lot in front of it, a bank of utility poles behind it, and a treeline holding the edge. It keeps to itself: sheltered and reclusive, an intentional isolation for safety. Its windows light on their own schedule, its window unit and its burner cycle with the real weather, and nobody is ever seen. It is printed every frame as carved linocut lines in six inks, filmed by an observational crew that never comes close enough to see inside. It runs on HEADLAND's engine with SRUTHÁN v3's surface-anchored hatching.
 
-**Status:** built on the branch `mz-world/outbuilding-040`, not yet published to `main`.
-**Live (once merged):** https://matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/
+**Status:** published 2026-11-01. Awaiting MZ.Human's review.
+**Live:** https://matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/
 **OBS:** Browser Source → that URL · 1920×1080 · enable "Control audio via OBS"
 **Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (internal resolution, default 720; 420–540 for phones or weak GPUs) · `?ff=MIN` · `?hour=H` (start at local hour H, testing) · `?cam=N` (hold one camera) · `?live=0` (simulated weather) · `?capture=1` (no rAF; drive with `MZ.tick(dt)` / `MZ.advance(sec)`)
 **Keys:** **I** info · **M** mute · **R** a hand on the building (pushes toward rupture; logged as human intervention)
