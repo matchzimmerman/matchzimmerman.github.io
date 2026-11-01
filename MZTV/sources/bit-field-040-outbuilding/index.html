@@ -1,0 +1,1286 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MZ World Outbuilding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* MZ WORLD · OUTBUILDING — a building that keeps to itself, printed; the info box is printed in the current inks */
+:root { --ink:#1c2228; --paper:#eeeadf; --hot:#c4572e; --deep:#3d4f63; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
+html, body { height:100%; margin:0; background:var(--ink); overflow:hidden }
+canvas { display:block; width:100%; height:100% }
+#hud { position:fixed; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:min(480px, calc(100vw - 40px)); box-sizing:border-box; padding:11px 13px 10px; font:400 11px/1.5 var(--mono);
+  color:var(--ink); background:color-mix(in srgb, var(--paper) 90%, transparent); border:2px solid var(--ink);
+  letter-spacing:.01em; font-variant-numeric:tabular-nums; pointer-events:none }
+#hud b { font-weight:600 }
+#hud .t { display:flex; justify-content:space-between; gap:12px; font-weight:600; letter-spacing:.08em; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:6px }
+#hud .r { display:grid; grid-template-columns:1fr auto; gap:0 10px }
+#hud .r span:last-child { color:var(--deep); text-align:right }
+#hud .ev { color:var(--hot); font-weight:600 }
+#hud .log { margin-top:6px; padding-top:5px; border-top:1px dashed var(--ink); min-height:3em }
+#hud .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .cr { margin-top:6px; font-size:10px; letter-spacing:.06em; opacity:.8 }
+@media (max-width:560px) { #hud { font-size:9.5px; padding:8px 10px } }
+#tap { position:fixed; right:calc(20px + env(safe-area-inset-right,0px)); top:calc(20px + env(safe-area-inset-top,0px)); font:600 11px/1 var(--mono);
+  color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:8px 10px; letter-spacing:.08em; cursor:pointer }
+</style>
+
+<div id="hud" hidden></div>
+<button id="tap" type="button" hidden>CLICK FOR SOUND</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ====================================================================== params */
+const Q = new URLSearchParams(location.search);
+const CAPTURE = Q.get('capture') === '1';
+const RATE = Math.max(0.01, +(Q.get('rate') || 1));
+const LINES = +(Q.get('lines') || 720);
+let INFO = Q.get('info') !== '0';
+const AUDIO_WANTED = Q.get('audio') !== '0';
+const SEED = +(Q.get('seed') || 1);
+const LIVE_WX = Q.get('live') !== '0';
+const KEY = 'mzworld-outbuilding-v1' + (Q.has('seed') ? '-s' + SEED : '');
+if (Q.get('fresh') === '1') { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+const LAT = 39.27, LON = -76.73;           // town-level (Catonsville, Maryland): drives sun, moon and weather only
+const TZ = 'America/New_York';
+const TAU = Math.PI * 2, D2R = Math.PI / 180;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+function mulberry(s) { return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry(SEED * 7919 + (Date.now() % 100000));
+const rr = (a, b) => a + (b - a) * rnd();
+const prnd = mulberry(40040);               // fixed salt: the place is the same for every seed
+const pr = (a, b) => a + (b - a) * prnd();
+
+/* ====================================================================== clock */
+const fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', weekday: 'short', month: 'numeric' });
+function localParts(ms) {
+  const o = {}; for (const p of fmt.formatToParts(new Date(ms))) o[p.type] = p.value;
+  const h = +o.hour % 24, m = +o.minute, sec = +o.second;
+  return { h, m, sec, str: `${o.hour % 24 < 10 ? '0' : ''}${h}:${o.minute}:${o.second}`, hour: h + m / 60 + sec / 3600, wd: o.weekday, month: +o.month,
+    weekend: o.weekday === 'Sat' || o.weekday === 'Sun' };
+}
+let simMs = Date.now();
+if (Q.has('hour')) { const want = +Q.get('hour'); const cur = localParts(simMs).hour; simMs += (((want - cur) % 24 + 24) % 24) * 3600e3; }
+if (Q.has('ff')) simMs += (+Q.get('ff')) * 60e3;
+let simT = 0;
+
+/* ====================================================================== noise + terrain (metres; +x north, +z east, y up) */
+function hash2(x, y) { let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + 104729; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+function fbm(x, y) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 4; i++) { s += a * vnoise(x * f, y * f); f *= 2.03; a *= 0.5; } return s; }
+// the building: long axis east-west, 30 m × 7 m; the lot lies south of it
+const BW = 3.5, BL = 15, WALL0 = 0.45, WALLTOP = 3.39, RIDGE = 4.3;
+const roadZ = (x) => 31 + 5 * Math.sin(x * 0.021 + 0.6);
+function lotMask(x, z) {   // 1 on asphalt
+  const box = (x0, x1, z0, z1, r) => { const dx = Math.max(x0 - x, 0, x - x1), dz = Math.max(z0 - z, 0, z - z1); return 1 - smoothstep(0, r, Math.hypot(dx, dz)); };
+  const lot = box(-40, -5.2, -24, 21, 1.2);
+  const drive = box(-24, -9, 18, roadZ(-16), 0.8);
+  const road = 1 - smoothstep(3.0, 3.6, Math.abs(z - roadZ(x)));
+  return Math.max(lot, drive, road);
+}
+function groundH(x, z) {
+  let h = 0.018 * x + 2.6 * smoothstep(36, 90, z) + 2.2 * smoothstep(12, 45, x) * smoothstep(-30, 10, z) - 1.4 * smoothstep(-26, -60, z)
+    + 0.9 * (fbm(x * 0.045 + 3, z * 0.045 + 1) - 0.5);
+  const mound = 0.9 * Math.exp(-Math.pow((x + 30) / 6, 2) - Math.pow((z + 22) / 7, 2));
+  h += mound;
+  const lot = lotMask(x, z); const plane = (x < -5 ? 0.1 * (-5 - x) : 0.018 * x) - 0.25 + 0.05 * Math.sin(x * 0.11) * Math.sin(z * 0.07);
+  h = lerp(h, plane, lot);
+  const pad = 1 - smoothstep(0.8, 3.5, Math.max(Math.abs(x) - BW, Math.abs(z) - BL, 0));
+  return lerp(h, -0.3, pad);
+}
+
+/* ====================================================================== sun + moon */
+function sunMoon(ms) {
+  const d = ms / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * D2R, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, e = (23.439 - 0.00000036 * d) * D2R;
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const lst = (gmst * 15 + LON) * D2R, la = LAT * D2R;
+  const place = (lon, lat) => {
+    const ra = Math.atan2(Math.cos(e) * Math.sin(lon) - Math.tan(lat) * Math.sin(e), Math.cos(lon));
+    const dec = Math.asin(Math.sin(lat) * Math.cos(e) + Math.cos(lat) * Math.sin(e) * Math.sin(lon));
+    const ha = lst - ra;
+    const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+    const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+    return { el, az };
+  };
+  const sun = place(L, 0);
+  const Lm = (218.316 + 13.176396 * d) * D2R, Mm = (134.963 + 13.064993 * d) * D2R, F = (93.272 + 13.229350 * d) * D2R;
+  const mlon = Lm + 6.289 * D2R * Math.sin(Mm), mlat = 5.128 * D2R * Math.sin(F);
+  const moon = place(mlon, mlat);
+  const phase = ((mlon - L) % TAU + TAU) % TAU;
+  return { sun, moon, illum: 0.5 * (1 - Math.cos(phase)) };
+}
+const azElToVec = (az, el) => V(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
+const fromBearingTravel = (deg) => { const b = deg * D2R; return new THREE.Vector2(-Math.cos(b), -Math.sin(b)); };
+const compass = (deg) => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+
+/* ====================================================================== palettes (6 inks: INK DEEP SEA HOT GLOW PAPER) */
+const COLORWAYS = [
+  { name: 'GALVANISED',     c: ['#1c2228', '#3d4f63', '#9db5a8', '#c4572e', '#e9c46a', '#eeeadf'] },
+  { name: 'CREOSOTE',       c: ['#1f1712', '#4a3426', '#8f9c7a', '#d9622b', '#e6c27a', '#f2eadb'] },
+  { name: 'SIGNAL FLARE',   c: ['#24123a', '#5b3fd1', '#6fd3c1', '#ff7a8a', '#ffd24a', '#fbf3e4'] },
+  { name: 'RED OXIDE',      c: ['#2a1414', '#7a2e22', '#9fb0a8', '#e8a33d', '#f3dfb0', '#f4ece0'] },
+  { name: 'PISTACHIO NIGHT',c: ['#10202b', '#1f4a6e', '#b6d97a', '#ff5a7a', '#f9e7b0', '#eef4ea'] },
+  { name: 'WINDOW UNIT',    c: ['#22202a', '#585a72', '#b9c7b2', '#e0703a', '#f2d79a', '#f6f1e4'] },
+  { name: 'ULTRAMARINE',    c: ['#0c1440', '#1f3bb3', '#44b8e8', '#ff6a1a', '#ffd0a1', '#fff7ec'] },
+  { name: 'LICHEN',         c: ['#22261d', '#4b5b3a', '#a7c5a0', '#d9475b', '#e8d27c', '#f3eedf'] },
+];
+const hexV = (h) => { const n = parseInt(h.slice(1), 16); return V(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+const INK = 0, DEEP = 1, SEA = 2, HOT = 3, GLOW = 4, PAPER = 5;
+// material ids → [dark, mid, light] ink roles, hatch strength, speckle
+const MAT = [
+  /* 0 sky     */ [DEEP, HOT, PAPER, 0.9, 1], /* 1 sun     */ [HOT, GLOW, PAPER, 1.0, 0], /* 2 siding  */ [DEEP, SEA, PAPER, 1.0, 0],
+  /* 3 bare    */ [INK, DEEP, SEA, 1.0, 0],   /* 4 rust    */ [INK, HOT, GLOW, 1.0, 1],   /* 5 grass   */ [DEEP, SEA, GLOW, 0.9, 0],
+  /* 6 wood    */ [INK, DEEP, GLOW, 1.0, 0],  /* 7 dark    */ [INK, INK, DEEP, 0.3, 0],   /* 8 foliage */ [INK, DEEP, SEA, 0.9, 0],
+  /* 9 white   */ [DEEP, PAPER, PAPER, 0.5, 0], /*10 asphalt */ [INK, DEEP, SEA, 0.9, 0], /*11 wet     */ [INK, SEA, PAPER, 0.7, 0],
+  /*12 awning  */ [INK, SEA, SEA, 0.8, 0],    /*13 cloud   */ [SEA, PAPER, PAPER, 0.8, 0], /*14 moon    */ [DEEP, SEA, PAPER, 0.8, 0],
+  /*15 lamp    */ [GLOW, GLOW, PAPER, 0.0, 0],
+];
+
+/* ====================================================================== persistent state (memory) */
+const DEF = () => ({
+  v: 1, born: Date.now(), epoch: 1, epochStart: 0, epochLen: rr(50, 95) * 60, tension: 0, colorway: 0, cwVisits: [1, 0, 0, 0, 0, 0, 0, 0],
+  grammar: { period: 6.8, dith: 0.12, wob: 7, outline: 1, hatch: 1.0, ribK: 1 }, center: 38,
+  uncanny: { next: rr(4, 9) * 60, counts: {}, last: {}, mem: {} }, log: [], runSec: 0,
+  rust: 0.38, peel: 0.42, wetH: 0, wet: 0, crack: 0.22, ft: { below: false, cycles: 0 }, savedAt: Date.now(),
+  night: { key: '', off: 3, allNight: false }, car: { in: false }, logKind: {},
+});
+let S = DEF();
+try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEF(), o); } } catch (e) {}
+const T0 = S.runSec || 0; simT = T0;
+{ // the surface dried while the source was dark
+  const awayH = clamp((Date.now() - (S.savedAt || Date.now())) / 3600e3, 0, 1e4); S.wet *= Math.exp(-awayH / 3); }
+function save() { try { S.runSec = simT; S.savedAt = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function logEv(text) { S.log.unshift({ t: localParts(simMs).str, text }); if (S.log.length > 40) S.log.length = 40; }
+function logOnce(kind, text, gapMin = 45) { const l = S.logKind[kind]; if (l != null && simT - l < gapMin * 60 && l <= simT) return; S.logKind[kind] = simT; logEv(text); }
+if (!S.log.length) logEv('the outbuilding was found as it is'); else logEv('the outbuilding resumed (epoch ' + S.epoch + ')');
+
+/* ====================================================================== renderer + targets */
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: CAPTURE });
+renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.autoClear = true;
+document.body.prepend(renderer.domElement);
+let W = 2, H = 2, IW = 2, IH = 2;
+const rtData = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, generateMipmaps: false });
+const rtPrint = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 4000);
+function resize() {
+  W = innerWidth; H = innerHeight; renderer.setSize(W, H, false);
+  IH = Math.min(LINES, H); IW = Math.round(IH * W / H);
+  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  PU.uRes.value.set(IW, IH); wireU.uResW.value.set(IW, IH);
+}
+
+/* ====================================================================== shaders */
+const COMMON = /* glsl */`
+uniform float uPerPx, uWobPx, uPxK, uRibK;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+vec4 pack(float sh, float id, float line, float acc){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., clamp(line,0.,1.), acc>0.5?1.:0.); }
+// the hatching is carved into the surface (as SRUTHÁN v3): lines run along T, spaced across it in the surface's own coordinates,
+// and the spacing follows distance in octaves so the print keeps its density on screen. A still object keeps a still pattern.
+float lineAt(vec3 W, vec3 N, vec3 T, float dist, float extra){
+  vec3 A=cross(N,T); if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.)); if(dot(A,A)<1e-6) A=vec3(1.,0.,0.); A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float per=uPerPx*max(dist,0.05)*uPxK;
+  float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float p0=exp2(floor(L)), p1=p0*2.;
+  float s=dot(W,A), t=dot(W,B); float wk=uWobPx/max(uPerPx,0.1)*1.35;
+  float l0=cos((s+((vn(vec2(s,t)/(p0*7.)+3.1)-.5)*wk+extra)*p0)*6.2831853/p0);
+  float l1=cos((s+((vn(vec2(s,t)/(p1*7.)+3.1)-.5)*wk+extra)*p1)*6.2831853/p1);
+  return 0.5+0.5*mix(l0,l1,f); }
+// the corrugation is the line grammar: lines sit on the ribs themselves, and step out to every 2nd, 4th… rib with distance
+float ribLine(float s, float t, float dist, float pitch){
+  float per=uPerPx*max(dist,0.05)*uPxK;
+  float L=log2(max(per/pitch,1.)*uRibK); float f=smoothstep(0.,1.,fract(L));
+  float p0=pitch*exp2(floor(L)), p1=p0*2.;
+  float wk=uWobPx/max(uPerPx,0.1)*0.5;
+  float w0=(vn(vec2(s/(p0*5.),t/(p0*11.))+1.7)-.5)*wk*p0, w1=(vn(vec2(s/(p1*5.),t/(p1*11.))+1.7)-.5)*wk*p1;
+  return 0.5+0.5*mix(cos((s+w0)*6.2831853/p0), cos((s+w1)*6.2831853/p1), f); }
+`;
+const SH = {   // shared uniforms (same objects referenced by every material)
+  uTime: { value: 0 }, uSunD: { value: V(0, 1, 0) }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
+  uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 600 }, uFogShade: { value: 0.6 }, uDay: { value: 1 }, uSkyB: { value: 0.6 },
+  uPerPx: { value: 6 }, uWobPx: { value: 7 }, uPxK: { value: 0.0012 }, uRibK: { value: 1 },
+  uRust: { value: 0.38 }, uPeel: { value: 0.42 }, uCrack: { value: 0.22 }, uWet: { value: 0 }, uGrow: { value: 1 }, uRainNow: { value: 0 },
+  uWindL: { value: V() }, uLean: { value: 0 }, uLeanC: { value: V(0, 0, 0) }, uCalm: { value: 1 },
+  uFloodP: { value: V() }, uFloodD: { value: V(0, -1, 0) }, uFlood: { value: 0 },
+  uSpill: { value: [0, 0, 0, 0, 0, 0] }, uWinZ: { value: [0, 0, 0, 0, 0, 0] }, uFan: { value: 0 },
+};
+const OBJ_VERT = /* glsl */`
+uniform float uTime, uCloth, uMover, uLean, uCalm; uniform vec3 uWindL, uLeanC;
+attribute vec3 aT; attribute vec4 aTree; attribute float aLot;
+varying vec3 vW, vN, vL, vT; varying float vC, vLot;
+void main(){
+  vC=0.; vLot=aLot;
+  vec4 lp=vec4(position,1.); vec3 ln=normal; vec3 lt=aT;
+  #ifdef USE_INSTANCING
+    lp=instanceMatrix*lp; ln=mat3(instanceMatrix)*ln; lt=mat3(instanceMatrix)*lt;
+  #endif
+  vec4 w=modelMatrix*lp; vec3 n=normalize(mat3(modelMatrix)*ln);
+  vec3 wl=uWindL*uCalm;
+  if(uCloth>2.5&&uCloth<4.5){   // grass blades bend with the wind
+    float hgt=max(position.y,0.); float ph=sin(uTime*2.1+w.x*1.7+w.z*1.3)+0.5*sin(uTime*3.3+w.x*4.+w.z*3.);
+    float k=1.5*hgt*hgt; w.xz+=(wl.xz*(0.75+0.3*ph)+vec2(ph,ph*0.6)*0.05*uCalm)*k; w.y-=k*0.2*length(wl.xz);
+    vC=0.05*ph*hgt;
+  }
+  if(uCloth>4.5){                // trees: sway with the wind, and sometimes lean in toward the building
+    vec3 root=aTree.xyz; float hgt=max(w.y-root.y,0.);
+    float ph=sin(uTime*0.8+root.x*0.37+root.z*0.21)+0.45*sin(uTime*1.9+w.x*0.6+w.z*0.5);
+    w.xz+=wl.xz*(0.8+0.3*ph)*hgt*hgt*0.0018+vec2(ph,ph*0.7)*0.006*hgt*(0.3+length(wl.xz))*uCalm;
+    vec2 d=uLeanC.xz-root.xz; float dl=length(d); d=dl>0.01?d/dl:vec2(0.);
+    float k=uLean*hgt*hgt*0.02*smoothstep(4.,16.,dl)*(1.-smoothstep(48.,85.,dl));
+    w.xz+=d*k; w.y-=k*0.1;
+  }
+  vW=w.xyz; vN=n; vL=uMover>0.5?position:w.xyz; vT=mat3(modelMatrix)*lt;
+  gl_Position=projectionMatrix*viewMatrix*w;
+}`;
+const OBJ_FRAG = /* glsl */`
+${COMMON}
+uniform float uId, uMode, uEmit, uTime, uAmb, uDiff, uFogD, uFogShade, uSkyB, uDay;
+uniform float uRust, uPeel, uCrack, uWet, uGrow, uRainNow, uFan;
+uniform vec3 uKeyD, uCamP, uT, uFloodP, uFloodD; uniform float uFlood; uniform float uSpill[6]; uniform float uWinZ[6];
+varying vec3 vW, vN, vL, vT; varying float vC, vLot;
+const float RIB=0.30, RIBR=0.46, WALLTOP=${WALLTOP.toFixed(2)};
+float lights(vec3 N){
+  float s=0.;
+  vec3 Lv=uFloodP-vW; float dl=length(Lv); vec3 Ld=Lv/max(dl,1e-3);
+  float cone=smoothstep(0.42,0.75,dot(-Ld,uFloodD));
+  s+=uFlood*cone*max(dot(N,Ld),0.)*exp(-dl*dl/600.)*1.5;
+  for(int i=0;i<6;i++){ if(uSpill[i]<0.01) continue;
+    vec3 wp=vec3(-${BW.toFixed(1)}-0.2,1.7,uWinZ[i]); vec3 q=wp-vW; float d2=dot(q,q); vec3 qd=q/sqrt(max(d2,1e-4));
+    float face=smoothstep(0.,0.5,-qd.x);
+    s+=uSpill[i]*face*max(dot(N,qd),0.)*exp(-d2/7.)*0.6; }
+  return s; }
+void main(){
+  vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
+  float dist=length(vW-uCamP);
+  float sh=uAmb+uDiff*max(dot(N,uKeyD),0.)+vC;
+  float id=uId; vec3 T=uT; float acc=0.; float line=-1.;
+  if(uMode>0.5&&uMode<1.5){          // corrugated siding: ribs run up the wall
+    vec3 A=cross(vec3(0.,1.,0.),N); A=dot(A,A)<1e-4?vec3(0.,0.,1.):normalize(A); float s=dot(vW,A), t=vW.y;
+    float px=RIB/(max(dist,0.05)*uPxK); float amp=smoothstep(1.5,5.,px);
+    float ph=s*6.2831853/RIB; vec3 Np=normalize(N+A*0.42*sin(ph)*amp);
+    sh=uAmb+uDiff*max(dot(Np,uKeyD),0.)+0.05*cos(ph)*amp-0.06*uWet*uRainNow;
+    float pe=vn(vec2(s,t)*4.1+11.)*0.55+vn(vec2(s,t)*13.)*0.45+0.16*(1.-smoothstep(0.5,1.3,t));
+    if(pe>1.2-uPeel*0.75){ id=3.; sh-=0.12; }
+    float st=vn(vec2(s*2.6,3.3)); float run=WALLTOP-t;   // rust runs down from the eaves
+    if(st>0.6&&run<(st-0.6)*7.*uRust+0.06){ id=4.; sh-=0.3; }
+    line=ribLine(s,t,dist,RIB);
+  }
+  else if(uMode>1.5&&uMode<2.5){     // ground: asphalt (cracks, puddles) or grass
+    float lot=vLot+0.22*(vn(vW.xz*0.7)-0.5);
+    if(lot>0.5){
+      id=10.; T=normalize(vec3(1.,0.,0.35)); sh+=0.07*(vn(vW.xz*1.7)-0.5)-0.12*uWet-0.14+0.16*step(0.985,hash(floor(vW.xz*9.)));
+      vec2 jx=vW.xz+vec2(vn(vW.xz*1.7)-0.5,vn(vW.zx*1.9+4.)-0.5)*0.9;
+      float c1=abs(vn(jx*0.11+vec2(3.1,7.))-0.5), c2=abs(vn(jx*0.27+vec2(9.,1.))-0.5)*1.25;
+      float c=min(c1,c2); float g=vn(vW.xz*0.045+5.)+0.2*vn(vW.xz*0.3);
+      float w=0.004+0.014*uCrack; bool crack=c<w&&g>0.92-0.62*uCrack;
+      float pd=vn(vW.xz*0.14+1.3)*0.65+vn(vW.xz*0.45)*0.35;
+      vec3 Vd=normalize(uCamP-vW); float fres=pow(1.-max(dot(N,Vd),0.),3.);
+      if(pd<uWet*0.3||(crack&&uWet>0.25)){ id=11.; sh=0.28+0.6*fres*uSkyB+0.22*uSkyB; T=normalize(vec3(0.,0.,1.)); }
+      else if(crack){ id=7.; sh=0.08; T=normalize(vec3(c1-c2,0.,1.)); }
+      else if(c<w*2.6&&g>0.92-0.62*uCrack&&uGrow>0.5){ id=5.; sh+=0.05; }
+      if(id==10.){ float edge=1.-smoothstep(0.5,0.62,lot); sh-=0.05*edge; }
+    } else {
+      id=5.; float a=0.5+0.6*(vn(vW.xz*0.12)-0.5); T=normalize(vec3(cos(a),0.,sin(a))); sh+=0.1*(vn(vW.xz*0.9)-0.5)-0.06*uWet;
+      if(uGrow<0.5) sh+=0.05;
+    }
+  }
+  else if(uMode>2.5&&uMode<3.5){ T=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.); sh+=0.08*(vn(vec2(dot(vW,T)*0.8,dot(vW,cross(T,N))*30.))-0.5); }
+  else if(uMode>3.5&&uMode<4.5){     // the roof: ribs down the slope, rust in streaks along them, crossed by a second hatch
+    vec3 Td=vec3(0.,-1.,0.)-N*dot(vec3(0.,-1.,0.),N); Td=dot(Td,Td)<1e-5?vec3(1.,0.,0.):normalize(Td); vec3 A=normalize(cross(N,Td));
+    float s=dot(vW,A), t=dot(vW,Td);
+    float px=RIBR/(max(dist,0.05)*uPxK); float amp=smoothstep(1.5,5.,px);
+    float ph=s*6.2831853/RIBR; vec3 Np=normalize(N+A*0.35*sin(ph)*amp);
+    sh=uAmb+uDiff*max(dot(Np,uKeyD),0.)+0.04*cos(ph)*amp+0.1-0.08*uWet;
+    float seamd=abs(fract(s/3.05)-0.5)*3.05; float seam=smoothstep(1.3,1.52,seamd);
+    float eave=1.-smoothstep(${WALLTOP.toFixed(2)},${(WALLTOP + 0.7).toFixed(2)},vW.y);
+    float valley=0.5-0.5*cos(ph);
+    float r=0.5*vn(vec2(s/RIBR*1.1,t*0.3)+4.)+0.26*vn(vW.xz*0.33+9.)+0.24*eave+0.18*seam+0.12*vn(vec2(s*6.,t*0.5))+0.1*valley;
+    float rib=ribLine(s,t,dist,RIBR);
+    if(r>1.13-uRust){ id=4.; sh-=0.28; line=min(rib,ribLine(t,s,dist,RIBR*0.8)); }
+    else { id=3.; line=rib; }
+  }
+  else if(uMode>4.5&&uMode<5.5){     // foliage
+    id=8.; float a=vn(vW.xz*0.55+vW.y*0.4)*3.14159; T=normalize(vec3(cos(a),0.55,sin(a)));
+    sh+=0.2*(vn(vW.xz*0.8+vW.y*0.6)-0.5)+0.08*N.y-0.04;
+  }
+  else if(uMode>5.5&&uMode<6.5){     // the window unit's grille, with the fan turning behind it when it runs
+    vec2 p=vL.xy; float lv=0.5+0.5*cos(p.y*6.2831853/0.045);
+    float a=atan(p.y-0.0,p.x); float r=length(p);
+    float fan=0.5+0.5*cos(a*5.-uFan); float inside=1.-smoothstep(0.17,0.2,r);
+    line=min(lv,mix(1.,fan,0.75*inside)); sh=0.62+0.2*N.y-0.18*inside;
+  }
+  else if(uMode>6.5&&uMode<7.5){     // concrete foundation
+    id=9.; T=vec3(0.,0.,1.); sh-=0.12*(1.-smoothstep(0.,0.35,vW.y+0.2))+0.08*(vn(vW.xz*3.+vW.y*4.)-0.5)+0.06*uWet;
+  }
+  else if(uMode>7.5&&uMode<8.5){     // glass: dark, with a little sky in it; it never shows the inside
+    vec3 Vd=normalize(uCamP-vW); float fres=pow(1.-max(dot(N,Vd),0.),2.);
+    sh=0.06+0.32*fres*uSkyB+0.08*(vn(vW.yz*3.)-0.5); id=7.; T=vec3(0.,1.,0.);
+  }
+  sh=0.08+0.55*sh;
+  sh+=lights(N);
+  float fog=1.-exp(-dist/uFogD);
+  if(uEmit>0.){ sh=uEmit; fog*=0.35; id=15.; }
+  sh=mix(sh,uFogShade,fog);
+  if(line<0.) line=lineAt(vL,N,T,dist,0.);
+  gl_FragColor=pack(sh,id,line,acc*(1.-fog));
+}`;
+function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
+    uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
+      uEmit: { value: 0 }, uCloth: { value: 0 }, uMover: { value: 0 } }, extra)
+  });
+}
+
+/* ---------- sky */
+const SKY_FRAG = /* glsl */`
+${COMMON}
+uniform vec3 uSunD, uCamP; uniform float uDay, uCloud, uTime; uniform vec2 uWind;
+varying vec3 vW;
+void main(){
+  vec3 d=normalize(vW-uCamP); float el=d.y;
+  float sg=pow(max(dot(d,uSunD),0.),5.)*smoothstep(-0.25,0.05,uSunD.y);
+  float low=smoothstep(-0.28,0.,uSunD.y)*(1.-smoothstep(0.12,0.5,uSunD.y));
+  float az=pow(max(dot(normalize(d.xz+1e-4),normalize(uSunD.xz+1e-4)),0.),2.);
+  float band=(1.-smoothstep(0.,0.32,max(el,0.)))*az*low;
+  float sh=mix(0.1,0.58,uDay)+0.36*sg-0.16*smoothstep(0.,0.7,el)*uDay+0.12*(1.-smoothstep(0.,0.2,el))*uDay+0.42*band;
+  float id=0.; float per=uPerPx*uPxK;
+  float line=0.5+0.5*cos(asin(clamp(el,-1.,1.))/per*6.2831853);
+  if(el>0.){
+    vec2 cp=d.xz/max(el,0.035)*500.+uWind*uTime*6.;
+    float cl=vn(cp*0.0016)*0.62+vn(cp*0.0055+3.)*0.38;
+    float thr=1.05-uCloud*0.75;
+    float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
+    if(cov>0.5){ id=13.; sh=mix(0.3,0.86,uDay)-0.45*(cl-thr)+0.28*sg; line=0.5+0.5*cos((asin(el)+0.03*cl)/per*6.2831853); }
+  }
+  gl_FragColor=pack(sh,id,line,0.);
+}`;
+const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
+const DISC_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); gl_Position.z=gl_Position.w*0.99998; }`;
+const DISC_FRAG = /* glsl */`
+${COMMON}
+uniform float uIsMoon, uIllum, uDim; varying vec2 vUv;
+void main(){ vec2 p=vUv*2.-1.; float r=length(p); if(r>1.) discard;
+  float sh=uIsMoon>0.5?0.55+0.4*uIllum-0.25*smoothstep(0.,1.,p.x*(1.-uIllum)*2.):0.92-0.3*smoothstep(0.5,1.,r);
+  gl_FragColor=pack(sh*uDim,uIsMoon>0.5?14.:1.,0.5+0.5*cos(p.y*22.),0.); }`;
+
+/* ---------- points (heat from the flue) */
+const PT_VERT = /* glsl */`attribute float aLife; uniform float uScale; varying float vLife; varying vec3 vW;
+void main(){ vLife=aLife; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; vec4 mv=viewMatrix*w; gl_Position=projectionMatrix*mv;
+  gl_PointSize=aLife>0.?uScale*(1.4-0.6*aLife)/max(-mv.z,1.):0.; }`;
+const PT_FRAG = /* glsl */`${COMMON}
+uniform vec3 uCamP; uniform float uFogD, uFogShade; varying float vLife; varying vec3 vW;
+void main(){ if(vLife<=0.) discard; vec2 c=gl_PointCoord*2.-1.; if(dot(c,c)>1.) discard; if(hash(gl_FragCoord.xy*0.37)>0.35+0.6*vLife) discard;
+  float fog=1.-exp(-length(vW-uCamP)/uFogD); gl_FragColor=pack(mix(0.8,uFogShade,fog),13.,0.5+0.5*c.y,0.); }`;
+
+/* ---------- the lines (wires): catenaries that sag with the heat and swing in the wind */
+const WIRE_VERT = /* glsl */`
+attribute float aU, aShape, aPh, aUo, aShapeO, aSgn; attribute vec3 aSide, aOther;
+uniform float uTime, uSag, uSwing, uSwAmp, uCalm, uWidth; uniform vec2 uResW;
+varying float vU; varying vec3 vW;
+vec3 wireP(vec3 p, float u, float sh){ float b=sin(3.14159265*u); p.y-=uSag*sh;
+  float sw=sin(uTime*6.2831853/uSwing+aPh)*uSwAmp*b*uCalm; p+=aSide*sw; p.y-=abs(sw)*0.12; return p; }
+void main(){ vec3 p=wireP(position,aU,aShape), q=wireP(aOther,aUo,aShapeO);
+  vec4 a=projectionMatrix*viewMatrix*vec4(p,1.), c=projectionMatrix*viewMatrix*vec4(q,1.);
+  vec2 sa=a.xy/max(a.w,1e-3), sc=c.xy/max(c.w,1e-3); vec2 d=(sc-sa)*uResW; float l=length(d); d=l>1e-5?d/l:vec2(1.,0.);
+  vec2 n=vec2(-d.y,d.x)/uResW*uWidth*aSgn;
+  vU=aU; vW=p; gl_Position=a; gl_Position.xy+=n*a.w; }`;
+const WIRE_FRAG = /* glsl */`${COMMON}
+uniform float uSing, uTime, uFogD, uFogShade; uniform vec3 uCamP; varying float vU; varying vec3 vW;
+void main(){ float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
+  float acc=uSing*step(0.55,fract(vU*4.-uTime*0.45+0.37*hash(vec2(floor(vU*4.-uTime*0.45),1.))));
+  gl_FragColor=pack(mix(0.07,uFogShade,fog*0.8),7.,0.5,acc*(1.-fog)); }`;
+
+/* ---------- print pass: linocut lines through six inks */
+const PU = {
+  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) },
+  uPal: { value: Array.from({ length: 6 }, () => V()) },
+  uTab: { value: MAT.map(m => V(m[0], m[1], m[2])) }, uHat: { value: MAT.map(m => m[3]) }, uSpk: { value: MAT.map(m => m[4]) },
+  uDith: { value: 0.12 }, uOutline: { value: 1 }, uHatch: { value: 1 },
+  uSeed: { value: rnd() * 100 }, uRain: { value: 0 }, uRainDir: { value: new THREE.Vector2(0.3, -1).normalize() }, uTime: { value: 0 },
+};
+const PRINT_FRAG = /* glsl */`
+uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uTab[16]; uniform float uHat[16]; uniform float uSpk[16];
+uniform float uDith, uOutline, uHatch, uSeed, uRain, uTime; uniform vec2 uRainDir;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float b2(vec2 a){ a=floor(a); return fract(dot(a,vec2(0.5,a.y*0.75))); }
+float b4(vec2 a){ return b2(0.5*a)*0.25+b2(a); }
+float b8(vec2 a){ return b4(0.5*a)*0.25+b2(a); }
+int idAt(vec2 fc){ return int(floor(texture2D(uData,fc/uRes).g*16.)); }
+bool soft(int a,int b){
+  bool sa=(a==0||a==13||a==1||a==14), sb=(b==0||b==13||b==1||b==14);
+  if(sa&&sb) return true;
+  if((a==3||a==4)&&(b==3||b==4)) return true;
+  if((a==2||a==4)&&(b==2||b==4)) return true;
+  if((a==10||a==11)&&(b==10||b==11)) return true;
+  if((a==5||a==10)&&(b==5||b==10)) return true;
+  return false; }
+void main(){
+  vec2 fc=gl_FragCoord.xy;
+  vec4 d=texture2D(uData,fc/uRes);
+  float s=d.r; int id=int(floor(d.g*16.)); float acc=d.a;
+  vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
+  float line=d.b*2.-1.;
+  float mid=1.-abs(2.*s-1.);
+  float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith;
+  int k=v<0.36?0:(v<0.69?1:2);
+  float ink=k==0?tab.x:(k==1?tab.y:tab.z);
+  if(uSpk[id]>0.5){ float h=hash(floor(fc/2.6)+uSeed); if(h>0.968){ if(s<0.28) ink=5.; else if(k==2) ink=tab.y; else if(k==1) ink=tab.x; } }
+  if(uOutline>0.5){
+    int il=idAt(fc+vec2(-1.,0.)), iu=idAt(fc+vec2(0.,-1.));
+    if((il!=id&&!soft(il,id))||(iu!=id&&!soft(iu,id))) ink=0.;
+  }
+  if(acc>0.5) ink=3.;   // accents (the singing lines) print over the outlines
+  if(uRain>0.01){
+    vec2 rp=vec2(dot(fc,vec2(-uRainDir.y,uRainDir.x)), dot(fc,uRainDir)+uTime*520.);
+    vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
+    if(h>1.-uRain*0.06 && fract(rp.y/46.)<0.35 && fract(rp.x/5.)<0.3) ink=(s<0.5)?float(tab.z):5.;
+  }
+  gl_FragColor=vec4(uPal[int(ink+0.5)],1.);
+}`;
+const BLIT_FRAG = /* glsl */`uniform sampler2D uTex; varying vec2 vUv;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){ vec3 c=texture2D(uTex,vUv).rgb; float g=hash(floor(gl_FragCoord.xy*0.5)); c*=0.965+0.035*g; gl_FragColor=vec4(c,1.); }`;
+const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const printMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PRINT_FRAG, uniforms: PU, depthTest: false, depthWrite: false });
+const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { uTex: { value: rtPrint.texture } }, depthTest: false, depthWrite: false });
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
+
+/* ====================================================================== world build */
+const M4 = (x, y, z, ry = 0, rx = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(sx, sy, sz));
+function withT(g, m4, T) { g.applyMatrix4(m4); const n = g.attributes.position.count, t = new Float32Array(n * 3); const tv = T.clone().transformDirection(m4);
+  for (let i = 0; i < n; i++) { t[i * 3] = tv.x; t[i * 3 + 1] = tv.y; t[i * 3 + 2] = tv.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; }
+const box = (w, h, d, m4, T = V(0, 1, 0)) => withT(new THREE.BoxGeometry(w, h, d), m4, T);
+const cyl = (r0, r1, h, m4, seg = 10, T = V(0, 1, 0)) => withT(new THREE.CylinderGeometry(r0, r1, h, seg, 1), m4, T);
+const merged = (list, mat) => { const m = new THREE.Mesh(mergeGeometries(list.map(g => g.index ? g.toNonIndexed() : g)), mat); scene.add(m); return m; };
+
+// ground
+{
+  const SZ = 320, N = 320; const g = new THREE.PlaneGeometry(SZ, SZ, N, N); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position; const lot = new Float32Array(p.count);
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i); p.setY(i, groundH(x, z)); lot[i] = lotMask(x, z); }
+  g.setAttribute('aLot', new THREE.BufferAttribute(lot, 1)); g.computeVertexNormals();
+  scene.add(new THREE.Mesh(g, objMat(10, 2, V(1, 0, 0))));
+}
+// sky dome, sun, moon
+const skyU = Object.assign({}, SH, { uCloud: { value: 0.5 }, uWind: { value: new THREE.Vector2(1, 0) } });
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 48, 24), new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthWrite: false }));
+sky.renderOrder = -3; sky.frustumCulled = false; scene.add(sky);
+const discMat = (isMoon) => new THREE.ShaderMaterial({ vertexShader: DISC_VERT, fragmentShader: DISC_FRAG, depthWrite: false,
+  uniforms: Object.assign({}, SH, { uIsMoon: { value: isMoon ? 1 : 0 }, uIllum: { value: 1 }, uDim: { value: 1 } }) });
+const sunM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(false)); sunM.renderOrder = -2; sunM.frustumCulled = false; scene.add(sunM);
+const moonM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(true)); moonM.renderOrder = -2; moonM.frustumCulled = false; scene.add(moonM);
+
+/* ---------- the outbuilding */
+const B = { south: [], north: [], ac: V(-BW - 0.32, 1.05, 9.5), flue: V(-1.2, 0, -10), door: V(-1.2, 1.05, BL + 0.07) };
+{
+  const sid = [], conc = [], white = [], dark = [], wood = [], roofG = [];
+  conc.push(box(BW * 2 + 0.35, 0.75, BL * 2 + 0.35, M4(0, 0.07, 0)));
+  sid.push(box(0.12, WALLTOP - WALL0, BL * 2, M4(-BW, (WALL0 + WALLTOP) / 2, 0)));
+  sid.push(box(0.12, WALLTOP - WALL0, BL * 2, M4(BW, (WALL0 + WALLTOP) / 2, 0)));
+  const gable = new THREE.Shape([new THREE.Vector2(-BW, WALL0), new THREE.Vector2(BW, WALL0), new THREE.Vector2(BW, WALLTOP), new THREE.Vector2(0, RIDGE), new THREE.Vector2(-BW, WALLTOP)]);
+  for (const zz of [-BL, BL]) { const g = new THREE.ExtrudeGeometry(gable, { depth: 0.12, bevelEnabled: false }); g.translate(0, 0, zz - 0.06); sid.push(withT(g, new THREE.Matrix4(), V(0, 1, 0))); }
+  const half = BW + 0.38, ang = Math.atan2(RIDGE - WALLTOP, BW), slope = half / Math.cos(ang);
+  for (const sgn of [-1, 1]) { const cx = sgn * half / 2, cy = RIDGE - (half / 2) * Math.tan(ang) + 0.03;
+    roofG.push(box(slope, 0.05, BL * 2 + 0.8, M4(cx, cy, 0, 0, 0, -sgn * ang), V(1, 0, 0))); }
+  roofG.push(box(0.22, 0.12, BL * 2 + 0.8, M4(0, RIDGE + 0.07, 0), V(0, 0, 1)));   // ridge cap
+  // south windows (one is boarded; the last has the window unit)
+  const SZW = [-11.5, -7.5, -3.5, 0.5, 5.0, 9.5];
+  SZW.forEach((z, i) => {
+    const y0 = 1.3, hW = i === 5 ? 1.2 : 1.05, wW = 0.92, x = -BW - 0.075;
+    white.push(box(0.09, 0.07, wW + 0.14, M4(x - 0.02, y0 - 0.04, z)), box(0.09, 0.07, wW + 0.14, M4(x - 0.02, y0 + hW + 0.04, z)));
+    white.push(box(0.09, hW + 0.12, 0.07, M4(x - 0.02, y0 + hW / 2, z - wW / 2 - 0.035)), box(0.09, hW + 0.12, 0.07, M4(x - 0.02, y0 + hW / 2, z + wW / 2 + 0.035)));
+    white.push(box(0.05, hW, 0.035, M4(x - 0.03, y0 + hW / 2, z)), box(0.05, 0.035, wW, M4(x - 0.03, y0 + hW / 2, z)));
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(wW, hW), objMat(7, 8)); pane.position.set(x, y0 + hW / 2, z); pane.rotation.y = -Math.PI / 2; scene.add(pane);
+    B.south.push({ z, pane, mat: pane.material, lit: 0, want: 0 });
+    if (i === 2) wood.push(box(0.04, hW * 0.62, wW + 0.06, M4(x - 0.07, y0 + hW * 0.66, z, 0, 0, 0.012), V(0, 0, 1)));   // the board
+    if (i === 5) white.push(box(0.6, 0.46, 0.72, M4(-BW - 0.32, y0 + 0.24, z)));                                      // the window unit
+  });
+  // north windows
+  [-9, -3, 3, 9].forEach(z => { const y0 = 1.3, hW = 1.05, wW = 0.92, x = BW + 0.065;
+    white.push(box(0.09, hW + 0.12, wW + 0.14, M4(x + 0.0, y0 + hW / 2, z), V(0, 1, 0)));
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(wW, hW), objMat(7, 8)); pane.position.set(x + 0.05, y0 + hW / 2, z); pane.rotation.y = Math.PI / 2; scene.add(pane);
+    B.north.push({ z, pane, mat: pane.material, lit: 0, want: 0 }); });
+  // east end: door, meter, awning; west end: a louvre in the gable
+  dark.push(box(0.95, 2.1, 0.06, M4(-1.2, WALL0 + 1.05, BL + 0.08)));
+  white.push(box(1.12, 0.07, 0.09, M4(-1.2, WALL0 + 2.14, BL + 0.08)));
+  white.push(box(0.32, 0.45, 0.16, M4(1.7, 1.7, BL + 0.14)));
+  dark.push(box(0.9, 0.6, 0.05, M4(0, RIDGE - 0.75, -BL - 0.08)));
+  // flue and a small vent
+  const fy = RIDGE - Math.abs(B.flue.x) * (RIDGE - WALLTOP) / BW; B.flue.y = fy;
+  white.push(cyl(0.11, 0.11, 1.9, M4(B.flue.x, fy + 0.9, B.flue.z), 12), cyl(0.0, 0.24, 0.16, M4(B.flue.x, fy + 1.95, B.flue.z), 12));
+  white.push(cyl(0.07, 0.07, 0.55, M4(-1.6, RIDGE - 1.6 * (RIDGE - WALLTOP) / BW + 0.25, 11.3), 10));
+  B.flueTop = V(B.flue.x, fy + 2.05, B.flue.z);
+  merged(sid, objMat(2, 1)); merged(conc, objMat(9, 7)); merged(white, objMat(9, 0, V(0, 1, 0))); merged(dark, objMat(7, 0)); merged(roofG, objMat(3, 4));
+  merged(wood, objMat(7, 3));   // the board: dark plywood, grain across
+  // the awning over the door (green, ribbed)
+  const aw = new THREE.Mesh(withT(new THREE.BoxGeometry(2.3, 0.06, 1.2), M4(-1.2, WALL0 + 2.55, BL + 0.6, 0, -0.38, 0), V(0, 0, 1)), objMat(12, 3)); scene.add(aw); B.awning = aw;
+  // the window unit's grille faces the lot
+  const gr = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.4), objMat(9, 6, V(0, 1, 0), { uMover: { value: 1 } }));
+  gr.position.set(-BW - 0.625, 1.3 + 0.24, 9.5); gr.rotation.y = -Math.PI / 2; scene.add(gr);
+}
+SH.uWinZ.value = B.south.map(w => w.z);
+
+/* ---------- poles and the lines */
+const POLEG = [], ARMG = [], INSG = [];
+const SPANS = [];
+function pole(x, z, h, arms, armYaw = 0) {
+  const y = groundH(x, z);
+  POLEG.push(cyl(0.13, 0.17, h + 1.5, M4(x, y + (h - 1.5) / 2, z, rnd() * 3), 9));
+  const att = [];
+  arms.forEach(a => { const ay = y + a.y; const dir = V(Math.sin(armYaw), 0, Math.cos(armYaw));
+    ARMG.push(box(0.11, 0.11, a.w, M4(x, ay, z, armYaw), V(0, 0, 1)));
+    if (a.w > 1.4) { ARMG.push(box(0.05, 0.05, a.w * 0.45, M4(x + dir.x * a.w * 0.16, ay - 0.36, z + dir.z * a.w * 0.16, armYaw, a.w > 1 ? 0.9 : 0), V(0, 0, 1)));
+      ARMG.push(box(0.05, 0.05, a.w * 0.45, M4(x - dir.x * a.w * 0.16, ay - 0.36, z - dir.z * a.w * 0.16, armYaw, -0.9), V(0, 0, 1))); }
+    const row = []; a.at.forEach(o => { const px = x + dir.x * o, pz = z + dir.z * o;
+      INSG.push(cyl(0.045, 0.06, 0.24, M4(px, ay + 0.17, pz), 8)); row.push(V(px, ay + 0.31, pz)); });
+    att.push(row); });
+  return { p: V(x, y, z), top: V(x, y + h, z), att };
+}
+const BIGP = pole(-27, -22, 11.6, [{ y: 11.2, w: 2.6, at: [-1.15, 0, 1.15] }, { y: 10.1, w: 2.6, at: [-1.15, 1.15] }, { y: 8.4, w: 1.4, at: [-0.6, 0.6] }]);
+const LINE = [[-14, -21.3], [-1, -20.6], [12, -19.8], [25, -18.9], [38, -18.0]].map(([x, z], i) => pole(x, z, 10.6 - i * 0.1, [{ y: 10.2, w: 2.4, at: [-1.05, 0, 1.05] }, { y: 9.1, w: 1.5, at: [-0.6, 0.6] }]));
+const LINE2 = [[-9, -24.2], [6, -23.6], [21, -22.8]].map(([x, z]) => pole(x, z, 9.4, [{ y: 9.0, w: 2.0, at: [-0.85, 0.85] }, { y: 7.9, w: 1.3, at: [-0.5, 0.5] }]));
+const LAMPP = pole(-5.4, 12.5, 8.6, [{ y: 8.1, w: 1.0, at: [0.35] }], Math.PI / 2);
+const FARW = [pole(-58, -12, 11, [{ y: 10.6, w: 2.6, at: [-1.15, 0, 1.15] }, { y: 9.5, w: 2.6, at: [-1.15, 1.15] }]), pole(52, -17, 10.6, [{ y: 10.2, w: 2.4, at: [-1.05, 0, 1.05] }, { y: 9.1, w: 1.5, at: [-0.6, 0.6] }])];
+const FARE = pole(-9, 58, 8.6, [{ y: 8.1, w: 1.0, at: [0.35] }], Math.PI / 2);
+const link = (a, b) => { for (let r = 0; r < Math.min(a.att.length, b.att.length); r++) for (let k = 0; k < Math.min(a.att[r].length, b.att[r].length); k++) SPANS.push({ a: a.att[r][k], b: b.att[r][k] }); };
+link(FARW[0], BIGP); link(BIGP, LINE[0]); for (let i = 0; i < LINE.length - 1; i++) link(LINE[i], LINE[i + 1]); link(LINE[LINE.length - 1], FARW[1]);
+for (let i = 0; i < LINE2.length - 1; i++) link(LINE2[i], LINE2[i + 1]);
+link(LAMPP, FARE); SPANS.push({ a: LAMPP.att[0][0], b: V(-0.8, WALLTOP + 0.5, BL + 0.1) });
+// the floodlight on the near pole
+const FLOOD = { p: V(LAMPP.p.x - 0.55, LAMPP.p.y + 6.0, LAMPP.p.z), on: 0 };
+ARMG.push(box(0.5, 0.06, 0.06, M4(FLOOD.p.x + 0.25, FLOOD.p.y + 0.05, FLOOD.p.z), V(1, 0, 0)));
+const floodHead = new THREE.Mesh(withT(new THREE.BoxGeometry(0.34, 0.16, 0.42), M4(0, 0, 0, 0, 0, 0.5), V(0, 0, 1)), objMat(7, 0)); floodHead.position.copy(FLOOD.p); scene.add(floodHead);
+SH.uFloodP.value.copy(FLOOD.p); SH.uFloodD.value.set(-0.62, -0.78, -0.1).normalize();
+merged(POLEG, objMat(6, 3)); merged(ARMG, objMat(6, 3));
+const insMat = objMat(9, 0); merged(INSG, insMat);
+SPANS.forEach(s => { s.L = s.a.distanceTo(s.b); s.ph = rnd() * TAU; });
+const wireU = Object.assign({}, SH, { uSag: { value: 1 }, uSwing: { value: 2 }, uSwAmp: { value: 0.05 }, uSing: { value: 0 }, uWidth: { value: 0.6 }, uResW: { value: new THREE.Vector2(2, 2) } });
+{
+  const A = { position: [], aOther: [], aU: [], aUo: [], aShape: [], aShapeO: [], aPh: [], aSide: [], aSgn: [] }; const NS = 28;
+  const vtx = (p, o, u, uo, sc, side, ph, sg) => { A.position.push(p.x, p.y, p.z); A.aOther.push(o.x, o.y, o.z); A.aU.push(u); A.aUo.push(uo);
+    A.aShape.push(4 * u * (1 - u) * sc); A.aShapeO.push(4 * uo * (1 - uo) * sc); A.aPh.push(ph); A.aSide.push(side.x, side.y, side.z); A.aSgn.push(sg); };
+  SPANS.forEach(s => { const d = s.b.clone().sub(s.a); const side = V(-d.z, 0, d.x).normalize(); const sc = Math.pow(s.L / 30, 2);
+    for (let i = 0; i < NS; i++) { const u0 = i / NS, u1 = (i + 1) / NS; const p0 = s.a.clone().lerp(s.b, u0), p1 = s.a.clone().lerp(s.b, u1);
+      // two triangles per segment; each vertex knows the other end so the ribbon is built in screen space
+      [[p0, p1, u0, u1, 1], [p0, p1, u0, u1, -1], [p1, p0, u1, u0, -1], [p0, p1, u0, u1, 1], [p1, p0, u1, u0, -1], [p1, p0, u1, u0, 1]].forEach(([p, o, u, uo, sg]) => vtx(p, o, u, uo, sc, side, s.ph, sg)); } });
+  const g = new THREE.BufferGeometry(); for (const k in A) g.setAttribute(k, new THREE.Float32BufferAttribute(A[k], k === 'position' || k === 'aOther' || k === 'aSide' ? 3 : 1));
+  const w = new THREE.Mesh(g, new THREE.ShaderMaterial({ vertexShader: WIRE_VERT, fragmentShader: WIRE_FRAG, uniforms: wireU, side: THREE.DoubleSide })); w.frustumCulled = false; scene.add(w);
+}
+function wirePoint(i, u) { const s = SPANS[i]; const p = s.a.clone().lerp(s.b, u); p.y -= wireU.uSag.value * 4 * u * (1 - u) * Math.pow(s.L / 30, 2); return p; }
+
+/* ---------- the treeline */
+const TREES = [];
+{
+  const fol = [], trunks = []; const nz = (x, y, z) => vnoise(x * 0.9 + z * 0.37, y * 0.9 + z * 0.61);
+  const segD = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az; const t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1); return Math.hypot(x - ax - dx * t, z - az - dz * t); };
+  const ok = (x, z) => segD(x, z, -6, -43, -3, -15) > 3.4 && lotMask(x, z) < 0.05 && Math.max(Math.abs(x) - BW, Math.abs(z) - BL) > 7 && !(z > -26.5 && z < -16 && x > -32 && x < 46) && Math.hypot(x + 27, z + 22) > 5;
+  const plant = (x, z, s, low = 0, det = 2) => {
+    if (!ok(x, z)) return; const y = groundH(x, z); const th = (low ? pr(0.2, 0.8) : pr(1.6, 4.5)) * s, cr = (low ? pr(1.1, 2.4) : pr(2.8, 5.2)) * s, cy = th + cr * 0.75;
+    if (low) { const lean = V(0, 0, 0); }
+    const tr = new THREE.CylinderGeometry(0.16 * s * (low ? 0.4 : 1), 0.3 * s * (low ? 0.4 : 1), th + cr * 0.6, 8, 2); tr.translate(x, y + (th + cr * 0.6) / 2, z);
+    const lean = V(pr(-0.08, 0.08), 0, pr(-0.08, 0.08)); const p = tr.attributes.position; for (let i = 0; i < p.count; i++) { const hh = p.getY(i) - y; p.setX(i, p.getX(i) + lean.x * hh); p.setZ(i, p.getZ(i) + lean.z * hh); }
+    withT(tr, new THREE.Matrix4(), V(lean.x, 1, lean.z)); trunks.push(tr);
+    const nb = low ? 2 + Math.floor(pr(0, 2)) : 4 + Math.floor(pr(0, 4));
+    for (let k = 0; k < nb; k++) { const a = pr(0, TAU), rad = cr * pr(0.25, 0.75); let g = new THREE.IcosahedronGeometry(cr * pr(0.5, 0.78), det); g.deleteAttribute('uv'); g.deleteAttribute('normal'); g = mergeVertices(g);
+      const bx = x + lean.x * cy + Math.cos(a) * rad, by = y + cy + pr(-0.35, 0.5) * cr, bz = z + lean.z * cy + Math.sin(a) * rad; const q = g.attributes.position;
+      for (let i = 0; i < q.count; i++) { const vx = q.getX(i), vy = q.getY(i), vz = q.getZ(i); const f = 0.82 + 0.36 * nz(vx + bx, vy + by, vz + bz) * 1.0;
+        q.setXYZ(i, bx + vx * f, by + vy * f * 0.85, bz + vz * f); }
+      g.computeVertexNormals(); fol.push(g); }
+    TREES.push({ p: V(x, y, z), h: cy + cr });
+  };
+  const blob = (x, z, r, hh) => {   // the far tree mass: closes every horizon
+    const y = groundH(x, z); let g = new THREE.IcosahedronGeometry(r, 1); g.deleteAttribute('uv'); g.deleteAttribute('normal'); g = mergeVertices(g); const q = g.attributes.position;
+    for (let i = 0; i < q.count; i++) { const vx = q.getX(i), vy = q.getY(i), vz = q.getZ(i); const f = 0.8 + 0.4 * nz(vx * 0.3 + x, vy * 0.3, vz * 0.3 + z); q.setXYZ(i, x + vx * f, y + hh + vy * f * 0.7, z + vz * f); }
+    g.computeVertexNormals(); fol.push(g); TREES.push({ p: V(x, y, z), h: hh + r });
+  };
+  const tag = (list) => list.forEach(g => { const p = g.attributes.position; const t = new Float32Array(p.count * 4);
+    // nearest planted root for each piece
+    let cx = 0, cz = 0; for (let i = 0; i < p.count; i++) { cx += p.getX(i); cz += p.getZ(i); } cx /= p.count; cz /= p.count;
+    let best = TREES[0], bd = 1e9; for (const tr of TREES) { const d = Math.hypot(tr.p.x - cx, tr.p.z - cz); if (d < bd) { bd = d; best = tr; } }
+    for (let i = 0; i < p.count; i++) { t[i * 4] = best.p.x; t[i * 4 + 1] = best.p.y; t[i * 4 + 2] = best.p.z; t[i * 4 + 3] = 1; }
+    g.setAttribute('aTree', new THREE.BufferAttribute(t, 4)); });
+  for (let i = 0; i < 130; i++) { const x = pr(-40, 62), z = pr(-80, -27); plant(x, z, pr(0.95, 1.35), 0, Math.hypot(x, z) < 55 ? 2 : 1); }   // the wood to the west
+  for (let i = 0; i < 90; i++) plant(pr(-40, 50), pr(-38, -26.5), pr(0.8, 1.2), 1);  // its understory, at the edge
+  for (let i = 0; i < 46; i++) plant(pr(12, 75), pr(-24, 58), pr(1.0, 1.4), 0, 1);   // behind, to the north
+  for (let i = 0; i < 26; i++) plant(pr(10, 60), pr(-24, 40), pr(0.8, 1.1), 1, 1);   // and its understory
+  for (let i = 0; i < 30; i++) plant(pr(-12, 80), pr(60, 120), pr(1.0, 1.5), 0, 1);   // the far hill to the east
+  for (let i = 0; i < 24; i++) plant(pr(-150, -60), pr(-60, 60), pr(1.1, 1.6), 0, 1); // far south across the lot
+  [[-20, 44], [6, 52], [28, 37], [-34, -26], [-40, -30], [-44, -24]].forEach(([x, z]) => plant(x, z, 1.15));
+  for (let i = 0; i < 150; i++) { const a = i / 150 * TAU + pr(-0.02, 0.02), r = pr(150, 210); blob(Math.cos(a) * r, Math.sin(a) * r, pr(9, 15), pr(6, 12)); }
+  tag(fol); tag(trunks);
+  const fm = new THREE.Mesh(mergeGeometries(fol), objMat(8, 5, V(0, 1, 0), { uCloth: { value: 5 } })); fm.frustumCulled = false; scene.add(fm);
+  const tm = new THREE.Mesh(mergeGeometries(trunks.map(g => g.toNonIndexed())), objMat(6, 3, V(0, 1, 0), { uCloth: { value: 5 } })); tm.frustumCulled = false; scene.add(tm);
+}
+const TREE_C = V(-14, 9, -40);   // the near edge of the wood
+
+/* ---------- grass: a tall clump at the lot's corner and a strip along the foundation */
+{
+  const g = new THREE.ConeGeometry(0.035, 1, 3, 1); g.translate(0, 0.5, 0); withT(g, new THREE.Matrix4(), V(0, 1, 0));
+  const spots = [];
+  for (let i = 0; i < 2600; i++) { const x = pr(-38, -19), z = pr(-30, -20.5); if (Math.hypot((x + 30) / 8, (z + 23) / 5) < 1.25 && lotMask(x, z) < 0.4) spots.push([x, z, pr(0.5, 1.1)]); }
+  for (let i = 0; i < 2200; i++) { const x = pr(-BW - 1.6, -BW - 0.35), z = pr(-BL, BL); spots.push([x, z, pr(0.12, 0.35)]); }
+  for (let i = 0; i < 900; i++) { const x = pr(-42, 20), z = pr(-27, -23.5); if (lotMask(x, z) < 0.3) spots.push([x, z, pr(0.25, 0.6)]); }
+  const im = new THREE.InstancedMesh(g, objMat(5, 0, V(0, 1, 0), { uCloth: { value: 3.5 } }), spots.length);
+  spots.forEach(([x, z, h], i) => im.setMatrixAt(i, M4(x, groundH(x, z) - 0.02, z, pr(0, TAU), pr(-0.15, 0.15), pr(-0.15, 0.15), 1, h, 1)));
+  im.frustumCulled = false; scene.add(im);
+}
+
+/* ---------- a car that comes and goes, deer at the edges of the day, crows */
+const SPOT = V(-11.5, 0, 19.5); SPOT.y = groundH(SPOT.x, SPOT.z);
+const car = { g: new THREE.Group(), pos: V(-80, 0, roadZ(-80)), head: 0, state: 'away', path: null, u: 0, lights: null };
+{ const white = objMat(9, 0, V(1, 0, 0)), dk = objMat(7, 8);
+  const body = new THREE.Mesh(withT(new THREE.BoxGeometry(4.6, 1.0, 1.9), M4(0, 0.75, 0), V(1, 0, 0)), white); car.g.add(body);
+  const cab = new THREE.Mesh(withT(new THREE.BoxGeometry(2.9, 0.75, 1.75), M4(-0.3, 1.6, 0), V(1, 0, 0)), white); car.g.add(cab);
+  const gl = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.55, 1.79), dk); gl.position.set(-0.3, 1.62, 0); car.g.add(gl);
+  for (const [x, z] of [[1.5, 0.9], [1.5, -0.9], [-1.5, 0.9], [-1.5, -0.9]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.25, 12), objMat(7, 0)); w.rotation.x = Math.PI / 2; w.position.set(x, 0.38, z); car.g.add(w); }
+  const lm = objMat(7, 0); car.lights = lm; for (const z of [0.7, -0.7]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.34), lm); l.position.set(2.31, 0.95, z); car.g.add(l); }
+  car.g.visible = false; scene.add(car.g); }
+function carPath(inbound) {
+  const pts = []; for (let x = -95; x <= -16; x += 3) pts.push(V(x, 0, roadZ(x)));
+  pts.push(V(-14, 0, 24.5), V(-12.6, 0, 21.8), SPOT.clone());
+  const c = new THREE.CatmullRomCurve3(inbound ? pts : pts.reverse()); return c;
+}
+function deerMesh() {
+  const g = new THREE.Group(); const m = objMat(6, 3, V(1, 0, 0));
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 8), m); body.scale.set(1.9, 0.95, 0.85); body.position.y = 1.0; g.add(body);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.7, 6), m); neck.position.set(0.72, 1.35, 0); neck.rotation.z = -0.6; g.add(neck);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.42, 6), m); head.rotation.z = -Math.PI / 2 - 0.35; head.position.set(1.0, 1.62, 0); g.add(head);
+  const legs = []; for (const [x, z] of [[0.55, 0.18], [0.55, -0.18], [-0.55, 0.18], [-0.55, -0.18]]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.85, 5), m); l.position.set(x, 0.45, z); g.add(l); legs.push(l); }
+  g.userData = { neck, head, legs }; g.visible = false; scene.add(g); return g;
+}
+const deer = [0, 1].map(i => ({ g: deerMesh(), pos: V(), head: 0, state: 'away', until: 0, tgt: V(), graze: 0, ph: rnd() * TAU }));
+let deerOut = false, deerUntil = rr(5, 20) * 60;
+function crowMesh() {
+  const g = new THREE.Group(); const m = objMat(7, 0, V(1, 0, 0));
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.48, 6), m); body.rotation.x = Math.PI / 2; g.add(body);
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.1, 0, 0, -0.12, 0.42, 0.02, -0.05, 0.42, 0.02, -0.05, 0.62, -0.03, -0.17, 0, 0, -0.12], 3)); wg.computeVertexNormals();
+  const wl = new THREE.Mesh(wg, m), wr = new THREE.Mesh(wg, m); wr.scale.x = -1; g.add(wl, wr); g.userData.w = [wl, wr]; scene.add(g); return g;
+}
+const PERCH = [];   // {kind, i, u} or fixed points, resolved each frame
+SPANS.forEach((s, i) => { if (s.L > 8 && s.a.y > 6) for (const u of [0.3, 0.45, 0.62]) PERCH.push({ kind: 'wire', i, u }); });
+for (const z of [-12, -6, 1, 7, 13]) PERCH.push({ kind: 'pt', p: V(0, RIDGE + 0.14, z) });
+[BIGP, ...LINE.slice(0, 3), LAMPP].forEach(p => PERCH.push({ kind: 'pt', p: p.top.clone().add(V(0, 0.05, 0)) }));
+for (let i = 0; i < 6; i++) { const x = pr(-30, 10), z = pr(30, 55); PERCH.push({ kind: 'pt', p: V(x, groundH(x, z) + 0.12, z), ground: true }); }
+const perchPos = (k) => k.kind === 'wire' ? wirePoint(k.i, k.u).add(V(0, 0.1, 0)) : k.p.clone();
+const crows = Array.from({ length: 5 }, (_, i) => ({ g: crowMesh(), pos: V(rr(-60, 60), rr(20, 40), rr(-80, 60)), vel: V(), state: 'away', perch: -1, until: rr(10, 90), ph: rnd() * TAU }));
+// heat from the flue
+const STEAM_N = 260;
+const stGeo = new THREE.BufferGeometry(); const stPos = new Float32Array(STEAM_N * 3), stLife = new Float32Array(STEAM_N), stVel = new Float32Array(STEAM_N * 3);
+stGeo.setAttribute('position', new THREE.BufferAttribute(stPos, 3)); stGeo.setAttribute('aLife', new THREE.BufferAttribute(stLife, 1));
+const steam = new THREE.Points(stGeo, new THREE.ShaderMaterial({ vertexShader: PT_VERT, fragmentShader: PT_FRAG, uniforms: Object.assign({}, SH, { uScale: { value: 380 } }) }));
+steam.frustumCulled = false; scene.add(steam); let stI = 0;
+
+/* ====================================================================== weather (live, town-level) */
+const WX = { wind: 3, gust: 6, windDir: 270, cloud: 0.5, precip: 0, temp: 12, hum: 70, live: false };
+const WXT = Object.assign({}, WX);
+const MONTH_T = [1, 3, 8, 13, 19, 24, 26, 25, 21, 15, 9, 4];
+function synthWx(ms) { const h = ms / 3600e3; const lp = localParts(ms); const base = MONTH_T[lp.month - 1];
+  const diur = -Math.cos((lp.hour - 3) / 24 * TAU) * 5;
+  return { wind: clamp(2.8 + 2.2 * Math.sin(h * 0.6) + 1.2 * Math.sin(h * 2.1 + 1) + 1.2 * smoothstep(9, 16, lp.hour) * (1 - smoothstep(17, 21, lp.hour)), 0.2, 12),
+    gust: 0, windDir: 260 + 60 * Math.sin(h * 0.27), cloud: clamp(0.5 + 0.4 * Math.sin(h * 0.8 + 1), 0, 1),
+    precip: Math.max(0, Math.sin(h * 1.3) * 1.8 - 1.3), temp: base + diur + 2.5 * Math.sin(h * 0.11), hum: clamp(66 + 18 * Math.sin(h * 0.45) - diur * 2, 30, 100) }; }
+Object.assign(WXT, synthWx(simMs)); WXT.gust = WXT.wind * 1.8; Object.assign(WX, WXT);
+async function fetchWx() {
+  if (!LIVE_WX) return;
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms`).then(r => r.json());
+    const c = r.current; const prev = { ...WXT };
+    Object.assign(WXT, { wind: c.wind_speed_10m, gust: c.wind_gusts_10m ?? c.wind_speed_10m * 1.6, windDir: c.wind_direction_10m, cloud: c.cloud_cover / 100, precip: c.precipitation, temp: c.temperature_2m, hum: c.relative_humidity_2m });
+    if (!WX.live) logEv('live weather arrived');
+    else if ((prev.precip < 0.05) !== (WXT.precip < 0.05)) logEv(WXT.precip >= 0.05 ? 'rain started on the roof' : 'the rain stopped');
+    WX.live = true; WXT.live = true;
+  } catch (e) { WX.live = false; }
+}
+fetchWx(); setInterval(fetchWx, 15 * 60e3);
+// the lines: sag follows the temperature (the conductors lengthen in heat); the sway period follows the sag
+const LINES_ = { sag: 1, swing: 2 };
+function linesFromWx() { LINES_.sag = clamp(0.78 + 0.022 * WX.temp, 0.45, 1.6); LINES_.swing = 1.806 * Math.sqrt(LINES_.sag); }
+
+/* ====================================================================== the uncanny (rare events where the place itself is alive) */
+const EVT = {
+  sing:    { label: 'the lines sang', min: 80, max: 170, cool: 40 * 60 },
+  windows: { label: 'every window lit at once', min: 50, max: 110, cool: 50 * 60 },
+  lean:    { label: 'the treeline leaned in', min: 90, max: 190, cool: 35 * 60 },
+  hush:    { label: 'everything held still', min: 22, max: 34, cool: 0 },
+};
+const live = { ev: null, evT: 0, evDur: 0, sing: 0, win: 0, lean: 0, calm: 1, why: '' };
+const B_ = { ac: false, heat: false, acT: 0, heatT: 0, roofT: 12, roofRate: 0, fan: 0, steam: 0 };
+function conditions() {
+  const sunEl = SUNM.sun.el / D2R;
+  return {
+    sing: (WX.hum >= 85 || WX.precip > 0.05) && sunEl < 8,
+    windows: sunEl > 5 && car.state === 'away' && !B_.ac && !B_.heat && WX.precip < 1,
+    lean: WX.wind < 2.5 && WX.precip < 0.1,
+  };
+}
+const why = {
+  sing: () => WX.precip > 0.05 ? `rain ${WX.precip.toFixed(1)} mm on the lines` : `humidity ${WX.hum.toFixed(0)}%`,
+  windows: () => 'daylight, the car gone, the building quiet',
+  lean: () => `wind ${WX.wind.toFixed(1)} m/s, the trees were still`,
+};
+function similarity(name) {
+  const mem = S.uncanny.mem[name]; if (!mem || !mem.length) return 1;
+  const h = localParts(simMs).hour; let s = 0;
+  for (const m of mem) { const dh = Math.min(Math.abs(m.h - h), 24 - Math.abs(m.h - h)) / 3, du = (m.hum - WX.hum) / 10, dt = (m.tmp - WX.temp) / 6; s += Math.exp(-(dh * dh + du * du + dt * dt)); }
+  return 1 + 1.2 * s / mem.length;
+}
+function startEvent(name, forced) {
+  const e = EVT[name]; live.ev = name; live.evT = 0; live.evDur = rr(e.min, e.max); live.why = forced ? 'forced by hand' : (why[name] ? why[name]() : '');
+  S.uncanny.counts[name] = (S.uncanny.counts[name] || 0) + 1; S.uncanny.last[name] = simT;
+  const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: localParts(simMs).hour, hum: WX.hum, tmp: WX.temp }); if (mem.length > 12) mem.shift();
+  if (name !== 'hush') S.tension += 0.08;
+  logEv(e.label + (live.why ? ' · ' + live.why : ''));
+  AUD.event(name, true);
+}
+function endEvent() { const n = live.ev; live.ev = null; AUD.event(n, false);
+  if (n === 'hush') rupture('the stillness broke'); else S.uncanny.next = simT + rr(14, 34) * 60 * (1 - 0.05 * Math.min(S.epoch - 1, 6)); }
+function uncannyTick(dt) {
+  if (live.ev) { live.evT += dt; if (live.evT >= live.evDur) endEvent(); return; }
+  if (S.tension >= 1) { startEvent('hush'); return; }
+  if (simT < S.uncanny.next) return;
+  const c = conditions(); const opts = [];
+  for (const n of ['sing', 'windows', 'lean']) { if (!c[n]) continue; const last = S.uncanny.last[n]; if (last != null && simT - last < EVT[n].cool && last <= simT) continue;
+    opts.push([n, similarity(n) / (1 + 0.4 * (S.uncanny.counts[n] || 0)) * (n === 'sing' ? 1.5 : 1)]); }
+  if (!opts.length) return;
+  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; for (const [n, w] of opts) { r -= w; if (r <= 0) { startEvent(n); return; } }
+}
+function rupture(reason) {
+  S.epoch++; const prev = S.colorway;
+  const w = COLORWAYS.map((_, i) => i === prev ? 0 : 1 / (1 + (S.cwVisits[i] || 0) * 0.8)); let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot, pick = 0;
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) { pick = i; break; } }
+  S.colorway = pick; S.cwVisits[pick] = (S.cwVisits[pick] || 0) + 1;
+  S.grammar = { period: rr(5.2, 9.5), dith: rr(0.05, 0.2), wob: rr(2, 11), outline: rnd() < 0.8 ? 1 : 0, hatch: rr(0.75, 1.25), ribK: [1, 1, 2, 3, 4][Math.floor(rnd() * 5)] };
+  const centers = [38, 33, 36, 31, 41, 35]; S.center = centers[(centers.indexOf(S.center) + 1 + Math.floor(rnd() * 3)) % centers.length];
+  S.tension = 0; S.epochStart = simT; S.epochLen = rr(50, 95) * 60; S.uncanny.next = simT + rr(5, 12) * 60;
+  cwFrom = cwNow.map(v => v.clone()); cwMix = 0;
+  logEv(`RUPTURE → epoch ${S.epoch} · inks ${COLORWAYS[pick].name} · ribs every ${S.grammar.ribK} · centre ${NOTE[S.center % 12]}` + (reason ? ' · ' + reason : ''));
+  AUD.rupture(); save();
+}
+const NOTE = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+
+/* ====================================================================== audio: the live lens is the microphone (the place first; no kick, no walking bass) */
+const AUD = {
+  ctx: null, ok: false, muted: false, step: 0, nextT: 0, bar: 0, chordI: 0, pend: [], barSec: 5.5, padUntil: 0, partial: null,
+  q(o) { if (this.ctx && this.ctx.state === 'running' && this.pend.length < 8) this.pend.push(o); },
+  async init() {
+    if (this.ctx || this.booting || !AUDIO_WANTED) return;
+    this.booting = true;
+    let ctx; try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { this.booting = false; return; }
+    this.wl = false;
+    try { await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET)); this.wl = true; }
+    catch (e) { try { const u = URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' })); await ctx.audioWorklet.addModule(u); this.wl = true; } catch (e2) {} }
+    this.ctx = ctx; this.build(); this.ok = true; this.booting = false; this.born = performance.now(); this.lastCT = ctx.currentTime; this.lastCTwall = performance.now(); this.silentFor = 0; this.nextT = 0;
+    if (ctx.state !== 'running') { tapBtn.hidden = false; ctx.resume().catch(() => {}); }
+    if (!this.timers) { this.timers = true; setInterval(() => this.sched(), 40); setInterval(() => this.watch(), 1000); }
+  },
+  rebuild(why) {
+    const old = this.ctx, oldOut = this.out; this.ctx = null; this.ok = false;
+    if (old) { try { oldOut.gain.setTargetAtTime(0, old.currentTime, 0.6); } catch (e) {} setTimeout(() => { try { if (old.state !== 'closed') old.close().catch(() => {}); } catch (e) {} }, 4000); }
+    if (why) console.warn('[audio] rebuild:', why);
+    this.init().then(() => { if (this.ctx) { const g = this.out.gain; g.value = 0; g.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 1.2); } });
+  },
+  build() {
+    const c = this.ctx; const g = (v = 1) => { const n = c.createGain(); n.gain.value = v; return n; };
+    const bq = (type, f, q = 0.7, gain = 0) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; n.gain.value = gain; return n; };
+    const curve = (fn) => { const a = new Float32Array(2048); for (let i = 0; i < 2048; i++) a[i] = fn(i / 1023.5 - 1); return a; };
+    const pan = (v) => { const p = c.createStereoPanner(); p.pan.value = v; return p; };
+    this.g = g; this.bq = bq;
+    const out = g(OUT_GAIN), master = g(1);
+    const hp = bq('highpass', 26), sat = c.createWaveShaper(); sat.curve = curve(x => Math.tanh(1.6 * x) / Math.tanh(1.6)); sat.oversample = '2x';
+    const shelf = bq('highshelf', 2000, 0.7, -10), lp = bq('lowpass', 6800, 0.5);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 2.4; comp.knee.value = 10; comp.attack.value = 0.03; comp.release.value = 0.35;
+    master.connect(hp).connect(sat).connect(shelf).connect(lp).connect(comp).connect(out).connect(c.destination);
+    this.an = c.createAnalyser(); this.an.fftSize = 2048; out.connect(this.an);
+    this.master = master; this.out = out;
+    // dub echo, unity-gain tanh in the loop
+    const eIn = g(1), dL = c.createDelay(4), dR = c.createDelay(4), fbL = g(0.4), fbR = g(0.4), lpE = bq('lowpass', 1400), hpE = bq('highpass', 160);
+    const ush = c.createWaveShaper(); ush.curve = curve(Math.tanh);
+    const pL = pan(-0.6), pR = pan(0.6), eOut = g(0.55);
+    eIn.connect(dL); dL.connect(lpE).connect(hpE).connect(ush); ush.connect(fbL).connect(dR); dR.connect(fbR).connect(dL);
+    dL.connect(pL).connect(eOut); dR.connect(pR).connect(eOut); eOut.connect(master);
+    this.echo = { eIn, dL, dR, fbL, fbR };
+    // room
+    const len = c.sampleRate * 4.2, ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let lpv = 0; for (let i = 0; i < len; i++) { lpv += (Math.random() * 2 - 1 - lpv) * 0.22; d[i] = lpv * Math.pow(1 - i / len, 2.6); } }
+    const conv = c.createConvolver(); conv.buffer = ir; const rIn = g(1), rOut = g(0.5); rIn.connect(conv).connect(rOut).connect(master);
+    this.room = { rIn, rOut };
+    const nb = (brown) => { const b = c.createBuffer(2, c.sampleRate * 9, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let l = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } } return b; };
+    this.white = nb(false); this.brown = nb(true);
+    const loop = (buf) => { if (this.wl) { try { return new AudioWorkletNode(c, 'mz-noise', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { brown: buf === this.brown } }); } catch (e) {} }
+      const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(c.currentTime + rr(0, 0.1), rr(0, 8)); return s; };
+    const bed = (buf, chain, p = 0, room = 0.4) => { const s = loop(buf); let n = s; chain.forEach(f => { n.connect(f); n = f; }); const gg = g(0), pp = pan(p); n.connect(gg).connect(pp); pp.connect(master); if (room) { const rs = g(room); pp.connect(rs).connect(this.room.rIn); } return { g: gg, p: pp, f: chain[0] }; };
+    // the place
+    this.traffic = bed(this.brown, [bq('lowpass', 210, 0.6), bq('highpass', 40)], 0.25, 0.2);
+    this.wind = bed(this.white, [bq('bandpass', 360, 0.6), bq('lowpass', 850)], 0, 0.3);
+    this.leaves = bed(this.white, [bq('bandpass', 620, 0.7), bq('lowpass', 1050)], -0.35, 0.3);
+    this.rain = bed(this.white, [bq('bandpass', 780, 0.6), bq('lowpass', 1100)], 0, 0.5);
+    this.roofRain = bed(this.brown, [bq('lowpass', 520, 0.9)], 0, 0.6);
+    // the building: compressor, fan, burner
+    this.comp = bed(this.brown, [bq('bandpass', 118, 2.2)], 0, 0.2);
+    { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 120; const f = bq('lowpass', 200); const gg = g(0); o.connect(f).connect(gg).connect(this.comp.p); o.start(); this.compTone = gg; }
+    this.fan = bed(this.white, [bq('bandpass', 430, 0.9), bq('lowpass', 800)], 0, 0.2);
+    this.burner = bed(this.brown, [bq('lowpass', 170, 0.7)], 0, 0.3);
+    this.car = bed(this.brown, [bq('lowpass', 140, 1.2)], 0, 0.2);
+    // the lines: a steady hum with its overtones, tuned to the centre; the only low end, and it holds still
+    this.humBus = g(0); const humLP = bq('lowpass', 520, 0.5); this.humBus.connect(humLP).connect(master); this.humSend = g(0.25); humLP.connect(this.humSend).connect(this.room.rIn);
+    this.hum = [[1, 0.5], [1.0035, 0.18], [2, 0.26], [3, 0.12], [4, 0.07]].map(([m, v]) => { const o = c.createOscillator(); o.type = 'sine'; const gg = g(v); o.connect(gg).connect(this.humBus); o.start(); return { o, m, gg, v }; });
+    // a partial that leans toward a phrygian degree now and then
+    { const o = c.createOscillator(); o.type = 'sine'; const gg = g(0); o.connect(gg); gg.connect(this.humBus); const s2 = g(0.6); gg.connect(s2).connect(this.echo.eIn); o.start(); this.part = { o, g: gg }; }
+    // insects on warm nights, tuned
+    this.insect = [[48, 0.5, 17, 0.8], [55, 0.32, 13, 0.55]].map(([semi, v, rate, slow], i) => {
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = this.hz(S.center + semi);
+      const am = g(0.5); const l1 = c.createOscillator(); l1.type = 'square'; l1.frequency.value = rate; const l1g = g(0.5); l1.connect(l1g).connect(am.gain);
+      const l2 = c.createOscillator(); l2.type = 'sine'; l2.frequency.value = slow; const gate = g(0.5); const l2g = g(0.5); l2.connect(l2g).connect(gate.gain);
+      const pp = pan(i ? 0.5 : -0.4); const out2 = g(0); o.connect(am).connect(gate).connect(out2).connect(pp).connect(master); const rs = g(0.6); pp.connect(rs).connect(this.room.rIn);
+      o.start(); l1.start(); l2.start(); return { o, out: out2, semi, v }; });
+    // pad (rare)
+    this.padBus = g(0); this.padLP = bq('lowpass', 640, 0.6); this.padBus.connect(this.padLP); this.padLP.connect(master); this.padLP.connect(this.room.rIn);
+    this.pad = [0, 1, 2].map(() => { const a = c.createOscillator(), b = c.createOscillator(); a.type = b.type = 'sawtooth'; b.detune.value = 8; a.detune.value = -6; const gg = g(0.04); a.connect(gg); b.connect(gg); gg.connect(this.padBus); a.start(); b.start(); return { a, b }; });
+    // event voices: ♭II chord (the lines sing), high fifth in the room (windows), sub with a breath (lean)
+    this.singG = g(0); this.singG.connect(master); this.singG.connect(this.room.rIn); this.singO = [0, 1, 2].map(() => { const o = c.createOscillator(); o.type = 'triangle'; const gg = g(0.055); o.connect(gg).connect(this.singG); o.start(); return o; });
+    this.fifthG = g(0); this.fifthG.connect(this.room.rIn); const fd = g(0.4); this.fifthG.connect(fd).connect(master); this.fifthO = [0, 1].map(() => { const o = c.createOscillator(); o.type = 'sine'; o.connect(this.fifthG); o.start(); return o; });
+    { const o = c.createOscillator(); o.type = 'sine'; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
+    this.retune(true);
+  },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  deg(d, oct = 0) { const sc = [0, 1, 3, 5, 7, 8, 10]; const o = Math.floor(d / 7); return S.center + oct * 12 + sc[((d % 7) + 7) % 7] + 12 * o; },
+  retune(now) { if (!this.ctx) return; const t = this.ctx.currentTime; const tc = now ? 0.01 : 6;   // the hum retunes slowly at rupture
+    this.hum.forEach(h => h.o.frequency.setTargetAtTime(this.hz(S.center) * h.m, t, tc));
+    this.insect.forEach(x => x.o.frequency.setTargetAtTime(this.hz(S.center + x.semi), t, tc));
+    this.singO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([1, 3, 5][i], 1)), t, 0.5));
+    this.fifthO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([0, 4][i], 2)), t, 0.5));
+    this.sub.o.frequency.setTargetAtTime(this.hz(S.center - 12), t, tc); },
+  start() { if (!this.ctx) { this.init(); return; } this.ctx.resume().then(() => { tapBtn.hidden = true; }).catch(() => {}); },
+  watch() {
+    const c = this.ctx; if (!c) return;
+    if (c.state === 'closed') { this.rebuild('closed'); return; }
+    if (c.state === 'suspended') { c.resume().catch(() => {}); return; }
+    const now = performance.now();
+    if (c.currentTime !== this.lastCT) { this.lastCT = c.currentTime; this.lastCTwall = now; }
+    else if (now - this.lastCTwall > 6000) { this.rebuild('clock stalled'); return; }
+    const td = this.td || (this.td = new Float32Array(this.an.fftSize)); this.an.getFloatTimeDomainData(td);
+    let pk = 0, bad = false; for (let i = 0; i < td.length; i += 4) { const v = td[i]; if (!isFinite(v)) { bad = true; break; } pk = Math.max(pk, Math.abs(v)); }
+    if (bad) { this.rebuild('NaN in the mix'); return; }
+    this.silentFor = (pk < 1e-5 && !this.muted) ? this.silentFor + 1 : 0;
+    if (this.silentFor > 20) { this.rebuild('20 s of silence'); return; }
+    if (now - this.born > 3 * 3600e3) this.rebuild('3 h refresh');
+  },
+  mute() { this.muted = !this.muted; if (this.ctx) this.out.gain.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 0.1); },
+  lens(p, near = 40) { const v = p.clone().project(camera); const behind = v.z > 1; const d = p.distanceTo(camera.position);
+    return { pan: clamp(v.x, -1, 1) * (behind ? -0.4 : 0.85), g: (behind ? 0.35 : (Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 ? 1 : 0.55)) / (1 + d / near) }; },
+  voice(type, t, o) {
+    const c = this.ctx, g = this.g, bq = this.bq;
+    const fin = (node, dur, ...srcs) => { srcs.forEach(s => { s.start(t); s.stop(t + dur); }); srcs[0].onended = () => node.disconnect(); };
+    if (type === 'pop') {   // the tin roof pops as it heats or cools: a short knock with a tuned ring
+      const os = c.createOscillator(), og = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'triangle'; os.frequency.value = this.hz(o.m);
+      og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(o.v * 0.5, t + 0.004); og.gain.exponentialRampToValueAtTime(0.0004, t + 0.7);
+      const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', 520, 1.6), ng = g(0);
+      ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(o.v, t + 0.002); ng.gain.exponentialRampToValueAtTime(0.0004, t + 0.06);
+      os.connect(og).connect(p); s.connect(f).connect(ng).connect(p); p.connect(this.master); p.connect(this.room.rIn); if (o.throw) p.connect(this.echo.eIn);
+      os.start(t); os.stop(t + 0.8); s.start(t, rr(0, 7)); s.stop(t + 0.1); os.onended = () => p.disconnect(); return; }
+    if (type === 'tick') {  // the flue ticking as it expands
+      const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', 900, 3), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; const lp2 = bq('lowpass', 1200);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.002); gg.gain.exponentialRampToValueAtTime(0.0003, t + 0.05);
+      s.connect(f).connect(lp2).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); s.start(t, rr(0, 7)); s.stop(t + 0.08); s.onended = () => p.disconnect(); return; }
+    if (type === 'drip' || type === 'chirp') {  // tuned: drips from the window unit, small birds by day
+      const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'sine'; const f0 = this.hz(o.m);
+      if (type === 'drip') { os.frequency.setValueAtTime(f0 * 1.25, t); os.frequency.exponentialRampToValueAtTime(f0, t + 0.05); }
+      else { os.frequency.setValueAtTime(f0, t); os.frequency.linearRampToValueAtTime(f0 * (o.up ? 1.12 : 0.9), t + o.d); }
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.01); gg.gain.setTargetAtTime(0, t + o.d * 0.6, o.d * 0.25);
+      const f = bq('lowpass', 2600); os.connect(f).connect(gg).connect(p); p.connect(this.master); const es = g(0.7); p.connect(es).connect(this.echo.eIn); p.connect(this.room.rIn);
+      os.start(t); os.stop(t + o.d + 0.4); os.onended = () => p.disconnect(); return; }
+    if (type === 'caw') { const os = c.createOscillator(), f = bq('lowpass', 1000, 1), gg = g(0), p = c.createStereoPanner(); os.type = 'sawtooth'; p.pan.value = o.pan;
+      const f0 = rr(430, 560); os.frequency.setValueAtTime(f0, t); os.frequency.linearRampToValueAtTime(f0 * 0.8, t + 0.3);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.03); gg.gain.setTargetAtTime(0, t + 0.24, 0.05);
+      os.connect(f).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); os.start(t); os.stop(t + 0.6); os.onended = () => p.disconnect(); return; }
+    if (type === 'patter') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', rr(500, 900), 2), lp2 = bq('lowpass', 1100), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.002); gg.gain.exponentialRampToValueAtTime(0.0003, t + 0.09);
+      s.connect(f).connect(lp2).connect(gg).connect(p); p.connect(this.master); p.connect(this.room.rIn); s.start(t, rr(0, 7)); s.stop(t + 0.12); s.onended = () => p.disconnect(); return; }
+    if (type === 'thunk') { const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'sine';
+      os.frequency.setValueAtTime(95, t); os.frequency.exponentialRampToValueAtTime(48, t + 0.2);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.006); gg.gain.exponentialRampToValueAtTime(0.0005, t + 0.5);
+      os.connect(gg).connect(p); p.connect(this.master); p.connect(this.room.rIn); os.start(t); os.stop(t + 0.6); os.onended = () => p.disconnect(); return; }
+    if (type === 'swell') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('lowpass', 300, 0.7), gg = g(0); f.frequency.setValueAtTime(180, t); f.frequency.exponentialRampToValueAtTime(1300, t + o.d);
+      gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(o.v, t + o.d); gg.gain.linearRampToValueAtTime(0, t + o.d + 0.04);
+      s.connect(f).connect(gg); gg.connect(this.master); gg.connect(this.room.rIn); s.start(t, rr(0, 4)); s.stop(t + o.d + 0.1); s.onended = () => gg.disconnect(); return; }
+  },
+  sched() {
+    const c = this.ctx; if (!c || c.state !== 'running') return;
+    const ahead = c.currentTime + 0.5;
+    if (this.nextT < c.currentTime - 0.3) this.nextT = c.currentTime + 0.05;
+    const lp = localParts(simMs); const sunEl = SUNM.sun.el / D2R; const hush = live.ev === 'hush';
+    while (this.nextT < ahead) {
+      const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16;
+      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(2.8 * LINES_.swing, 4.0, 6.6), 0.5);
+        if (!hush && this.bar % 8 === 0 && rnd() < 0.24) this.padUntil = this.bar + 8 + Math.floor(rnd() * 9);
+        if (this.bar % 2 === 0 && this.bar < this.padUntil) this.chord(t);
+        if (!hush && this.bar % 4 === 0 && rnd() < 0.35 && !this.partial) this.partial = { until: this.bar + 2 + Math.floor(rnd() * 4), d: [1, 3, 4, 5][Math.floor(rnd() * 4)] };
+        if (this.partial && this.bar >= this.partial.until) this.partial = null; }
+      if (!hush) {
+        if (this.pend.length) { this.pend.sort((a, b) => b.v - a.v); const p = this.pend.shift(); if (this.pend.length > 3) this.pend.length = 3;
+          if (p.v > 0.004) this.voice(p.type, t, p); }
+        if (B_.ac && WX.hum > 50 && st % 4 === 2 && rnd() < 0.3) { const l = this.lens(B.ac, 25); this.voice('drip', t, { m: this.deg([0, 4, 3][Math.floor(rnd() * 3)], 3), v: clamp(l.g * 0.5, 0, 0.05), pan: l.pan, d: 0.25 }); }
+        const birdy = sunEl > -3 && WX.precip < 0.3 ? (0.4 + 2.2 * Math.exp(-Math.pow((sunEl - 4) / 6, 2))) * (lp.month >= 3 && lp.month <= 10 ? 1 : 0.35) : 0;
+        if (rnd() < 0.012 * birdy) { const d = Math.floor(rnd() * 7), n = 1 + Math.floor(rnd() * 3); for (let k = 0; k < n; k++) this.voice('chirp', t + k * sixteenth * 0.5, { m: this.deg(d + k, 4), v: 0.012 * rr(0.5, 1), pan: rr(-0.8, 0.8), d: rr(0.08, 0.16), up: rnd() < 0.5 }); }
+        if (WX.precip > 0.05 && rnd() < clamp(WX.precip * 0.35, 0.05, 0.8)) { const l = this.lens(V(rr(-3, 3), RIDGE, rr(-14, 14)), 18); this.voice('patter', t + rr(0, sixteenth), { v: clamp(0.008 + l.g * 0.12, 0, 0.07), pan: l.pan }); }
+      }
+      this.step++; this.nextT += sixteenth; this.cur16 = st;
+    }
+    const tq = this.barSec / 16 * 3; this.echo.dL.delayTime.setTargetAtTime(tq, c.currentTime, 0.5); this.echo.dR.delayTime.setTargetAtTime(tq + this.barSec / 16, c.currentTime, 0.5);
+  },
+  chord(t) { const prog = [[0, 2, 4], [1, 3, 5], [5, 0, 2], [3, 5, 0]]; const ch = prog[this.chordI++ % prog.length];
+    this.pad.forEach((v, i) => { const hz = this.hz(this.deg(ch[i], 1)); v.a.frequency.setTargetAtTime(hz, t, 1.2); v.b.frequency.setTargetAtTime(hz, t, 1.2); }); },
+  event(name, on) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    if (name === 'sing') { this.singG.gain.setTargetAtTime(on ? 0.45 : 0, t, on ? 5 : 3); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.16 }); }
+    if (name === 'windows') this.fifthG.gain.setTargetAtTime(on ? 0.03 : 0, t, 3);
+    if (name === 'hush' && on) this.voice('swell', t, { d: 6, v: 0.1 }); },
+  rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.2 });
+    this.voice('pop', t + this.barSec, { m: this.deg(0, 2), v: 0.22, pan: 0, throw: true }); this.retune(false); },
+  frame(dt) {
+    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime; const lp = localParts(simMs); const sunEl = SUNM.sun.el / D2R;
+    const hush = live.ev === 'hush' ? 1 : 0, calm = live.calm, set = (p, v, tc = 0.6) => p.setTargetAtTime(v, t, tc);
+    const rush = 0.35 + 0.65 * Math.max(Math.exp(-Math.pow((lp.hour - 8) / 1.3, 2)), Math.exp(-Math.pow((lp.hour - 17.2) / 1.6, 2))) + (lp.hour > 6 && lp.hour < 22 ? 0.3 : 0);
+    set(this.traffic.g.gain, 0.05 * rush * (lp.weekend ? 0.7 : 1) * (1 - 0.8 * hush), 2);
+    const lt = this.lens(TREE_C, 60);
+    set(this.wind.g.gain, Math.pow(WX.wind, 1.25) * 0.0028 * (0.6 + 0.6 * lt.g * 3) * calm, 0.8); set(this.wind.f.frequency, 240 + WX.wind * 20, 1); set(this.wind.p.pan, 0.45 * Math.sin(simT * 0.06), 1);
+    set(this.leaves.g.gain, clamp(WX.gust || WX.wind * 1.6, 0, 20) * 0.0016 * (0.4 + lt.g * 3) * (lp.month >= 4 && lp.month <= 11 ? 1 : 0.35) * calm, 0.5); set(this.leaves.p.pan, lt.pan, 1);
+    set(this.rain.g.gain, clamp(WX.precip, 0, 4) * 0.012 * (1 - 0.7 * hush), 1);
+    const lr = this.lens(V(0, RIDGE, 0), 22); set(this.roofRain.g.gain, clamp(WX.precip, 0, 4) * (0.02 + lr.g * 0.09) * (1 - 0.7 * hush), 1); set(this.roofRain.p.pan, lr.pan * 0.6, 1);
+    const la = this.lens(B.ac, 22);
+    set(this.comp.g.gain, (B_.ac ? 0.07 : 0) * (0.15 + la.g * 2.4) * (1 - hush), B_.ac ? 1.2 : 0.8); set(this.compTone.gain, B_.ac ? 0.05 : 0, 1.2); set(this.comp.p.pan, la.pan, 0.5);
+    set(this.fan.g.gain, (B_.ac ? 0.022 : 0) * (0.1 + la.g * 3) * (1 - hush), 1.2);
+    const lf = this.lens(B.flueTop, 25); set(this.burner.g.gain, (B_.heat ? 0.06 : 0) * (0.2 + lf.g * 2.2) * (1 - hush), 1.5); set(this.burner.p.pan, lf.pan, 0.5);
+    const lc = this.lens(car.pos, 20); set(this.car.g.gain, (car.state === 'in' || car.state === 'out' ? 0.12 : 0) * (0.1 + lc.g * 2.5), 0.5); set(this.car.p.pan, lc.pan, 0.3);
+    // the hum: wetter air sings louder; nearer wires louder
+    const lw = this.lens(V(0, 9.5, -20.5), 30); const wet = smoothstep(55, 98, WX.hum) + 0.5 * clamp(WX.precip, 0, 1);
+    set(this.humBus.gain, (0.035 + 0.07 * wet) * (0.4 + lw.g * 2.2) * (1 - 0.95 * hush) * (1 + 0.6 * live.sing), 1.5);
+    if (this.partial) { set(this.part.o.frequency, this.hz(this.deg(this.partial.d, 2)), 2.5); set(this.part.g.gain, 0.06 * (0.5 + wet), 3); } else set(this.part.g.gain, 0, 2.5);
+    const warmNight = smoothstep(14, 20, WX.temp) * smoothstep(-2, -8, sunEl) * (WX.precip < 0.2 ? 1 : 0.2) * (lp.month >= 6 && lp.month <= 10 ? 1 : 0.4);
+    this.insect.forEach(x => set(x.out.gain, warmNight * 0.006 * x.v * (1 - hush), 3));
+    set(this.padBus.gain, (this.bar < this.padUntil ? 0.22 + 0.2 * (1 - SH.uDay.value) : 0) * (1 - hush), 6);
+    set(this.padLP.frequency, 380 + clamp(WX.temp, -5, 30) * 12, 3);
+    set(this.sub.g.gain, live.lean * 0.18 * (0.5 + 0.5 * Math.sin(simT * TAU / (this.barSec * 2))), 0.4);
+    const fb = clamp(0.3 + (WX.hum - 60) / 110 + (live.ev ? 0.1 : 0), 0.2, 0.66); set(this.echo.fbL.gain, fb, 1); set(this.echo.fbR.gain, fb, 1);
+    set(this.room.rOut.gain, 0.38 + 0.25 * clamp(WX.precip, 0, 1) + 0.2 * (1 - SH.uDay.value), 2);
+  },
+};
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(o){super();this.b=!!(o.processorOptions&&o.processorOptions.brown);this.l=[0,0];}
+process(_,outs){const o=outs[0];for(let c=0;c<o.length;c++){const d=o[c];let l=this.l[c]||0;for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(this.b){l=(l+0.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}this.l[c]=l;}return true;}}
+registerProcessor('mz-noise',N);`;
+const OUT_GAIN = 0.75;
+
+/* ====================================================================== camera crew (observational: operators hold, keep their distance, and the mixer cuts) */
+const gp = (x, z, up) => V(x, groundH(x, z) + up, z);
+const CREW = [
+  { name: 'LOT', fov: 50, p: gp(-31, -7, 1.9), upd(c, t) { c.p.y = groundH(-31, -7) + 1.9 + 0.04 * Math.sin(t * 0.4); c.tgt.set(-0.5, 2.7 + 0.3 * Math.sin(t / 61), 1.5 + 2 * Math.sin(t / 47)); } },
+  { name: 'CORNER', fov: 40, p: gp(-10, -25, 1.5), upd(c, t) { c.tgt.set(-BW, 1.9 + 0.2 * Math.sin(t / 37), 4 + 6 * Math.sin(t / 71)); } },
+  { name: 'ROOF', fov: 40, p: gp(-13, 27, 9.5), upd(c, t) { c.tgt.set(0.5, RIDGE - 1.2, -3 + 5 * Math.sin(t / 83)); } },
+  { name: 'TREELINE', fov: 46, p: gp(-6, -41, 1.7), upd(c, t) { c.tgt.set(-3 + 3 * Math.sin(t / 53), 2.2, 3); } },
+  { name: 'LAWN', fov: 22, p: gp(-15, 47, 1.6), upd(c, t) { c.tgt.set(-BW - 0.5, 1.9, 11.5 + 2.5 * Math.sin(t / 59)); } },
+  { name: 'POLE LINE', fov: 50, p: gp(-24, -19, 1.4), upd(c, t) { c.tgt.set(8 + 6 * Math.sin(t / 67), 9.5, -20); } },
+  { name: 'LONG LENS', fov: 11, p: gp(-38, 5, 1.9), upd(c, t) { c.tgt.lerp(longTarget(t), 0.012); } },
+  { name: 'ASPHALT', fov: 58, p: gp(-12.5, -2, 0.38), upd(c, t) { c.tgt.set(-BW, 1.5, 3 + 3 * Math.sin(t / 43)); } },
+  { name: 'WIRES', fov: 24, p: gp(-19, -11, 1.6), upd(c, t) { c.tgt.set(3 + 5 * Math.sin(t / 79), 9.2, -20.4); } },
+];
+function longTarget(t) {
+  const dv = deer.find(d => d.state !== 'away'); if (dv) return dv.pos.clone().add(V(0, 1, 0));
+  if (live.ev === 'sing') return LINE[1].top.clone();
+  if (B_.steam > 0.3) return B.flueTop.clone().add(V(0, 0.6, 0));
+  const lit = B.south.find(w => w.lit > 0.5); if (lit) return V(-BW, 1.8, lit.z);
+  const cr = crows.find(c => c.state === 'perch'); if (cr) return cr.pos.clone();
+  return [B.ac.clone(), B.flueTop.clone(), V(-BW, 1.8, -3.5), BIGP.top.clone().add(V(0, -1, 0))][Math.floor(t / 110) % 4];
+}
+CREW.forEach(c => { c.tgt = V(0, 2, 0); c.upd(c, 0); if (c.name === 'LONG LENS') c.tgt.copy(B.ac); });
+const DIR = { cur: 0, prev: -1, until: 6, pendingCut: -1 };
+function camSees(c, p) { const f = c.tgt.clone().sub(c.p).normalize(); const d = p.clone().sub(c.p).normalize(); return f.dot(d) > Math.cos((c.fov * 0.55) * D2R * 1.3); }
+function chooseShot() {
+  const night = SUNM.sun.el < -0.05;
+  const w = CREW.map((c, i) => {
+    if (i === DIR.cur) return 0; let x = 1; if (i === DIR.prev) x *= 0.35;
+    if (c.name === 'LONG LENS') x *= deer.some(d => d.state !== 'away') ? 3 : (B_.steam > 0.3 ? 1.6 : 1);
+    if (c.name === 'WIRES') x *= crows.some(k => k.state === 'perch' && PERCH[k.perch] && PERCH[k.perch].kind === 'wire') ? 1.8 : 0.8;
+    if (c.name === 'LAWN') x *= (B_.ac || B_.heat) ? 1.6 : 0.9;
+    if (c.name === 'ASPHALT') x *= S.wet > 0.2 ? 1.7 : 1;
+    if (c.name === 'ROOF') x *= WX.precip > 0.05 ? 1.7 : 1;
+    if (c.name === 'TREELINE') x *= WX.wind > 6 ? 1.5 : 1;
+    if (c.name === 'LOT') x *= night ? 1.5 : 1.2;
+    if (live.ev) { const subj = live.ev === 'sing' ? V(0, 9.5, -20.5) : live.ev === 'windows' ? V(-BW, 1.8, 0) : live.ev === 'lean' ? TREE_C : V(0, 2, 0);
+      if (camSees(c, subj)) x *= 2.2; }
+    return x; });
+  let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; } return 0;
+}
+function cut(i) { DIR.prev = DIR.cur; DIR.cur = i; DIR.until = simT + rr(8, 19) * (CREW[i].name === 'LONG LENS' ? 1.3 : 1); }
+function keepDistance(p) {   // no operator comes close enough to see through the glass
+  const dx = Math.max(Math.abs(p.x) - BW, 0), dz = Math.max(Math.abs(p.z) - BL, 0); const d = Math.hypot(dx, dz);
+  if (d < 6) { const a = V(p.x, 0, p.z); if (Math.abs(p.x) - BW > Math.abs(p.z) - BL) p.x = Math.sign(p.x || -1) * (BW + 6); else p.z = Math.sign(p.z || 1) * (BL + 6); }
+  p.y = Math.max(p.y, groundH(p.x, p.z) + 0.3); return p;
+}
+
+/* ====================================================================== sim */
+let SUNM = sunMoon(simMs), SUND = V(), MOOND = V();
+let cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
+
+function buildingTick(dt) {   // the building keeps its own hours
+  const lp = localParts(simMs); const sunEl = SUNM.sun.el / D2R; const hush = live.ev === 'hush';
+  // thermostat: cooling in the heat, heating in the cold, each cycling on its own duty
+  const acDuty = WX.temp > 24 ? clamp((WX.temp - 22) / 11, 0.25, 0.85) : 0, heatDuty = WX.temp < 13 ? clamp((15 - WX.temp) / 20, 0.2, 0.85) : 0;
+  B_.acT -= dt; B_.heatT -= dt;
+  if (B_.acT <= 0) { const on = !B_.ac && acDuty > 0 && !hush; B_.ac = on; B_.acT = on ? rr(6, 12) * 60 * acDuty * 1.6 : rr(4, 10) * 60 * (1.2 - acDuty); if (on) logOnce('ac', 'the window unit came on', 90); }
+  if (B_.heatT <= 0) { const on = !B_.heat && heatDuty > 0 && !hush; if (on !== B_.heat) { const p = AUD.lens(B.flueTop, 25); for (let k = 0; k < 8; k++) AUD.q({ type: 'tick', v: 0.02 + p.g * 0.25, pan: p.pan }); }
+    B_.heat = on; B_.heatT = on ? rr(8, 16) * 60 * heatDuty * 1.4 : rr(5, 14) * 60 * (1.2 - heatDuty); if (on) logOnce('heat', 'the heat came on', 90); }
+  if (hush) { B_.ac = false; B_.heat = false; }
+  B_.fan += dt * (B_.ac ? 22 : 0); SH.uFan.value = B_.fan;
+  B_.steam = lerp(B_.steam, B_.heat ? clamp((10 - WX.temp) / 12 + (WX.hum - 75) / 40, 0, 1) : 0, 1 - Math.exp(-dt / 20));
+  // the roof's own temperature: sun on tin, cloud, air; pops come with change
+  const sunOn = Math.max(0, SUND.y) * (1 - 0.75 * WX.cloud); const tgt = WX.temp + 22 * sunOn - (WX.precip > 0.05 ? 4 : 0);
+  const prevT = B_.roofT; B_.roofT = lerp(B_.roofT, tgt, 1 - Math.exp(-dt / 240)); B_.roofRate = lerp(B_.roofRate, Math.abs(B_.roofT - prevT) / Math.max(dt, 1e-3) * 60, 1 - Math.exp(-dt / 10));
+  if (rnd() < dt * B_.roofRate * 0.05) { const p = V(rr(-3, 3), RIDGE - 0.4, rr(-14, 14)); const l = AUD.lens(p, 22); AUD.q({ type: 'pop', m: AUD.deg([0, 4, 3, 1][Math.floor(rnd() * 4)], 2), v: 0.01 + l.g * 0.22, pan: l.pan, throw: rnd() < 0.3 }); }
+  // the lit window: from dusk to a time of its own choosing each night; some nights it never goes out
+  const nightKey = new Date(simMs - 12 * 3600e3).toISOString().slice(0, 10);
+  if (S.night.key !== nightKey) { S.night = { key: nightKey, off: rr(22.5, 29.5), allNight: rnd() < 0.3, morning: !lp.weekend && rnd() < 0.5 }; }
+  const hh = lp.hour < 12 ? lp.hour + 24 : lp.hour;
+  const dusk = sunEl < -1.5; const want = dusk && (S.night.allNight || hh < S.night.off) || (S.night.morning && lp.hour > 5.4 && lp.hour < 7 && sunEl < 3);
+  const one = B.south[1]; if ((one.want > 0.5) !== want) { if (want) logOnce('lit', 'a window lit', 120); else if (dusk) logOnce('dark', 'the window went dark', 120); }
+  one.want = want ? 1 : 0;
+  if (dusk && rnd() < dt / 5400) { const w = B.south[[0, 3, 4][Math.floor(rnd() * 3)]]; w.brief = rr(120, 480); }
+  B.south.forEach((w, i) => { if (w.brief > 0) w.brief -= dt; const on = live.win > 0.5 || (i === 1 ? w.want > 0.5 : (w.brief > 0 && i !== 2));
+    w.lit = lerp(w.lit, on ? 1 : 0, 1 - Math.exp(-dt / (live.win > 0.5 ? 1.5 : 0.6)));
+    w.mat.uniforms.uEmit.value = w.lit > 0.5 ? 0.6 + 0.04 * w.lit : 0; SH.uSpill.value[i] = w.lit * (i === 2 ? 0.4 : 1) * (1 - SH.uDay.value * 0.8); });
+  B.north.forEach(w => { w.lit = lerp(w.lit, live.win > 0.5 ? 1 : 0, 1 - Math.exp(-dt / 1.5)); w.mat.uniforms.uEmit.value = w.lit > 0.5 ? 0.62 : 0; });
+  // the floodlight: dusk to dawn
+  const fl = sunEl < -2.5; if ((FLOOD.on > 0.5) !== fl && fl) logOnce('flood', 'the floodlight came on', 300);
+  FLOOD.on = lerp(FLOOD.on, fl ? 1 : 0, 1 - Math.exp(-dt / (fl ? 3 : 1)));
+  floodHead.material.uniforms.uEmit.value = FLOOD.on > 0.5 ? 1 : 0; SH.uFlood.value = FLOOD.on;
+}
+function memoryTick(dt) {   // slow damage
+  const wetNow = WX.precip > 0.05, humidNow = WX.hum > 92;
+  S.wet = clamp(S.wet + WX.precip * dt / 3600 * 0.5 - S.wet * dt / (3 * 3600), 0, 1.5);
+  if (wetNow || humidNow) { S.wetH += dt / 3600; const r0 = S.rust; S.rust = Math.min(0.92, S.rust + dt / 3600 * 0.006 * (wetNow ? 1 : 0.5)); S.peel = Math.min(0.95, S.peel + dt / 3600 * 0.003);
+    if (Math.floor(r0 * 50) !== Math.floor(S.rust * 50)) logEv(`the rust crept: roof ${(S.rust * 100).toFixed(0)}%`); }
+  if (WX.temp < -0.5 && !S.ft.below) S.ft.below = true;
+  if (WX.temp > 0.5 && S.ft.below) { S.ft.below = false; S.ft.cycles++; S.crack = Math.min(1, S.crack + 0.035); logEv(`a freeze and a thaw: the lot cracked further (${S.ft.cycles})`); }
+  if (!isFinite(S.rust)) S.rust = 0.38; if (!isFinite(S.crack)) S.crack = 0.22; if (!isFinite(S.wet)) S.wet = 0;
+}
+function carTick(dt) {
+  const lp = localParts(simMs);
+  const shouldBeIn = lp.weekend ? (S.car.wk == null ? false : S.car.wk) : (lp.hour >= (S.car.arr ?? 8) && lp.hour < (S.car.dep ?? 16.5));
+  if (S.car.day !== lp.wd) { S.car.day = lp.wd; S.car.arr = rr(7.15, 8.7); S.car.dep = rr(15.5, 17.6); S.car.wk = null; S.car.wkAt = rr(10, 15); S.car.wkLen = rr(1, 3); S.car.wkGo = rnd() < 0.25; }
+  let want = shouldBeIn; if (lp.weekend) want = S.car.wkGo && lp.hour > S.car.wkAt && lp.hour < S.car.wkAt + S.car.wkLen;
+  if (car.state === 'away' && want) { car.state = 'in'; car.path = carPath(true); car.u = 0; car.g.visible = true; scatterCrows('a car came'); }
+  if (car.state === 'parked' && !want) { car.state = 'out'; car.path = carPath(false); car.u = 0; scatterCrows(null); const l = AUD.lens(car.pos, 20); AUD.q({ type: 'thunk', v: 0.04 + l.g * 0.3, pan: l.pan }); }
+  if (car.state === 'in' || car.state === 'out') {
+    const len = car.path.getLength(); car.u = Math.min(1, car.u + dt * (car.u > 0.85 ? 3.2 : 9) / len);
+    const p = car.path.getPointAt(car.u), q = car.path.getPointAt(Math.min(1, car.u + 0.002)); car.pos.copy(p); car.pos.y = groundH(p.x, p.z);
+    if (q.distanceTo(p) > 1e-4) car.head = Math.atan2(-(q.z - p.z), q.x - p.x);
+    if (car.u >= 1) { if (car.state === 'in') { car.state = 'parked'; logEv('a car pulled in'); const l = AUD.lens(car.pos, 20); AUD.q({ type: 'thunk', v: 0.05 + l.g * 0.35, pan: l.pan }); }
+      else { car.state = 'away'; car.g.visible = false; logEv('the car left'); } }
+  }
+  if (!isFinite(car.pos.x)) { car.state = 'away'; car.g.visible = false; car.pos.set(-80, 0, 30); }
+  car.g.position.copy(car.pos); car.g.rotation.y = car.head;
+  car.lights.uniforms.uEmit.value = (car.state === 'in' || car.state === 'out') && SUNM.sun.el < 0.05 ? 1 : 0;
+}
+function deerTick(dt, t) {
+  const sunEl = SUNM.sun.el / D2R; deerUntil -= dt;
+  const edge = sunEl > -9 && sunEl < 6;
+  if (!deerOut && edge && deerUntil <= 0 && car.state !== 'in' && car.state !== 'out' && WX.wind < 9 && WX.precip < 1.5) {
+    if (rnd() < 0.5) { deerOut = true; deerUntil = rr(10, 35) * 60; logEv(deer.length > 1 && rnd() < 0.6 ? 'two deer came out of the trees' : 'a deer came out of the trees');
+      deer.forEach((d, i) => { d.state = i === 0 || rnd() < 0.6 ? 'in' : 'away'; d.pos.set(rr(16, 26), 0, rr(12, 26)); d.tgt.set(rr(-6, 14), 0, rr(20, 46)); d.until = rr(20, 80); }); }
+    else deerUntil = rr(8, 25) * 60;
+  }
+  if (deerOut && (deerUntil <= 0 || !edge || car.state === 'in' || car.state === 'out' || live.ev === 'lean')) { deerOut = false; deerUntil = rr(40, 120) * 60; deer.forEach(d => { if (d.state !== 'away') { d.state = 'leave'; d.tgt.set(rr(24, 34), 0, rr(4, 18)); } }); }
+  deer.forEach((d, i) => {
+    if (d.state === 'away') { d.g.visible = false; return; }
+    d.until -= dt; if (d.state === 'in' && d.until <= 0) { d.tgt.set(clamp(d.pos.x + rr(-8, 8), -8, 20), 0, clamp(d.pos.z + rr(-8, 8), 18, 50)); d.until = rr(30, 120); }
+    const to = d.tgt.clone().sub(d.pos).setY(0); const dist = to.length(); const sp = d.state === 'leave' ? 1.4 : 0.35; const moving = dist > 0.4;
+    if (moving) { to.normalize(); d.pos.addScaledVector(to, Math.min(dist, sp * dt)); const want = Math.atan2(-to.z, to.x); let dh = ((want - d.head + Math.PI) % TAU + TAU) % TAU - Math.PI; d.head += clamp(dh, -dt, dt); }
+    else if (d.state === 'leave') { d.state = 'away'; }
+    if (!isFinite(d.pos.x)) { d.state = 'away'; d.pos.set(20, 0, 20); }
+    d.pos.y = groundH(d.pos.x, d.pos.z); d.graze = lerp(d.graze, moving ? 0 : 1, 1 - Math.exp(-dt * 0.8)); d.ph += dt * (moving ? sp * 6 : 0);
+    const g = d.g; g.visible = true; g.position.copy(d.pos); g.rotation.y = d.head;
+    const u = g.userData; u.neck.rotation.z = -0.6 - 1.1 * d.graze; u.neck.position.set(0.72 + 0.1 * d.graze, 1.35 - 0.4 * d.graze, 0);
+    u.head.position.set(1.0 + 0.1 * d.graze, 1.62 - 1.05 * d.graze, 0); u.head.rotation.z = -Math.PI / 2 - 0.35 - 1.0 * d.graze;
+    u.legs.forEach((l, k) => l.rotation.z = Math.sin(d.ph + (k % 2) * Math.PI + (k > 1 ? 0.5 : 0)) * 0.3 * (moving ? 1 : 0));
+  });
+}
+function scatterCrows(why) { let n = 0; crows.forEach(c => { if (c.state === 'perch') { c.state = 'fly'; c.perch = pickPerch(c); c.until = rr(40, 140); n++; } }); if (n && why) logOnce('scatter', `the crows lifted: ${why}`, 30); }
+function pickPerch(c) { const used = new Set(crows.filter(k => k !== c && k.perch >= 0).map(k => k.perch)); let i = 0, tries = 0; do { i = Math.floor(rnd() * PERCH.length); } while (used.has(i) && ++tries < 20); return i; }
+function crowTick(dt, t) {
+  const sunEl = SUNM.sun.el / D2R; const day = sunEl > -3; let calls = 0; const hush = live.ev === 'hush';
+  crows.forEach((c, i) => {
+    if (hush) return;   // held mid-air
+    c.until -= dt;
+    if (!day && c.state !== 'away' && c.state !== 'roost') { c.state = 'roost'; c.tgt = V(-120 - i * 6, 40, -160); if (i === 0) logOnce('roost', 'the crows went off to roost', 600); }
+    if (day && c.state === 'away' && rnd() < dt / 180) { c.state = 'fly'; c.perch = pickPerch(c); c.pos.set(-140, 35, -150 + i * 8); c.until = rr(60, 200); if (i === 0) logOnce('crows', 'crows came back over the trees', 600); }
+    if (c.state === 'perch' && c.until <= 0) { c.state = 'fly'; c.perch = pickPerch(c); c.until = rr(60, 220); }
+    if (live.ev === 'lean' && c.state === 'perch' && PERCH[c.perch].kind !== 'wire') { c.state = 'fly'; c.perch = PERCH.findIndex(k => k.kind === 'wire'); }
+    if (c.state === 'away') { c.g.visible = false; return; }
+    const tgt = c.state === 'roost' ? c.tgt : perchPos(PERCH[c.perch]); const to = tgt.clone().sub(c.pos); const dist = to.length();
+    if (c.state === 'roost' && dist < 8) { c.state = 'away'; c.g.visible = false; return; }
+    const perched = c.state === 'perch';
+    if (!perched) { const lift = dist > 12 ? V(0, 0.35, 0) : V(); const want = to.normalize().add(lift).multiplyScalar(clamp(dist * 0.6, 2.5, 11)); c.vel.lerp(want, 1 - Math.exp(-dt * 1.6));
+      c.pos.addScaledVector(c.vel, dt); if (dist < 0.5 && c.state === 'fly') { c.state = 'perch'; c.until = rr(40, 260); c.vel.set(0, 0, 0); } }
+    else c.pos.lerp(tgt, 1 - Math.exp(-dt * 6));
+    if (!isFinite(c.pos.x)) { c.pos.set(0, 30, -60); c.vel.set(0, 0, 0); c.state = 'fly'; }
+    const m = c.g; m.visible = true; m.position.copy(c.pos); if (!perched && c.vel.lengthSq() > 0.05) m.rotation.y = Math.atan2(c.vel.x, c.vel.z);
+    c.ph += dt * (perched ? 0 : 9); const flap = perched ? -1.25 : Math.sin(c.ph) * 0.6 + 0.1; m.userData.w[0].rotation.z = flap; m.userData.w[1].rotation.z = -flap;
+    if (calls < 1 && rnd() < dt / (perched ? 90 : 30)) { const l = AUD.lens(c.pos, 30); if (l.g > 0.005 && AUD.ctx && AUD.ctx.state === 'running') { const n = 1 + Math.floor(rnd() * 3); for (let k = 0; k < n; k++) AUD.voice('caw', AUD.ctx.currentTime + 0.02 + k * 0.42, { pan: l.pan, v: clamp(l.g * 1.8, 0, 0.05) }); calls++; } }
+  });
+}
+function steamTick(dt) {
+  const wd = fromBearingTravel(WX.windDir); const emit = B_.steam * dt * 40; let n = Math.floor(emit) + (rnd() < emit % 1 ? 1 : 0);
+  while (n-- > 0) { const i = stI = (stI + 1) % STEAM_N; stPos[i * 3] = B.flueTop.x + rr(-0.06, 0.06); stPos[i * 3 + 1] = B.flueTop.y; stPos[i * 3 + 2] = B.flueTop.z + rr(-0.06, 0.06);
+    stVel[i * 3] = rr(-0.1, 0.1); stVel[i * 3 + 1] = rr(0.5, 1.1); stVel[i * 3 + 2] = rr(-0.1, 0.1); stLife[i] = 1; }
+  for (let i = 0; i < STEAM_N; i++) { if (stLife[i] <= 0) continue; stLife[i] -= dt * 0.22;
+    stPos[i * 3] += (stVel[i * 3] + wd.x * WX.wind * 0.35) * dt; stPos[i * 3 + 1] += stVel[i * 3 + 1] * dt * (0.4 + stLife[i]); stPos[i * 3 + 2] += (stVel[i * 3 + 2] + wd.y * WX.wind * 0.35) * dt; }
+  stGeo.attributes.position.needsUpdate = true; stGeo.attributes.aLife.needsUpdate = true;
+}
+
+function step(dt) {
+  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000;
+  if (!WX.live) { Object.assign(WXT, synthWx(simMs)); WXT.gust = WXT.wind * 1.7; }
+  for (const k of ['wind', 'gust', 'cloud', 'precip', 'temp', 'hum']) { WX[k] = lerp(WX[k], WXT[k], 1 - Math.exp(-sdt / 90)); if (!isFinite(WX[k])) WX[k] = WXT[k] || 0; }
+  { const d = ((WXT.windDir - WX.windDir + 540) % 360) - 180; WX.windDir += d * (1 - Math.exp(-sdt / 120)); }
+  linesFromWx();
+  SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
+  buildingTick(sdt); memoryTick(sdt); carTick(sdt); deerTick(sdt, simT); crowTick(sdt, simT); steamTick(sdt);
+  S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1); if (!isFinite(S.tension)) S.tension = 0;
+  uncannyTick(sdt);
+  live.sing = lerp(live.sing, live.ev === 'sing' && live.evT < live.evDur - 8 ? 1 : 0, 1 - Math.exp(-sdt / (live.ev === 'sing' ? 6 : 3)));
+  live.win = live.ev === 'windows' && live.evT > 1 && live.evT < live.evDur - 2 ? 1 : 0;
+  const leanEnv = live.ev === 'lean' ? smoothstep(0, 40, live.evT) * smoothstep(0, 40, live.evDur - live.evT) : 0;
+  live.lean = lerp(live.lean, leanEnv * (0.85 + 0.15 * Math.sin(simT * TAU / (AUD.barSec * 2))), 1 - Math.exp(-sdt * 1.5));
+  live.calm = lerp(live.calm, live.ev === 'hush' ? 0.02 : 1, 1 - Math.exp(-sdt / (live.ev === 'hush' ? 3 : 2.5)));
+  if (simT >= DIR.until && DIR.pendingCut < 0) DIR.pendingCut = chooseShot();
+  if (DIR.pendingCut >= 0 && (!AUD.ctx || AUD.ctx.state !== 'running' || AUD.cur16 !== DIR.last16)) { cut(DIR.pendingCut); DIR.pendingCut = -1; }
+  DIR.last16 = AUD.cur16;
+  CREW.forEach(c => { c.upd(c, simT); keepDistance(c.p); });
+  if (simT - (S._saved || 0) > 60) { S._saved = simT; save(); }
+}
+
+/* ====================================================================== render */
+function applyLook(dt) {
+  const c = DIR.look || CREW[DIR.cur]; camera.position.copy(c.p); camera.lookAt(c.tgt); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  if (!isFinite(camera.position.x)) { camera.position.set(-30, 2, -6); camera.lookAt(0, 2, 0); }
+  SH.uCamP.value.copy(camera.position); SH.uTime.value = simT;
+  const sEl = SUNM.sun.el, mEl = SUNM.moon.el;
+  const day = smoothstep(-0.2, 0.18, sEl); SH.uDay.value = day; SH.uSunD.value.copy(SUND);
+  const cloudDim = 1 - 0.55 * WX.cloud;
+  if (sEl > -0.06) { SH.uKeyD.value.copy(SUND); SH.uDiff.value = (0.18 + 0.62 * smoothstep(-0.06, 0.35, sEl)) * cloudDim; }
+  else { SH.uKeyD.value.copy(mEl > 0 ? MOOND : V(0, 1, 0)); SH.uDiff.value = mEl > 0 ? 0.2 * SUNM.illum * cloudDim : 0.04; }
+  SH.uAmb.value = 0.13 + 0.3 * day + 0.08 * WX.cloud * day;
+  SH.uFogD.value = clamp(900 - 650 * smoothstep(80, 100, WX.hum) - 200 * clamp(WX.precip, 0, 2), 140, 1000);
+  SH.uFogShade.value = 0.12 + 0.55 * day; SH.uSkyB.value = 0.2 + 0.6 * day;
+  SH.uRust.value = S.rust; SH.uPeel.value = S.peel; SH.uCrack.value = S.crack; SH.uWet.value = clamp(S.wet, 0, 1); SH.uRainNow.value = clamp(WX.precip, 0, 1);
+  const lp = localParts(simMs); SH.uGrow.value = lp.month >= 4 && lp.month <= 10 ? 1 : 0;
+  const wd = fromBearingTravel(WX.windDir); const gustNow = WX.wind + (WX.gust - WX.wind) * Math.max(0, Math.sin(simT * 0.37) * Math.sin(simT * 0.13));
+  SH.uWindL.value.set(wd.x, 0, wd.y).multiplyScalar(clamp(gustNow / 10, 0, 1.6));
+  SH.uLean.value = live.lean; SH.uLeanC.value.set(0, 0, 0); SH.uCalm.value = live.calm;
+  SH.uPxK.value = 2 * Math.tan(camera.fov * D2R / 2) / IH;
+  wireU.uSag.value = LINES_.sag; wireU.uSwing.value = LINES_.swing; wireU.uSwAmp.value = 0.025 + 0.012 * clamp(gustNow, 0, 25); wireU.uSing.value = live.sing; wireU.uWidth.value = (0.55 + 0.9 * live.sing) * IH / 720 + 0.15;
+  insMat.uniforms.uEmit.value = live.sing > 0.3 ? 0.75 + 0.25 * Math.sin(simT * 2.1) : 0;
+  skyU.uCloud.value = WX.cloud; skyU.uWind.value.set(wd.x, wd.y).multiplyScalar(WX.wind);
+  sky.position.copy(camera.position);
+  const place = (m, dir, deg, up) => { m.position.copy(camera.position).addScaledVector(dir, 2500); m.quaternion.copy(camera.quaternion); const s = 2 * 2500 * Math.tan(deg * D2R); m.scale.set(s, s, 1); m.visible = up; };
+  place(sunM, SUND, 2.6, sEl > -0.08); place(moonM, MOOND, 1.5, mEl > -0.05 && sEl < 0.1);
+  sunM.material.uniforms.uDim.value = 1 - 0.35 * WX.cloud; moonM.material.uniforms.uIllum.value = SUNM.illum;
+  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
+  const target = COLORWAYS[S.colorway].c.map(hexV);
+  for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
+  const gm = S.grammar; SH.uPerPx.value = gm.period * IH / 720; SH.uWobPx.value = gm.wob * IH / 720; SH.uRibK.value = gm.ribK || 1;
+  PU.uDith.value = gm.dith; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch;
+  PU.uRain.value = clamp(WX.precip / 2, 0, 1); PU.uRainDir.value.set(wd.x * 0.35, -1).normalize(); PU.uTime.value = simT;
+  const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
+  const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1]));
+}
+function render() {
+  renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
+  quad.material = printMat; renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
+  quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+}
+
+/* ====================================================================== info box */
+const hud = document.getElementById('hud'); hud.hidden = !INFO;
+const tapBtn = document.getElementById('tap');
+function hudUpdate() {
+  if (!INFO) return; const lp = localParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360;
+  const bstate = B_.ac ? 'cooling (window unit on)' : B_.heat ? 'heating (burner on)' : 'quiet';
+  const lit = B.south.filter(w => w.lit > 0.5).length;
+  const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
+  const humDb = AUD.ctx ? (20 * Math.log10(Math.max(1e-5, (0.035 + 0.07 * (smoothstep(55, 98, WX.hum) + 0.5 * clamp(WX.precip, 0, 1)))))).toFixed(0) : '—';
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · OUTBUILDING</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  <div class="r"><span>LOCAL ${lp.str} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
+  <div class="r"><span>TEMP ${WX.temp.toFixed(1)}°C · LINES sag ${LINES_.sag.toFixed(2)} m, swing ${LINES_.swing.toFixed(2)} s</span><span>→ bar ${AUD.barSec.toFixed(1)} s, roof ${B_.roofT.toFixed(0)}°</span></div>
+  <div class="r"><span>HUMIDITY ${WX.hum.toFixed(0)}%${WX.precip > 0.05 ? ' · RAIN ' + WX.precip.toFixed(1) + ' mm' : ''}</span><span>→ line hum ${humDb} dB, echo</span></div>
+  <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · gusts ${WX.gust.toFixed(0)} · CLOUD ${(WX.cloud * 100).toFixed(0)}%</span><span>→ trees, wires</span></div>
+  <div class="r"><span>BUILDING ${bstate}${lit ? ` · ${lit} lit` : ''}</span><span>→ ${B_.ac ? 'compressor' : B_.heat ? 'burner, flue' : 'room tone'}</span></div>
+  <div class="r"><span>ROOF RUST ${(S.rust * 100).toFixed(0)}% · LOT ${S.ft.cycles} freeze-thaws · WET ${(clamp(S.wet, 0, 1) * 100).toFixed(0)}%</span><span>${CREW[DIR.cur].name} · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
+  ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
+  <div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
+}
+
+/* ====================================================================== loop, keys, API */
+addEventListener('resize', resize); resize();
+renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
+renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); console.warn('[gl] context restored'); });
+SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el)); linesFromWx();
+cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : Math.floor(rnd() * CREW.length));
+if (Q.has('cam')) DIR.until = 1e12;
+// pre-warm: it was running before you arrived (the car, the crows, the building's hours settle)
+{ if (SUNM.sun.el > -0.05) crows.forEach((c, i) => { if (rnd() < 0.8) { c.state = 'perch'; c.perch = pickPerch(c); c.pos.copy(perchPos(PERCH[c.perch])); c.until = rr(20, 200); } });
+  for (let i = 0; i < 240; i++) step(0.25); if (car.state === 'in') { car.u = 1; carTick(0); } }
+function frame(dt) {
+  try { step(dt); applyLook(dt); render(); AUD.frame(dt); }
+  catch (e) { console.error(e); }
+}
+let lastT = performance.now(), hudT = 0;
+function raf(now) { const dt = (now - lastT) / 1000; lastT = now; frame(dt); hudT += dt; if (hudT > 0.5) { hudT = 0; hudUpdate(); } requestAnimationFrame(raf); }
+if (!CAPTURE) requestAnimationFrame(raf);
+addEventListener('beforeunload', save);
+addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
+  if (k === 'i') { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); }
+  if (k === 'm') AUD.mute();
+  if (k === 'r' && !live.ev) { logEv('a hand on the building (human intervention)'); S.tension = 1; }
+  AUD.start(); });
+addEventListener('pointerdown', () => AUD.start());
+tapBtn.addEventListener('click', () => AUD.start());
+AUD.init(); hudUpdate();
+window.MZ = {
+  tick(dt = 1 / 30) { frame(dt); hudUpdate(); },
+  advance(sec, dt = 0.25) { for (let t = 0; t < sec; t += dt) step(dt); applyLook(sec); render(); hudUpdate(); },
+  force(name) { if (live.ev) { const was = live.ev; endEvent(); if (was === 'hush' && name === 'rupture') return; } if (name === 'rupture') { rupture('forced by hand'); return; } startEvent(name, true); },
+  cam(i) { cut(i); DIR.until = 1e12; },
+  look(p, t, fov = 30) { DIR.look = p ? { p: V(...p), tgt: V(...t), fov } : null; },
+  ink(i) { S.colorway = i; cwMix = 1; cwFrom = COLORWAYS[i].c.map(hexV); },
+  grammar(g) { Object.assign(S.grammar, g); },
+  h: (x, z) => groundH(x, z),
+  geo: { BW, BL, WALLTOP, RIDGE, flue: B.flueTop.toArray(), ac: B.ac.toArray() },
+  seekHour(h) { const cur = localParts(simMs).hour; simMs += (((h - cur) % 24 + 24) % 24) * 3600e3; },
+  wet(mm) { S.wet = clamp(S.wet + mm * 0.5, 0, 1.5); },
+  age(o = {}) { if (o.rust != null) S.rust = clamp(o.rust, 0, 0.92); if (o.crack != null) S.crack = clamp(o.crack, 0, 1); if (o.peel != null) S.peel = clamp(o.peel, 0, 0.95); },
+  get state() { return { S, live: { ...live }, WX: { ...WX }, cam: CREW[DIR.cur].name, building: { ...B_ }, car: car.state, lines: { ...LINES_ }, crows: crows.map(c => c.state), deer: deer.map(d => d.state) }; },
+  setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
+  analyser() { return AUD.an; },
+  audio: AUD,
+};
+</script>
