@@ -33,7 +33,6 @@ A corrugated outbuilding on a rise, with a cracked lot in front of it, a bank of
   - The door never opens.
 - **A car** comes on weekday mornings and leaves in the afternoon, and visits now and then on weekends. Its arrival scatters the crows.
 - **Crows** perch on the wires, the ridge, the pole tops and the lawn, move between them, caw, and leave to roost at dusk.
-- **Deer** come out of the trees at dawn and dusk to graze the lawn, and leave when the car moves.
 
 ## Memory (slow damage)
 - **Rust** creeps across the roof with every wet or very humid hour, and paint peels from the siding more slowly. Neither ever recovers.
@@ -43,14 +42,14 @@ A corrugated outbuilding on a rise, with a cracked lot in front of it, a bank of
 - State lives in `localStorage` under `mzworld-outbuilding-v1`, saved every 60 s and on unload. An OBS reload resumes the same epoch, memory and log.
 
 ## Cameras (observational, at a distance)
-LOT · CORNER · ROOF · TREELINE · LAWN · POLE LINE · LONG LENS · ASPHALT · WIRES. Operators hold and drift, and the mixer cuts every 8–19 s on the 16th, weighted by what is happening (deer out, crows on the wires, a machine running, a wet lot, rain on the roof, wind in the trees, an event in view). LONG LENS follows the deer, the plume, a lit window or a perched crow. Every operator is kept at least 6 m from the walls, and the glass prints dark with only sky in it, so the inside is never seen.
+LOT · CORNER · ROOF · TREELINE · LAWN · POLE LINE · LONG LENS · ASPHALT · WIRES. Operators hold and drift, and the mixer cuts every 8–19 s on the 16th, weighted by what is happening (crows on the wires, a machine running, a wet lot, rain on the roof, wind in the trees, an event in view). LONG LENS follows the plume, a lit window or a perched crow. Every operator is kept at least 6 m from the walls, and the glass prints dark with only sky in it, so the inside is never seen.
 
 ## The uncanny
 | Event | Conditions | What happens |
 |---|---|---|
 | The lines sing | humidity ≥ 85% or rain, sun below 8° | pulses of HOT ink run along the wires, the insulators glow, and the hum swells into a ♭II chord with a reverse swell |
 | Every window | daylight, the car gone, the building quiet | every window lights at once, the boarded one and the north side included; a high fifth in the room |
-| The treeline leans in | wind < 2.5 m/s, no rain | the trees bend toward the building and hold, breathing; a sub swells with them; the crows go to the wires and the deer leave |
+| The treeline leans in | wind < 2.5 m/s, no rain | the trees bend toward the building and hold, breathing; a sub swells with them; the crows go to the wires |
 
 Each event has its own cooldown, and the global gap is 14–34 min.
 

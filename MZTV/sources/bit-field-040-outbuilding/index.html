@@ -645,7 +645,7 @@ const TREE_C = V(-14, 9, -40);   // the near edge of the wood
   im.frustumCulled = false; scene.add(im);
 }
 
-/* ---------- a car that comes and goes, deer at the edges of the day, crows */
+/* ---------- a car that comes and goes, crows */
 const SPOT = V(-11.5, 0, 19.5); SPOT.y = groundH(SPOT.x, SPOT.z);
 const car = { g: new THREE.Group(), pos: V(-80, 0, roadZ(-80)), head: 0, state: 'away', path: null, u: 0, lights: null };
 { const white = objMat(9, 0, V(1, 0, 0)), dk = objMat(7, 8);
@@ -660,16 +660,6 @@ function carPath(inbound) {
   pts.push(V(-14, 0, 24.5), V(-12.6, 0, 21.8), SPOT.clone());
   const c = new THREE.CatmullRomCurve3(inbound ? pts : pts.reverse()); return c;
 }
-function deerMesh() {
-  const g = new THREE.Group(); const m = objMat(6, 3, V(1, 0, 0));
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 8), m); body.scale.set(1.9, 0.95, 0.85); body.position.y = 1.0; g.add(body);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.7, 6), m); neck.position.set(0.72, 1.35, 0); neck.rotation.z = -0.6; g.add(neck);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.42, 6), m); head.rotation.z = -Math.PI / 2 - 0.35; head.position.set(1.0, 1.62, 0); g.add(head);
-  const legs = []; for (const [x, z] of [[0.55, 0.18], [0.55, -0.18], [-0.55, 0.18], [-0.55, -0.18]]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.85, 5), m); l.position.set(x, 0.45, z); g.add(l); legs.push(l); }
-  g.userData = { neck, head, legs }; g.visible = false; scene.add(g); return g;
-}
-const deer = [0, 1].map(i => ({ g: deerMesh(), pos: V(), head: 0, state: 'away', until: 0, tgt: V(), graze: 0, ph: rnd() * TAU }));
-let deerOut = false, deerUntil = rr(5, 20) * 60;
 function crowMesh() {
   const g = new THREE.Group(); const m = objMat(7, 0, V(1, 0, 0));
   const body = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.48, 6), m); body.rotation.x = Math.PI / 2; g.add(body);
@@ -1004,7 +994,6 @@ const CREW = [
   { name: 'WIRES', fov: 24, p: gp(-19, -11, 1.6), upd(c, t) { c.tgt.set(3 + 5 * Math.sin(t / 79), 9.2, -20.4); } },
 ];
 function longTarget(t) {
-  const dv = deer.find(d => d.state !== 'away'); if (dv) return dv.pos.clone().add(V(0, 1, 0));
   if (live.ev === 'sing') return LINE[1].top.clone();
   if (B_.steam > 0.3) return B.flueTop.clone().add(V(0, 0.6, 0));
   const lit = B.south.find(w => w.lit > 0.5); if (lit) return V(-BW, 1.8, lit.z);
@@ -1018,7 +1007,7 @@ function chooseShot() {
   const night = SUNM.sun.el < -0.05;
   const w = CREW.map((c, i) => {
     if (i === DIR.cur) return 0; let x = 1; if (i === DIR.prev) x *= 0.35;
-    if (c.name === 'LONG LENS') x *= deer.some(d => d.state !== 'away') ? 3 : (B_.steam > 0.3 ? 1.6 : 1);
+    if (c.name === 'LONG LENS') x *= B_.steam > 0.3 ? 1.6 : 1;
     if (c.name === 'WIRES') x *= crows.some(k => k.state === 'perch' && PERCH[k.perch] && PERCH[k.perch].kind === 'wire') ? 1.8 : 0.8;
     if (c.name === 'LAWN') x *= (B_.ac || B_.heat) ? 1.6 : 0.9;
     if (c.name === 'ASPHALT') x *= S.wet > 0.2 ? 1.7 : 1;
@@ -1100,29 +1089,6 @@ function carTick(dt) {
   car.g.position.copy(car.pos); car.g.rotation.y = car.head;
   car.lights.uniforms.uEmit.value = (car.state === 'in' || car.state === 'out') && SUNM.sun.el < 0.05 ? 1 : 0;
 }
-function deerTick(dt, t) {
-  const sunEl = SUNM.sun.el / D2R; deerUntil -= dt;
-  const edge = sunEl > -9 && sunEl < 6;
-  if (!deerOut && edge && deerUntil <= 0 && car.state !== 'in' && car.state !== 'out' && WX.wind < 9 && WX.precip < 1.5) {
-    if (rnd() < 0.5) { deerOut = true; deerUntil = rr(10, 35) * 60; logEv(deer.length > 1 && rnd() < 0.6 ? 'two deer came out of the trees' : 'a deer came out of the trees');
-      deer.forEach((d, i) => { d.state = i === 0 || rnd() < 0.6 ? 'in' : 'away'; d.pos.set(rr(16, 26), 0, rr(12, 26)); d.tgt.set(rr(-6, 14), 0, rr(20, 46)); d.until = rr(20, 80); }); }
-    else deerUntil = rr(8, 25) * 60;
-  }
-  if (deerOut && (deerUntil <= 0 || !edge || car.state === 'in' || car.state === 'out' || live.ev === 'lean')) { deerOut = false; deerUntil = rr(40, 120) * 60; deer.forEach(d => { if (d.state !== 'away') { d.state = 'leave'; d.tgt.set(rr(24, 34), 0, rr(4, 18)); } }); }
-  deer.forEach((d, i) => {
-    if (d.state === 'away') { d.g.visible = false; return; }
-    d.until -= dt; if (d.state === 'in' && d.until <= 0) { d.tgt.set(clamp(d.pos.x + rr(-8, 8), -8, 20), 0, clamp(d.pos.z + rr(-8, 8), 18, 50)); d.until = rr(30, 120); }
-    const to = d.tgt.clone().sub(d.pos).setY(0); const dist = to.length(); const sp = d.state === 'leave' ? 1.4 : 0.35; const moving = dist > 0.4;
-    if (moving) { to.normalize(); d.pos.addScaledVector(to, Math.min(dist, sp * dt)); const want = Math.atan2(-to.z, to.x); let dh = ((want - d.head + Math.PI) % TAU + TAU) % TAU - Math.PI; d.head += clamp(dh, -dt, dt); }
-    else if (d.state === 'leave') { d.state = 'away'; }
-    if (!isFinite(d.pos.x)) { d.state = 'away'; d.pos.set(20, 0, 20); }
-    d.pos.y = groundH(d.pos.x, d.pos.z); d.graze = lerp(d.graze, moving ? 0 : 1, 1 - Math.exp(-dt * 0.8)); d.ph += dt * (moving ? sp * 6 : 0);
-    const g = d.g; g.visible = true; g.position.copy(d.pos); g.rotation.y = d.head;
-    const u = g.userData; u.neck.rotation.z = -0.6 - 1.1 * d.graze; u.neck.position.set(0.72 + 0.1 * d.graze, 1.35 - 0.4 * d.graze, 0);
-    u.head.position.set(1.0 + 0.1 * d.graze, 1.62 - 1.05 * d.graze, 0); u.head.rotation.z = -Math.PI / 2 - 0.35 - 1.0 * d.graze;
-    u.legs.forEach((l, k) => l.rotation.z = Math.sin(d.ph + (k % 2) * Math.PI + (k > 1 ? 0.5 : 0)) * 0.3 * (moving ? 1 : 0));
-  });
-}
 function scatterCrows(why) { let n = 0; crows.forEach(c => { if (c.state === 'perch') { c.state = 'fly'; c.perch = pickPerch(c); c.until = rr(40, 140); n++; } }); if (n && why) logOnce('scatter', `the crows lifted: ${why}`, 30); }
 function pickPerch(c) { const used = new Set(crows.filter(k => k !== c && k.perch >= 0).map(k => k.perch)); let i = 0, tries = 0; do { i = Math.floor(rnd() * PERCH.length); } while (used.has(i) && ++tries < 20); return i; }
 function crowTick(dt, t) {
@@ -1163,7 +1129,7 @@ function step(dt) {
   { const d = ((WXT.windDir - WX.windDir + 540) % 360) - 180; WX.windDir += d * (1 - Math.exp(-sdt / 120)); }
   linesFromWx();
   SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
-  buildingTick(sdt); memoryTick(sdt); carTick(sdt); deerTick(sdt, simT); crowTick(sdt, simT); steamTick(sdt);
+  buildingTick(sdt); memoryTick(sdt); carTick(sdt); crowTick(sdt, simT); steamTick(sdt);
   S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1); if (!isFinite(S.tension)) S.tension = 0;
   uncannyTick(sdt);
   live.sing = lerp(live.sing, live.ev === 'sing' && live.evT < live.evDur - 8 ? 1 : 0, 1 - Math.exp(-sdt / (live.ev === 'sing' ? 6 : 3)));
@@ -1278,7 +1244,7 @@ window.MZ = {
   seekHour(h) { const cur = localParts(simMs).hour; simMs += (((h - cur) % 24 + 24) % 24) * 3600e3; },
   wet(mm) { S.wet = clamp(S.wet + mm * 0.5, 0, 1.5); },
   age(o = {}) { if (o.rust != null) S.rust = clamp(o.rust, 0, 0.92); if (o.crack != null) S.crack = clamp(o.crack, 0, 1); if (o.peel != null) S.peel = clamp(o.peel, 0, 0.95); },
-  get state() { return { S, live: { ...live }, WX: { ...WX }, cam: CREW[DIR.cur].name, building: { ...B_ }, car: car.state, lines: { ...LINES_ }, crows: crows.map(c => c.state), deer: deer.map(d => d.state) }; },
+  get state() { return { S, live: { ...live }, WX: { ...WX }, cam: CREW[DIR.cur].name, building: { ...B_ }, car: car.state, lines: { ...LINES_ }, crows: crows.map(c => c.state) }; },
   setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
   analyser() { return AUD.an; },
   audio: AUD,
