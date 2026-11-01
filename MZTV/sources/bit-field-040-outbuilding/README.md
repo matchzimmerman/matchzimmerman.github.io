@@ -5,18 +5,19 @@ A corrugated outbuilding on a rise, with a cracked lot in front of it, a bank of
 **Status:** published 2026-11-01. Awaiting MZ.Human's review.
 **Live:** https://matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/
 **OBS:** Browser Source → that URL · 1920×1080 · enable "Control audio via OBS"
-**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (internal resolution, default 720; 420–540 for phones or weak GPUs) · `?ff=MIN` · `?hour=H` (start at local hour H, testing) · `?cam=N` (hold one camera) · `?live=0` (simulated weather) · `?capture=1` (no rAF; drive with `MZ.tick(dt)` / `MZ.advance(sec)`)
+**Params:** `?info=0` · `?fresh=1` · `?audio=0` · `?seed=N` · `?rate=N` · `?lines=N` (internal resolution, default 720; 420–540 for phones or weak GPUs) · `?ff=MIN` · `?hour=H` (start at the next real moment the world shows hour H, testing) · `?cam=N` (hold one camera) · `?live=0` (simulated weather) · `?capture=1` (no rAF; drive with `MZ.tick(dt)` / `MZ.advance(sec)`)
 **Keys:** **I** info · **M** mute · **R** a hand on the building (pushes toward rupture; logged as human intervention)
-**Console:** `MZ.force('sing' | 'windows' | 'lean' | 'hush' | 'rupture')` · `MZ.seekHour(h)` · `MZ.wet(mm)` · `MZ.age({ rust, crack, peel })`
+**Console:** `MZ.force('sing' | 'windows' | 'lean' | 'hush' | 'rupture')` · `MZ.seekHour(h)` (world hour) · `MZ.wet(mm)` · `MZ.age({ rust, crack, peel })`
 
 ## Deliberate breaks from the HEADLAND standard
 - **Unlocated.** The world is not labelled with its place. Town-level coordinates (Catonsville, Maryland: 39.27°N, 76.73°W) drive the sun, the moon and the live weather, and nothing else. The info box says `LOCAL`, and no site is named on screen or here. The building, lot, poles and trees are sculpted from one photograph and are not surveyed or placed on a map.
 - **No kick and no walking bass.** The sound is the place first, with only slight tonal elements. Nothing marks the beat, and the low end is one held hum that moves only at rupture. The "central figure → bass degree" row is replaced by the building's state → which machine is sounding.
+- **Night lasts five minutes.** The world keeps its own clock instead of real local time (see World → Time). These worlds are most alive in the light, so the night is compressed.
 - **The hum is tuned, not mains.** The lines' hum and its overtones sit on the world's harmonic centre (D at home), not on 60 Hz.
 
 ## World
 - **Place:** a single-storey corrugated building, 30 m × 7 m, on a low concrete foundation. It has a shallow tin roof rusting in streaks, six windows facing the lot (one boarded, one with a window unit under it), a flue and a vent, and a door with a green awning at the east end. A parking lot falls toward it from the south, with a grass strip between. A bank of poles with crossarms and insulators runs behind its west end, with a tall pole at the lot's corner and a floodlight pole near the door. There is a road on the east side, a lawn rising beyond it, and woods to the west and north, with understory at the edge and a far tree mass closing every horizon.
-- **Time:** real local time (America/New_York). Sun and moon positions come from the town-level coordinates, and the moon carries its real phase.
+- **Time:** a world clock built from real time. Real noon is world noon. Through the real afternoon and evening the world's afternoon stretches out (about 0.45× in November), so the sunset from 0° to −3° takes about 40 real minutes. The whole night, from −3° after sunset to −3° before sunrise, passes in 5 real minutes around real midnight. Then the sunrise and the morning run until real noon. The sun and moon are computed for the world time at town-level coordinates, with the moon's real phase, and the building's hours and the car follow world time. Weather stays real time. The info box shows both: `WORLD hh:mm · real hh:mm`.
 - **Weather:** Open-Meteo (current conditions), polled every 15 min and slewed over minutes, with a simulated fallback shown on screen.
   - temperature → the lines' sag (conductors lengthen in heat) and so their sway period and the bar length; the window unit or the burner; the roof's own temperature; freeze-thaw nights
   - humidity and rain → the lines' hum, echo feedback, haze, the wet store, rust

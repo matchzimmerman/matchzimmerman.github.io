@@ -72,7 +72,6 @@ function localParts(ms) {
     weekend: o.weekday === 'Sat' || o.weekday === 'Sun' };
 }
 let simMs = Date.now();
-if (Q.has('hour')) { const want = +Q.get('hour'); const cur = localParts(simMs).hour; simMs += (((want - cur) % 24 + 24) % 24) * 3600e3; }
 if (Q.has('ff')) simMs += (+Q.get('ff')) * 60e3;
 let simT = 0;
 
@@ -126,6 +125,34 @@ function sunMoon(ms) {
 }
 const azElToVec = (az, el) => V(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
 const fromBearingTravel = (deg) => { const b = deg * D2R; return new THREE.Vector2(-Math.cos(b), -Math.sin(b)); };
+/* ---------- the world clock: real noon is world noon; the afternoon stretches into a long sunset, the whole night
+   passes in five minutes around real midnight, and then the dawn. Weather stays real time. */
+const DARK_EL = -3 * D2R, NIGHT_REAL = 300e3, DAY = 86400e3, HALF = 43200e3;
+const SOLAR_MID0 = Date.UTC(2026, 0, 1) + (-LON / 15) * 3600e3;   // solar midnight, roughly, in UTC
+const NIGHTS = new Map();
+const sunEl = (ms) => sunMoon(ms).sun.el;
+function nightAround(t) {
+  const k = Math.round((t - SOLAR_MID0) / DAY); let n = NIGHTS.get(k); if (n) return n;
+  const m0 = SOLAR_MID0 + k * DAY; let M = m0, lo = 9;
+  for (let d = -40; d <= 40; d++) { const e = sunEl(m0 + d * 60e3); if (e < lo) { lo = e; M = m0 + d * 60e3; } }
+  const cross = (a, b, falling) => { for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if ((sunEl(m) > DARK_EL) === falling) a = m; else b = m; } return (a + b) / 2; };
+  const D = cross(M - HALF, M, true), A = cross(M, M + HALF, false);
+  n = { M, D: Math.min(D, M), A: Math.max(A, M) }; NIGHTS.set(k, n); if (NIGHTS.size > 8) NIGHTS.delete(NIGHTS.keys().next().value); return n;
+}
+function worldOf(t) {
+  const n = nightAround(t), h = NIGHT_REAL / 2, noonP = n.M - HALF, noonN = n.M + HALF;
+  if (t < n.M - h) return noonP + (t - noonP) / (n.M - h - noonP) * (n.D - noonP);
+  if (t > n.M + h) return n.A + (t - (n.M + h)) / (noonN - (n.M + h)) * (noonN - n.A);
+  return n.D + (t - (n.M - h)) / NIGHT_REAL * (n.A - n.D);
+}
+let WMS = worldOf(simMs);
+function seekWorldHour(want) {   // move the real clock forward to the next moment the world shows hour `want`
+  const diff = (t) => { const d = localParts(worldOf(t)).hour - want; return ((d % 24) + 36) % 24 - 12; };
+  let best = simMs, bd = 99; for (let t = simMs; t < simMs + DAY; t += 120e3) { const d = Math.abs(diff(t)); if (d < bd) { bd = d; best = t; } }
+  for (let t = best - 120e3; t < best + 120e3; t += 2e3) { const d = Math.abs(diff(t)); if (d < bd) { bd = d; best = t; } }
+  simMs = best; WMS = worldOf(simMs);
+}
+if (Q.has('hour')) seekWorldHour(+Q.get('hour'));
 const compass = (deg) => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
 
 /* ====================================================================== palettes (6 inks: INK DEEP SEA HOT GLOW PAPER) */
@@ -165,7 +192,7 @@ const T0 = S.runSec || 0; simT = T0;
 { // the surface dried while the source was dark
   const awayH = clamp((Date.now() - (S.savedAt || Date.now())) / 3600e3, 0, 1e4); S.wet *= Math.exp(-awayH / 3); }
 function save() { try { S.runSec = simT; S.savedAt = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
-function logEv(text) { S.log.unshift({ t: localParts(simMs).str, text }); if (S.log.length > 40) S.log.length = 40; }
+function logEv(text) { S.log.unshift({ t: localParts(WMS).str, text }); if (S.log.length > 40) S.log.length = 40; }
 function logOnce(kind, text, gapMin = 45) { const l = S.logKind[kind]; if (l != null && simT - l < gapMin * 60 && l <= simT) return; S.logKind[kind] = simT; logEv(text); }
 if (!S.log.length) logEv('the outbuilding was found as it is'); else logEv('the outbuilding resumed (epoch ' + S.epoch + ')');
 
@@ -730,14 +757,14 @@ const why = {
 };
 function similarity(name) {
   const mem = S.uncanny.mem[name]; if (!mem || !mem.length) return 1;
-  const h = localParts(simMs).hour; let s = 0;
+  const h = localParts(WMS).hour; let s = 0;
   for (const m of mem) { const dh = Math.min(Math.abs(m.h - h), 24 - Math.abs(m.h - h)) / 3, du = (m.hum - WX.hum) / 10, dt = (m.tmp - WX.temp) / 6; s += Math.exp(-(dh * dh + du * du + dt * dt)); }
   return 1 + 1.2 * s / mem.length;
 }
 function startEvent(name, forced) {
   const e = EVT[name]; live.ev = name; live.evT = 0; live.evDur = rr(e.min, e.max); live.why = forced ? 'forced by hand' : (why[name] ? why[name]() : '');
   S.uncanny.counts[name] = (S.uncanny.counts[name] || 0) + 1; S.uncanny.last[name] = simT;
-  const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: localParts(simMs).hour, hum: WX.hum, tmp: WX.temp }); if (mem.length > 12) mem.shift();
+  const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: localParts(WMS).hour, hum: WX.hum, tmp: WX.temp }); if (mem.length > 12) mem.shift();
   if (name !== 'hush') S.tension += 0.08;
   logEv(e.label + (live.why ? ' · ' + live.why : ''));
   AUD.event(name, true);
@@ -919,7 +946,7 @@ const AUD = {
     const c = this.ctx; if (!c || c.state !== 'running') return;
     const ahead = c.currentTime + 0.5;
     if (this.nextT < c.currentTime - 0.3) this.nextT = c.currentTime + 0.05;
-    const lp = localParts(simMs); const sunEl = SUNM.sun.el / D2R; const hush = live.ev === 'hush';
+    const lp = localParts(WMS); const sunEl = SUNM.sun.el / D2R; const hush = live.ev === 'hush';
     while (this.nextT < ahead) {
       const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16;
       if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(2.8 * LINES_.swing, 4.0, 6.6), 0.5);
@@ -948,7 +975,7 @@ const AUD = {
   rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.2 });
     this.voice('pop', t + this.barSec, { m: this.deg(0, 2), v: 0.22, pan: 0, throw: true }); this.retune(false); },
   frame(dt) {
-    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime; const lp = localParts(simMs); const sunEl = SUNM.sun.el / D2R;
+    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime; const lp = localParts(WMS); const sunEl = SUNM.sun.el / D2R;
     const hush = live.ev === 'hush' ? 1 : 0, calm = live.calm, set = (p, v, tc = 0.6) => p.setTargetAtTime(v, t, tc);
     const rush = 0.35 + 0.65 * Math.max(Math.exp(-Math.pow((lp.hour - 8) / 1.3, 2)), Math.exp(-Math.pow((lp.hour - 17.2) / 1.6, 2))) + (lp.hour > 6 && lp.hour < 22 ? 0.3 : 0);
     set(this.traffic.g.gain, 0.05 * rush * (lp.weekend ? 0.7 : 1) * (1 - 0.8 * hush), 2);
@@ -1027,11 +1054,11 @@ function keepDistance(p) {   // no operator comes close enough to see through th
 }
 
 /* ====================================================================== sim */
-let SUNM = sunMoon(simMs), SUND = V(), MOOND = V();
+let SUNM = sunMoon(WMS), SUND = V(), MOOND = V();
 let cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
 
 function buildingTick(dt) {   // the building keeps its own hours
-  const lp = localParts(simMs); const sunEl = SUNM.sun.el / D2R; const hush = live.ev === 'hush';
+  const lp = localParts(WMS); const sunEl = SUNM.sun.el / D2R; const hush = live.ev === 'hush';
   // thermostat: cooling in the heat, heating in the cold, each cycling on its own duty
   const acDuty = WX.temp > 24 ? clamp((WX.temp - 22) / 11, 0.25, 0.85) : 0, heatDuty = WX.temp < 13 ? clamp((15 - WX.temp) / 20, 0.2, 0.85) : 0;
   B_.acT -= dt; B_.heatT -= dt;
@@ -1046,7 +1073,7 @@ function buildingTick(dt) {   // the building keeps its own hours
   const prevT = B_.roofT; B_.roofT = lerp(B_.roofT, tgt, 1 - Math.exp(-dt / 240)); B_.roofRate = lerp(B_.roofRate, Math.abs(B_.roofT - prevT) / Math.max(dt, 1e-3) * 60, 1 - Math.exp(-dt / 10));
   if (rnd() < dt * B_.roofRate * 0.05) { const p = V(rr(-3, 3), RIDGE - 0.4, rr(-14, 14)); const l = AUD.lens(p, 22); AUD.q({ type: 'pop', m: AUD.deg([0, 4, 3, 1][Math.floor(rnd() * 4)], 2), v: 0.01 + l.g * 0.22, pan: l.pan, throw: rnd() < 0.3 }); }
   // the lit window: from dusk to a time of its own choosing each night; some nights it never goes out
-  const nightKey = new Date(simMs - 12 * 3600e3).toISOString().slice(0, 10);
+  const nightKey = new Date(WMS - 12 * 3600e3).toISOString().slice(0, 10);
   if (S.night.key !== nightKey) { S.night = { key: nightKey, off: rr(22.5, 29.5), allNight: rnd() < 0.3, morning: !lp.weekend && rnd() < 0.5 }; }
   const hh = lp.hour < 12 ? lp.hour + 24 : lp.hour;
   const dusk = sunEl < -1.5; const want = dusk && (S.night.allNight || hh < S.night.off) || (S.night.morning && lp.hour > 5.4 && lp.hour < 7 && sunEl < 3);
@@ -1072,7 +1099,7 @@ function memoryTick(dt) {   // slow damage
   if (!isFinite(S.rust)) S.rust = 0.38; if (!isFinite(S.crack)) S.crack = 0.22; if (!isFinite(S.wet)) S.wet = 0;
 }
 function carTick(dt) {
-  const lp = localParts(simMs);
+  const lp = localParts(WMS);
   const shouldBeIn = lp.weekend ? (S.car.wk == null ? false : S.car.wk) : (lp.hour >= (S.car.arr ?? 8) && lp.hour < (S.car.dep ?? 16.5));
   if (S.car.day !== lp.wd) { S.car.day = lp.wd; S.car.arr = rr(7.15, 8.7); S.car.dep = rr(15.5, 17.6); S.car.wk = null; S.car.wkAt = rr(10, 15); S.car.wkLen = rr(1, 3); S.car.wkGo = rnd() < 0.25; }
   let want = shouldBeIn; if (lp.weekend) want = S.car.wkGo && lp.hour > S.car.wkAt && lp.hour < S.car.wkAt + S.car.wkLen;
@@ -1123,12 +1150,12 @@ function steamTick(dt) {
 }
 
 function step(dt) {
-  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000;
+  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000; WMS = worldOf(simMs);
   if (!WX.live) { Object.assign(WXT, synthWx(simMs)); WXT.gust = WXT.wind * 1.7; }
   for (const k of ['wind', 'gust', 'cloud', 'precip', 'temp', 'hum']) { WX[k] = lerp(WX[k], WXT[k], 1 - Math.exp(-sdt / 90)); if (!isFinite(WX[k])) WX[k] = WXT[k] || 0; }
   { const d = ((WXT.windDir - WX.windDir + 540) % 360) - 180; WX.windDir += d * (1 - Math.exp(-sdt / 120)); }
   linesFromWx();
-  SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
+  SUNM = sunMoon(WMS); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
   buildingTick(sdt); memoryTick(sdt); carTick(sdt); crowTick(sdt, simT); steamTick(sdt);
   S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1); if (!isFinite(S.tension)) S.tension = 0;
   uncannyTick(sdt);
@@ -1158,7 +1185,7 @@ function applyLook(dt) {
   SH.uFogD.value = clamp(900 - 650 * smoothstep(80, 100, WX.hum) - 200 * clamp(WX.precip, 0, 2), 140, 1000);
   SH.uFogShade.value = 0.12 + 0.55 * day; SH.uSkyB.value = 0.2 + 0.6 * day;
   SH.uRust.value = S.rust; SH.uPeel.value = S.peel; SH.uCrack.value = S.crack; SH.uWet.value = clamp(S.wet, 0, 1); SH.uRainNow.value = clamp(WX.precip, 0, 1);
-  const lp = localParts(simMs); SH.uGrow.value = lp.month >= 4 && lp.month <= 10 ? 1 : 0;
+  const lp = localParts(WMS); SH.uGrow.value = lp.month >= 4 && lp.month <= 10 ? 1 : 0;
   const wd = fromBearingTravel(WX.windDir); const gustNow = WX.wind + (WX.gust - WX.wind) * Math.max(0, Math.sin(simT * 0.37) * Math.sin(simT * 0.13));
   SH.uWindL.value.set(wd.x, 0, wd.y).multiplyScalar(clamp(gustNow / 10, 0, 1.6));
   SH.uLean.value = live.lean; SH.uLeanC.value.set(0, 0, 0); SH.uCalm.value = live.calm;
@@ -1189,13 +1216,13 @@ function render() {
 const hud = document.getElementById('hud'); hud.hidden = !INFO;
 const tapBtn = document.getElementById('tap');
 function hudUpdate() {
-  if (!INFO) return; const lp = localParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360;
+  if (!INFO) return; const lp = localParts(WMS); const rp = localParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360;
   const bstate = B_.ac ? 'cooling (window unit on)' : B_.heat ? 'heating (burner on)' : 'quiet';
   const lit = B.south.filter(w => w.lit > 0.5).length;
   const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
   const humDb = AUD.ctx ? (20 * Math.log10(Math.max(1e-5, (0.035 + 0.07 * (smoothstep(55, 98, WX.hum) + 0.5 * clamp(WX.precip, 0, 1)))))).toFixed(0) : '—';
   hud.innerHTML = `<div class="t"><span>MZ WORLD · OUTBUILDING</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
-  <div class="r"><span>LOCAL ${lp.str} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
+  <div class="r"><span>WORLD ${lp.str.slice(0, 5)} · real ${rp.str.slice(0, 5)} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
   <div class="r"><span>TEMP ${WX.temp.toFixed(1)}°C · LINES sag ${LINES_.sag.toFixed(2)} m, swing ${LINES_.swing.toFixed(2)} s</span><span>→ bar ${AUD.barSec.toFixed(1)} s, roof ${B_.roofT.toFixed(0)}°</span></div>
   <div class="r"><span>HUMIDITY ${WX.hum.toFixed(0)}%${WX.precip > 0.05 ? ' · RAIN ' + WX.precip.toFixed(1) + ' mm' : ''}</span><span>→ line hum ${humDb} dB, echo</span></div>
   <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · gusts ${WX.gust.toFixed(0)} · CLOUD ${(WX.cloud * 100).toFixed(0)}%</span><span>→ trees, wires</span></div>
@@ -1209,7 +1236,7 @@ function hudUpdate() {
 addEventListener('resize', resize); resize();
 renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
 renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); console.warn('[gl] context restored'); });
-SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el)); linesFromWx();
+SUNM = sunMoon(WMS); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el)); linesFromWx();
 cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : Math.floor(rnd() * CREW.length));
 if (Q.has('cam')) DIR.until = 1e12;
 // pre-warm: it was running before you arrived (the car, the crows, the building's hours settle)
@@ -1241,7 +1268,8 @@ window.MZ = {
   grammar(g) { Object.assign(S.grammar, g); },
   h: (x, z) => groundH(x, z),
   geo: { BW, BL, WALLTOP, RIDGE, flue: B.flueTop.toArray(), ac: B.ac.toArray() },
-  seekHour(h) { const cur = localParts(simMs).hour; simMs += (((h - cur) % 24 + 24) % 24) * 3600e3; },
+  seekHour(h) { seekWorldHour(h); },
+  get worldHour() { return localParts(WMS).hour; },
   wet(mm) { S.wet = clamp(S.wet + mm * 0.5, 0, 1.5); },
   age(o = {}) { if (o.rust != null) S.rust = clamp(o.rust, 0, 0.92); if (o.crack != null) S.crack = clamp(o.crack, 0, 1); if (o.peel != null) S.peel = clamp(o.peel, 0, 0.95); },
   get state() { return { S, live: { ...live }, WX: { ...WX }, cam: CREW[DIR.cur].name, building: { ...B_ }, car: car.state, lines: { ...LINES_ }, crows: crows.map(c => c.state) }; },
