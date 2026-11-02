@@ -232,9 +232,15 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         </div>
       </div>
 
+      <div class="grp" id="bathyGrp" hidden>
+        <label class="toggle"><input type="checkbox" id="bathy"> Show the lake bed under the reservoir</label>
+        <p class="note" id="bathyNote"></p>
+      </div>
+
       <div class="grp" id="surfGrp">
-        <label class="toggle"><input type="checkbox" id="surf"> Show today's buildings &amp; trees</label>
-        <p class="note" id="surfNote">Hatches today's roofs and tints tree canopy, so standing structures don't get mistaken for old pads.</p>
+        <label class="toggle"><input type="checkbox" id="surf"> Hatch today's buildings</label>
+        <label class="toggle"><input type="checkbox" id="trees"> Tint tree canopy</label>
+        <p class="note" id="surfNote">Marks what stands today, so a current roof or a stand of trees isn't mistaken for an old pad.</p>
       </div>
 
       <div class="grp">
@@ -359,7 +365,7 @@ const HREF = 150;            // metres NAVD88 at world y = 0
 let M, E0, NTOP, Ec, Nc, WM, HM, GW, GH;
 const TB = 2;                // tile border in px
 
-const BOOKMARKS = [
+let BOOKMARKS = [
   {name:'Whole campus', E:347080, N:4361936, span:2600},
   {name:'Academic core', E:346840, N:4361930, span:460},
   {name:'Stadium & track', E:346990, N:4362450, span:260},
@@ -382,10 +388,10 @@ const MODES = {
 /* ------------------------------------------------------------------ state */
 const S = {
   view:{mode:'plan', cx:-240, cz:0, mpp:0.9, t3:null},
-  layer:{mode:'relief', lrm:1, gain:1.6, az:315, alt:30, slopeMax:25, zf:2, contour:0, surf:true, exag:1.5, lift:false},
+  layer:{mode:'relief', lrm:1, gain:1.6, az:315, alt:30, slopeMax:25, zf:2, contour:0, surf:true, trees:false, bathy:true, exag:1.5, lift:false},
   pins:[], objs:[], pending:{},
 };
-const LS_KEY = 'mcd-ground-survey.v1';
+let LS_KEY = 'mcd-ground-survey.v1';
 function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = s.objs||[]; S.pending = s.pending||{}; } }catch(e){} }
 let saveT = 0;
 function save(){ clearTimeout(saveT); saveT = setTimeout(()=>{ try{ syncViewState(); localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }, 300); }
@@ -436,7 +442,10 @@ async function photoTex(url){
   const t = new THREE.Texture(bmp); t.flipY = false; t.colorSpace = THREE.NoColorSpace;
   t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = true; t.needsUpdate = true; return t;
 }
-const dec = (d,i) => (d[i]*256 + d[i+1]) / 100 + 100;
+let HB = 100;
+let WF = 0;
+const dec = (d,i) => (WF && !S.layer.bathy && d[i+2]===255) ? WF : (d[i]*256 + d[i+1]) / 100 + HB;
+const isWaterCode = (d,i) => WF && d[i+2]===255;
 function bilin(img, u, v){
   const x0 = Math.floor(u), y0 = Math.floor(v), tx = u-x0, ty = v-y0, w = img.w, d = img.data;
   const cx = k => Math.min(img.w-1, Math.max(0,k)), cy = k => Math.min(img.h-1, Math.max(0,k));
@@ -452,13 +461,15 @@ function heightAt(x,z){
   if(t && t.state===2) return bilin(t.data, gx - t.c*M.tile + TB - 0.5, gy - t.r*M.tile + TB - 0.5);
   return bilin(ov, gx/4 + TB - 0.5, gy/4 + TB - 0.5);
 }
+function isFlat(x,z){ const a=heightAt(x+1,z), b=heightAt(x-1,z), c=heightAt(x,z+1), d=heightAt(x,z-1); if([a,b,c,d].includes(null)) return false; return Math.hypot(a-b,c-d)/2 < 0.004; }
 /* surface code: building flag + height above ground */
 function surfAt(x,z){
-  if(!M.surface || !inExtent(x,z)) return null;
+  if((!M.surface && !WF) || !inExtent(x,z)) return null;
   const gx=(x+WM/2)*2, gy=(z+HM/2)*2, t=tileAt(gx,gy);
   let b;
   if(t && t.state===2){ const i=((Math.floor(gy-t.r*M.tile)+TB)*t.data.w + Math.floor(gx-t.c*M.tile)+TB)*4; b=t.data.data[i+2]; }
   else { const i=((Math.floor(gy/4)+TB)*ov.w + Math.floor(gx/4)+TB)*4; b=ov.data[i+2]; }
+  if(WF && b===255) return {water:true, bld:false, h:0};
   return {bld:(b&128)>0, h:(b&127)*0.4};
 }
 /* height used to draw the mesh (matches vertex shader) */
@@ -490,15 +501,16 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.6); scene.add(sun); scene.add
 const G = {
   uOv:{value:dummy}, uSm:{value:dummy}, uIntOv:{value:dummy}, uHasIntOv:{value:0},
   uMode:{value:0}, uSun:{value:new THREE.Vector3()}, uZf:{value:2}, uGain:{value:4},
-  uSlopeMax:{value:25}, uContour:{value:0}, uSurf:{value:0}, uHmin:{value:120}, uHmax:{value:185},
-  uExag:{value:1}, uLift:{value:0}, uHRef:{value:HREF}, uHalf:{value:new THREE.Vector2()}, uOvMax:{value:new THREE.Vector2()}
+  uSlopeMax:{value:25}, uContour:{value:0}, uSurf:{value:0}, uHmin:{value:120}, uHmax:{value:185}, uWater:{value:0},
+  uExag:{value:1}, uLift:{value:0}, uHRef:{value:HREF}, uHalf:{value:new THREE.Vector2()}, uOvMax:{value:new THREE.Vector2()}, uHBase:{value:100}, uBathy:{value:0}, uWaterFlat:{value:0}
 };
 const COMMON = /* glsl */`
 uniform sampler2D uHi; uniform float uHasHi; uniform vec2 uTileOff;
-uniform sampler2D uOv; uniform vec2 uOvMax; uniform vec2 uHalf;
-float decH(vec4 t){ vec3 b = floor(t.rgb*255.0+0.5); return (b.r*256.0+b.g)/100.0+100.0; }
-float hiT(ivec2 k){ return decH(texelFetch(uHi, clamp(k, ivec2(0), ivec2(1027)), 0)); }
-float ovT(sampler2D s, ivec2 k){ return decH(texelFetch(s, clamp(k, ivec2(0), ivec2(uOvMax)), 0)); }
+uniform sampler2D uOv; uniform vec2 uOvMax; uniform vec2 uHalf; uniform float uHBase, uBathy, uWaterFlat;
+float decH(vec4 t){ vec3 b = floor(t.rgb*255.0+0.5); return (b.r*256.0+b.g)/100.0+uHBase; }
+float decW(vec4 t){ if(uWaterFlat > 0.0 && uBathy < 0.5 && t.b > 0.998) return uWaterFlat; return decH(t); }
+float hiT(ivec2 k){ return decW(texelFetch(uHi, clamp(k, ivec2(0), ivec2(1027)), 0)); }
+float ovT(sampler2D s, ivec2 k){ return decW(texelFetch(s, clamp(k, ivec2(0), ivec2(uOvMax)), 0)); }
 float hiH(vec2 gp){ vec2 u = gp - uTileOff + 1.5; vec2 f = floor(u); vec2 t = u - f; ivec2 k = ivec2(f);
   return mix(mix(hiT(k), hiT(k+ivec2(1,0)), t.x), mix(hiT(k+ivec2(0,1)), hiT(k+ivec2(1,1)), t.x), t.y); }
 float ovH(sampler2D s, vec2 gp){ vec2 u = gp*0.25 + 1.5; vec2 f = floor(u); vec2 t = u - f; ivec2 k = ivec2(f);
@@ -512,13 +524,13 @@ void main(){
   vGp = vec2((w.x + uHalf.x)*2.0, (w.z + uHalf.y)*2.0);
   float h = uHasHi > 0.5 ? hiH(vGp) : ovH(uOv, vGp);
   float lift = 0.0;
-  if(uLift > 0.5){ vec4 b = texelFetch(uOv, clamp(ivec2(floor(vGp*0.25))+2, ivec2(0), ivec2(uOvMax)), 0); lift = mod(floor(b.b*255.0+0.5),128.0)*0.4; }
+  if(uLift > 0.5){ vec4 b = texelFetch(uOv, clamp(ivec2(floor(vGp*0.25))+2, ivec2(0), ivec2(uOvMax)), 0); float cb = floor(b.b*255.0+0.5); lift = cb > 254.5 ? 0.0 : mod(cb,128.0)*0.4; }
   w.y = (h - uHRef + lift) * uExag;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const FRAG = COMMON + /* glsl */`
 uniform sampler2D uSm, uInt, uIntOv; uniform float uHasInt, uHasIntOv;
-uniform int uMode; uniform vec3 uSun; uniform float uZf, uGain, uSlopeMax, uContour, uSurf, uHmin, uHmax;
+uniform int uMode; uniform vec3 uSun; uniform float uZf, uGain, uSlopeMax, uContour, uSurf, uHmin, uHmax, uWater;
 varying vec2 vGp;
 out vec4 fragColor;
 float H(vec2 p, bool hi){ return hi ? hiH(p) : ovH(uOv, p); }
@@ -563,15 +575,27 @@ void main(){
     else iv = ms*0.6;
     col = vec3(iv) * vec3(0.95,1.0,0.97);
   }
-  if(uSurf > 0.5){
+  if(uWater > 0.0 && h0 < uWater && length(vec2(gx,gz)) < 0.002){
+    col = vec3(0.04,0.14,0.19);
+  }
+  vec4 wb = hi ? texelFetch(uHi, ivec2(floor(vGp - uTileOff))+2, 0) : texelFetch(uOv, ivec2(floor(vGp*0.25))+2, 0);
+  bool isWater = uWaterFlat > 0.0 && wb.b > 0.998;
+  if(isWater){
+    if(uBathy > 0.5){
+      float dpt = clamp((uWaterFlat - h0) / 1.8, 0.0, 1.0);
+      vec3 wc = mix(vec3(0.20,0.46,0.52), vec3(0.03,0.10,0.18), dpt);
+      col = wc * (0.55 + 0.6*ms);
+    } else col = vec3(0.04,0.14,0.19);
+  }
+  if(uSurf > 0.5 && !isWater){
     vec4 b = hi ? texelFetch(uHi, ivec2(floor(vGp - uTileOff))+2, 0) : texelFetch(uOv, ivec2(floor(vGp*0.25))+2, 0);
     float code = floor(b.b*255.0+0.5);
-    if(code >= 128.0){
+    if(code >= 128.0 && mod(uSurf, 2.0) > 0.5){
       float hatch = step(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0), 2.2);
       col = mix(col, vec3(0.93,0.90,0.80), 0.30) ;
       col = mix(col, amber, hatch*0.75);
     }
-    else { float ht = code*0.4; if(ht > 2.5) col = mix(col, vec3(0.20,0.62,0.36), clamp(ht/25.0,0.12,0.40)); }
+    else if(code < 128.0 && uSurf > 1.5){ float ht = code*0.4; if(ht > 2.5) col = mix(col, vec3(0.20,0.62,0.36), clamp(ht/25.0,0.12,0.40)); }
   }
   if(uContour > 0.0){
     float c = h0 / uContour; float fwc = max(fwidth(c), 1e-4);
@@ -774,6 +798,13 @@ function updateReadout(){
   else if(lastPointer) p=pickGround(lastPointer.x,lastPointer.y);
   else return;
   if(!p){ $('readout').innerHTML='<span class="k">outside survey area</span>'; return; }
+  const sw = WF ? surfAt(p.x,p.z) : null;
+  if(sw && sw.water){ const {E,N}=toUTM(p.x,p.z), [la,lo]=utmToLL(E,N);
+    $('readout').innerHTML = S.layer.bathy
+      ? `<b>lake bed ≈ ${p.h.toFixed(1)} m</b> <span class="k">(${((WF-p.h)/0.3048).toFixed(1)} ft under the 2024 surface)</span><br><span class="k">MGS 1996–97 soundings, approx. ±0.5 m</span><br><span class="k">E</span> ${E.toFixed(1)} <span class="k">N</span> ${N.toFixed(1)} · ${la.toFixed(5)}°, ${lo.toFixed(5)}°`
+      : `<b>reservoir surface ${WF.toFixed(2)} m</b><br><span class="k">lidar can't see below the water</span><br><span class="k">E</span> ${E.toFixed(1)} <span class="k">N</span> ${N.toFixed(1)}`;
+    return; }
+  if(!WF && M.water && p.h < M.water && isFlat(p.x,p.z)){ const {E,N}=toUTM(p.x,p.z); $('readout').innerHTML=`<b>reservoir surface ${p.h.toFixed(2)} m</b><br><span class="k">lidar can't see below the water</span><br><span class="k">E</span> ${E.toFixed(1)} <span class="k">N</span> ${N.toFixed(1)}`; return; }
   const {E,N}=toUTM(p.x,p.z), [la,lo]=utmToLL(E,N), s=surfAt(p.x,p.z);
   let sur=''; if(s && (s.bld||s.h>0.8)) sur=` <span class="k">· ${s.bld?'building':'canopy'} +${s.h.toFixed(1)} m</span>`;
   $('readout').innerHTML = `<b>${p.h.toFixed(2)} m</b> <span class="k">(${(p.h/0.3048).toFixed(1)} ft)</span>${sur}<br>`+
@@ -832,7 +863,7 @@ new ResizeObserver(resize).observe(canvas);
 function applyLayer(){
   const L=S.layer;
   G.uMode.value=MODES[L.mode].id; G.uGain.value=L.gain; G.uZf.value=L.zf; G.uSlopeMax.value=L.slopeMax;
-  G.uContour.value=L.contour; G.uSurf.value=L.surf&&M.surface?1:0; G.uSm.value=sm[L.lrm]?.tex||dummy;
+  G.uContour.value=L.contour; G.uSurf.value=M.surface?((L.surf?1:0)+(L.trees?2:0)):0; G.uSm.value=sm[L.lrm]?.tex||dummy;
   const az=L.az*Math.PI/180, al=L.alt*Math.PI/180;
   G.uSun.value.set(Math.sin(az)*Math.cos(al), Math.sin(al), -Math.cos(az)*Math.cos(al));
   sun.position.set(G.uSun.value.x*1000, G.uSun.value.y*1000, G.uSun.value.z*1000);
@@ -842,7 +873,8 @@ function applyLayer(){
   $('lrmSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===L.lrm));
   $('ctSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===L.contour));
   for(const [id,k,fmt] of [['gain','gain',v=>`half colour at ±${(1/v*100).toFixed(0)} cm`],['az','az',v=>`${v}°`],['alt','alt',v=>`${v}°`],['slopeMax','slopeMax',v=>`${v}°`],['zf','zf',v=>`${v}×`],['ex','exag',v=>`${v}×`]]){ $(id).value=L[k]; const out=$(({gain:'gainOut',az:'azOut',alt:'altOut',slopeMax:'slopeOut',zf:'zfOut',ex:'exOut'})[id]); if(out) out.textContent=fmt(L[k]); }
-  $('surf').checked=L.surf; $('lift').checked=L.lift;
+  $('surf').checked=L.surf; $('trees').checked=!!L.trees; $('lift').checked=L.lift; $('bathy').checked=L.bathy; G.uBathy.value=L.bathy?1:0;
+  $('bathyGrp').hidden=!M.bathy; if(M.bathy) $('bathyNote').textContent = M.bathy + '. Where the lidar saw only flat water, depth comes from sonar soundings: modern sediment, not the 1915 street level.';
   $('surfGrp').hidden=!M.surface; $('liftWrap').hidden=!M.surface;
   $('mInt').disabled=!M.intensity;
   if(L.mode==='intensity' && M.intensity && !ovi) loadOvi();
@@ -853,12 +885,15 @@ $('lrmSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if
 $('ctSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.layer.contour=+b.dataset.v; applyLayer(); });
 for(const [id,k] of [['gain','gain'],['az','az'],['alt','alt'],['slopeMax','slopeMax'],['zf','zf'],['ex','exag']]) $(id).addEventListener('input',()=>{ S.layer[k]=+$(id).value; applyLayer(); if(k==='exag') placeAllObjects(); });
 $('surf').addEventListener('change',()=>{ S.layer.surf=$('surf').checked; applyLayer(); });
+$('trees').addEventListener('change',()=>{ S.layer.trees=$('trees').checked; applyLayer(); });
+$('bathy').addEventListener('change',()=>{ S.layer.bathy=$('bathy').checked; applyLayer(); placeAllObjects(); });
 $('lift').addEventListener('change',()=>{ S.layer.lift=$('lift').checked; applyLayer(); });
 async function loadOvi(){ try{ ovi={tex:await photoTex('data/ovi.jpg')}; G.uIntOv.value=ovi.tex; G.uHasIntOv.value=1; req(); }catch(e){} }
 
 $('vPlan').onclick=()=>setViewMode('plan'); $('v3d').onclick=()=>setViewMode('3d');
 $('north').onclick=()=>{ if(S.view.mode==='3d'){ const t=controls.target, d=persp.position.distanceTo(t); const pol=Math.acos(Math.min(1,(persp.position.y-t.y)/d)); persp.position.set(t.x, t.y+d*Math.cos(pol), t.z+d*Math.sin(pol)); controls.update(); req(); } };
-$('gotoMenu').innerHTML = BOOKMARKS.map((b,i)=>`<button data-i="${i}">${b.name}<small>${b.span} m</small></button>`).join('');
+function buildGoto(){ $('gotoMenu').innerHTML = BOOKMARKS.map((b,i)=>`<button data-i="${i}">${b.name}<small>${b.span} m</small></button>`).join(''); }
+buildGoto();
 $('gotoBtn').onclick=()=>{ const m=$('gotoMenu'); m.hidden=!m.hidden; $('gotoBtn').setAttribute('aria-expanded', !m.hidden); };
 $('gotoMenu').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; const k=BOOKMARKS[+b.dataset.i]; flyTo(k.E,k.N,k.span); $('gotoMenu').hidden=true; };
 
@@ -1225,7 +1260,13 @@ async function boot(){
     M = await (await fetch('data/meta.json')).json();
   }catch(e){ $('loadText').textContent='Could not load the survey data'; return; }
   E0=M.e0; NTOP=M.ntop; GW=M.cols*M.tile; GH=M.rows*M.tile; WM=GW*M.res; HM=GH*M.res; Ec=E0+WM/2; Nc=NTOP-HM/2;
-  G.uHalf.value.set(WM/2, HM/2); G.uHmin.value=M.hmin; G.uHmax.value=M.hmax;
+  G.uHalf.value.set(WM/2, HM/2); G.uHmin.value=M.hmin; G.uHmax.value=M.hmax; G.uWater.value=M.bathy?0:(M.water||0); WF = M.bathy ? (M.waterflat||0) : 0; G.uWaterFlat.value = WF; HB = M.hbase ?? 100; G.uHBase.value = HB;
+  if(M.slug) LS_KEY = M.slug + '.v1';
+  if(M.bookmarks){ BOOKMARKS = M.bookmarks; buildGoto(); }
+  if(M.title){ document.title = M.title; $('brand').querySelector('h1').textContent = M.title; $('view').setAttribute('aria-label', 'Terrain map of '+M.title); }
+  if(M.subtitle) $('brand').querySelector('p').textContent = M.subtitle;
+  if(M.credit) document.querySelector('#p-layers .foot').textContent = M.credit;
+  if(M.start){ const w=toWorld(M.start.E, M.start.N); S.view.cx=w.x; S.view.cz=w.z; S.view.mpp=M.start.span/Math.min(innerWidth, innerHeight); }
   loadLS();
   let done=0; const steps=4, tick=()=>{ bar.style.width=(++done/steps*100)+'%'; };
   const [o, ...ss] = await Promise.all(['data/ov.webp','data/s0.webp','data/s1.webp','data/s2.webp'].map(u=>decodeImage(u).then(r=>{tick(); return r;})));
