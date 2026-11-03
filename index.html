@@ -203,7 +203,7 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
   .live{align-self:flex-start}
   .icons{display:flex;flex-direction:row;flex-wrap:wrap;width:auto;gap:4px;max-height:none;direction:ltr}
   .win{max-width:100%}
-  .sticky{position:relative;top:auto;left:auto;width:auto;max-height:none;transform:none}
+  .sticky{position:relative;top:auto;left:auto;width:auto;max-height:none;transform:none;order:1}   /* last in the phone stack */
   .icon{width:72px}
   .wins{display:flex;flex-direction:column;gap:16px}
   .win{position:relative;left:auto!important;top:auto!important;width:auto!important}
@@ -512,7 +512,7 @@ const DEFS = {
       <span class="tag">EXHIBITION TOUR · TUTTLE GALLERY</span>
       <div class="cover"><button class="play" data-play="https://www.youtube-nocookie.com/embed/${MAGPIE_VIDEO}?autoplay=1&rel=0&playsinline=1">▶ PLAY TOUR</button></div></div>`
       : viewer('magpie', 'EXHIBITION TOUR · ON YOUTUBE')) + `
-    <span class="meta">WORLD · EXHIBITION · GAME</span>
+    <span class="meta">WORLD · NARRATIVE ECOSYSTEM</span>
     <p>Field Station: Magpie is set in a future shaped by corporate-sovereign states. Beyond the Grid lies the Field, zones where this cognitive spell weakens. The Magpie stations operate along these boundaries, gathering fragments, rebuilding histories, and searching for those who have slipped out of the Grid’s cognitive consensus.</p>
     <span class="meta">THE STATION CREW</span>
     <div class="crew">${Object.keys(CREW).map(id => `<button data-open="${id}"><span>${CREW[id].name}</span><small>${CREW[id].role.split(/ \/ | \+ /)[0]}</small></button>`).join('')}</div>
@@ -557,7 +557,7 @@ const DEFS = {
   seals: { title: 'TO SEE WHAT SEALS SEE', w: 330, body: () => `<span class="meta">POETRY · PHOTOGRAPHY · SOUND</span><p>A series rooted in a family farm near Galway.</p>` },
   jcp: { title: 'JOURNAL OF CURRICULUM AND PEDAGOGY', w: 330, body: () => `<span class="meta">ARTICLE</span><p>Co-authored with Stephanie Flores-Koulish.</p>` },
 
-  worlds: { title: 'WORLDS', w: 300, body: () => `<ul class="list">${item('inverin','INVERIN','4 studies')}${item('magpie','FIELD STATION: MAGPIE','game')}${item('mzbrdz','MZBRDZ','world')}${item('earhart','EARHART','new')}${item('warren','WARREN','world')}</ul>` },
+  worlds: { title: 'WORLDS', w: 300, body: () => `<ul class="list">${item('inverin','INVERIN','4 studies')}${item('magpie','FIELD STATION: MAGPIE','narrative ecosystem')}${item('mzbrdz','MZBRDZ','world')}${item('earhart','EARHART','new')}${item('warren','WARREN','world')}</ul>` },
   tv: { title: 'MZTV', w: 300, body: () => `<ul class="list">${item('mztv','MZ TRIANGULATED WEATHER SYSTEM','program')}${item('orbit','BIT FIELD 017','orbit score')}${item('sounding','BIT FIELD 014','sounding')}${item('plant48','48 PLANT','interactive')}</ul>` },
   sonic: { title: 'SONIC LAB', w: 320, body: () => `<ul class="list">${item('squish','SQUISH//SYNTH 001','S · mobile')}${item('gull','GULL','M')}${item('banger','BANGER','M')}${item('serial','SERIAL','M')}${item('typefield','TYPE//FIELD','M')}${item('deckav','DECK//AV 001','L · video')}</ul>` },
   arcade: { title: 'ARCADE', w: 320, body: () => `<ul class="list">${item('homekey','HOMEKEY HERO','L')}${item('signal6','SIGNAL 6','S')}${item('recon','MAGPIE · RECON','L')}${item('battery','BATTERY SORT','S')}${item('beatdef','OBAS BEAT DEFENSE','M')}${item('madlib','MADLIB 001','L')}</ul>` },
