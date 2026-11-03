@@ -560,7 +560,6 @@ const DEFS = {
   worlds: { title: 'WORLDS', w: 300, body: () => `<ul class="list">${item('inverin','INVERIN','4 studies')}${item('magpie','FIELD STATION: MAGPIE','narrative ecosystem')}${item('mzbrdz','MZBRDZ','world')}${item('earhart','EARHART','new')}${item('warren','WARREN','world')}</ul>` },
   tv: { title: 'MZTV', w: 300, body: () => `<ul class="list">${item('mztv','MZ TRIANGULATED WEATHER SYSTEM','program')}${item('orbit','BIT FIELD 017','orbit score')}${item('sounding','BIT FIELD 014','sounding')}${item('plant48','48 PLANT','interactive')}</ul>` },
   sonic: { title: 'SONIC LAB', w: 320, body: () => `<ul class="list">${item('squish','SQUISH//SYNTH 001','S · mobile')}${item('gull','GULL','M')}${item('banger','BANGER','M')}${item('serial','SERIAL','M')}${item('typefield','TYPE//FIELD','M')}${item('deckav','DECK//AV 001','L · video')}</ul>` },
-  arcade: { title: 'ARCADE', w: 320, body: () => `<ul class="list">${item('homekey','HOMEKEY HERO','L')}${item('signal6','SIGNAL 6','S')}${item('recon','MAGPIE · RECON','L')}${item('battery','BATTERY SORT','S')}${item('beatdef','OBAS BEAT DEFENSE','M')}${item('madlib','MADLIB 001','L')}</ul>` },
   archive: { title: 'ARCHIVE', w: 440, body: () => {
     const subs = [['fal','FIELD AUDIO LAB'],['obas','OBAS STUDIES'],['pre2026','PRE-2026 WORK'],['client','CLIENT WORK']];
     const loose = Object.keys(TOOLS).filter(k => TOOLS[k].loose);
@@ -570,7 +569,7 @@ const DEFS = {
       ${loose.map((id, i) => `<button class="dicon" data-open="${id}" style="transform:translate(${Math.round((hash(i * 5.7) - .5) * 14)}px,${Math.round((hash(i * 2.3) - .5) * 10)}px) rotate(${((hash(i * 9.1) - .5) * 8).toFixed(1)}deg)"><span class="file"></span><span class="lbl">${TOOLS[id].file}</span></button>`).join('')}
       </div><div class="status">${subs.length} FOLDERS · ${loose.length} FILES</div>`; } },
   fal: { title: 'FIELD AUDIO LAB', w: 320, body: () => `<span class="meta">SOUND AS MOVEMENT, PLACE AND MEMORY</span><ul class="list">${item('fas001','FIELD AUDIO SCAN 001','place → sound')}${item('zones','RESONANT ZONES','experiment')}${item('slice','SLICE SCANNER','experiment')}${item('memtrail','MEMORY TRAIL','experiment')}${item('direction','DIRECTIONAL FIELD','experiment')}${item('autowalk','AUTOWALK','experiment')}</ul>` },
-  obas: { title: 'OBAS STUDIES', w: 320, body: () => `<span class="meta">VOICE + TILE LINEAGES</span><ul class="list">${item('voicetype','OBAS VOICE TYPE FIELD','lineage')}${item('tilepulse','OBAS TILE PULSE 004','study')}</ul>` },
+  obas: { title: 'OBAS STUDIES', w: 320, body: () => `<span class="meta">VOICE, TILE + RHYTHM STUDIES</span><ul class="list">${item('voicetype','OBAS VOICE TYPE FIELD','lineage')}${item('tilepulse','OBAS TILE PULSE 004','study')}${item('beatdef','OBAS BEAT DEFENSE','game')}</ul>` },
   pre2026: { title: 'PRE-2026 WORK', w: 300, body: () => `<p style="color:var(--dim)">This folder is empty for now.</p>` },
   client: { title: 'CLIENT WORK', w: 300, body: () => `<p style="color:var(--dim)">This folder is empty for now.</p>` },
   writing: { title: 'WRITING', w: 300, body: () => `<ul class="list">${item('seals','TO SEE WHAT SEALS SEE','series')}${item('jcp','CURRICULUM + PEDAGOGY','article')}${item('readme','README.TXT','about')}</ul>` }
@@ -589,12 +588,9 @@ const TOOLS = {
   typefield:{ title: 'TYPE//FIELD', size: 'm', scene: 'lanes', kind: 'SONIC LAB · INSTRUMENT', href: '/preview/type-field/', text: 'A typing instrument. Keys you already know how to touch-type play notes and chords.' },
   deckav:   { title: 'DECK//AV 001 · DUB FIELD', size: 'l', scene: 'bog', video: true, kind: 'SONIC LAB · STEAM DECK INSTRUMENT', text: 'An autonomous audiovisual instrument for the Steam Deck, built in Godot. The Deck’s controls shape sound and image through one shared parameter system.' },
 
-  homekey:  { title: 'HOMEKEY HERO', size: 'l', scene: 'lanes', kind: 'ARCADE · RHYTHM GAME', href: '/preview/homekey-hero/', text: 'Each home-row key is a lane. Notes travel toward you, and typing them in time plays the song.' },
-  signal6:  { title: 'SIGNAL 6', size: 's', scene: 'testcard', kind: 'ARCADE · CARD GAME · MAGPIE', text: 'Build a tower and a radio, then race to confirm a transmission before your opponent jams it.' },
-  recon:    { title: 'FIELD STATION: MAGPIE · RECON', size: 'l', scene: 'magpie', kind: 'ARCADE · MAGPIE', text: 'Leave the bunker, scavenge parts, avoid the drone and build signal nodes that map the field.' },
-  battery:  { title: 'BATTERY SORT', size: 's', scene: 'testcard', kind: 'ARCADE · MAGPIE', text: 'A charge-sorting puzzle from the station’s power subsystem.' },
-  beatdef:  { title: 'OBAS BEAT DEFENSE', size: 'm', scene: 'lanes', kind: 'ARCADE · KEYBOARD', href: '/mz-audio-tools/obas-sector-defense/', text: 'A keyboard rhythm game where beat placement and timing become a defense.' },
-  madlib:   { title: 'MADLIB 001 · INVERTED FAIRGROUND', size: 'l', scene: 'testcard', kind: 'ARCADE · 3D WORLD', href: '/MZTV/sources/madlib-001-inverted-fairground/', text: 'An abandoned fairground, a mechanical bird and a glowing key. Examine the key and gravity reverses.' },
+  homekey:  { title: 'HOMEKEY HERO', size: 'l', scene: 'lanes', kind: 'GAME · TYPING RHYTHM', href: '/preview/homekey-hero/', text: 'Each home-row key is a lane. Notes travel toward you, and typing them in time plays the song.' },
+  beatdef:  { title: 'OBAS BEAT DEFENSE', size: 'm', scene: 'lanes', kind: 'OBAS STUDIES · KEYBOARD RHYTHM GAME', href: '/mz-audio-tools/obas-sector-defense/', text: 'A keyboard rhythm game where beat placement and timing become a defense.' },
+  madlib:   { title: 'MADLIB 001 · INVERTED FAIRGROUND', loose: true, file: 'madlib_001_inverted_fairground/', size: 'l', scene: 'testcard', kind: 'MZ WORLDS · PROTOTYPE', href: '/MZTV/sources/madlib-001-inverted-fairground/', text: 'An abandoned fairground, a mechanical bird and a glowing key. Examine the key and gravity reverses.' },
 
   fas001:   { title: 'FIELD AUDIO SCAN 001', kind: 'FIELD AUDIO LAB', href: '/field-audio-scan-001/', text: 'A LiDAR-derived place translated into a procedural sound environment.' },
   zones:    { title: 'RESONANT ZONES', kind: 'FIELD AUDIO LAB', href: '/field-audio-lab/zones/', text: 'Eight spatial regions become persistent voices.' },
@@ -651,11 +647,9 @@ Object.entries(TOOLS).forEach(([id, o]) => {
   const inPreview = Object.values(TOOLS).filter(o => o.href && o.href.startsWith('/preview/')).map(o => o.title);
   const looseNoPage = Object.values(TOOLS).filter(o => o.loose && !o.href).length;
   const f = s => `<span class="f">${s}</span>`;
-  const games = { signal6: 'signal_6', recon: 'magpie_recon', battery: 'battery_sort' };
-  const unbuilt = Object.keys(games).filter(id => !TOOLS[id].href).map(id => f(games[id]));
   const done = [
     'Desktop front page',
-    'Worlds, MZTV, Sonic Lab, Arcade and Archive folders',
+    'Worlds, MZTV, Sonic Lab and Archive folders',
     `Tools play inside their windows`,
     `${f('homekey_hero')} + ${f('type_field')} wired in`,
     'Field Station: Magpie exhibition tour video',
@@ -664,7 +658,6 @@ Object.entries(TOOLS).forEach(([id, o]) => {
   const todo = [
     'Real world footage in the background loops, starting with HEADLAND',
     'Mobile: suggest landscape orientation',
-    unbuilt.length && `Arcade: ${names(unbuilt)}`,
     TOOLS.deckav.video && `${f('deck_av_001')} demo video`,
     'Copy for SHEEPDOG, EARHART, WARREN and the rest',
     `Archive: pre-2026 + client work; ${f('optic_flight_001')} and friends still offline`,
@@ -716,7 +709,7 @@ addEventListener('blur', () => setTimeout(() => {
   if (a && a.tagName === 'IFRAME'){ const w = a.closest('.win'); if (w) focusWin(w); }
 }, 0));
 
-const ICONS = [['worlds','WORLDS','fold'],['tv','MZTV','fold'],['sonic','SONIC LAB','fold'],['arcade','ARCADE','fold'],
+const ICONS = [['worlds','WORLDS','fold'],['tv','MZTV','fold'],['sonic','SONIC LAB','fold'],
   ['writing','WRITING','fold'],['archive','ARCHIVE','fold'],['readme','README.TXT','file'],['homekey','HOMEKEY HERO','app']];
 
 /* ---------- window manager ---------- */

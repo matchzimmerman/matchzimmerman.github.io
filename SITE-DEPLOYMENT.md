@@ -38,7 +38,7 @@ When a major visual revision changes the stylesheet or JavaScript substantially,
 
 ## Current version
 
-MZCMG DESKTOP made the homepage 28 Oct 2026, at MZ.Human's direction. It's a desktop-style interface: a looping world excerpt in the background, draggable windows, folders (WORLDS, MZTV, SONIC LAB, ARCADE, WRITING, ARCHIVE), and a pinned site to-do note. Tools open as same-site iframes. The working copy that came before it is kept at `/preview/desktop-c794b166/`.
+MZCMG DESKTOP made the homepage 28 Oct 2026, at MZ.Human's direction. It's a desktop-style interface: a looping world excerpt in the background, draggable windows, folders (WORLDS, MZTV, SONIC LAB, WRITING, ARCHIVE) plus a loose HOMEKEY HERO icon, and a pinned site to-do note. Tools open as same-site iframes. The working copy that came before it is kept at `/preview/desktop-c794b166/`.
 
 ## Previous version
 
