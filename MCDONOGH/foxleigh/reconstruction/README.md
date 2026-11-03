@@ -74,8 +74,8 @@ shows this.
 ## Next pass: geolocated AR
 - **Placement.** Set position and heading on the 2024 USGS 0.5 m lidar used by the
   [Ground Survey](../../ground-survey/). The memorial is documented as standing between Finney Quad and the dorms.
-  Ground Survey candidate **C03** (a 17 × 30 m sunken rectangle about 36 m NW of Study 001's provisional centre) is
-  worth checking against this footprint.
+  Ground Survey candidate C03 (17 × 30 m sunken rectangle NW of Study 001's centre) is ruled out: MZ.Human identifies it as
+  the new middle school's drainage pond.
 - **Delivery.**
   - iPhone: AR Quick Look with a USDZ export.
   - Android: WebXR with geospatial anchoring, or a marker/ground-plane workflow.
