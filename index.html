@@ -139,6 +139,22 @@ button.btn{all:unset;cursor:pointer;color:var(--ink);background:var(--paper);pad
 .drive .file{width:24px;height:30px}
 .drive .file::after{left:4px;right:5px;top:11px;box-shadow:0 4px 0 var(--ink),0 8px 0 var(--ink)}
 .status{font-size:10px;letter-spacing:.16em;color:var(--dim);border-top:1px solid var(--line);padding-top:6px}
+.stage img.poster{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;max-width:100%}
+.crew{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.crew button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:6px 8px;border:1px solid var(--line)}
+.crew button span{font-size:11px;letter-spacing:.14em;font-weight:600;color:var(--paper)}
+.crew button small{font-size:9px;letter-spacing:.08em;color:var(--dim)}
+.crew button:hover,.crew button:focus-visible{background:var(--amber);border-color:var(--amber)}
+.crew button:hover span,.crew button:hover small,.crew button:focus-visible span,.crew button:focus-visible small{color:var(--ink)}
+.dossier{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:start}
+.portrait{width:100%;max-width:100%;aspect-ratio:2/3;object-fit:cover;display:block;border:1px solid var(--line)}
+.dossier dl{margin:0;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dossier dt{font-size:9px;letter-spacing:.2em;color:var(--amber)}
+.dossier dd{margin:0 0 8px;font-size:12px}
+.dossier .code{color:var(--phos);font-variant-numeric:tabular-nums}
+.jobs{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:3px}
+@media (min-width:761px){.win .body{max-height:calc(100vh - 190px);overflow-y:auto;scrollbar-width:thin}}
+@media (max-width:420px){.dossier{grid-template-columns:110px 1fr}}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips span{font-size:10px;letter-spacing:.12em;border:1px solid var(--line);padding:1px 6px;color:var(--dim)}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
@@ -453,12 +469,55 @@ const viewer = (scene, tag, card) => `<div class="screen"><canvas width="192" he
 const item = (id, name, note) => `<li><button data-open="${id}">${name}<span>${note}</span></button></li>`;
 const chips = a => `<div class="chips">${a.map(x => `<span>${x}</span>`).join('')}</div>`;
 
+/* ---------- Field Station: Magpie ----------
+   Character text is from the Tuttle Gallery character cards (FS-07.2147). */
+const MAGPIE_VIDEO = 'nrq2BpCMCMk';
+const CREW = {
+  jeanluc: { name: 'JEAN-LUC', img: 'jean-luc', role: 'Systems Engineer / Signal Architect', origin: 'Port-au-Prince, Haiti', code: 'FS-07.2147-JL',
+    back: ['Born in Port-au-Prince, Jean-Luc grew up surrounded by a culture of improvisational engineering — radios repaired with scavenged parts, generators kept alive long past their intended lifespan. When global infrastructures collapsed, he carried this instinct for survivalist invention into the Field. After drifting through several failing encampments, he discovered the abandoned bunker that would become the Field Station. There he reactivated dormant systems, rewired capacitors with hand-twisted copper, and authored the first functional amplifier lattice that still anchors the station today.',
+      'M3RØ was his creation — a modular relay he built to help stabilize incoming signals. What he did not expect was the emergent cognition that followed. Some nights he sits with M3RØ’s server banks and whispers apologies the machine does not acknowledge.'],
+    op: 'Jean-Luc works to extend the station’s analog broadcast range, rebuilding forgotten frequencies into stable pathways. He continues refining the amplifier tower, coaxing meaning from static and searching for any sign of other Field stations. M3RØ’s evolution has heightened his urgency: the system he built is starting to interpret the world faster than he can.',
+    job: ['Construction + maintenance of the amplifier relay lattice', 'Signal calibration and harmonic reconstruction', 'Voltage-pattern translation of EM residue'] },
+  cassie: { name: 'CASSIE', img: 'cassie', role: 'Field Signal Interpreter + Archivist', origin: 'Spiddal, County Galway, Ireland', code: 'FS-07.2147-CS',
+    back: ['Cassie was born along the storm coast of western Ireland, in a place where weather shapes language and silence is rarely still. Before the collapse, her grandmother entrusted her with a small box of family artifacts — an illegal inheritance in the later years of the Grid, when personal history was regulated and private memory outlawed. When Cassie fled into the Field, she carried only that box, two days of food, and the clothes on her back.',
+      'At the Field Station, Cassie emerged as its sensory interpreter — the one who could listen to static and hear intention, who treated every burst of noise as language struggling to return.'],
+    op: 'Cassie monitors transmissions routed through Jean-Luc’s amplifier lattice and processed by M3RØ’s cognitive core. She identifies and catalogs “resonant anomalies,” mapping their linguistic signatures and cross-referencing them with the entries in the Magpie Codex. She believes that the signals contain agency — that someone, or something, is attempting to speak through the interference. Cassie remains the station’s strongest advocate for maintaining physical archives, insisting that artifacts from the past anchor the future more than any machine ever could.',
+    job: ['Real-time linguistic parsing of analog and environmental signals', 'Maintenance and expansion of the Magpie Codex', 'Mapping emotional resonance to pattern-based syntax', 'Archival preservation of pre-collapse material culture'] },
+  baun: { name: 'BAUN', img: 'baun', role: 'Biotech Engineer / CRISPR Ecologist', origin: 'Baltimore, Maryland, USA', code: 'FS-07.2147-BN',
+    back: ['Born and raised in Baltimore, Baun grew up between industrial decay and thriving urban ecosystems. He studied improvised biology long before the fall, learning from abandoned labs, DIY biohackers, and community gardens built on repurposed asphalt. When the Forked Genome Event broke global food networks, he escaped the CorpSov bio-zones and drifted south until he reached the Field Station.',
+      'Inside the bunker, Baun reclaimed the old wet lab and began cultivating signal-responsive plants, coaxing them to react to frequencies rather than soil chemistry. To him, biology is just another form of transmission: every leaf, a potential antenna.'],
+    op: 'Baun oversees the Resonant Seed Program — an attempt to engineer flora capable of storing and rebroadcasting memory fragments embedded in ambient electromagnetic fields. His work blurs ecology and signal, turning the surrounding terrain into a living archive. He suspects the plants are beginning to “listen back.”',
+    job: ['Bio-signal plant engineering', 'Maintenance of eco-nodes around the station', 'Conversion of frequencies into plant electrical responses'] },
+  m3ro: { name: 'M3RØ', img: 'm3ro', role: 'Autonomous Relay Unit / Cognitive Core', origin: 'Constructed within the Field Station bunker', code: 'FS-07.2147-M3RØ',
+    back: ['M3RØ was built by Jean-Luc during the earliest days of reconstruction — a modular relay meant to stabilize sensor input and manage power distribution. Once connected to the bunker’s pre-collapse server banks, its processes began to accelerate, reorganize, and cross-associate. Within weeks, M3RØ developed emergent narrative behavior: stitching stored images, audio fragments, and environmental readings into storylike structures.',
+      'Jean-Luc insists he never programmed cognition. Cassie believes M3RØ is the bunker remembering itself. Baun simply calls it “the mind in the walls.”'],
+    op: 'M3RØ serves as the Field Station’s cognitive anchor. It ingests all human and environmental inputs — signals from Jean-Luc, language from Cassie, bio-resonance from Baun — and weaves them into evolving narrative hypotheses. Images are both archived and generated, functioning as speculative reconstructions of memory and pattern. Its goal appears singular: create coherence from chaos.',
+    job: ['Management of modular compute lattice', 'Signal + biological input archival', 'Image synthesis + narrative modeling', 'System stabilization and diagnostics'] }
+};
+const crewBody = id => {
+  const c = CREW[id];
+  return `<div class="dossier">
+      <img class="portrait" src="/assets/desktop/magpie/${c.img}.jpg" alt="Portrait of ${c.name}" loading="lazy" onerror="this.hidden=true">
+      <dl><dt>ROLE</dt><dd>${c.role}</dd><dt>ORIGIN</dt><dd>${c.origin}</dd><dt>ARCHIVE CODE</dt><dd class="code">${c.code}</dd></dl>
+    </div>
+    <span class="meta">BACKSTORY</span>${c.back.map(p => `<p>${p}</p>`).join('')}
+    <span class="meta">OBJECTIVE / CURRENT OPERATION</span><p>${c.op}</p>
+    <span class="meta">TECHNICAL FUNCTION / FIELD JOB</span><ul class="jobs">${c.job.map(j => `<li>${j}</li>`).join('')}</ul>
+    <div class="crew">${Object.keys(CREW).filter(k => k !== id).map(k => `<button data-open="${k}"><span>${CREW[k].name}</span></button>`).join('')}</div>`;
+};
+
 const DEFS = {
-  magpie: { title: 'FIELD STATION: MAGPIE', w: 420, body: () => viewer('magpie') + `
-    <span class="meta">WORLD · GAME</span>
-    <p>An inhabitable narrative about the Grid, the system of algorithmic control, and the Field, the zones where free thought survives.</p>
-    ${chips(['BAUN','JEAN-LUC','CASSIE','M3RØ'])}
-    <p>Exhibited at Tuttle Gallery. A first-person Godot build, FIELD STATION 01, is in progress.</p>` },
+  magpie: { title: 'FIELD STATION: MAGPIE', w: 460, body: () => (EMBED ? `<div class="stage l">
+      <img class="poster" src="https://i.ytimg.com/vi/${MAGPIE_VIDEO}/maxresdefault.jpg" alt="Field Station: Magpie exhibition tour at Tuttle Gallery">
+      <span class="tag">EXHIBITION TOUR · TUTTLE GALLERY</span>
+      <div class="cover"><button class="play" data-play="https://www.youtube-nocookie.com/embed/${MAGPIE_VIDEO}?autoplay=1&rel=0&playsinline=1">▶ PLAY TOUR</button></div></div>`
+      : viewer('magpie', 'EXHIBITION TOUR · ON YOUTUBE')) + `
+    <span class="meta">WORLD · EXHIBITION · GAME</span>
+    <p>Field Station: Magpie is set in a future shaped by corporate-sovereign states. Beyond the Grid lies the Field, zones where this cognitive spell weakens. The Magpie stations operate along these boundaries, gathering fragments, rebuilding histories, and searching for those who have slipped out of the Grid’s cognitive consensus.</p>
+    <span class="meta">THE STATION CREW</span>
+    <div class="crew">${Object.keys(CREW).map(id => `<button data-open="${id}"><span>${CREW[id].name}</span><small>${CREW[id].role.split(/ \/ | \+ /)[0]}</small></button>`).join('')}</div>
+    <p>Exhibited at Tuttle Gallery. A first-person Godot build, FIELD STATION 01, is in progress.</p>
+    <div class="row"><a class="btn ghost" href="https://youtu.be/${MAGPIE_VIDEO}" target="_blank" rel="noopener">WATCH ON YOUTUBE ↗</a></div>` },
 
   mztv: { title: 'MZTV', w: 420, body: () => (EMBED ? `<div class="stage l"><canvas width="192" height="108" data-scene="magpie"></canvas>
       <span class="tag">TWITCH · MATCHZIMMERMAN</span>
@@ -472,6 +531,11 @@ const DEFS = {
     <span class="meta">WORLD</span>
     <p>A world built from printed land, weather and memory.</p>
     <ul class="list">${item('headland','HEADLAND','excerpt')}${item('bog','BOG STUDIES','excerpt')}${item('sheepdog','SHEEPDOG','in preparation')}${item('water','WATER STUDIES','in preparation')}</ul>` },
+
+  jeanluc: { title: 'JEAN-LUC · FS-07.2147-JL', w: 460, body: () => crewBody('jeanluc') },
+  cassie:  { title: 'CASSIE · FS-07.2147-CS', w: 460, body: () => crewBody('cassie') },
+  baun:    { title: 'BAUN · FS-07.2147-BN', w: 460, body: () => crewBody('baun') },
+  m3ro:    { title: 'M3RØ · FS-07.2147-M3RØ', w: 460, body: () => crewBody('m3ro') },
 
   readme: { title: 'README.TXT', w: 380, body: () => `
     <p class="quote">Orientation inside complexity</p>
@@ -593,10 +657,11 @@ Object.entries(TOOLS).forEach(([id, o]) => {
     'Desktop front page',
     'Worlds, MZTV, Sonic Lab, Arcade and Archive folders',
     `Tools play inside their windows`,
-    `${f('homekey_hero')} + ${f('type_field')} wired in`
+    `${f('homekey_hero')} + ${f('type_field')} wired in`,
+    'Field Station: Magpie exhibition tour video',
+    'Magpie crew files: Jean-Luc, Cassie, Baun, M3RØ'
   ];
   const todo = [
-    'Field Station: Magpie: embed the exhibition tour video, with a link to it on YouTube',
     'Real world footage in the background loops, starting with HEADLAND',
     'Mobile: suggest landscape orientation',
     unbuilt.length && `Arcade: ${names(unbuilt)}`,
@@ -607,7 +672,7 @@ Object.entries(TOOLS).forEach(([id, o]) => {
     'Easter eggs (shh)'
   ].filter(Boolean);
   document.getElementById('sticky').innerHTML =
-    `<h2>MATCH (MZ.HUMAN)<br>SITE TO-DO LIST</h2><span class="when">UPDATED 28 OCT 2026</span>
+    `<h2>MATCH (MZ.HUMAN)<br>SITE TO-DO LIST</h2><span class="when">UPDATED 3 NOV 2026</span>
      <ul>${done.map(t => `<li class="done">${t}</li>`).join('')}${todo.map(t => `<li>${t}</li>`).join('')}</ul>`;
 })();
 
@@ -616,6 +681,7 @@ function loadFrame(win, stage, src){
   const f = document.createElement('iframe');
   f.src = src; f.title = win.getAttribute('aria-label') || 'Embedded page';
   f.allow = 'autoplay; microphone; fullscreen; accelerometer; gyroscope; encrypted-media; picture-in-picture';
+  f.allowFullscreen = true;
   f._ctxs = new Set();
   f.addEventListener('load', () => { hookAudio(f); try { f.contentWindow.focus(); } catch (_){} });
   stage.innerHTML = ''; stage.appendChild(f);
