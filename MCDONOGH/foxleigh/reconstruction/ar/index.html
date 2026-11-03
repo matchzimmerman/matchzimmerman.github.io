@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Foxleigh On Site</title>
+<meta name="description" content="Stand on the site of Foxleigh Mansion and see Reconstruction 002 through your phone camera, placed by compass and GPS.">
+<style>
+:root{--bg:#081318;--gold:#e4c68e;--mint:#aad8cc;--text:#eef2ef;--muted:#a9bbb6;--panel:#0b1a1fe6;--line:#3b5a60}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,sans-serif;overflow:hidden;overscroll-behavior:none}
+#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+canvas{position:fixed;inset:0;display:block;touch-action:none}
+.top{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;background:linear-gradient(#081318ee,#08131800);pointer-events:none}
+.eyebrow{color:var(--gold);font-size:10px;letter-spacing:.16em;font-weight:700}
+.title{font:400 22px Georgia,serif}
+#status{font-size:12px;color:#d7e2de;margin-top:2px}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);background:var(--panel);border-top:1px solid var(--line)}
+.row{display:flex;gap:8px;align-items:center;margin:6px 0}
+button{flex:1;border:1px solid #557479;background:#17343b;color:var(--text);border-radius:8px;padding:10px 6px;font:600 13px system-ui,sans-serif;min-height:42px}
+button.on{background:#d9e8de;color:#08191b;border-color:#d9e8de}
+label{font-size:11px;color:var(--muted);flex:0 0 74px}
+input[type=range]{flex:1;accent-color:var(--mint)}
+output{font-size:11px;color:var(--gold);flex:0 0 46px;text-align:right}
+#start{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);padding:24px;z-index:5}
+#start .card{max-width:420px}
+#start h1{font:400 30px Georgia,serif;margin:6px 0 10px}
+#start p{color:#cfdad6;font-size:14px}
+#start ol{color:#cfdad6;font-size:13px;padding-left:20px}
+#go{width:100%;margin-top:12px;font-size:16px;min-height:52px;background:#e4c68e;color:#1a1408;border-color:#e4c68e}
+.small{font-size:11px;color:var(--muted)}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"}}</script>
+</head><body>
+<video id="video" playsinline muted autoplay></video>
+<div id="start"><div class="card">
+  <div class="eyebrow">MZ WORLDS / MCDONOGH / RECONSTRUCTION 002 · ON SITE</div>
+  <h1>Foxleigh Mansion, where it stood</h1>
+  <p>Hold your phone up and the Old House (c.1873–1914) appears through the camera, placed by compass and GPS on the site between Finney Quad and Rollins Hall.</p>
+  <ol>
+    <li><b>At the plaque</b> (most accurate): stand at the Foxleigh memorial and look around.</li>
+    <li><b>Walk</b>: uses GPS, which drifts 3–10 m; best on open lawn.</li>
+    <li>If it sits crooked, drag left/right on the screen or use <i>Heading trim</i> to line a corner up. Compasses near buildings and cars are often 5–15° off.</li>
+  </ol>
+  <button id="go">Start camera &amp; compass</button>
+  <p class="small">Placement is a field estimate (±5 m, ±5°) from MZ.Human on site, 3 Nov 2026. Nothing is recorded or sent anywhere.</p>
+</div></div>
+<div class="top"><div class="eyebrow">FOXLEIGH · ON SITE</div><div class="title">The Old House, c.1873–1914</div><div id="status">Loading model…</div></div>
+<div class="bar">
+  <div class="row"><button id="mPlaque" class="on">At the plaque</button><button id="mGPS">Walk (GPS)</button></div>
+  <div class="row"><label>Heading trim</label><input id="trim" type="range" min="-30" max="30" step="0.5" value="0"><output id="trimV">0°</output></div>
+  <div class="row"><label>See-through</label><input id="op" type="range" min="0.2" max="1" step="0.05" value="0.85"><output id="opV">85%</output></div>
+  <div class="row"><label>Cut-away</label><input id="near" type="range" min="0.1" max="20" step="0.5" value="6"><output id="nearV">6 m</output></div>
+  <div class="row"><label>Camera FOV</label><input id="fov" type="range" min="40" max="80" step="1" value="62"><output id="fovV">62°</output></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const $ = s => document.querySelector(s), status = t => ($('#status').textContent = t);
+const P = await (await fetch('../placement.json')).json();
+const pin = P.memorial_pin, EYE = 1.6;
+// local frame: x = east, y = up, z = south; origin = memorial plaque at its ground level
+const lat0 = pin.lat, lon0 = pin.lon, mE = 111319.49 * Math.cos(lat0 * Math.PI / 180), mN = 110574.3;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+document.body.prepend(renderer.domElement); renderer.domElement.style.zIndex = 1;
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight('#dbe6ee', '#6b6250', 1.2));
+const sun = new THREE.DirectionalLight('#fff1dc', 2.2); sun.position.set(-30, 60, 40); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 6, 600); // near plane = cut-away: the plaque stands inside the Trustees' wing footprint
+camera.position.set(0, EYE, 0);
+
+// model placement: rotate model +x to its bearing, shift so the plaque is at the origin
+const site = new THREE.Group(); scene.add(site);
+const head = P.heading.front_porch_faces_deg;
+let trim = 0;
+function placeSite() {
+  site.rotation.y = THREE.MathUtils.degToRad(180 - head - trim);
+  const [px, pz] = pin.model_xz, v = new THREE.Vector3(px, 0, pz).applyEuler(site.rotation);
+  site.position.set(-v.x, P.origin.elevation_navd88_m - pin.elevation_navd88_m, -v.z);
+}
+placeSite();
+
+let mats = [];
+new GLTFLoader().load('../foxleigh_reconstruction_002.glb', g => {
+  site.add(g.scene);
+  g.scene.traverse(o => { if (o.isMesh) { o.material.transparent = true; o.material.depthWrite = true; mats.push(o.material); } });
+  setOpacity(+$('#op').value);
+  status('Ready — tap Start'); if ($('#start').style.display === 'none') status('Tracking…');
+}, e => status('Loading model… ' + (e.total ? Math.round(e.loaded / e.total * 100) + '%' : '')), () => status('Could not load the model'));
+function setOpacity(v) { mats.forEach(m => { m.opacity = v; }); $('#opV').textContent = Math.round(v * 100) + '%'; }
+
+// ---------- orientation ----------
+const zee = new THREE.Vector3(0, 0, 1), q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), euler = new THREE.Euler(), q0 = new THREE.Quaternion();
+let ori = null, alphaOffset = null, absolute = false, dragTrim = 0;
+function onOri(e) {
+  if (e.alpha == null) return;
+  let alpha = e.alpha;
+  if (typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) {
+    // iOS: alpha is relative; anchor it to the compass (smoothed circular estimate)
+    const est = ((360 - e.webkitCompassHeading) - e.alpha + 720) % 360;
+    if (alphaOffset == null) alphaOffset = est;
+    else { let d = ((est - alphaOffset + 540) % 360) - 180; if (Math.abs(d) < 25) alphaOffset = (alphaOffset + d * 0.03 + 360) % 360; else alphaOffset = (alphaOffset + d * 0.2 + 360) % 360; }
+    alpha = (e.alpha + alphaOffset) % 360; absolute = true;
+  } else if (e.absolute || e.type === 'deviceorientationabsolute') absolute = true;
+  ori = { alpha, beta: e.beta, gamma: e.gamma };
+}
+function orient() {
+  if (!ori) return;
+  const D = THREE.MathUtils.degToRad, sc = D(screen.orientation ? screen.orientation.angle : (window.orientation || 0));
+  euler.set(D(ori.beta), D(ori.alpha + dragTrim), -D(ori.gamma), 'YXZ');
+  camera.quaternion.setFromEuler(euler); camera.quaternion.multiply(q1); camera.quaternion.multiply(q0.setFromAxisAngle(zee, -sc));
+}
+
+// ---------- position ----------
+let mode = 'plaque', gps = null, gpsSmooth = null;
+function onGPS(p) {
+  const e = (p.coords.longitude - lon0) * mE, n = (p.coords.latitude - lat0) * mN;
+  gps = { e, n, acc: p.coords.accuracy };
+  gpsSmooth = gpsSmooth ? { e: gpsSmooth.e * 0.7 + e * 0.3, n: gpsSmooth.n * 0.7 + n * 0.3 } : { e, n };
+}
+let watch = null;
+function setMode(m) {
+  mode = m; $('#mPlaque').classList.toggle('on', m === 'plaque'); $('#mGPS').classList.toggle('on', m === 'gps');
+  if (m === 'gps' && watch == null && navigator.geolocation) watch = navigator.geolocation.watchPosition(onGPS, err => status('GPS: ' + err.message), { enableHighAccuracy: true, maximumAge: 1000 });
+}
+$('#mPlaque').onclick = () => setMode('plaque'); $('#mGPS').onclick = () => setMode('gps');
+
+// ---------- controls ----------
+$('#trim').oninput = e => { trim = +e.target.value; $('#trimV').textContent = trim + '°'; placeSite(); };
+$('#op').oninput = e => setOpacity(+e.target.value);
+$('#near').oninput = e => { camera.near = +e.target.value; camera.updateProjectionMatrix(); $('#nearV').textContent = e.target.value + ' m'; };
+$('#fov').oninput = e => { camera.fov = +e.target.value; camera.updateProjectionMatrix(); $('#fovV').textContent = e.target.value + '°'; };
+let dx0 = null; // horizontal drag nudges the view heading (fixes compass error by eye)
+renderer.domElement.addEventListener('pointerdown', e => { dx0 = e.clientX; });
+renderer.domElement.addEventListener('pointermove', e => { if (dx0 == null) return; dragTrim += (e.clientX - dx0) * 0.08; dx0 = e.clientX; });
+addEventListener('pointerup', () => { dx0 = null; });
+
+// ---------- start ----------
+$('#go').onclick = async () => {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+      const r = await DeviceOrientationEvent.requestPermission(); if (r !== 'granted') throw new Error('Motion & orientation access was declined');
+    }
+    if ('ondeviceorientationabsolute' in window) addEventListener('deviceorientationabsolute', onOri); else addEventListener('deviceorientation', onOri);
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    $('#video').srcObject = stream; await $('#video').play();
+    $('#start').style.display = 'none'; status('Tracking…');
+  } catch (err) { status('Could not start: ' + err.message); $('#start').style.display = 'none'; }
+};
+
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+renderer.setAnimationLoop(() => {
+  orient();
+  if (mode === 'gps' && gpsSmooth) camera.position.set(gpsSmooth.e, EYE, -gpsSmooth.n); else camera.position.set(0, EYE, 0);
+  if ($('#start').style.display === 'none') {
+    const hdg = ori ? Math.round((360 - ori.alpha - dragTrim + 720) % 360) : null;
+    status(mode === 'gps' ? (gps ? `GPS ±${Math.round(gps.acc)} m · ${Math.round(Math.hypot(gps.e, gps.n))} m from plaque` : 'Waiting for GPS…') : `At the plaque${hdg != null ? ' · facing ' + hdg + '°' : ''}${absolute ? '' : ' · compass not available'}`);
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body></html>

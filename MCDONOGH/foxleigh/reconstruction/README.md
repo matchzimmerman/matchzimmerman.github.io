@@ -71,22 +71,31 @@ shows this.
 5. **Basement.** Footprint and depth of the documented full basement; this matters for any ground-truth search with
    the lidar.
 
-## Next pass: geolocated AR
-- **Placement.** Set position and heading on the 2024 USGS 0.5 m lidar used by the
-  [Ground Survey](../../ground-survey/). The memorial is documented as standing between Finney Quad and the dorms.
-  Ground Survey candidate C03 (17 × 30 m sunken rectangle NW of Study 001's centre) is ruled out: MZ.Human identifies it as
-  the new middle school's drainage pond.
-- **Delivery.**
-  - iPhone: AR Quick Look with a USDZ export.
-  - Android: WebXR with geospatial anchoring, or a marker/ground-plane workflow.
-  - Both need the model's origin (centre of the brick block at grade, +x along the long axis) tied to a surveyed
-    coordinate and bearing.
+## Placement on site (v001, 2026-11-03)
+**On-site AR:** https://www.matchzimmerman.com/MCDONOGH/foxleigh/reconstruction/ar/ · data: `placement.json` · plan: `placement.jpg`
+
+- **Basis.** MZ.Human, standing on site, sketched the footprint over Google Maps, pinned the Foxleigh memorial at
+  39.3956616, −76.7760450, and confirmed that the front porch faces **south / slightly south-east (165°)**. The long
+  axis therefore runs 75°, and the wings run east from the brick house, which matches photo 1.
+- **Result.** Brick-house centre (model origin) at **39.3955909, −76.7762687**, ground 164.8 m NAVD88 (2024 lidar).
+  The memorial falls inside the Trustees' Extension footprint (model x 20.7, z −2.2).
+- **Accuracy.** A field estimate, not a survey: expect ±5 m and ±5°.
+- **Ruled out.** Ground Survey candidate C03 is the new middle school's drainage pond (MZ.Human).
+
+### How the AR page works
+- **Rendering.** The web page draws the model over the live camera. It aims by the phone's compass, and positions by
+  either the plaque (most accurate) or GPS (3–10 m drift).
+- **Correcting the compass.** Heading trim and drag-to-rotate fix compass error by eye.
+- **Cut-away.** Hides geometry within a few metres of the viewer, because the plaque sits inside the old building.
+- **Limits.** It is not ARKit world-tracking, so the model is not pinned to the ground as you walk. A native
+  geospatial-anchor build (ARKit `ARGeoAnchor` / ARCore Geospatial) is the upgrade path.
 
 ## Files
 - `foxleigh-model.js` — the procedural builder; every dimension and its source
 - `textures.js` — procedural PBR surfaces (painted brick, clapboard, slate, shingle, rubble, chimney brick, boards, louvres)
 - `index.html` — viewer: orbit, phase toggles, evidence colouring, photo overlays with solved cameras, sun, GLB export
 - `foxleigh_reconstruction_002.glb` — exported model for AR / other tools
+- `placement.json`, `placement.jpg` — geolocation of the model; `ar/` — on-site camera AR
 
 Sources: [150 Stories #38](https://150.mcdonogh.org/not-forgotten/foxleigh-estate-becomes-mcdonogh-school/) ·
 [Foxleigh Mansion memorialized (2024)](https://www.mcdonogh.org/about/news-photos/news/photo-essays/2024/foxleigh-mansion-memorialized)
