@@ -451,7 +451,8 @@ const S = {
   pins:[], objs:[], pending:{},
 };
 let LS_KEY = 'mcd-ground-survey.v1';
-function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = s.objs||[]; S.pending = s.pending||{}; } }catch(e){} }
+let HAD_SAVED=false;
+function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = s.objs||[]; S.pending = s.pending||{}; } }catch(e){} }
 let saveT = 0;
 function save(){ clearTimeout(saveT); saveT = setTimeout(()=>{ try{ syncViewState(); localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }, 300); }
 
@@ -1690,7 +1691,12 @@ async function boot(){
   if(M.subtitle) $('brand').querySelector('p').textContent = M.subtitle;
   if(M.credit) document.querySelector('#p-layers .foot').textContent = M.credit;
   if(M.start){ const w=toWorld(M.start.E, M.start.N); S.view.cx=w.x; S.view.cz=w.z; S.view.mpp=M.start.span/Math.min(innerWidth, innerHeight); }
-  loadLS();
+  const FRESH = new URLSearchParams(location.search).has('fresh');
+  if(!FRESH) loadLS();
+  const DV = (!HAD_SAVED && M.view) ? M.view : null;
+  if(DV){ if(DV.layer) Object.assign(S.layer, DV.layer);
+    const c=toWorld(DV.cam.E,DV.cam.N), t=toWorld(DV.target.E,DV.target.N);
+    S.view.mode='3d'; S.view.t3={p:[c.x,(DV.cam.h-HREF)*S.layer.exag,c.z], t:[t.x,(DV.target.h-HREF)*S.layer.exag,t.z]}; }
   let done=0; const steps=4, tick=()=>{ bar.style.width=(++done/steps*100)+'%'; };
   const [o, ...ss] = await Promise.all([DATA+'/ov.webp',DATA+'/s0.webp',DATA+'/s1.webp',DATA+'/s2.webp'].map(u=>decodeImage(u).then(r=>{tick(); return r;})));
   Object.assign(ov,o); ov.tex=heightTex(o); G.uOv.value=ov.tex; G.uOvMax.value.set(o.w-1,o.h-1);
@@ -1702,6 +1708,7 @@ async function boot(){
   else { S.view.mode='plan'; applyPlanCam(); }
   resize();
   $('loading').hidden=true;
+  if(DV && DV.tab) openTab(DV.tab);
   // restore imported files
   for(const o of S.objs){ if(o.kind==='mass'){ realizeMass(o); continue; } if(!IDB.db) continue; const f=await idbGet(o.id); if(f){ try{ await realize(o,f); }catch(e){ console.warn(e); } } }
   await initExtras();
