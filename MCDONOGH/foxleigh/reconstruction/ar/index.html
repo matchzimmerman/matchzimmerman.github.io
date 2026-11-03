@@ -8,13 +8,16 @@
 :root{--bg:#081318;--gold:#e4c68e;--mint:#aad8cc;--text:#eef2ef;--muted:#a9bbb6;--panel:#0b1a1fe6;--line:#3b5a60}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,sans-serif;overflow:hidden;overscroll-behavior:none}
-#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
-canvas{position:fixed;inset:0;display:block;touch-action:none}
-.top{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;background:linear-gradient(#081318ee,#08131800);pointer-events:none}
+#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:0}
+#gl{position:fixed;inset:0;display:block;touch-action:none;z-index:1}
+.top{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;background:linear-gradient(#081318ee,#08131800);pointer-events:none;z-index:10}
 .eyebrow{color:var(--gold);font-size:10px;letter-spacing:.16em;font-weight:700}
 .title{font:400 22px Georgia,serif}
 #status{font-size:12px;color:#d7e2de;margin-top:2px}
-.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);background:var(--panel);border-top:1px solid var(--line)}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);background:var(--panel);border-top:1px solid var(--line);z-index:10;touch-action:manipulation}
+.bar.min .more{display:none}
+#map{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 74px);width:150px;height:150px;border-radius:10px;border:1px solid var(--line);background:#081318d9;z-index:10;touch-action:none}
+#mapHint{position:fixed;right:10px;top:calc(env(safe-area-inset-top) + 228px);width:150px;font-size:10px;color:var(--muted);text-align:center;z-index:10;pointer-events:none}
 .row{display:flex;gap:8px;align-items:center;margin:6px 0}
 button{flex:1;border:1px solid #557479;background:#17343b;color:var(--text);border-radius:8px;padding:10px 6px;font:600 13px system-ui,sans-serif;min-height:42px}
 button.on{background:#d9e8de;color:#08191b;border-color:#d9e8de}
@@ -38,7 +41,8 @@ output{font-size:11px;color:var(--gold);flex:0 0 46px;text-align:right}
   <p>Hold your phone up and the Old House (c.1873–1914) appears through the camera, placed by compass and GPS on the site between Finney Quad and Rollins Hall.</p>
   <ol>
     <li><b>At the plaque</b> (most accurate): stand at the Foxleigh memorial and look around.</li>
-    <li><b>Walk</b>: uses GPS, which drifts 3–10 m; best on open lawn.</li>
+    <li><b>Best view</b>: the plaque is <i>inside</i> the old building. Walk 30–40 m south onto Finney Quad, tap <b>Tap map</b>, then tap where you are on the little map and face the house.</li>
+    <li><b>Walk</b>: uses GPS, which drifts 3–10 m.</li>
     <li>If it sits crooked, drag left/right on the screen or use <i>Heading trim</i> to line a corner up. Compasses near buildings and cars are often 5–15° off.</li>
   </ol>
   <button id="go">Start camera &amp; compass</button>
@@ -46,12 +50,15 @@ output{font-size:11px;color:var(--gold);flex:0 0 46px;text-align:right}
 </div></div>
 <div class="top"><div class="eyebrow">FOXLEIGH · ON SITE</div><div class="title">The Old House, c.1873–1914</div><div id="status">Loading model…</div></div>
 <div class="bar">
-  <div class="row"><button id="mPlaque" class="on">At the plaque</button><button id="mGPS">Walk (GPS)</button></div>
+  <div class="row"><button id="mPlaque" class="on">At the plaque</button><button id="mGPS">Walk (GPS)</button><button id="mMap">Tap map</button><button id="more" style="flex:0 0 46px">▾</button></div>
+  <div class="more">
   <div class="row"><label>Heading trim</label><input id="trim" type="range" min="-30" max="30" step="0.5" value="0"><output id="trimV">0°</output></div>
   <div class="row"><label>See-through</label><input id="op" type="range" min="0.2" max="1" step="0.05" value="0.85"><output id="opV">85%</output></div>
   <div class="row"><label>Cut-away</label><input id="near" type="range" min="0.1" max="20" step="0.5" value="6"><output id="nearV">6 m</output></div>
   <div class="row"><label>Camera FOV</label><input id="fov" type="range" min="40" max="80" step="1" value="62"><output id="fovV">62°</output></div>
+  </div>
 </div>
+<canvas id="map" width="300" height="300"></canvas><div id="mapHint">You are the dot. Tap the map to say where you're standing.</div>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -65,7 +72,7 @@ const lat0 = pin.lat, lon0 = pin.lon, mE = 111319.49 * Math.cos(lat0 * Math.PI /
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
-document.body.prepend(renderer.domElement); renderer.domElement.style.zIndex = 1;
+document.body.prepend(renderer.domElement); renderer.domElement.id = 'gl';
 const scene = new THREE.Scene();
 scene.add(new THREE.HemisphereLight('#dbe6ee', '#6b6250', 1.2));
 const sun = new THREE.DirectionalLight('#fff1dc', 2.2); sun.position.set(-30, 60, 40); scene.add(sun);
@@ -115,7 +122,7 @@ function orient() {
 }
 
 // ---------- position ----------
-let mode = 'plaque', gps = null, gpsSmooth = null;
+let mode = 'plaque', gps = null, gpsSmooth = null, manual = { x: 0, z: 35 };
 function onGPS(p) {
   const e = (p.coords.longitude - lon0) * mE, n = (p.coords.latitude - lat0) * mN;
   gps = { e, n, acc: p.coords.accuracy };
@@ -123,10 +130,35 @@ function onGPS(p) {
 }
 let watch = null;
 function setMode(m) {
-  mode = m; $('#mPlaque').classList.toggle('on', m === 'plaque'); $('#mGPS').classList.toggle('on', m === 'gps');
+  mode = m; for (const [id, k] of [['#mPlaque', 'plaque'], ['#mGPS', 'gps'], ['#mMap', 'map']]) $(id).classList.toggle('on', m === k);
   if (m === 'gps' && watch == null && navigator.geolocation) watch = navigator.geolocation.watchPosition(onGPS, err => status('GPS: ' + err.message), { enableHighAccuracy: true, maximumAge: 1000 });
 }
-$('#mPlaque').onclick = () => setMode('plaque'); $('#mGPS').onclick = () => setMode('gps');
+$('#mPlaque').onclick = () => setMode('plaque'); $('#mGPS').onclick = () => setMode('gps'); $('#mMap').onclick = () => setMode('map');
+$('#more').onclick = () => { const b = $('.bar'); b.classList.toggle('min'); $('#more').textContent = b.classList.contains('min') ? '▴' : '▾'; };
+
+// ---------- mini-map (north up; local x = east, z = south; metres) ----------
+const FOOT = [[[-7.83,-4.88],[7.83,-4.88],[7.83,4.88],[-7.83,4.88]], [[-2.55,4.88],[7.52,4.88],[7.52,8.29],[-2.55,8.29]],
+  [[7.83,-5.04],[18.32,-5.04],[18.32,3.95],[7.83,3.95]], [[18.32,-5.04],[37.1,-5.04],[37.1,3.64],[18.32,3.64]],
+  [[22.15,-11.3],[28.23,-11.3],[28.23,-5.04],[22.15,-5.04]], [[21.31,-16.88],[41.68,-16.88],[41.68,-11.3],[21.31,-11.3]]];
+const mapC = $('#map'), mg = mapC.getContext('2d'), MS = 2.2, MC = { x: -10, z: 12 }; // px per metre (canvas px), map centre in local metres
+const toMap = (x, z) => [150 + (x - MC.x) * MS, 150 + (z - MC.z) * MS];
+const tv = new THREE.Vector3();
+function drawMap() {
+  mg.clearRect(0, 0, 300, 300); site.updateMatrixWorld();
+  FOOT.forEach((poly, i) => { mg.beginPath(); poly.forEach(([x, z], k) => { tv.set(x, 0, z).applyMatrix4(site.matrixWorld); const [u, v] = toMap(tv.x, tv.z); k ? mg.lineTo(u, v) : mg.moveTo(u, v); }); mg.closePath();
+    mg.fillStyle = i === 0 ? '#e4c68e88' : i === 1 ? '#e4c68e44' : '#aad8cc55'; mg.strokeStyle = '#e4c68e'; mg.lineWidth = 2; mg.fill(); mg.stroke(); });
+  const [pu, pv] = toMap(0, 0); mg.fillStyle = '#ffffff'; mg.fillRect(pu - 4, pv - 4, 8, 8); // plaque
+  const [cu, cv] = toMap(camera.position.x, camera.position.z);
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), a = Math.atan2(f.x, -f.z);
+  mg.fillStyle = '#ff5a3c55'; mg.beginPath(); mg.moveTo(cu, cv); mg.arc(cu, cv, 46, a - Math.PI / 2 - 0.5, a - Math.PI / 2 + 0.5); mg.closePath(); mg.fill();
+  mg.fillStyle = '#ff5a3c'; mg.beginPath(); mg.arc(cu, cv, 7, 0, 7); mg.fill(); mg.strokeStyle = '#fff'; mg.lineWidth = 2; mg.stroke();
+  mg.fillStyle = '#fff'; mg.font = 'bold 22px system-ui'; mg.fillText('N', 272, 26);
+  mg.font = '18px system-ui'; mg.fillStyle = '#a9bbb6'; mg.fillText('plaque', pu + 8, pv - 6);
+}
+mapC.addEventListener('pointerdown', e => {
+  const r = mapC.getBoundingClientRect(), u = (e.clientX - r.left) / r.width * 300, v = (e.clientY - r.top) / r.height * 300;
+  manual = { x: MC.x + (u - 150) / MS, z: MC.z + (v - 150) / MS }; setMode('map'); $('#mapHint').style.display = 'none'; e.preventDefault();
+});
 
 // ---------- controls ----------
 $('#trim').oninput = e => { trim = +e.target.value; $('#trimV').textContent = trim + '°'; placeSite(); };
@@ -154,10 +186,14 @@ $('#go').onclick = async () => {
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 renderer.setAnimationLoop(() => {
   orient();
-  if (mode === 'gps' && gpsSmooth) camera.position.set(gpsSmooth.e, EYE, -gpsSmooth.n); else camera.position.set(0, EYE, 0);
+  if (mode === 'gps' && gpsSmooth) camera.position.set(gpsSmooth.e, EYE, -gpsSmooth.n); else if (mode === 'map') camera.position.set(manual.x, EYE, manual.z); else camera.position.set(0, EYE, 0);
+  // cut-away only matters inside the house; from outside show everything
+  const inside = Math.hypot(camera.position.x + 8, camera.position.z) < 30; const wantNear = inside ? +$('#near').value : 0.5;
+  if (camera.near !== wantNear) { camera.near = wantNear; camera.updateProjectionMatrix(); }
+  drawMap();
   if ($('#start').style.display === 'none') {
     const hdg = ori ? Math.round((360 - ori.alpha - dragTrim + 720) % 360) : null;
-    status(mode === 'gps' ? (gps ? `GPS ±${Math.round(gps.acc)} m · ${Math.round(Math.hypot(gps.e, gps.n))} m from plaque` : 'Waiting for GPS…') : `At the plaque${hdg != null ? ' · facing ' + hdg + '°' : ''}${absolute ? '' : ' · compass not available'}`);
+    status(mode === 'gps' ? (gps ? `GPS ±${Math.round(gps.acc)} m · ${Math.round(Math.hypot(gps.e, gps.n))} m from plaque` : 'Waiting for GPS…') : mode === 'map' ? `Standing where you tapped · ${Math.round(Math.hypot(manual.x, manual.z))} m from plaque${hdg != null ? ' · facing ' + hdg + '°' : ''}` : `At the plaque${hdg != null ? ' · facing ' + hdg + '°' : ''}${absolute ? '' : ' · compass not available'}`);
   }
   renderer.render(scene, camera);
 });
