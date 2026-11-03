@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Foxleigh Reconstruction 002</title>
+<meta name="description" content="Plan-scaled, photo-proportioned 3D reconstruction of the lost Foxleigh Mansion (c.1850–1914), McDonogh School. Research model by MZ.Claude for MZ WORLDS.">
+<style>
+:root{--bg:#081318;--panel:#0e2027;--line:#2f4b52;--gold:#e4c68e;--mint:#aad8cc;--text:#e6ece8;--muted:#9fb3ae}
+:root:not([data-theme="light"]){color-scheme:dark}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+a{color:var(--mint)}
+#app{display:grid;grid-template-columns:1fr 360px;height:100dvh}
+#stage{position:relative;overflow:hidden;background:#0b171c}
+#stage canvas{position:absolute;display:block;touch-action:none}
+#overlay{position:absolute;pointer-events:none;opacity:.5;display:none;object-fit:fill}
+.head{position:absolute;left:16px;top:14px;right:16px;pointer-events:none;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.eyebrow{color:var(--gold);font-size:10px;letter-spacing:.18em;font-weight:700}
+h1{font:400 clamp(24px,3.4vw,36px)/1.05 Georgia,"Times New Roman",serif;margin:4px 0 2px;text-shadow:0 1px 12px #000a}
+.sub{color:#c9d6d1;font-size:12px;text-shadow:0 1px 8px #000}
+.badge{border:1px solid #8d7b54;color:var(--gold);background:#0b171cc0;padding:6px 10px;border-radius:20px;font-size:10px;letter-spacing:.08em;white-space:nowrap}
+.hint{position:absolute;left:16px;bottom:14px;font-size:11px;color:#c8d4cf;background:#0b171cb8;border:1px solid var(--line);padding:6px 10px;border-radius:6px;pointer-events:none}
+aside{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:16px 16px 40px}
+h2{font:400 20px Georgia,serif;margin:0 0 6px}
+.sec{border-top:1px solid var(--line);padding:12px 0}.sec:first-child{border-top:0;padding-top:0}
+.k{color:var(--gold);font-size:10px;letter-spacing:.16em;font-weight:700;margin-bottom:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+button{cursor:pointer;border:1px solid #4d6a6f;background:#16323a;color:var(--text);border-radius:5px;padding:7px 10px;font:600 12px system-ui,sans-serif;min-height:34px}
+button:hover{border-color:var(--mint)}button.on{background:#d9e8de;color:#08191b;border-color:#d9e8de}
+label.chk{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer}label.chk input{accent-color:var(--mint);width:16px;height:16px}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+input[type=range]{width:100%;accent-color:var(--mint)}
+.small{font-size:11px;color:var(--muted)}
+.note{border-left:2px solid var(--gold);background:#24261f;color:#e9d9b6;padding:9px 11px;font-size:11px;margin:10px 0 0}
+#features{list-style:none;padding:0;margin:6px 0 0;font-size:11.5px}
+#features li{padding:5px 0;border-bottom:1px dashed #27424a;display:grid;grid-template-columns:14px 1fr;gap:6px}
+#features li small{display:block;color:var(--muted)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px;color:var(--muted)}.stats b{color:var(--text);font-weight:600}
+#loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:12px;letter-spacing:.1em}
+@media (max-width:860px){#app{grid-template-columns:1fr;grid-template-rows:58dvh 1fr}aside{border-left:0;border-top:1px solid var(--line)}.badge{display:none}.hint{display:none}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"}}</script>
+</head><body>
+<div id="app">
+<section id="stage">
+  <img id="overlay" alt="" referrerpolicy="no-referrer">
+  <div id="loading">BUILDING FOXLEIGH…</div>
+  <div class="head"><div><div class="eyebrow">MZ WORLDS / MCDONOGH / RECONSTRUCTION 002</div><h1>Foxleigh Mansion</h1><div class="sub">The Old House as it stood c.1873–1914 · plan-scaled, photo-proportioned</div></div><span class="badge">RESEARCH MODEL · NOT A SURVEY</span></div>
+  <div class="hint">Drag to orbit · right-drag / two fingers to pan · scroll or pinch to zoom</div>
+</section>
+<aside>
+  <div class="sec"><div class="k">VIEW</div><div class="row" id="views"></div></div>
+  <div class="sec"><div class="k">COMPARE WITH THE PHOTOGRAPHS</div>
+    <div class="row" id="photos"></div>
+    <label class="small" style="display:block;margin-top:8px">Photo opacity <input type="range" id="opacity" min="0" max="1" step="0.01" value="0.5"></label>
+    <p class="small">Snaps the camera to the estimated position of each archival photograph and lays the photograph over the render. Images load from McDonogh's 150 Stories site and are not stored in this project.</p></div>
+  <div class="sec"><div class="k">BUILDING PHASES</div><div id="phases"></div></div>
+  <div class="sec"><div class="k">EVIDENCE</div>
+    <label class="chk"><input type="checkbox" id="evidence"> Colour by source of each part</label>
+    <div id="legend" class="small"></div>
+    <ul id="features"></ul></div>
+  <div class="sec"><div class="k">LIGHT</div><label class="small">Sun <input type="range" id="sun" min="0" max="1" step="0.005" value="0.38"></label>
+    <label class="chk"><input type="checkbox" id="ao" checked> Ambient occlusion (slower on phones)</label></div>
+  <div class="sec"><div class="k">MODEL</div><div class="stats" id="stats"></div>
+    <div class="row" style="margin-top:10px"><button id="glb">Download GLB</button><button id="png">Save image</button></div>
+    <div class="note">Footprint from the alumni-drawn 1873 plan, scaled by its stair treads (0.093 m per plan pixel). Roof forms, storey heights, openings and trim are proportioned from two photographs; colours and textures are period-typical, not documented. Not yet placed on the ground — geolocation is the next pass.</div>
+    <p class="small" style="margin-top:10px"><a href="../fidelity/">Fidelity study 001</a> · <a href="../images/">Source images</a> · <a href="../align/">Site alignment</a> · <a href="https://150.mcdonogh.org/not-forgotten/foxleigh-estate-becomes-mcdonogh-school/" target="_blank" rel="noopener">150 Stories #38</a></p></div>
+</aside>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { buildFoxleigh, CONFIDENCE, SECTIONS, confidenceMaterials } from './foxleigh-model.js';
+import { grass, gravel } from './textures.js';
+
+const $ = s => document.querySelector(s), stage = $('#stage'), Q = new URLSearchParams(location.search);
+const mobile = matchMedia('(max-width:860px)').matches || /iPhone|Android/.test(navigator.userAgent);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 1.5 : 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.82;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const sky = new THREE.Color('#b9c6cc'); scene.background = sky; scene.fog = new THREE.Fog(sky, 140, 420);
+const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.3;
+const hemi = new THREE.HemisphereLight('#cfdbe6', '#5d5a47', 0.55); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff0dc', 3.1); sun.castShadow = true;
+sun.shadow.mapSize.set(mobile ? 2048 : 4096, mobile ? 2048 : 4096); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 260 });
+sun.shadow.camera.updateProjectionMatrix(); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; scene.add(sun, sun.target);
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.2, 900);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 3; controls.maxDistance = 320;
+
+// ground: an illustrative knoll (photo 1 is taken from ~4 m below the porch, 55 m out) with the carriage drive.
+// Real terrain from the 2024 USGS lidar replaces this in the geolocation pass.
+const HC = [15, -3], RX = 40, RZ = 20;
+function terrainY(x, z) {
+  const r = Math.hypot((x - HC[0]) / RX, (z - HC[1]) / RZ);
+  if (r <= 1) return 0; const t = r - 1; return -Math.min(9, 2.05 * t * t / (t + 0.35) * 1.18);
+}
+const G = grass(), gm = new THREE.MeshStandardMaterial({ map: G.map, roughness: 1 }); G.map.repeat.set(460 / G.tile, 460 / G.tile);
+const tg = new THREE.PlaneGeometry(460, 460, 230, 230); tg.rotateX(-Math.PI / 2);
+{ const p = tg.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, terrainY(p.getX(i) + 15, p.getZ(i))); tg.computeVertexNormals(); }
+const ground = new THREE.Mesh(tg, gm); ground.position.x = 15; ground.receiveShadow = true; scene.add(ground);
+const D = gravel();
+{ // drive ribbon draped on the terrain, sweeping up from the south-west to the centre steps (photo 1)
+  const curve = new THREE.CatmullRomCurve3([[-60, 0, 120], [-34, 0, 70], [-16, 0, 36], [-5, 0, 19], [0.1, 0, 12.6], [9, 0, 13.5], [18, 0, 9], [28, 0, 8.5]].map(p => new THREE.Vector3(...p)));
+  const N = 220, w = 2.9, pos = [], uv = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, c = curve.getPointAt(t), d = curve.getTangentAt(t), nx = -d.z, nz = d.x, l = Math.hypot(nx, nz);
+    for (const s of [-1, 1]) { const x = c.x + s * w * nx / l, z = c.z + s * w * nz / l; pos.push(x, terrainY(x, z) + 0.03, z); uv.push(s > 0 ? 1 : 0, t * curve.getLength() / 3); }
+    if (i < N) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  const drive = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: D.map, roughness: 1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 })); drive.receiveShadow = true; scene.add(drive);
+}
+
+const t0 = performance.now();
+const { root, groups, features, triangles } = buildFoxleigh();
+scene.add(root);
+const buildMs = Math.round(performance.now() - t0);
+$('#loading').remove();
+
+// ----- composer / AO -----
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const gtao = new GTAOPass(scene, camera, 1, 1); gtao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.4, thickness: 1.2, scale: 1.1 }); gtao.blendIntensity = 0.85;
+composer.addPass(gtao); composer.addPass(new OutputPass());
+let useAO = !mobile && !Q.has('noao'); $('#ao').checked = useAO; $('#ao').onchange = e => { useAO = e.target.checked; };
+
+// ----- sun -----
+function setSun(t) { // t 0..1 sweeps morning (east) → evening (west) across the southern sky
+  const az = THREE.MathUtils.lerp(-1.9, 1.9, t), el = Math.sin(t * Math.PI) * 0.95 + 0.08, r = 120;
+  sun.position.set(Math.sin(az) * Math.cos(el) * r + 15, Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
+  sun.target.position.set(15, 0, -3);
+  const warm = 1 - Math.sin(t * Math.PI); sun.color.setHSL(0.09, 0.5 + warm * 0.3, 0.88 - warm * 0.12); sun.intensity = 1.6 + Math.sin(t * Math.PI) * 2.6;
+}
+setSun(+$('#sun').value); $('#sun').oninput = e => setSun(+e.target.value);
+
+// ----- views & photo match -----
+// Camera estimates for the two archival photographs (model metres; see README for method).
+const PHOTOS = {
+  front: { label: 'Photo 1 · front', src: 'https://i0.wp.com/150.mcdonogh.org/wp-content/uploads/2023/09/Foxleigh-Mansion.jpg?w=1584', aspect: 1584 / 1025, pos: [-12.24, -2.35, 54.51], target: [-2.61, 1.71, 26.39], fov: 30.2, solved: '19 landmarks, 7.5 px RMS' },
+  tower: { label: 'Photo 2 · tower', src: 'https://i0.wp.com/150.mcdonogh.org/wp-content/uploads/2023/09/Foxleigh-Estate.jpg?w=2000', aspect: 2000 / 1156, pos: [-27.45, 17.87, 59.01], target: [15.53, 3.34, 19.75], fov: 47.7, solved: '9 landmarks, 18 px RMS (approximate)' },
+};
+const VIEWS = {
+  'Front': { pos: [-6, 7, 36], target: [8, 6, 0], fov: 40 },
+  'South-west': { pos: [-30, 9, 30], target: [6, 6, 0], fov: 40 },
+  'Rear': { pos: [44, 14, -40], target: [16, 5, -6], fov: 40 },
+  'Aerial': { pos: [-26, 58, 52], target: [16, 0, -4], fov: 40 },
+  'Porch': { pos: [-4.5, 2.6, 13.5], target: [1.5, 3.6, 5], fov: 50 },
+  'Gable': { pos: [-17, 9, 8], target: [-6, 11, 0], fov: 42 },
+};
+let photo = null;
+function applyCam(v) { controls.maxPolarAngle = v.solved ? Math.PI : Math.PI * 0.495; camera.position.set(...v.pos); controls.target.set(...v.target); camera.fov = v.fov; camera.updateProjectionMatrix(); controls.update(); }
+function setPhoto(key) {
+  photo = key ? PHOTOS[key] : null;
+  document.querySelectorAll('#photos button').forEach(b => b.classList.toggle('on', b.dataset.k === key));
+  const ov = $('#overlay');
+  if (photo) { ov.src = photo.src; ov.style.display = 'block'; applyCam(photo); } else ov.style.display = 'none';
+  resize();
+}
+for (const [k, v] of Object.entries(VIEWS)) { const b = document.createElement('button'); b.textContent = k; b.onclick = () => { setPhoto(null); applyCam(v); }; $('#views').append(b); }
+for (const [k, v] of Object.entries(PHOTOS)) { const b = document.createElement('button'); b.textContent = v.label; b.dataset.k = k; b.onclick = () => setPhoto(photo && photo === v ? null : k); $('#photos').append(b); }
+$('#opacity').oninput = e => { $('#overlay').style.opacity = e.target.value; };
+
+// ----- phases & evidence -----
+for (const [k, label] of Object.entries(SECTIONS)) {
+  const l = document.createElement('label'); l.className = 'chk'; l.innerHTML = `<input type="checkbox" checked data-s="${k}"> ${label}`;
+  l.querySelector('input').onchange = e => { groups[k].visible = e.target.checked; }; $('#phases').append(l);
+}
+$('#legend').innerHTML = Object.values(CONFIDENCE).map(c => `<div><span class="sw" style="background:${c.color}"></span>${c.label}</div>`).join('');
+$('#features').innerHTML = features.map(f => `<li><span class="sw" style="background:${CONFIDENCE[f.conf].color}"></span><span>${f.name}<small>${f.source}</small></span></li>`).join('');
+const CM = confidenceMaterials();
+const realMat = new WeakMap(); root.traverse(o => { if (o.isMesh) realMat.set(o, o.material); }); // not userData: the exporter would serialise it
+$('#evidence').onchange = e => root.traverse(o => { if (o.isMesh) o.material = e.target.checked ? CM[o.userData.confidence] : realMat.get(o); });
+
+const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
+$('#stats').innerHTML = `<span>Length</span><b>${size.x.toFixed(1)} m</b><span>Depth</span><b>${size.z.toFixed(1)} m</b><span>Height</span><b>${size.y.toFixed(1)} m</b><span>Triangles</span><b>${Math.round(triangles / 1000)}k</b><span>Meshes</span><b>${root.children.reduce((a, g) => a + g.children.length, 0)}</b><span>Build</span><b>${buildMs} ms</b>`;
+
+// ----- export -----
+async function exportGLB() {
+  const glb = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true, maxTextureSize: 1024 });
+  return glb;
+}
+$('#glb').onclick = async () => { const b = $('#glb'); b.disabled = true; b.textContent = 'Exporting…'; try { const glb = await exportGLB(); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' })); a.download = 'foxleigh_reconstruction_002.glb'; a.click(); } finally { b.disabled = false; b.textContent = 'Download GLB'; } };
+$('#png').onclick = () => { render(); const a = document.createElement('a'); a.download = 'foxleigh_002.png'; a.href = renderer.domElement.toDataURL('image/png'); a.click(); };
+
+// ----- layout -----
+function resize() {
+  const r = stage.getBoundingClientRect(); let w = r.width, h = r.height, x = 0, y = 0;
+  if (photo) { const a = photo.aspect; if (w / h > a) { const nw = h * a; x = (w - nw) / 2; w = nw; } else { const nh = w / a; y = (h - nh) / 2; h = nh; } }
+  const c = renderer.domElement; c.style.left = x + 'px'; c.style.top = y + 'px';
+  Object.assign($('#overlay').style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+  renderer.setSize(w, h); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+applyCam(VIEWS['South-west']);
+function render() { if (useAO) composer.render(); else renderer.render(scene, camera); }
+renderer.setAnimationLoop(() => { controls.update(); render(); });
+
+// hooks for the offline renderer / exporter (tools/render.py)
+window.__fox = { THREE, scene, camera, controls, renderer, root, render, applyCam, setPhoto, setSun, exportGLB, PHOTOS, VIEWS, features, triangles, size: size.toArray() };
+</script>
+</body></html>
