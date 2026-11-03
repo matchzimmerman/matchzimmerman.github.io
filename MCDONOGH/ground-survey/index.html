@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>McDonogh Ground Survey</title>
-<meta name="description" content="Explore McDonogh School's 2024 USGS lidar: relight the bare earth to find old foundations and align 3D models of lost buildings.">
+<meta name="description" content="Explore McDonogh School's 2024 USGS lidar: machine-found foundation leads, trace-to-3D rebuilds, walk the ground at eye height.">
 <meta name="theme-color" content="#061012">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -34,7 +34,20 @@ button{cursor:pointer}
 #brand{top:12px;left:var(--gut);display:flex;flex-direction:column;gap:2px;pointer-events:none;max-width:calc(100% - 200px)}
 #brand h1{margin:0;font:700 13px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--fg);text-shadow:0 1px 6px #000}
 #brand p{margin:0;font:400 11px/1.3 var(--mono);color:var(--dim);letter-spacing:.04em;text-shadow:0 1px 6px #000}
-#tr{top:12px;right:calc(var(--gutR) + 342px);display:flex;gap:6px;align-items:flex-start}
+#tr{top:12px;right:calc(var(--gutR) + 342px);display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;justify-content:flex-end}
+#siteBar button{font-size:11px}
+.cand{position:absolute;transform:translate(-50%,-50%);font:700 10px var(--mono);color:#081214;padding:1px 4px;border-radius:3px;pointer-events:auto;cursor:pointer;white-space:nowrap}
+.cand.raised{background:var(--amber)} .cand.sunken{background:var(--teal)}
+#joy{position:absolute;z-index:7;left:calc(var(--gut) + 8px);bottom:calc(28px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;border:1px solid var(--line2);background:color-mix(in srgb,var(--panel) 70%,transparent);touch-action:none}
+#joy i{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:var(--amber);opacity:.85}
+#walkBar{left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center;background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;font:500 11px var(--mono);color:var(--dim)}
+#driftTag{left:var(--gut);bottom:calc(16px + env(safe-area-inset-bottom,0px));font:700 11px var(--mono);letter-spacing:.18em;color:var(--amber);text-shadow:0 1px 6px #000;pointer-events:none}
+body.drift #panel, body.drift #tr, body.drift #readout, body.drift #scalebar, body.drift #marks, body.drift #hint, body.drift #brand p{display:none!important}
+body.drift #view{cursor:none}
+.gcpTable{display:grid;grid-template-columns:auto 1fr auto auto;gap:4px 8px;font:500 11px var(--mono);align-items:center;font-variant-numeric:tabular-nums}
+.gcpTable button{border:1px solid var(--line);background:none;border-radius:4px;font:600 10px var(--mono);color:var(--dim);padding:2px 6px}
+.gcpTable .hold{color:var(--teal)} .gcpTable .fit{color:var(--amber)}
+.gate{font:500 11px/1.45 var(--mono);color:var(--dim);border-left:2px solid var(--teal);padding-left:8px}
 .chipbar{display:flex;background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:6px;overflow:hidden;backdrop-filter:blur(6px)}
 .chipbar button{border:0;background:transparent;padding:7px 11px;font:500 12px var(--mono);letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
 .chipbar button+button{border-left:1px solid var(--line)}
@@ -135,7 +148,10 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
 
 @media (max-width:720px){
   #brand{max-width:calc(100% - 200px)}
-  #tr{right:var(--gutR)}
+  #tr{right:var(--gutR);left:var(--gut);justify-content:flex-start}
+  body.multi #brand{display:none}
+  body #readout{top:100px}
+  body:not(.multi) #readout{top:92px}
   #brand h1{font-size:11.5px}
   #brand p{display:none}
   #readout{top:40px;font-size:10.5px;padding:5px 8px}
@@ -162,10 +178,13 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
   <div id="readout" class="float"><span class="k">move over the map</span></div>
 
   <div id="tr" class="float">
+    <div class="chipbar" id="siteBar" role="group" aria-label="Site" hidden></div>
     <div class="chipbar" role="group" aria-label="View">
       <button id="vPlan" aria-pressed="true">Plan</button>
       <button id="v3d" aria-pressed="false">3D</button>
+      <button id="vWalk" aria-pressed="false" title="Stand in the landscape at eye height">Walk</button>
     </div>
+    <button class="iconbtn" id="driftBtn" title="Drift: slow camera and moving light, for MZTV" aria-label="Drift mode">◐</button>
     <button class="iconbtn" id="north" title="Reset to north-up" aria-label="Reset to north-up"><span>N</span></button>
     <div id="goto">
       <button class="iconbtn" id="gotoBtn" title="Go to a place" aria-label="Go to a place" aria-expanded="false">⌖</button>
@@ -173,9 +192,12 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
     </div>
   </div>
 
-  <div id="hint" class="float" hidden><span id="hintText"></span><button id="hintCancel">Cancel</button></div>
+  <div id="hint" class="float" hidden><span id="hintText"></span><button id="hintUndo" hidden>Undo</button><button id="hintFinish" hidden>Finish</button><button id="hintCancel">Cancel</button></div>
   <div id="scalebar" class="float"><span id="sbLabel">100 m</span><i id="sbBar" style="width:100px"></i></div>
   <div id="toast" class="float" hidden></div>
+  <div id="joy" hidden><i></i></div>
+  <div id="walkBar" class="float" hidden><span id="walkText">drag to look · WASD / stick to walk · shift to run</span><button class="btn" id="walkExit">Exit walk</button></div>
+  <div id="driftTag" class="float" hidden></div>
 
   <aside id="panel" aria-label="Survey controls">
     <button id="grab" aria-label="Expand or collapse panel"></button>
@@ -213,6 +235,16 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         <input type="range" id="az" min="0" max="360" step="1" value="315">
         <div class="lab">Sun altitude <output id="altOut"></output></div>
         <input type="range" id="alt" min="3" max="80" step="1" value="30">
+        <div class="lab">Real sun for a date and time</div>
+        <div class="row"><input type="datetime-local" id="sunWhen" style="flex:1;background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 6px;font:500 12px var(--mono)"><button class="btn" id="sunGo">Use</button><button class="btn ghost" id="sunNow">Now</button></div>
+        <p class="note" id="sunNote">Low winter sun across the site raises the faintest earthworks.</p>
+      </div>
+
+      <div class="grp" id="waterGrp" hidden>
+        <div class="lab">Water level <output id="lvlOut"></output></div>
+        <input type="range" id="lvl" min="69" max="76" step="0.05" value="72.25">
+        <div class="btns"><button class="btn" id="floodPlay">▶ Fill the valley</button><button class="btn ghost" id="lvlReset">2024 level</button></div>
+        <p class="note">Lower the water to see where the sounded lake bed sits, or raise it over the banks. An illustration on today's ground and modern sediment, not the 1915 valley floor.</p>
       </div>
 
       <div class="grp" data-for="slope">
@@ -259,6 +291,15 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
       <div class="btns">
         <button class="btn" id="tPin">＋ Drop a pin</button>
         <button class="btn" id="tProf">⟋ Profile line</button>
+        <button class="btn" id="tTrace" style="grid-column:1/-1">▱ Trace a footprint → 3D building</button>
+      </div>
+
+      <div class="grp" id="candGrp" hidden>
+        <div class="lab">Machine finds <output id="candCount"></output></div>
+        <label class="toggle"><input type="checkbox" id="candShow" checked> Outline on the map</label>
+        <p class="note" id="candNote">Rectangular bumps and hollows the scan found in the ground, ranked. Amber sits higher, teal lower. Each one is a lead to check, not a find.</p>
+        <div class="list" id="candList"></div>
+        <button class="btn ghost" id="candMore">Show all</button>
       </div>
 
       <div class="grp" id="profGrp" hidden>
@@ -282,6 +323,7 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         <p class="note">Pins and model placements save in this browser automatically. To move them to another device, copy the scene here and paste it there.</p>
         <div class="btns">
           <button class="btn" id="copyScene">Copy scene</button>
+          <button class="btn" id="copyGeo" style="grid-column:1/-1">Copy GeoJSON (pins, footprints, plans)</button>
           <button class="btn" id="pasteToggle">Paste scene</button>
         </div>
         <div class="grp" id="pasteGrp" hidden>
@@ -296,6 +338,7 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         <label class="btn pri" for="file" style="cursor:pointer">Import model or plan image</label>
         <input type="file" id="file" accept=".glb,.gltf,.obj,.stl,.dae,.png,.jpg,.jpeg,.webp" multiple hidden>
         <p class="note">3D: <b>.glb</b> (best), .gltf (single file), .obj, .stl, .dae (SketchUp export). Images: historic site plans or aerials, placed flat on the ground. Files stay in this browser.</p>
+        <div id="preOverlays" class="grp" hidden></div>
       </div>
       <div class="grp">
         <div class="lab">In the scene</div>
@@ -316,6 +359,21 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
           <label class="f"><span>Heading °</span><input id="fH" inputmode="decimal"></label>
           <label class="f"><span id="fSLab">Scale ×</span><input id="fS" inputmode="decimal"></label>
           <label class="f"><span>Opacity</span><input id="fO" type="range" min="0.1" max="1" step="0.05"></label>
+        </div>
+        <div class="fields" id="massFields" hidden>
+          <label class="f"><span>Wall height m</span><input id="mH" inputmode="decimal"></label>
+          <label class="f"><span>Roof</span><select id="mRoof"><option value="gable">gable</option><option value="hip">hip</option><option value="flat">flat</option></select></label>
+          <label class="f"><span>Roof rise m</span><input id="mR" inputmode="decimal"></label>
+          <label class="f"><span>Footprint</span><input id="mInfo" readonly></label>
+        </div>
+        <div class="grp" id="geoGrp" hidden>
+          <div class="lab">Georeference <output id="geoStat"></output></div>
+          <p class="note">Pair a point on the plan with the same spot on the ground. Two pairs place it; mark extra pairs as checks to measure the error honestly.</p>
+          <div class="seg" id="geoModel"><button data-v="sim" aria-pressed="true">Similarity</button><button data-v="aff">Affine</button></div>
+          <div class="btns"><button class="btn" id="gcpAdd">＋ Control point</button><button class="btn ghost" id="geoClear">Clear</button></div>
+          <div class="gcpTable" id="gcpTable"></div>
+          <div class="gate" id="gateNote" hidden></div>
+          <button class="btn ghost" id="gcpCopy">Copy control-point ledger (CSV)</button>
         </div>
         <div class="fields" id="fmtFields">
           <label class="f"><span>File units</span><select id="fU">
@@ -361,6 +419,7 @@ import {TransformControls} from 'three/addons/controls/TransformControls.js';
    World axes: x = east, y = up, z = south (metres). Origin = extent centre.
    gp = global 0.5 m pixel coordinate of the 5120 x 6144 bare-earth grid.            */
 const $ = id => document.getElementById(id);
+let DATA = 'data', SITES = null, SITE = null;
 const HREF = 150;            // metres NAVD88 at world y = 0
 let M, E0, NTOP, Ec, Nc, WM, HM, GW, GH;
 const TB = 2;                // tile border in px
@@ -489,10 +548,11 @@ const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreferenc
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setClearColor(0x061012);
 const scene = new THREE.Scene();
+const SKY = new THREE.Color(0x2a3f45), INK = new THREE.Color(0x061012);
 const ortho = new THREE.OrthographicCamera(-1,1,1,-1,1,12000);
 ortho.up.set(0,0,-1);
 const persp = new THREE.PerspectiveCamera(42,1,2,20000);
-const cam = () => S.view.mode==='3d' ? persp : ortho;
+const cam = () => S.view.mode==='plan' ? ortho : persp;
 
 const hemi = new THREE.HemisphereLight(0xdff3ee, 0x22302c, 1.4); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); scene.add(sun); scene.add(sun.target);
@@ -501,7 +561,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.6); scene.add(sun); scene.add
 const G = {
   uOv:{value:dummy}, uSm:{value:dummy}, uIntOv:{value:dummy}, uHasIntOv:{value:0},
   uMode:{value:0}, uSun:{value:new THREE.Vector3()}, uZf:{value:2}, uGain:{value:4},
-  uSlopeMax:{value:25}, uContour:{value:0}, uSurf:{value:0}, uHmin:{value:120}, uHmax:{value:185}, uWater:{value:0},
+  uSlopeMax:{value:25}, uContour:{value:0}, uSurf:{value:0}, uHmin:{value:120}, uHmax:{value:185}, uWater:{value:0}, uLevel:{value:0}, uFog:{value:0}, uCam:{value:new THREE.Vector3()}, uFogCol:{value:new THREE.Color(0x2a3f45)},
   uExag:{value:1}, uLift:{value:0}, uHRef:{value:HREF}, uHalf:{value:new THREE.Vector2()}, uOvMax:{value:new THREE.Vector2()}, uHBase:{value:100}, uBathy:{value:0}, uWaterFlat:{value:0}
 };
 const COMMON = /* glsl */`
@@ -518,20 +578,20 @@ float ovH(sampler2D s, vec2 gp){ vec2 u = gp*0.25 + 1.5; vec2 f = floor(u); vec2
 `;
 const VERT = COMMON + /* glsl */`
 uniform float uExag, uLift, uHRef;
-varying vec2 vGp;
+varying vec2 vGp; varying vec3 vW;
 void main(){
   vec4 w = modelMatrix * vec4(position,1.0);
   vGp = vec2((w.x + uHalf.x)*2.0, (w.z + uHalf.y)*2.0);
   float h = uHasHi > 0.5 ? hiH(vGp) : ovH(uOv, vGp);
   float lift = 0.0;
   if(uLift > 0.5){ vec4 b = texelFetch(uOv, clamp(ivec2(floor(vGp*0.25))+2, ivec2(0), ivec2(uOvMax)), 0); float cb = floor(b.b*255.0+0.5); lift = cb > 254.5 ? 0.0 : mod(cb,128.0)*0.4; }
-  w.y = (h - uHRef + lift) * uExag;
+  w.y = (h - uHRef + lift) * uExag; vW = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 const FRAG = COMMON + /* glsl */`
 uniform sampler2D uSm, uInt, uIntOv; uniform float uHasInt, uHasIntOv;
-uniform int uMode; uniform vec3 uSun; uniform float uZf, uGain, uSlopeMax, uContour, uSurf, uHmin, uHmax, uWater;
-varying vec2 vGp;
+uniform int uMode; uniform vec3 uSun; uniform float uZf, uGain, uSlopeMax, uContour, uSurf, uHmin, uHmax, uWater, uLevel;
+varying vec2 vGp; varying vec3 vW; uniform float uFog; uniform vec3 uCam, uFogCol;
 out vec4 fragColor;
 float H(vec2 p, bool hi){ return hi ? hiH(p) : ovH(uOv, p); }
 vec3 ramp3(vec3 a, vec3 b, vec3 c, float t){ return t < 0.5 ? mix(a,b,t*2.0) : mix(b,c,t*2.0-1.0); }
@@ -579,18 +639,19 @@ void main(){
     col = vec3(0.04,0.14,0.19);
   }
   vec4 wb = hi ? texelFetch(uHi, ivec2(floor(vGp - uTileOff))+2, 0) : texelFetch(uOv, ivec2(floor(vGp*0.25))+2, 0);
-  bool isWater = uWaterFlat > 0.0 && wb.b > 0.998;
+  bool flagW = uWaterFlat > 0.0 && wb.b > 0.998;
+  bool isWater = uWaterFlat > 0.0 && ((flagW && (uBathy < 0.5 || h0 <= uLevel + 0.003)) || h0 < uLevel - 0.005);
   if(isWater){
-    if(uBathy > 0.5){
-      float dpt = clamp((uWaterFlat - h0) / 1.8, 0.0, 1.0);
-      vec3 wc = mix(vec3(0.20,0.46,0.52), vec3(0.03,0.10,0.18), dpt);
-      col = wc * (0.55 + 0.6*ms);
-    } else col = vec3(0.04,0.14,0.19);
+    float dpt = clamp((uLevel - h0) / 2.5, 0.0, 1.0);
+    vec3 wc = mix(vec3(0.16,0.42,0.48), vec3(0.03,0.10,0.18), dpt);
+    col = (uBathy > 0.5 || !flagW) ? wc * (0.55 + 0.6*ms) : vec3(0.04,0.14,0.19);
+  } else if(flagW && uBathy > 0.5){
+    col *= vec3(0.86, 0.78, 0.64);   // exposed lake bed
   }
   if(uSurf > 0.5 && !isWater){
     vec4 b = hi ? texelFetch(uHi, ivec2(floor(vGp - uTileOff))+2, 0) : texelFetch(uOv, ivec2(floor(vGp*0.25))+2, 0);
     float code = floor(b.b*255.0+0.5);
-    if(code >= 128.0 && mod(uSurf, 2.0) > 0.5){
+    if(code >= 128.0 && code < 254.5 && mod(uSurf, 2.0) > 0.5){
       float hatch = step(mod(gl_FragCoord.x + gl_FragCoord.y, 7.0), 2.2);
       col = mix(col, vec3(0.93,0.90,0.80), 0.30) ;
       col = mix(col, amber, hatch*0.75);
@@ -603,6 +664,7 @@ void main(){
     float major = step(abs(mod(floor(c+0.5), 5.0)), 0.0);
     col = mix(col, major > 0.5 ? amber : vec3(0.98,0.86,0.62), line * (major > 0.5 ? 0.85 : 0.5));
   }
+  if(uFog > 0.5) col = mix(col, uFogCol, smoothstep(120.0, 900.0, distance(vW, uCam)));
   fragColor = vec4(col, 1.0);
 }`;
 
@@ -626,6 +688,7 @@ let inflight = 0; const MAXRES = innerWidth < 800 ? 14 : 30;
 function neededTiles(){
   const need = []; let cx, cz, rad, hiOK;
   if(S.view.mode==='plan'){ cx=S.view.cx; cz=S.view.cz; const w=canvas.clientWidth*S.view.mpp, h=canvas.clientHeight*S.view.mpp; rad=Math.hypot(w,h)/2+60; hiOK = S.view.mpp < 2.2; }
+  else if(S.view.mode==='walk'){ cx=persp.position.x; cz=persp.position.z; rad=450; hiOK=true; }
   else { const t=controls.target; cx=t.x; cz=t.z; const d=persp.position.distanceTo(t); rad=Math.min(d*1.4, 1600); hiOK = d < 2600; }
   if(!hiOK) return need;
   for(const t of tiles){
@@ -651,7 +714,7 @@ function updateTiles(){
 async function loadTile(t){
   t.state=1; inflight++;
   try{
-    t.data = await decodeImage(`data/t/${t.c}_${t.r}.webp`);
+    t.data = await decodeImage(`${DATA}/t/${t.c}_${t.r}.webp`);
     t.tex = heightTex(t.data); t.state=2;
     const u=t.mesh.material.uniforms; u.uHi.value=t.tex; u.uHasHi.value=1;
     if(M.probe && !probeChecked){ probeCheck(); }
@@ -660,7 +723,7 @@ async function loadTile(t){
 }
 async function loadInt(t){
   t.istate=1; inflight++;
-  try{ t.itex = await photoTex(`data/i/${t.c}_${t.r}.jpg`); t.istate=2; const u=t.mesh.material.uniforms; u.uInt.value=t.itex; u.uHasInt.value=1; }
+  try{ t.itex = await photoTex(`${DATA}/i/${t.c}_${t.r}.jpg`); t.istate=2; const u=t.mesh.material.uniforms; u.uInt.value=t.itex; u.uHasInt.value=1; }
   catch(e){ t.istate=0; }
   inflight--; req();
 }
@@ -829,6 +892,9 @@ function updateOverlays(){
   if(prof.a) dots.push([prof.a,'A','']); if(prof.b) dots.push([prof.b,'B','']);
   if(profCursor) dots.push([profCursor,'','b']);
   align.pts.forEach((p,i)=>dots.push([p, ['1','1′','2','2′'][i], i%2?'':'b']));
+  trace.pts.forEach((p,i)=>dots.push([p, String(i+1), 'b']));
+  if(gcpPend) dots.push([gcpPend.world, 'plan', '']);
+  candLabels(host);
   for(const [p,label,cls] of dots){ const y=p.y!==undefined?p.y:(renderY(p.x,p.z)??0); const s=project(p.x,y,p.z); if(!s.vis) continue;
     const d=document.createElement('div'); d.className='dot '+cls; d.style.left=s.x+'px'; d.style.top=s.y+'px'; if(label) d.innerHTML=`<em>${label}</em>`; host.appendChild(d); }
   // scale bar & north
@@ -850,6 +916,7 @@ function frame(){
   if(S.view.mode==='plan') applyPlanCam();
   updateTiles();
   const ex=exag(); G.uExag.value=ex; G.uLift.value=(S.layer.lift&&S.view.mode==='3d'&&M.surface)?1:0;
+  frameHook();
   renderer.render(scene, cam());
   updateOverlays(); reqReadout();
 }
@@ -874,7 +941,7 @@ function applyLayer(){
   $('ctSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===L.contour));
   for(const [id,k,fmt] of [['gain','gain',v=>`half colour at ±${(1/v*100).toFixed(0)} cm`],['az','az',v=>`${v}°`],['alt','alt',v=>`${v}°`],['slopeMax','slopeMax',v=>`${v}°`],['zf','zf',v=>`${v}×`],['ex','exag',v=>`${v}×`]]){ $(id).value=L[k]; const out=$(({gain:'gainOut',az:'azOut',alt:'altOut',slopeMax:'slopeOut',zf:'zfOut',ex:'exOut'})[id]); if(out) out.textContent=fmt(L[k]); }
   $('surf').checked=L.surf; $('trees').checked=!!L.trees; $('lift').checked=L.lift; $('bathy').checked=L.bathy; G.uBathy.value=L.bathy?1:0;
-  $('bathyGrp').hidden=!M.bathy; if(M.bathy) $('bathyNote').textContent = M.bathy + '. Where the lidar saw only flat water, depth comes from sonar soundings: modern sediment, not the 1915 street level.';
+  $('bathyGrp').hidden=!M.bathy; $('waterGrp').hidden=!WF; if(WF){ if(L.level==null) L.level=WF; G.uLevel.value=L.level; $('lvl').value=L.level; $('lvlOut').textContent=L.level.toFixed(2)+' m'; } else G.uLevel.value=0; if(M.bathy) $('bathyNote').textContent = M.bathy + '. Where the lidar saw only flat water, depth comes from sonar soundings: modern sediment, not the 1915 street level.';
   $('surfGrp').hidden=!M.surface; $('liftWrap').hidden=!M.surface;
   $('mInt').disabled=!M.intensity;
   if(L.mode==='intensity' && M.intensity && !ovi) loadOvi();
@@ -888,7 +955,7 @@ $('surf').addEventListener('change',()=>{ S.layer.surf=$('surf').checked; applyL
 $('trees').addEventListener('change',()=>{ S.layer.trees=$('trees').checked; applyLayer(); });
 $('bathy').addEventListener('change',()=>{ S.layer.bathy=$('bathy').checked; applyLayer(); placeAllObjects(); });
 $('lift').addEventListener('change',()=>{ S.layer.lift=$('lift').checked; applyLayer(); });
-async function loadOvi(){ try{ ovi={tex:await photoTex('data/ovi.jpg')}; G.uIntOv.value=ovi.tex; G.uHasIntOv.value=1; req(); }catch(e){} }
+async function loadOvi(){ try{ ovi={tex:await photoTex(DATA+'/ovi.jpg')}; G.uIntOv.value=ovi.tex; G.uHasIntOv.value=1; req(); }catch(e){} }
 
 $('vPlan').onclick=()=>setViewMode('plan'); $('v3d').onclick=()=>setViewMode('3d');
 $('north').onclick=()=>{ if(S.view.mode==='3d'){ const t=controls.target, d=persp.position.distanceTo(t); const pol=Math.acos(Math.min(1,(persp.position.y-t.y)/d)); persp.position.set(t.x, t.y+d*Math.cos(pol), t.z+d*Math.sin(pol)); controls.update(); req(); } };
@@ -922,8 +989,15 @@ function setTool(t){
   if(t==='pin') hint('Tap the ground to drop a pin');
   else if(t==='prof') hint(prof.a&&!prof.b ? 'Tap the end point' : 'Tap the start of the profile line');
   else if(t==='align') hint('1 of 4 · tap a corner on the model');
+  else if(t==='trace') hint('Tap each corner of the footprint, then Finish');
+  else if(t==='gcp') hint('Tap a point on the plan image');
+  else if(t==='walkpick') hint('Tap where you want to stand');
   else hint(null);
   if(t==='prof'){ prof.a=prof.b=null; prof.samples=null; profLine.visible=false; $('profGrp').hidden=true; }
+  if(t!=='trace'){ trace.pts=[]; updateTraceLine(); }
+  if(t!=='gcp') gcpPend=null;
+  $('hintFinish').hidden = t!=='trace'; $('hintUndo').hidden = t!=='trace';
+  $('tTrace').classList.toggle('on', t==='trace');
   if(t && sheetSmall()) setSheet(false);
   req();
 }
@@ -951,6 +1025,9 @@ function onTap(cx,cy){
     else { prof.b=p; setTool(null); prof.a=prof.a; buildProfile(); }
     return; }
   if(tool==='align'){ alignTap(cx,cy); return; }
+  if(tool==='trace'){ const p=pickGround(cx,cy); if(p){ trace.pts.push({x:p.x,z:p.z}); updateTraceLine(); hint(`${trace.pts.length} corner${trace.pts.length>1?'s':''} · ${trace.pts.length>=3?polyStats(trace.pts):'keep tapping'}`); req(); } return; }
+  if(tool==='gcp'){ gcpTap(cx,cy); return; }
+  if(tool==='walkpick'){ const p=pickGround(cx,cy); if(p){ setTool(null); startWalk(p); } return; }
   const hit=pickObject(cx,cy);
   if(hit&&hit.obj){ select(hit.obj.id); openTab('models'); }
   else if(selId){ select(null); }
@@ -1037,13 +1114,14 @@ $('prof').addEventListener('pointerleave',()=>{ profCursor=null; drawProfile(); 
 $('profClear').onclick=()=>{ prof.a=prof.b=prof.samples=null; profLine.visible=false; $('profGrp').hidden=true; req(); };
 
 /* scene copy / paste */
-$('copyScene').onclick=()=>{ syncViewState(); const out={app:'mcd-ground-survey',v:1, pins:S.pins, placements:S.objs.map(o=>({name:o.name,kind:o.kind,E:o.E,N:o.N,elev:o.elev,heading:o.heading,scale:o.scale,units:o.units,up:o.up,opacity:o.opacity,xray:o.xray,ghost:o.ghost}))}; copyText(JSON.stringify(out,null,1),'Scene copied'); };
+$('copyScene').onclick=()=>{ syncViewState(); const out={app:'mcd-ground-survey',v:1, pins:S.pins, placements:S.objs.map(o=>({id:o.id,name:o.name,kind:o.kind,E:o.E,N:o.N,elev:o.elev,heading:o.heading,scale:o.scale,units:o.units,up:o.up,opacity:o.opacity,xray:o.xray,ghost:o.ghost,poly:o.poly,height:o.height,roof:o.roof,rise:o.rise,gcps:o.gcps,geo:o.geo,geoModel:o.geoModel}))}; copyText(JSON.stringify(out,null,1),'Scene copied'); };
 $('pasteToggle').onclick=()=>{ $('pasteGrp').hidden=!$('pasteGrp').hidden; };
 $('pasteApply').onclick=()=>{
   try{ const j=JSON.parse($('pasteBox').value);
     if(Array.isArray(j.pins)){ const have=new Set(S.pins.map(p=>p.id)); j.pins.forEach(p=>{ if(!have.has(p.id)) S.pins.push(p); }); }
     let applied=0, waiting=0;
-    (j.placements||[]).forEach(pl=>{ const o=S.objs.find(x=>x.name===pl.name); if(o){ Object.assign(o,pl); placeObject(o); applyLook(o); applied++; } else { S.pending[pl.name]=pl; waiting++; } });
+    (j.placements||[]).forEach(pl=>{ if(pl.kind==='mass' && !S.objs.find(x=>x.id===pl.id)){ const r={...pl, id:pl.id||('m'+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), visible:true}; S.objs.push(r); realizeMass(r); applied++; return; }
+      const o=S.objs.find(x=>x.name===pl.name); if(o){ Object.assign(o,pl); placeObject(o); applyLook(o); applied++; } else { S.pending[pl.name]=pl; waiting++; } });
     renderPins(); renderObjs(); fillEditor(); save(); req(); $('pasteGrp').hidden=true; $('pasteBox').value='';
     toast(`Loaded ${j.pins?.length||0} pins${applied?`, placed ${applied} models`:''}${waiting?`; ${waiting} placements wait for their files`:''}`, 3600);
   }catch(e){ toast('That text is not a scene copied from this tool'); }
@@ -1057,7 +1135,7 @@ $('file').addEventListener('change', async e=>{
   for(const f of e.target.files){ await importFile(f); }
   e.target.value='';
 });
-async function importFile(file){
+async function importFile(file, opts){
   const ext=file.name.split('.').pop().toLowerCase();
   const isImg=['png','jpg','jpeg','webp'].includes(ext);
   const id='o'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
@@ -1065,6 +1143,7 @@ async function importFile(file){
   const {E,N}=toUTM(cxz.x,cxz.z);
   const rec={id, name:file.name, kind:isImg?'image':'model', ext, E:+E.toFixed(2), N:+N.toFixed(2), elev:heightAt(cxz.x,cxz.z)??150, heading:0,
     scale:isImg? +(Math.max(40, span*0.5)/100).toFixed(2) : 1, units: ext==='stl'?0.001:1, up: (ext==='stl')?'Z':'Y', opacity:isImg?0.6:0.85, xray:isImg, ghost:false, visible:true};
+  if(opts) Object.assign(rec, opts);
   const pend=S.pending[file.name]; if(pend){ Object.assign(rec, pend); delete S.pending[file.name]; }
   const stored = IDB.db ? await idbPut(id, file) : false;
   rec.stored=!!stored;
@@ -1081,8 +1160,9 @@ async function realize(rec, file){
   const orient=new THREE.Group(); wrap.add(orient);
   let content;
   if(rec.kind==='image'){
-    const bmp=await createImageBitmap(file);
-    const tex=new THREE.Texture(bmp); tex.colorSpace=THREE.SRGBColorSpace; tex.needsUpdate=true; tex.anisotropy=8;
+    let bmp; try{ bmp=await createImageBitmap(file,{imageOrientation:'flipY'}); }catch(e){ bmp=await createImageBitmap(file); }
+    const tex=new THREE.Texture(bmp); tex.flipY=false; tex.colorSpace=THREE.SRGBColorSpace; tex.needsUpdate=true; tex.anisotropy=8;
+    rec.imgW=bmp.width; rec.imgH=bmp.height;
     const aspect=bmp.height/bmp.width;
     const geo=new THREE.PlaneGeometry(100, 100*aspect); geo.rotateX(-Math.PI/2);
     content=new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map:tex, transparent:true, side:THREE.DoubleSide, depthWrite:false}));
@@ -1094,7 +1174,7 @@ async function realize(rec, file){
   }
   content.traverse(n=>{ if(n.isMesh){ n.userData.base = n.material; } });
   rec.wrap=wrap; rec.orient=orient; rec.content=content;
-  scene.add(wrap); applyFormat(rec); placeObject(rec); applyLook(rec); renderObjs(); req();
+  scene.add(wrap); applyFormat(rec); if(rec.kind==='image' && rec.geo) applyGeo(rec); placeObject(rec); applyLook(rec); renderObjs(); req();
 }
 async function loadModel(ext, file){
   const url=URL.createObjectURL(file);
@@ -1108,7 +1188,7 @@ async function loadModel(ext, file){
 }
 /* units + up axis; then recentre so the wrapper origin is the bottom-centre of the footprint */
 function applyFormat(o){
-  const c=o.content; if(o.kind==='image') { o.orient.position.set(0,0,0); return; }
+  const c=o.content; if(o.kind!=='model') { o.orient.position.set(0,0,0); return; }
   c.position.set(0,0,0); c.rotation.set(o.up==='Z'?-Math.PI/2:0,0,0); c.scale.setScalar(o.units);
   o.orient.position.set(0,0,0); o.orient.updateMatrixWorld(true);
   const prev=o.wrap.matrix.clone(); o.wrap.position.set(0,0,0); o.wrap.rotation.set(0,0,0); o.wrap.scale.setScalar(1); o.wrap.updateMatrixWorld(true);
@@ -1117,7 +1197,9 @@ function applyFormat(o){
   o.size=box.getSize(new THREE.Vector3());
 }
 function placeObject(o){
-  if(!o.wrap) return; const w=toWorld(o.E,o.N);
+  if(!o.wrap) return;
+  if(o.kind==='image' && o.geo){ o.wrap.position.set(0,(o.elev-HREF)*exag(),0); o.wrap.rotation.set(0,0,0); o.wrap.scale.setScalar(1); o.wrap.visible=o.visible!==false; o.wrap.updateMatrixWorld(true); if(o.id===selId) updateBox(); return; }
+  const w=toWorld(o.E,o.N);
   o.wrap.position.set(w.x, (o.elev-HREF)*exag(), w.z);
   o.wrap.rotation.set(0, -o.heading*Math.PI/180, 0);
   const s = o.kind==='image' ? o.scale : o.scale; o.wrap.scale.setScalar(s);
@@ -1157,7 +1239,7 @@ function applyLook(o){
 function updateBox(){ const o=selObj(); if(!o||!o.wrap||!o.wrap.visible){ boxHelper.visible=false; return; } boxHelper.box.setFromObject(o.wrap); boxHelper.visible=true; }
 function updateGizmo(){
   const o=selObj(); const mode=$('gizSeg').querySelector('[aria-pressed="true"]').dataset.v;
-  if(!o||!o.wrap||mode==='off'||tool==='align'){ tc.detach(); req(); return; }
+  if(!o||!o.wrap||mode==='off'||tool==='align'||tool==='gcp'||(o.kind==='image'&&o.geo)){ tc.detach(); req(); return; }
   tc.attach(o.wrap); tc.setMode(mode);
   if(mode==='translate'){ tc.showX=true; tc.showZ=true; tc.showY=S.view.mode==='3d'; }
   else { tc.showX=false; tc.showZ=false; tc.showY=true; }
@@ -1172,7 +1254,7 @@ function renderObjs(){
   L.innerHTML='';
   for(const o of S.objs){
     const it=document.createElement('div'); it.className='item'+(o.id===selId?' sel':'');
-    const dims = o.size ? `${(o.size.x*o.scale).toFixed(1)} × ${(o.size.z*o.scale).toFixed(1)} m` : (o.kind==='image' ? `${(o.scale*100).toFixed(0)} m wide` : '');
+    const dims = o.kind==='mass' ? `building · ${polyArea(o.poly).toFixed(0)} m² · ${o.height} m` : o.size ? `${(o.size.x*o.scale).toFixed(1)} × ${(o.size.z*o.scale).toFixed(1)} m` : (o.kind==='image' ? (o.geo ? `georeferenced · ${o.gcps.length} pts` : `${(o.scale*100).toFixed(0)} m wide`) : '');
     const status = o.wrap ? `${dims} · ${o.heading.toFixed(1)}°` : 'file not in this browser — import it again';
     it.innerHTML=`<input class="nm" aria-label="Name"><div class="meta">${status}</div><div class="acts"><button data-a="vis" title="Show or hide">${o.visible===false?'○':'●'}</button><button data-a="go" title="Go to">⌖</button></div>`;
     const nm=it.querySelector('.nm'); nm.value=o.name; nm.addEventListener('input',()=>{o.name=nm.value; save(); $('edName').textContent=o.name;}); nm.addEventListener('focus',()=>{ if(selId!==o.id) select(o.id); });
@@ -1189,6 +1271,7 @@ function fillEditor(){
   $('fO').value=o.opacity; $('fX').checked=!!o.xray; $('fG').checked=!!o.ghost; $('fG').parentElement.hidden=o.kind==='image';
   $('fmtFields').hidden=o.kind==='image'; $('fU').value=String(o.units); $('fUp').value=o.up;
   $('bDrop').disabled=false; delArm(false);
+  fillExtra(o);
 }
 function num(v){ const n=parseFloat(String(v).replace(/,/g,'')); return Number.isFinite(n)?n:null; }
 for(const [id,k] of [['fE','E'],['fN','N'],['fZ','elev'],['fH','heading']]) $(id).addEventListener('change',()=>{ const o=selObj(); const v=num($(id).value); if(!o||v===null) return fillEditor(); o[k]=k==='heading'?((v%360)+360)%360:v; placeObject(o); save(); renderObjs(); req(); });
@@ -1253,11 +1336,351 @@ addEventListener('keydown',e=>{
   if(k){ e.preventDefault(); k(); placeObject(o); fillEditor(); save(); req(); }
 });
 
+/* ================================================================== EXTRAS
+   site switcher · machine finds · trace → building · georeferencing · water level ·
+   real sun · walk · drift · GeoJSON                                               */
+
+/* ---------- small geometry helpers ---------- */
+function polyArea(pts){ if(!pts||pts.length<3) return 0; let a=0; for(let i=0;i<pts.length;i++){ const [x1,z1]=pts[i].x!==undefined?[pts[i].x,pts[i].z]:pts[i], [x2,z2]=pts[(i+1)%pts.length].x!==undefined?[pts[(i+1)%pts.length].x,pts[(i+1)%pts.length].z]:pts[(i+1)%pts.length]; a+=x1*z2-x2*z1; } return Math.abs(a)/2; }
+function polyPerim(pts){ let s=0; for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; s+=Math.hypot(b.x-a.x,b.z-a.z); } return s; }
+function polyStats(pts){ return pts.length>=3 ? `${polyArea(pts).toFixed(1)} m² · ${polyPerim(pts).toFixed(1)} m around` : ''; }
+/* oriented minimum rectangle via hull edge directions */
+function minRect(pts){
+  const P=pts.map(p=>[p[0],p[1]]); let best=null;
+  for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; const L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<1e-6) continue;
+    const ux=(b[0]-a[0])/L, uz=(b[1]-a[1])/L; let mn1=1e9,mx1=-1e9,mn2=1e9,mx2=-1e9;
+    for(const q of P){ const s=q[0]*ux+q[1]*uz, t=-q[0]*uz+q[1]*ux; mn1=Math.min(mn1,s); mx1=Math.max(mx1,s); mn2=Math.min(mn2,t); mx2=Math.max(mx2,t); }
+    const area=(mx1-mn1)*(mx2-mn2); if(!best||area<best.area){ const cs=(mn1+mx1)/2, ct=(mn2+mx2)/2; best={area, ux, uz, a:(mx1-mn1)/2, b:(mx2-mn2)/2, cx:cs*ux-ct*uz, cz:cs*uz+ct*ux}; } }
+  if(best.b>best.a){ const t=best.a; best.a=best.b; best.b=t; const ux=best.ux; best.ux=-best.uz; best.uz=ux; }
+  return best;
+}
+
+/* ---------- site switcher ---------- */
+function buildSiteBar(){
+  const bar=$('siteBar'); if(!SITES||SITES.length<2) return; bar.hidden=false; document.body.classList.add('multi');
+  bar.innerHTML=SITES.map(s=>`<button data-s="${s.slug}" aria-pressed="${s.slug===SITE.slug}">${s.name}</button>`).join('');
+  bar.onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.s===SITE.slug) return; syncViewState(); try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(_){} location.hash=b.dataset.s; location.reload(); };
+}
+addEventListener('hashchange',()=>{ if(SITES && SITE && location.hash.slice(1)!==SITE.slug && SITES.some(s=>s.slug===location.hash.slice(1))) location.reload(); });
+
+/* ---------- machine finds ---------- */
+let CAND=[], candShowAll=false;
+const candLines=new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({vertexColors:true, depthTest:false, transparent:true}));
+candLines.renderOrder=15; candLines.frustumCulled=false; candLines.visible=false; scene.add(candLines);
+const candVisible=()=>CAND.filter(c=>!(S.dismissed||[]).includes(c.id));
+function buildCandLines(){
+  const arr=[], col=[]; const show=$('candShow').checked && CAND.length;
+  if(show){ for(const c of candVisible()){ const pts=c.poly.map(([E,N])=>{ const w=toWorld(E,N); return [w.x,(renderY(w.x,w.z)??0)+0.4,w.z]; });
+    const rgb=c.kind==='raised'?[0.94,0.64,0.23]:[0.24,0.72,0.70];
+    for(let i=0;i<4;i++){ arr.push(...pts[i],...pts[(i+1)%4]); col.push(...rgb,...rgb); } } }
+  candLines.geometry.dispose(); candLines.geometry=new THREE.BufferGeometry();
+  candLines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(arr,3)); candLines.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
+  candLines.visible=!!arr.length; req();
+}
+function candLabels(host){
+  host.querySelectorAll('.cand').forEach(d=>d.remove());
+  if(!candLines.visible || S.view.mode==='walk') return;
+  const close = S.view.mode==='plan' ? S.view.mpp<1.6 : persp.position.distanceTo(S.view.mode==='walk'?persp.position:controls.target)<700;
+  if(!close) return;
+  for(const c of candVisible()){ const w=toWorld(c.E,c.N); const s=project(w.x,(renderY(w.x,w.z)??0)+0.5,w.z); if(!s.vis) continue;
+    const d=document.createElement('div'); d.className='cand '+c.kind; d.textContent=c.id; d.style.left=s.x+'px'; d.style.top=s.y+'px';
+    d.onclick=()=>{ openTab('marks'); const el=document.querySelector(`[data-cid="${c.id}"]`); if(el){ el.scrollIntoView({block:'nearest'}); el.classList.add('sel'); setTimeout(()=>el.classList.remove('sel'),1500);} };
+    host.appendChild(d); }
+}
+function renderCands(){
+  if(!CAND.length){ $('candGrp').hidden=true; return; } $('candGrp').hidden=false;
+  const vis=candVisible(); $('candCount').textContent=`${vis.length} of ${CAND.length}`;
+  const list=candShowAll?vis:vis.slice(0,12); $('candMore').hidden=vis.length<=12; $('candMore').textContent=candShowAll?'Show top 12':`Show all ${vis.length}`;
+  const L=$('candList'); L.innerHTML='';
+  if(!vis.length){ L.innerHTML='<div class="empty">All machine finds reviewed. Dismissed ones come back if you clear browser data.</div>'; return; }
+  for(const c of list){
+    const it=document.createElement('div'); it.className='item'; it.dataset.cid=c.id;
+    it.innerHTML=`<div class="nm" style="font:600 12.5px var(--mono)">${c.id} · ${c.kind==='raised'?'raised':'sunken'} ${c.w}×${c.l} m</div>
+      <div class="meta">${c.relief>0?'+':''}${Math.round(c.relief*100)} cm relief · ${Math.round(c.rect*100)}% rectangular · ${c.area} m²</div>
+      <div class="acts"><button data-a="go" title="Go to">⌖</button><button data-a="build" title="Rebuild as a 3D building">▣</button><button data-a="pin" title="Keep as a pin">✓</button><button data-a="no" title="Dismiss">✕</button></div>`;
+    it.querySelector('.acts').onclick=e=>{ const a=e.target.closest('button')?.dataset.a; if(!a) return;
+      if(a==='go'){ flyTo(c.E,c.N,Math.max(45,c.l*4)); if(sheetSmall()) setSheet(false); }
+      if(a==='pin'){ const w=toWorld(c.E,c.N); addPinNamed({x:w.x,z:w.z,h:heightAt(w.x,w.z)}, `${c.id} ${c.kind}`); dismiss(c.id); }
+      if(a==='build'){ const pts=c.poly.map(([E,N])=>toWorld(E,N)); createMass(pts, {name:`${c.id} rebuild`, height:5, roof:'gable', rise:2.5}); }
+      if(a==='no') dismiss(c.id); };
+    L.appendChild(it);
+  }
+}
+function dismiss(id){ S.dismissed=[...(S.dismissed||[]), id]; renderCands(); buildCandLines(); save(); }
+function addPinNamed(p,name){ addPin(p); const pin=S.pins[S.pins.length-1]; pin.name=name; renderPins(); save(); req(); }
+$('candShow').addEventListener('change',buildCandLines);
+$('candMore').onclick=()=>{ candShowAll=!candShowAll; renderCands(); };
+
+/* ---------- trace → building ---------- */
+const trace={pts:[]};
+const traceLine=new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color:0xf0a43a, depthTest:false}));
+traceLine.renderOrder=21; traceLine.frustumCulled=false; scene.add(traceLine);
+function updateTraceLine(){ const arr=[]; for(const p of trace.pts) arr.push(p.x,(renderY(p.x,p.z)??0)+0.4,p.z);
+  traceLine.geometry.dispose(); traceLine.geometry=new THREE.BufferGeometry(); traceLine.geometry.setAttribute('position',new THREE.Float32BufferAttribute(arr,3)); traceLine.visible=trace.pts.length>1; req(); }
+$('tTrace').onclick=()=>setTool(tool==='trace'?null:'trace');
+$('hintUndo').onclick=()=>{ trace.pts.pop(); updateTraceLine(); hint(trace.pts.length?`${trace.pts.length} corners`:'Tap each corner of the footprint, then Finish'); req(); };
+$('hintFinish').onclick=()=>{ if(trace.pts.length<3){ toast('Tap at least three corners'); return; } const pts=trace.pts.slice(); setTool(null);
+  createMass(pts,{name:`Footprint ${S.objs.filter(o=>o.kind==='mass').length+1}`, height:6, roof:pts.length===4?'gable':'flat', rise:3}); };
+
+function createMass(worldPts, opts){
+  let cx=0,cz=0; worldPts.forEach(p=>{cx+=p.x;cz+=p.z;}); cx/=worldPts.length; cz/=worldPts.length;
+  const {E,N}=toUTM(cx,cz); let base=Infinity; worldPts.forEach(p=>{ const g=heightAt(p.x,p.z); if(g!==null) base=Math.min(base,g); });
+  const rec={id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,4), kind:'mass', name:opts.name, E:+E.toFixed(3), N:+N.toFixed(3), elev:+(isFinite(base)?base:heightAt(cx,cz)).toFixed(3),
+    heading:0, scale:1, units:1, up:'Y', opacity:0.92, xray:false, ghost:false, visible:true,
+    poly:worldPts.map(p=>[+(p.x-cx).toFixed(3), +(p.z-cz).toFixed(3)]), height:opts.height, roof:opts.roof, rise:opts.rise};
+  S.objs.push(rec); realizeMass(rec); select(rec.id); openTab('models'); save();
+  toast(`${rec.name}: ${polyArea(rec.poly).toFixed(0)} m² footprint, ${rec.height} m walls. Edit height and roof in Models.`, 3600);
+}
+function massContent(rec){
+  const g=new THREE.Group();
+  const shape=new THREE.Shape(rec.poly.map(([x,z])=>new THREE.Vector2(x,-z)));
+  const wg=new THREE.ExtrudeGeometry(shape,{depth:rec.height, bevelEnabled:false}); wg.rotateX(-Math.PI/2);
+  const walls=new THREE.Mesh(wg,new THREE.MeshStandardMaterial({color:0xd9ccb0, roughness:.92, side:THREE.DoubleSide})); g.add(walls);
+  if(rec.roof!=='flat' && rec.rise>0){
+    const r=minRect(rec.poly), H=rec.height, R=rec.rise, ux=r.ux, uz=r.uz, vx=-uz, vz=ux;
+    const P=(s,t,y)=>[r.cx+ux*s+vx*t, y, r.cz+uz*s+vz*t];
+    const c1=P(-r.a,-r.b,H), c2=P(r.a,-r.b,H), c3=P(r.a,r.b,H), c4=P(-r.a,r.b,H);
+    const k=rec.roof==='hip'?Math.max(0,r.a-r.b):r.a; const k1=P(-k,0,H+R), k2=P(k,0,H+R);
+    const tri=[]; const T=(a,b,c)=>tri.push(...a,...b,...c);
+    T(c1,c2,k2); T(c1,k2,k1); T(c3,c4,k1); T(c3,k1,k2); T(c2,c3,k2); T(c4,c1,k1);
+    if(rec.roof==='gable'){ /* gable ends are vertical triangles already: c2,c3,k2 / c4,c1,k1 */ }
+    const rg=new THREE.BufferGeometry(); rg.setAttribute('position',new THREE.Float32BufferAttribute(tri,3)); rg.computeVertexNormals();
+    g.add(new THREE.Mesh(rg,new THREE.MeshStandardMaterial({color:0xa9906a, roughness:.85, side:THREE.DoubleSide})));
+  }
+  return g;
+}
+function realizeMass(rec){
+  if(rec.wrap){ scene.remove(rec.wrap); }
+  const wrap=new THREE.Group(); wrap.userData.objId=rec.id; const orient=new THREE.Group(); wrap.add(orient);
+  const content=massContent(rec); orient.add(content);
+  content.traverse(n=>{ if(n.isMesh) n.userData.base=n.material; });
+  rec.wrap=wrap; rec.orient=orient; rec.content=content;
+  const xs=rec.poly.map(p=>p[0]), zs=rec.poly.map(p=>p[1]);
+  rec.size=new THREE.Vector3(Math.max(...xs)-Math.min(...xs), rec.height+(rec.roof==='flat'?0:rec.rise), Math.max(...zs)-Math.min(...zs));
+  scene.add(wrap); placeObject(rec); applyLook(rec); if(selId===rec.id){ updateGizmo(); updateBox(); } renderObjs(); req();
+}
+for(const [id,k] of [['mH','height'],['mR','rise']]) $(id).addEventListener('change',()=>{ const o=selObj(); const v=num($(id).value); if(!o||o.kind!=='mass'||v===null||v<0) return fillEditor(); o[k]=v; realizeMass(o); fillEditor(); save(); });
+$('mRoof').addEventListener('change',()=>{ const o=selObj(); if(!o||o.kind!=='mass') return; o.roof=$('mRoof').value; realizeMass(o); fillEditor(); save(); });
+
+/* ---------- georeferencing plan images ---------- */
+let gcpPend=null;
+function fillExtra(o){
+  $('fmtFields').hidden=o.kind!=='model'; $('massFields').hidden=o.kind!=='mass'; $('geoGrp').hidden=o.kind!=='image';
+  ['fE','fN','fH','fS'].forEach(id=>{ $(id).disabled = o.kind==='image' && !!o.geo; });
+  if(o.kind==='mass'){ $('mH').value=o.height; $('mR').value=o.rise; $('mRoof').value=o.roof; $('mInfo').value=`${polyArea(o.poly).toFixed(0)} m²`; }
+  if(o.kind==='image') renderGcp(o);
+}
+function solve(A,b){ // least squares via normal equations, Gaussian elimination
+  const n=A[0].length, M=[...Array(n)].map(()=>Array(n+1).fill(0));
+  for(let r=0;r<A.length;r++) for(let i=0;i<n;i++){ for(let j=0;j<n;j++) M[i][j]+=A[r][i]*A[r][j]; M[i][n]+=A[r][i]*b[r]; }
+  for(let i=0;i<n;i++){ let p=i; for(let r=i+1;r<n;r++) if(Math.abs(M[r][i])>Math.abs(M[p][i])) p=r; [M[i],M[p]]=[M[p],M[i]]; if(Math.abs(M[i][i])<1e-12) return null;
+    for(let r=0;r<n;r++) if(r!==i){ const f=M[r][i]/M[i][i]; for(let c=i;c<=n;c++) M[r][c]-=f*M[i][c]; } }
+  return M.map((row,i)=>row[n]/row[i]);
+}
+function fitGeo(pts, model){ // pts: [{u,v,x,z}] -> {a,b,c,d,e,f}: x=a u+b v+c, z=d u+e v+f
+  if(model==='aff'){ if(pts.length<3) return null; const A=pts.map(p=>[p.u,p.v,1]);
+    const X=solve(A,pts.map(p=>p.x)), Z=solve(A,pts.map(p=>p.z)); if(!X||!Z) return null; return {a:X[0],b:X[1],c:X[2],d:Z[0],e:Z[1],f:Z[2]}; }
+  if(pts.length<2) return null; const A=[], b=[];
+  for(const p of pts){ A.push([p.u,-p.v,1,0]); b.push(p.x); A.push([p.v,p.u,0,1]); b.push(p.z); }
+  const s=solve(A,b); if(!s) return null; return {a:s[0],b:-s[1],c:s[2],d:s[1],e:s[0],f:s[3]};
+}
+const geoApply=(g,u,v)=>({x:g.a*u+g.b*v+g.c, z:g.d*u+g.e*v+g.f});
+function geoStats(o){
+  o.gcps=o.gcps||[]; const P=o.gcps.map(q=>({...q, ...toWorld(q.E,q.N)})); const fitP=P.filter(p=>!p.hold), holdP=P.filter(p=>p.hold);
+  const g=fitGeo(fitP,o.geoModel||'sim'); const res={g, fit:fitP.length, hold:holdP.length, per:{}};
+  if(!g) return res;
+  const rms=a=>a.length?Math.sqrt(a.reduce((s,v)=>s+v*v,0)/a.length):null;
+  const fe=fitP.map(p=>{ const q=geoApply(g,p.u,p.v); const e=Math.hypot(q.x-p.x,q.z-p.z); res.per[p.id]={res:e}; return e; });
+  const he=holdP.map(p=>{ const q=geoApply(g,p.u,p.v); const e=Math.hypot(q.x-p.x,q.z-p.z); res.per[p.id]={res:e}; return e; });
+  const minN=(o.geoModel==='aff')?3:2;
+  if(fitP.length>minN){ fitP.forEach(p=>{ const g2=fitGeo(fitP.filter(q=>q!==p),o.geoModel||'sim'); if(g2){ const q=geoApply(g2,p.u,p.v); res.per[p.id].loo=Math.hypot(q.x-p.x,q.z-p.z); } }); }
+  res.rmse=rms(fe); res.hrmse=rms(he); const loos=Object.values(res.per).map(r=>r.loo).filter(v=>v!=null); res.loo=rms(loos); return res;
+}
+function applyGeo(o){
+  const st=geoStats(o); if(!st.g){ return false; } o.geo=st.g;
+  const W=o.imgW, H=o.imgH; const C=[[0,0],[W,0],[W,H],[0,H]].map(([u,v])=>geoApply(st.g,u,v));
+  const pos=[], uv=[];
+  // corners: 0 TL,1 TR,2 BR,3 BL ; uv for TL=(0,1) TR=(1,1) BR=(1,0) BL=(0,0)
+  const UV=[[0,1],[1,1],[1,0],[0,0]]; const idx=[0,3,2, 0,2,1];
+  for(const i of idx){ pos.push(C[i].x,0.05,C[i].z); uv.push(...UV[i]); }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  o.content.geometry.dispose(); o.content.geometry=geo; o.content.position.set(0,0.05,0); o.orient.position.set(0,0,0);
+  const cx=(C[0].x+C[2].x)/2, cz=(C[0].z+C[2].z)/2; const u=toUTM(cx,cz); o.E=+u.E.toFixed(2); o.N=+u.N.toFixed(2);
+  if(o.elev==null) o.elev=heightAt(cx,cz)??150;
+  placeObject(o); return true;
+}
+function resetImagePlane(o){ const g=new THREE.PlaneGeometry(100,100*(o.imgH/o.imgW)); g.rotateX(-Math.PI/2); o.content.geometry.dispose(); o.content.geometry=g; o.content.position.set(0,0.05,0); o.geo=null; placeObject(o); }
+function renderGcp(o){
+  o.gcps=o.gcps||[]; const st=geoStats(o);
+  $('geoModel').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===(o.geoModel||'sim')));
+  const f=v=>v==null?'–':v<10?v.toFixed(2):v.toFixed(1);
+  updateGizmo();
+  $('geoStat').textContent = st.g ? `fit ${f(st.rmse)} m · checks ${st.hold?f(st.hrmse)+' m':'none'}` : (o.gcps.length?'need more pairs':'not placed');
+  const T=$('gcpTable'); T.innerHTML = o.gcps.length ? '<b>pt</b><b>role</b><b>miss m</b><b></b>' : '';
+  o.gcps.forEach((q,i)=>{ const r=st.per[q.id]||{}; T.insertAdjacentHTML('beforeend', `<span>${i+1}</span><button data-r="${q.id}" class="${q.hold?'hold':'fit'}">${q.hold?'check':'fit'}</button><span title="residual${r.loo!=null?' · leave-one-out '+f(r.loo):''}">${f(r.res)}${r.loo!=null?' <span style="color:var(--faint)">('+f(r.loo)+')</span>':''}</span><button data-d="${q.id}">✕</button>`); });
+  T.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.r){ const q=o.gcps.find(x=>x.id===b.dataset.r); q.hold=!q.hold; } if(b.dataset.d){ o.gcps=o.gcps.filter(x=>x.id!==b.dataset.d); }
+    if(!applyGeo(o)) resetImagePlane(o); renderGcp(o); renderObjs(); save(); req(); };
+  if(M.gate){ $('gateNote').hidden=false; $('gateNote').innerHTML = `${M.gate}<br>Here: <b>${st.fit}</b> fit · <b>${st.hold}</b> checks${st.g?` · fit RMSE ${f(st.rmse)} m · leave-one-out ${f(st.loo)} m${st.hold?` · check RMSE ${f(st.hrmse)} m`:''}`:''}.`; } else $('gateNote').hidden=true;
+}
+$('geoModel').onclick=e=>{ const b=e.target.closest('button'); const o=selObj(); if(!b||!o) return; o.geoModel=b.dataset.v; if(o.gcps?.length && !applyGeo(o)) resetImagePlane(o); renderGcp(o); save(); req(); };
+$('gcpAdd').onclick=()=>{ const o=selObj(); if(!o||o.kind!=='image') return; setTool('gcp'); updateGizmo(); };
+$('geoClear').onclick=()=>{ const o=selObj(); if(!o) return; o.gcps=[]; resetImagePlane(o); renderGcp(o); renderObjs(); save(); req(); };
+$('gcpCopy').onclick=()=>{ const o=selObj(); if(!o||!o.gcps?.length){ toast('No control points yet'); return; } const st=geoStats(o);
+  const rows=[['id','role','image_u_px','image_v_px','E_utm18n','N_utm18n','lat','lon','residual_m','leave_one_out_m','image','model']];
+  o.gcps.forEach((q,i)=>{ const [la,lo]=utmToLL(q.E,q.N); const r=st.per[q.id]||{}; rows.push([i+1,q.hold?'check':'fit',q.u.toFixed(1),q.v.toFixed(1),q.E.toFixed(2),q.N.toFixed(2),la.toFixed(7),lo.toFixed(7),r.res!=null?r.res.toFixed(3):'',r.loo!=null?r.loo.toFixed(3):'',`"${o.name}"`,o.geoModel||'sim']); });
+  copyText(rows.map(r=>r.join(',')).join('\n'),'Control-point ledger copied'); };
+function gcpTap(cx,cy){
+  const o=selObj(); if(!o||o.kind!=='image'){ setTool(null); return; }
+  if(!gcpPend){ const hit=pickObject(cx,cy,o); if(!hit){ toast('Tap on the plan image'); return; }
+    ray.setFromCamera(ndc(cx,cy), cam()); const hits=ray.intersectObject(o.content,false); if(!hits.length||!hits[0].uv){ toast('Tap on the plan image'); return; }
+    const uv=hits[0].uv; gcpPend={u:uv.x*o.imgW, v:(1-uv.y)*o.imgH, world:{x:hits[0].point.x,z:hits[0].point.z}};
+    o.opacity=Math.min(o.opacity,0.5); applyLook(o);
+    hint('Now tap the same spot on the ground'); req(); return; }
+  const g=pickGround(cx,cy); if(!g){ toast('Tap inside the survey area'); return; }
+  const {E,N}=toUTM(g.x,g.z); o.gcps=o.gcps||[]; o.gcps.push({id:'g'+Date.now().toString(36), u:gcpPend.u, v:gcpPend.v, E:+E.toFixed(2), N:+N.toFixed(2), hold:false});
+  gcpPend=null; const placed=applyGeo(o); setTool(null); renderGcp(o); renderObjs(); fillEditor(); save(); req();
+  toast(placed?`Pair ${o.gcps.length} added · plan re-fitted`:`Pair ${o.gcps.length} added · ${(o.geoModel==='aff'?3:2)-o.gcps.length} more to place it`);
+}
+
+/* ---------- water level ---------- */
+const waterPlane=new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({color:0x2c6e78, transparent:true, opacity:0.28, depthWrite:false}));
+waterPlane.rotation.x=-Math.PI/2; waterPlane.renderOrder=5; waterPlane.visible=false; scene.add(waterPlane);
+let flood=null;
+$('lvl').addEventListener('input',()=>{ S.layer.level=+$('lvl').value; flood=null; applyLayer(); });
+$('lvlReset').onclick=()=>{ S.layer.level=WF; flood=null; applyLayer(); };
+$('floodPlay').onclick=()=>{ flood={t0:performance.now(), from:+$('lvl').min, to:WF}; tick(); function tick(){ if(!flood) return; const k=Math.min(1,(performance.now()-flood.t0)/11000); const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; S.layer.level=flood.from+(flood.to-flood.from)*e; applyLayer(); if(k<1) requestAnimationFrame(tick); else flood=null; } };
+
+/* ---------- real sun ---------- */
+function sunPos(date, lat, lon){
+  const rad=Math.PI/180, d=(date.getTime()-Date.UTC(2000,0,1,12))/864e5;
+  const g=(357.529+0.98560028*d)*rad, q=280.459+0.98564736*d, L=(q+1.915*Math.sin(g)+0.020*Math.sin(2*g))*rad, e=(23.439-0.00000036*d)*rad;
+  const ra=Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)), dec=Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst=(18.697374558+24.06570982441908*d)%24, H=((gmst*15+lon)*rad-ra), la=lat*rad;
+  const alt=Math.asin(Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(H));
+  let az=Math.atan2(-Math.sin(H), Math.tan(dec)*Math.cos(la)-Math.sin(la)*Math.cos(H))/rad; az=(az+360)%360;
+  return {az, alt:alt/rad};
+}
+function useSun(date){ const [la,lo]=utmToLL(Ec,Nc); const s=sunPos(date,la,lo);
+  if(s.alt<1){ $('sunNote').textContent=`Sun is below the horizon then (${s.alt.toFixed(0)}°). Try earlier or later.`; return; }
+  S.layer.az=Math.round(s.az); S.layer.alt=Math.max(3,Math.round(s.alt)); if(S.layer.mode!=='shade'){ S.layer.mode='shade'; }
+  $('sunNote').textContent=`${date.toLocaleString([], {dateStyle:'medium', timeStyle:'short'})}: sun at ${s.az.toFixed(0)}°, ${s.alt.toFixed(0)}° up.`; applyLayer(); }
+$('sunGo').onclick=()=>{ const v=$('sunWhen').value; if(!v){ toast('Pick a date and time'); return; } useSun(new Date(v)); };
+$('sunNow').onclick=()=>useSun(new Date());
+
+/* ---------- walk at eye height ---------- */
+const WK={on:false, yaw:0, pitch:-0.05, keys:new Set(), joy:{x:0,y:0}, last:0, drag:null, eye:1.7};
+$('vWalk').onclick=()=>{ if(WK.on){ stopWalk(); return; } setTool('walkpick'); };
+function startWalk(p){
+  if(S.view.mode==='3d') syncViewState();
+  WK.prev = S.view.mode==='plan' ? 'plan' : '3d';
+  if(S.view.mode==='3d'){ const t=controls.target; WK.yaw=Math.atan2(-(t.x-persp.position.x), -(t.z-persp.position.z)); } else WK.yaw=0;
+  S.view.mode='walk'; WK.on=true; controls.enabled=false; scene.fog=new THREE.Fog(0x2a3f45, 120, 900); renderer.setClearColor(SKY); tc.detach(); boxHelper.visible=false; tc.camera=persp; persp.fov=62; persp.near=0.1; persp.updateProjectionMatrix();
+  persp.position.set(p.x,(renderY(p.x,p.z)??0)+WK.eye,p.z); persp.rotation.order='YXZ';
+  $('vPlan').setAttribute('aria-pressed',false); $('v3d').setAttribute('aria-pressed',false); $('vWalk').setAttribute('aria-pressed',true);
+  $('walkBar').hidden=false; $('joy').hidden=!matchMedia('(pointer:coarse)').matches; $('scalebar').hidden=true;
+  applyLayer(); placeAllObjects(); buildCandLines(); WK.last=performance.now(); requestAnimationFrame(walkStep);
+}
+function stopWalk(){
+  if(!WK.on) return; WK.on=false; scene.fog=null; renderer.setClearColor(INK); updateGizmo(); updateBox(); $('walkBar').hidden=true; $('joy').hidden=true; persp.fov=42; persp.near=2; persp.updateProjectionMatrix();
+  const p=persp.position; const fx=-Math.sin(WK.yaw), fz=-Math.cos(WK.yaw); const t=new THREE.Vector3(p.x+fx*60,(renderY(p.x+fx*60,p.z+fz*60)??0)*S.layer.exag,p.z+fz*60);
+  S.view.mode='3d'; controls.target.copy(t); persp.position.set(p.x-fx*120, t.y+110, p.z-fz*120); controls.enabled=true; controls.update();
+  $('vWalk').setAttribute('aria-pressed',false); $('v3d').setAttribute('aria-pressed',true);
+  applyLayer(); placeAllObjects(); buildCandLines(); req();
+}
+$('walkExit').onclick=stopWalk;
+function walkStep(now){
+  if(!WK.on) return; const dt=Math.min(0.05,(now-WK.last)/1000); WK.last=now;
+  let f=0,s=0; const k=WK.keys; if(k.has('w')||k.has('arrowup')) f+=1; if(k.has('s')||k.has('arrowdown')) f-=1; if(k.has('d')||k.has('arrowright')) s+=1; if(k.has('a')||k.has('arrowleft')) s-=1;
+  f+=-WK.joy.y; s+=WK.joy.x; const sp=(k.has('shift')?7:1.6)*dt;
+  if(f||s){ const fx=-Math.sin(WK.yaw), fz=-Math.cos(WK.yaw), rx=Math.cos(WK.yaw), rz=-Math.sin(WK.yaw);
+    const nx=persp.position.x+(fx*f+rx*s)*sp, nz=persp.position.z+(fz*f+rz*s)*sp; if(inExtent(nx,nz)){ persp.position.x=nx; persp.position.z=nz; } }
+  const gy=(renderY(persp.position.x,persp.position.z)??0)+WK.eye; persp.position.y+= (gy-persp.position.y)*Math.min(1,dt*10);
+  persp.rotation.set(WK.pitch, WK.yaw, 0);
+  frame(); requestAnimationFrame(walkStep);
+}
+canvas.addEventListener('pointerdown',e=>{ if(!WK.on) return; WK.drag={x:e.clientX,y:e.clientY}; });
+canvas.addEventListener('pointermove',e=>{ if(!WK.on||!WK.drag) return; WK.yaw-=(e.clientX-WK.drag.x)*0.0045; WK.pitch=Math.max(-1.3,Math.min(1.2,WK.pitch-(e.clientY-WK.drag.y)*0.0045)); WK.drag={x:e.clientX,y:e.clientY}; });
+addEventListener('pointerup',()=>{ WK.drag=null; });
+(()=>{ const J=$('joy'), knob=J.querySelector('i'); let id=null;
+  const upd=e=>{ const r=J.getBoundingClientRect(); let x=(e.clientX-r.left-r.width/2)/48, y=(e.clientY-r.top-r.height/2)/48; const m=Math.hypot(x,y); if(m>1){x/=m;y/=m;} WK.joy={x,y}; knob.style.transform=`translate(${x*36}px,${y*36}px)`; };
+  J.addEventListener('pointerdown',e=>{ id=e.pointerId; J.setPointerCapture(id); upd(e); e.stopPropagation(); });
+  J.addEventListener('pointermove',e=>{ if(e.pointerId===id) upd(e); });
+  const end=()=>{ id=null; WK.joy={x:0,y:0}; knob.style.transform=''; }; J.addEventListener('pointerup',end); J.addEventListener('pointercancel',end); })();
+document.addEventListener('keydown',e=>{
+  if(e.target.matches && e.target.matches('input,textarea,select')) return;
+  if(DR.on){ stopDrift(); e.stopPropagation(); return; }
+  if(!WK.on) return; const k=e.key.toLowerCase(); if(k==='escape'){ stopWalk(); e.stopPropagation(); return; }
+  WK.keys.add(k); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift',' '].includes(k)){ e.preventDefault(); e.stopPropagation(); }
+},true);
+document.addEventListener('keyup',e=>{ WK.keys.delete(e.key.toLowerCase()); },true);
+
+/* ---------- drift (for MZTV) ---------- */
+const DR={on:false};
+$('driftBtn').onclick=()=>startDrift();
+function startDrift(){
+  if(WK.on) stopWalk(); if(S.view.mode==='plan') setViewMode('3d');
+  const t=controls.target; const d=Math.min(900,Math.max(260,persp.position.distanceTo(t)));
+  DR.on=true; DR.t0=performance.now(); DR.save={mode:S.layer.mode, az:S.layer.az, alt:S.layer.alt}; DR.ang=Math.atan2(persp.position.x-t.x, persp.position.z-t.z); DR.d=d;
+  document.body.classList.add('drift'); controls.enabled=false; DR.sel=selId; tc.detach(); boxHelper.visible=false; candLines.visible=false; $('driftTag').hidden=false; $('driftTag').textContent=`MZTV · DRIFT · ${M.title||''}`;
+  setTimeout(()=>{ addEventListener('pointerdown', stopDrift, {once:true}); }, 300);
+  requestAnimationFrame(driftStep);
+}
+function stopDrift(){ if(!DR.on) return; DR.on=false; document.body.classList.remove('drift'); $('driftTag').hidden=true; controls.enabled=true; Object.assign(S.layer, DR.save); applyLayer(); updateGizmo(); updateBox(); buildCandLines(); req(); }
+function driftStep(now){
+  if(!DR.on) return; const t=(now-DR.t0)/1000; const T=controls.target;
+  const ang=DR.ang+t*0.022, pol=1.05+0.08*Math.sin(t*0.05);
+  persp.position.set(T.x+DR.d*Math.sin(pol)*Math.sin(ang), T.y+DR.d*Math.cos(pol), T.z+DR.d*Math.sin(pol)*Math.cos(ang)); persp.lookAt(T);
+  const modes=['shade','relief','multi','shade']; S.layer.mode=modes[Math.floor(t/28)%modes.length];
+  S.layer.az=(DR.save.az+t*5)%360; S.layer.alt=14+11*Math.sin(t*0.07);
+  applyLayerQuiet(); frame(); requestAnimationFrame(driftStep);
+}
+function applyLayerQuiet(){ const L=S.layer; G.uMode.value=MODES[L.mode].id; const az=L.az*Math.PI/180, al=L.alt*Math.PI/180; G.uSun.value.set(Math.sin(az)*Math.cos(al), Math.sin(al), -Math.cos(az)*Math.cos(al)); sun.position.copy(G.uSun.value).multiplyScalar(1000); }
+
+/* ---------- GeoJSON ---------- */
+$('copyGeo').onclick=()=>{
+  const F=[]; const ll=(x,z)=>{ const u=toUTM(x,z); const [la,lo]=utmToLL(u.E,u.N); return [+lo.toFixed(8),+la.toFixed(8)]; };
+  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); F.push({type:'Feature', geometry:{type:'Point', coordinates:[+lo.toFixed(8),+la.toFixed(8)]}, properties:{kind:'pin', name:p.name, elev_m_navd88:p.h, E:p.E, N:p.N}}); }
+  for(const o of S.objs){
+    if(o.kind==='mass' && o.wrap){ o.wrap.updateMatrixWorld(true); const ring=o.poly.map(([x,z])=>{ const v=new THREE.Vector3(x,0,z).applyMatrix4(o.orient.matrixWorld); return ll(v.x,v.z); }); ring.push(ring[0]);
+      F.push({type:'Feature', geometry:{type:'Polygon', coordinates:[ring]}, properties:{kind:'footprint', name:o.name, area_m2:+polyArea(o.poly).toFixed(1)*o.scale*o.scale, wall_m:o.height, roof:o.roof, roof_rise_m:o.rise, base_elev_m:o.elev}}); }
+    if(o.kind==='image' && o.geo){ const st=geoStats(o); const ring=[[0,0],[o.imgW,0],[o.imgW,o.imgH],[0,o.imgH],[0,0]].map(([u,v])=>{ const q=geoApply(o.geo,u,v); return ll(q.x,q.z); });
+      F.push({type:'Feature', geometry:{type:'Polygon', coordinates:[ring]}, properties:{kind:'georeferenced_plan', name:o.name, model:o.geoModel||'sim', fit_points:st.fit, check_points:st.hold, fit_rmse_m:st.rmse, check_rmse_m:st.hrmse, confidence:'Inferred'}}); }
+  }
+  copyText(JSON.stringify({type:'FeatureCollection', name:M.title||'ground survey', features:F},null,1), `GeoJSON copied · ${F.length} features`);
+};
+
+/* ---------- per-frame hook ---------- */
+function frameHook(){
+  G.uFog.value = S.view.mode==='walk' ? 1 : 0; candLines.material.depthTest = S.view.mode!=='plan'; G.uCam.value.copy(persp.position);
+  if(WF){ const ex=exag(); waterPlane.visible = S.view.mode!=='plan' && S.layer.level>(M.hmin||0); waterPlane.scale.set(WM,HM,1); waterPlane.position.set(0,(S.layer.level-HREF)*ex+0.01,0); }
+}
+
+/* ---------- init after boot ---------- */
+async function initExtras(){
+  try{ const r=await fetch(DATA+'/candidates.json'); if(r.ok){ const j=await r.json(); CAND=j.candidates||[]; $('candNote').title=j.method||''; } }catch(e){}
+  renderCands(); buildCandLines();
+  if(WF){ $('lvl').min=(Math.floor(M.hmin*4)/4-0.25).toFixed(2); $('lvl').max=(WF+3).toFixed(2); }
+  if(M.overlays?.length){ const g=$('preOverlays'); g.hidden=false;
+    g.innerHTML='<div class="lab">Archive plans for this site</div>'+M.overlays.map((o,i)=>`<button class="btn" data-o="${i}" style="justify-content:flex-start;text-align:left">＋ ${o.name}<br><small style="color:var(--dim);font:400 10.5px var(--mono)">${o.credit}</small></button>`).join('');
+    g.onclick=async e=>{ const b=e.target.closest('button'); if(!b) return; const ov=M.overlays[+b.dataset.o]; b.disabled=true;
+      try{ const bl=await (await fetch(DATA+'/'+ov.url)).blob(); await importFile(new File([bl], ov.file||ov.url, {type:bl.type}), {scale:ov.width/100, opacity:0.62, xray:true, credit:ov.credit}); toast('Loaded unregistered. Use Control points to place it.', 4200); }
+      catch(err){ toast('Could not load that plan'); } b.disabled=false; }; }
+  const now=new Date(); const pad=n=>String(n).padStart(2,'0'); $('sunWhen').value=`${now.getFullYear()}-12-21T09:30`;
+  // re-apply saved georeferences after restore
+  // keep candidate outlines draped when exaggeration or lake bed changes
+  ['ex','bathy'].forEach(id=>$(id).addEventListener('input',()=>{ buildCandLines(); updateTraceLine(); }));
+  $('bathy').addEventListener('change',()=>{ buildCandLines(); });
+  const sv=setViewMode; setViewMode=function(m){ if(WK.on){ if(m==='3d'){ stopWalk(); return; } stopWalkSilent(); } sv(m); buildCandLines(); updateTraceLine(); };
+}
+function stopWalkSilent(){ WK.on=false; scene.fog=null; renderer.setClearColor(INK); $('walkBar').hidden=true; $('joy').hidden=true; persp.fov=42; persp.near=2; persp.updateProjectionMatrix(); $('vWalk').setAttribute('aria-pressed',false); S.view.mode='3d'; controls.enabled=true; }
+
 /* ------------------------------------------------------------------ boot */
 async function boot(){
   const bar=$('loadBar');
   try{
-    M = await (await fetch('data/meta.json')).json();
+    try{ const sr = await fetch('sites.json'); if(sr.ok){ SITES = (await sr.json()).sites; } }catch(e){}
+    if(SITES && SITES.length){ const want = location.hash.slice(1); SITE = SITES.find(s=>s.slug===want) || SITES[0]; DATA = SITE.path; buildSiteBar(); }
+    M = await (await fetch(DATA+'/meta.json')).json();
   }catch(e){ $('loadText').textContent='Could not load the survey data'; return; }
   E0=M.e0; NTOP=M.ntop; GW=M.cols*M.tile; GH=M.rows*M.tile; WM=GW*M.res; HM=GH*M.res; Ec=E0+WM/2; Nc=NTOP-HM/2;
   G.uHalf.value.set(WM/2, HM/2); G.uHmin.value=M.hmin; G.uHmax.value=M.hmax; G.uWater.value=M.bathy?0:(M.water||0); WF = M.bathy ? (M.waterflat||0) : 0; G.uWaterFlat.value = WF; HB = M.hbase ?? 100; G.uHBase.value = HB;
@@ -1269,7 +1692,7 @@ async function boot(){
   if(M.start){ const w=toWorld(M.start.E, M.start.N); S.view.cx=w.x; S.view.cz=w.z; S.view.mpp=M.start.span/Math.min(innerWidth, innerHeight); }
   loadLS();
   let done=0; const steps=4, tick=()=>{ bar.style.width=(++done/steps*100)+'%'; };
-  const [o, ...ss] = await Promise.all(['data/ov.webp','data/s0.webp','data/s1.webp','data/s2.webp'].map(u=>decodeImage(u).then(r=>{tick(); return r;})));
+  const [o, ...ss] = await Promise.all([DATA+'/ov.webp',DATA+'/s0.webp',DATA+'/s1.webp',DATA+'/s2.webp'].map(u=>decodeImage(u).then(r=>{tick(); return r;})));
   Object.assign(ov,o); ov.tex=heightTex(o); G.uOv.value=ov.tex; G.uOvMax.value.set(o.w-1,o.h-1);
   ss.forEach((s,i)=>{ sm[i]={...s, tex:heightTex(s)}; });
   buildTiles();
@@ -1280,7 +1703,8 @@ async function boot(){
   resize();
   $('loading').hidden=true;
   // restore imported files
-  for(const o of S.objs){ if(!IDB.db) break; const f=await idbGet(o.id); if(f){ try{ await realize(o,f); }catch(e){ console.warn(e); } } }
+  for(const o of S.objs){ if(o.kind==='mass'){ realizeMass(o); continue; } if(!IDB.db) continue; const f=await idbGet(o.id); if(f){ try{ await realize(o,f); }catch(e){ console.warn(e); } } }
+  await initExtras();
   renderObjs(); req();
 }
 boot();
