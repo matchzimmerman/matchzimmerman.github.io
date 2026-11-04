@@ -87,6 +87,7 @@ shows this.
   either the plaque (most accurate) or GPS (3–10 m drift).
 - **Correcting the compass.** Heading trim and drag-to-rotate fix compass error by eye.
 - **Cut-away.** Hides geometry within a few metres of the viewer, because the plaque sits inside the old building.
+- **Hard-anchored version.** See `ios/`: an iPhone app using Google's ARCore Geospatial API (VPS + terrain anchor).
 - **Limits.** It is not ARKit world-tracking, so the model is not pinned to the ground as you walk. A native
   geospatial-anchor build (ARKit `ARGeoAnchor` / ARCore Geospatial) is the upgrade path.
 
