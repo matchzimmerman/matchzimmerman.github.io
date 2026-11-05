@@ -122,9 +122,34 @@ D phrygian family; the centre moves only at rupture.
 - Drone positions, tension, attention and the clock self-heal from non-finite values.
 - WebGL context loss is handled.
 - The world is pre-warmed for 65 s, so the drones are already on their marks and one is on air.
+- Phones (a screen under 700 px on its short side) default to 480 lines.
 
 ## Tested
-TESTED_PLACEHOLDER
+Run on 2026-11-05 in headless Chromium with SwiftShader (software WebGL). Stills from these runs are in `stills/`.
+
+- **Renders:** all seven drones rendered at 1920×1080, plus photo-matched front, right and back views. Each event was forced and rendered, along with a rupture into the PALLET inks. No console errors.
+- **10 simulated hours (seed 7):**
+  - 30 events (screens, feedback, clock), about one every 20 min
+  - 10 ruptures, about hourly
+  - no NaN
+  - 1,626 cuts in the first 6 hours, held 8–19 s (mean 13.3 s); longer holds only during the hush
+- **Parts known by hour:** 0, 10, 17, 21, 22, then all 23 by hour 6. The clock ran six times in six hours and moved from 8:55:15 to 9:03:14.
+- **Resume:** a reload (without `?fresh`) kept the epoch, the inks, the clock's position, attention and the log.
+- **WebGL:** context loss and restore recovered and drew the next frame.
+- **Audio recovery:** a suspended AudioContext resumed, a closed one was rebuilt, and poisoning tension and attention with NaN healed on the next frame.
+- **16 s recordings of the master** (bands relative to 60–120 Hz):
+
+  | Condition | RMS | Peak | 30–60 Hz | 2–5 kHz | above 5 kHz |
+  |---|---|---|---|---|---|
+  | quiet | −18.0 dB | −7.0 dBFS | −25 dB | −86 dB | −108 dB |
+  | the stack fed back | −16.2 dB | −4.9 dBFS | −26 dB | −48 dB | −65 dB |
+  | the clock ran | −18.0 dB | −5.2 dBFS | −5 dB | −56 dB | −81 dB |
+  | the screens woke | −19.3 dB | −8.0 dBFS | −22 dB | −56 dB | −80 dB |
+
+  - 60–120 Hz was the loudest band in every case.
+  - No clicks: the only window above 5 kHz louder than −60 dBFS was the recorder starting at t = 0.
+  - The clock's sub was turned down after a first recording put 30–60 Hz 4 dB above 60–120 Hz.
+- **Load, same machine, 640×360, `?lines=240`, software rendering:** WHITE CUBE ran at 5.7 fps, HEADLAND at 2.3 and OUTBUILDING at 1.0. That makes it the lightest of the three, but these are software numbers; it has not been measured on a GPU.
 
 ## Known limits
 - It has only been rendered in software (SwiftShader). GPU load on the streaming machine has not been measured; use `?lines=540` or `?lines=420` if it struggles. Each frame also renders the Kinect's view (96 × 72, every third frame) and, during the screens event, a drone feed (192 × 120).
