@@ -1794,8 +1794,9 @@ function assetLabels(host){
 }
 
 /* ---------- panel stage ---------- */
-async function initStage(){
-  if(AB.r) return; const cv=$('abView');
+function initStage(){ return AB.ready||(AB.ready=initStage0()); }
+async function initStage0(){
+  const cv=$('abView');
   AB.r=new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true}); AB.r.setPixelRatio(Math.min(devicePixelRatio,2)); AB.r.outputColorSpace=THREE.SRGBColorSpace;
   AB.scene=new THREE.Scene(); AB.cam=new THREE.PerspectiveCamera(35,1,0.1,2000);
   AB.scene.add(new THREE.HemisphereLight(0xeaf4f0,0x2a332f,1.25)); const d=new THREE.DirectionalLight(0xfff4e2,2.0); d.position.set(-40,60,50); AB.scene.add(d);
