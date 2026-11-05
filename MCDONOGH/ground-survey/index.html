@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>McDonogh Ground Survey</title>
-<meta name="description" content="Explore McDonogh School's 2024 USGS lidar: machine-found foundation leads, trace-to-3D rebuilds, walk the ground at eye height.">
+<meta name="description" content="McDonogh School's lost buildings on 2024 lidar: Foxleigh Mansion and the water tower in 3D, with every source behind them.">
 <meta name="theme-color" content="#061012">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -48,6 +48,46 @@ body.drift #view{cursor:none}
 .gcpTable button{border:1px solid var(--line);background:none;border-radius:4px;font:600 10px var(--mono);color:var(--dim);padding:2px 6px}
 .gcpTable .hold{color:var(--teal)} .gcpTable .fit{color:var(--amber)}
 .gate{font:500 11px/1.45 var(--mono);color:var(--dim);border-left:2px solid var(--teal);padding-left:8px}
+.acards{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.acard{border:1px solid var(--line);background:var(--ink);border-radius:6px;padding:9px 10px;text-align:left;display:flex;flex-direction:column;gap:3px;min-width:0}
+.acard b{font:600 13px var(--ui);color:var(--fg)} .acard small{font:400 10.5px var(--mono);color:var(--dim)}
+.acard[aria-pressed="true"]{border-color:var(--amber);background:var(--raise)}
+#abStage{position:relative;height:240px;border:1px solid var(--line);border-radius:6px;background:radial-gradient(ellipse at 50% 70%,var(--raise),var(--ink) 75%);overflow:hidden}
+#abStage canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#abStage .stTop{position:absolute;left:8px;right:8px;top:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;pointer-events:none}
+#abStage .stTop>*{pointer-events:auto}
+#abStage .cap{font:600 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+#abStage .stBtns{display:flex;gap:4px}
+#abStage .stBtns button{border:1px solid var(--line2);background:color-mix(in srgb,var(--panel) 85%,transparent);border-radius:4px;padding:4px 7px;font:600 10.5px var(--mono);color:var(--fg)}
+#abStage .stBtns button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+#abStage .empty3d{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;font:500 12px/1.5 var(--ui);color:var(--dim)}
+#abStage .legend{position:absolute;left:8px;bottom:8px;display:flex;flex-wrap:wrap;gap:4px 10px;font:500 10px var(--mono);color:var(--fg);pointer-events:none}
+#abStage .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+#abStage.big{position:fixed;z-index:6;left:0;top:0;bottom:0;right:calc(var(--gutR) + 350px);height:auto;border-radius:0;border:0}
+#abStage.big .bigCap{display:block}
+#abStage .bigCap{display:none;position:absolute;left:max(24px,env(safe-area-inset-left,0px));bottom:28px;max-width:560px;pointer-events:none}
+#abStage .bigCap h2{margin:0 0 4px;font:700 22px/1.15 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--fg);text-shadow:0 2px 12px #000}
+#abStage .bigCap p{margin:0;font:400 14px/1.45 var(--ui);color:var(--dim);text-shadow:0 1px 8px #000}
+#abStage.big .legend{left:auto;right:16px;bottom:24px}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font:500 11.5px var(--mono);font-variant-numeric:tabular-nums}
+.facts span{color:var(--faint);text-transform:uppercase;font-size:9.5px;letter-spacing:.1em;padding-top:2px}
+.facts b{font-weight:500;color:var(--fg);min-width:0;overflow-wrap:anywhere}
+.chip{display:inline-block;font:600 9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px}
+.chip.ok{background:#7cf2b122;color:var(--phos);border:1px solid #7cf2b155}
+.chip.est{background:#f0a43a22;color:var(--amber);border:1px solid #f0a43a55}
+.srcs{display:flex;flex-direction:column;gap:6px}
+.src{display:grid;grid-template-columns:64px 1fr;gap:9px;border:1px solid var(--line);background:var(--ink);border-radius:6px;padding:8px;min-width:0}
+.src.nothumb{grid-template-columns:1fr}
+.src .th{width:64px;height:64px;border-radius:4px;background:var(--raise) center/cover no-repeat;border:1px solid var(--line)}
+.src .bd{min-width:0;display:flex;flex-direction:column;gap:3px}
+.src .ty{font:600 9.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+.src a{font:600 12.5px/1.3 var(--ui);color:var(--fg);text-decoration:none;border-bottom:1px solid var(--line2)}
+.src a:hover{color:var(--amber)}
+.src .who{font:400 10.5px var(--mono);color:var(--faint)}
+.src .use{font:400 12px/1.45 var(--ui);color:var(--dim)}
+.alab{cursor:pointer}
+.alab span{background:var(--fg)!important;color:var(--ink)!important}
+.alab::after{background:var(--fg)!important}
 .chipbar{display:flex;background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:6px;overflow:hidden;backdrop-filter:blur(6px)}
 .chipbar button{border:0;background:transparent;padding:7px 11px;font:500 12px var(--mono);letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
 .chipbar button+button{border-left:1px solid var(--line)}
@@ -151,6 +191,7 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
   #tr{right:var(--gutR);left:var(--gut);justify-content:flex-start}
   body.multi #brand{display:none}
   body #readout{top:100px}
+  #abStage.big{right:0;bottom:var(--sheet)}
   body:not(.multi) #readout{top:92px}
   #brand h1{font-size:11.5px}
   #brand p{display:none}
@@ -334,14 +375,33 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
     </section>
 
     <section class="pane" id="p-models" hidden>
-      <div class="grp">
-        <label class="btn pri" for="file" style="cursor:pointer">Import model or plan image</label>
-        <input type="file" id="file" accept=".glb,.gltf,.obj,.stl,.dae,.png,.jpg,.jpeg,.webp" multiple hidden>
-        <p class="note">3D: <b>.glb</b> (best), .gltf (single file), .obj, .stl, .dae (SketchUp export). Images: historic site plans or aerials, placed flat on the ground. Files stay in this browser.</p>
-        <div id="preOverlays" class="grp" hidden></div>
+      <div class="grp" id="abGrp" hidden>
+        <div class="lab">Collection <output id="abCount"></output></div>
+        <div class="acards" id="abCards"></div>
+      </div>
+      <div class="grp" id="abDetail" hidden>
+        <div id="abStage">
+          <canvas id="abView" aria-label="3D model preview"></canvas>
+          <div class="empty3d" id="abEmpty" hidden></div>
+          <div class="stTop"><span class="cap" id="abCap"></span>
+            <div class="stBtns"><button id="abEvid" aria-pressed="false" title="Colour each part by the evidence behind it">Evidence</button><button id="abBig" aria-pressed="false" title="Fill the screen with the model">Present</button></div></div>
+          <div class="legend" id="abLegend" hidden></div>
+          <div class="bigCap"><h2 id="abBigName"></h2><p id="abBigText"></p></div>
+        </div>
+        <p class="note" id="abSummary"></p>
+        <div class="btns"><button class="btn" id="abGo">⌖ Show on the ground</button><button class="btn" id="abOn" aria-pressed="true">● On the map</button></div>
+        <div class="facts" id="abFacts"></div>
+        <div class="lab">Built from <output id="abSrcCount"></output></div>
+        <div class="srcs" id="abSrcs"></div>
+        <div class="grp" id="abOpenGrp" hidden><div class="lab">Still wanted</div><ul class="note" id="abOpen" style="margin:0;padding-left:16px"></ul></div>
+        <div class="row" id="abLinks" style="flex-wrap:wrap"></div>
       </div>
       <div class="grp">
-        <div class="lab">In the scene</div>
+        <input type="file" id="file" accept=".glb,.gltf,.obj,.stl,.dae,.png,.jpg,.jpeg,.webp" multiple hidden>
+        <div id="preOverlays" class="grp" hidden></div>
+      </div>
+      <div class="grp" id="objGrp">
+        <div class="lab">Your traces</div>
         <div class="list" id="objList"></div>
       </div>
 
@@ -428,7 +488,8 @@ let BOOKMARKS = [
   {name:'Whole campus', E:347080, N:4361936, span:2600},
   {name:'Academic core', E:346840, N:4361930, span:460},
   {name:'Stadium & track', E:346990, N:4362450, span:260},
-  {name:'Foxleigh (field study 001)', E:347064, N:4362210, span:200},
+  {name:'Foxleigh Mansion site', E:347060, N:4362186, span:180},
+  {name:'Water tower site', E:347198, N:4362215, span:160},
   {name:'Playing fields', E:346720, N:4362400, span:620},
   {name:'North courts & pads', E:346890, N:4362810, span:380},
   {name:'East terraces', E:347560, N:4361930, span:620},
@@ -895,7 +956,7 @@ function updateOverlays(){
   align.pts.forEach((p,i)=>dots.push([p, ['1','1′','2','2′'][i], i%2?'':'b']));
   trace.pts.forEach((p,i)=>dots.push([p, String(i+1), 'b']));
   if(gcpPend) dots.push([gcpPend.world, 'plan', '']);
-  candLabels(host);
+  candLabels(host); assetLabels(host);
   for(const [p,label,cls] of dots){ const y=p.y!==undefined?p.y:(renderY(p.x,p.z)??0); const s=project(p.x,y,p.z); if(!s.vis) continue;
     const d=document.createElement('div'); d.className='dot '+cls; d.style.left=s.x+'px'; d.style.top=s.y+'px'; if(label) d.innerHTML=`<em>${label}</em>`; host.appendChild(d); }
   // scale bar & north
@@ -966,7 +1027,7 @@ $('gotoBtn').onclick=()=>{ const m=$('gotoMenu'); m.hidden=!m.hidden; $('gotoBtn
 $('gotoMenu').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; const k=BOOKMARKS[+b.dataset.i]; flyTo(k.E,k.N,k.span); $('gotoMenu').hidden=true; };
 
 /* tabs & sheet */
-function openTab(name){ document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===name)); ['layers','marks','models'].forEach(n=>$('p-'+n).hidden=n!==name); if(sheetSmall()) setSheet(true); }
+function openTab(name){ if(name!=='models') closeBig(); document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===name)); ['layers','marks','models'].forEach(n=>$('p-'+n).hidden=n!==name); if(sheetSmall()) setSheet(true); }
 $('tabs').onclick=e=>{ const b=e.target.closest('button'); if(b) openTab(b.dataset.tab); };
 const sheetSmall=()=>innerWidth<=720;
 let sheetOpen=false;
@@ -1029,6 +1090,7 @@ function onTap(cx,cy){
   if(tool==='trace'){ const p=pickGround(cx,cy); if(p){ trace.pts.push({x:p.x,z:p.z}); updateTraceLine(); hint(`${trace.pts.length} corner${trace.pts.length>1?'s':''} · ${trace.pts.length>=3?polyStats(trace.pts):'keep tapping'}`); req(); } return; }
   if(tool==='gcp'){ gcpTap(cx,cy); return; }
   if(tool==='walkpick'){ const p=pickGround(cx,cy); if(p){ setTool(null); startWalk(p); } return; }
+  const ah=pickAsset(cx,cy); if(ah){ openAsset(ah.id, true); return; }
   const hit=pickObject(cx,cy);
   if(hit&&hit.obj){ select(hit.obj.id); openTab('models'); }
   else if(selId){ select(null); }
@@ -1249,9 +1311,10 @@ function updateGizmo(){
 $('gizSeg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; $('gizSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); updateGizmo(); };
 function select(id){ selId=id; renderObjs(); fillEditor(); updateGizmo(); updateBox(); req(); }
 function renderObjs(){
-  $('objCount').textContent=S.objs.length||'';
+  $('objCount').textContent=(ASSETS.length+S.objs.length)||'';
   const L=$('objList');
-  if(!S.objs.length){ L.innerHTML='<div class="empty">Nothing placed yet. Import a building model or a historic site plan, then line its corners up with the footings you find.</div>'; return; }
+  $('objGrp').hidden = !S.objs.length && ASSETS.length>0;
+  if(!S.objs.length){ L.innerHTML='<div class="empty">Nothing yet. Use <b>Marks → Trace a footprint</b>, or ▣ on a machine find, to sketch a building here.</div>'; return; }
   L.innerHTML='';
   for(const o of S.objs){
     const it=document.createElement('div'); it.className='item'+(o.id===selId?' sel':'');
@@ -1368,7 +1431,7 @@ addEventListener('hashchange',()=>{ if(SITES && SITE && location.hash.slice(1)!=
 let CAND=[], candShowAll=false;
 const candLines=new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({vertexColors:true, depthTest:false, transparent:true}));
 candLines.renderOrder=15; candLines.frustumCulled=false; candLines.visible=false; scene.add(candLines);
-const candVisible=()=>CAND.filter(c=>!(S.dismissed||[]).includes(c.id));
+const candVisible=()=>CAND.filter(c=>!c.reviewed && !(S.dismissed||[]).includes(c.id));
 function buildCandLines(){
   const arr=[], col=[]; const show=$('candShow').checked && CAND.length;
   if(show){ for(const c of candVisible()){ const pts=c.poly.map(([E,N])=>{ const w=toWorld(E,N); return [w.x,(renderY(w.x,w.z)??0)+0.4,w.z]; });
@@ -1652,6 +1715,7 @@ $('copyGeo').onclick=()=>{
 
 /* ---------- per-frame hook ---------- */
 function frameHook(){
+  assetFrame();
   G.uFog.value = S.view.mode==='walk' ? 1 : 0; candLines.material.depthTest = S.view.mode!=='plan'; G.uCam.value.copy(persp.position);
   if(WF){ const ex=exag(); waterPlane.visible = S.view.mode!=='plan' && S.layer.level>(M.hmin||0); waterPlane.scale.set(WM,HM,1); waterPlane.position.set(0,(S.layer.level-HREF)*ex+0.01,0); }
 }
@@ -1674,6 +1738,161 @@ async function initExtras(){
   const sv=setViewMode; setViewMode=function(m){ if(WK.on){ if(m==='3d'){ stopWalk(); return; } stopWalkSilent(); } sv(m); buildCandLines(); updateTraceLine(); };
 }
 function stopWalkSilent(){ WK.on=false; scene.fog=null; renderer.setClearColor(INK); $('walkBar').hidden=true; $('joy').hidden=true; persp.fov=42; persp.near=2; persp.updateProjectionMatrix(); $('vWalk').setAttribute('aria-pressed',false); S.view.mode='3d'; controls.enabled=true; }
+
+/* ================================================================== ASSET BANK
+   Curated reconstructions with their evidence. Each model shows in a side-panel stage
+   and, at its recorded location, on the map.                                          */
+let ASSETS=[], curAsset=null;
+const assetScenes=new Map();          // id -> Promise<THREE.Object3D|null>
+const assetOnMap=new Map();           // id -> THREE.Group on the terrain
+const AB={r:null, scene:null, cam:null, ctrl:null, root:null, raf:0, evid:false, big:false, spin:true, lastInput:0};
+const isAssetOff=id=>(S.assetsOff||[]).includes(id);
+const evidColor=new Map();
+
+function loadAssetScene(a){
+  if(!a.model) return Promise.resolve(null);
+  if(!assetScenes.has(a.id)) assetScenes.set(a.id, (async()=>{
+    const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+    const g=await new GLTFLoader().loadAsync(DATA+'/'+a.model);
+    g.scene.traverse(n=>{ if(n.isMesh){ n.userData.base=n.material; } });
+    return g.scene; })().catch(e=>{ console.warn(e); return null; }));
+  return assetScenes.get(a.id);
+}
+function evidMat(a, conf){
+  const key=a.id+':'+conf; if(evidColor.has(key)) return evidColor.get(key);
+  const c=(a.confidence&&a.confidence[conf])?a.confidence[conf][0]:'#7f8c8a';
+  const m=new THREE.MeshStandardMaterial({color:c, roughness:.8, metalness:0}); evidColor.set(key,m); return m;
+}
+function setEvidence(root, a, on){ if(!root) return; root.traverse(n=>{ if(!n.isMesh) return; n.material = on ? evidMat(a, n.userData.confidence||'none') : n.userData.base; }); }
+
+/* ---------- map placement ---------- */
+async function placeAssetOnMap(a){
+  if(!a.placement) return;
+  if(isAssetOff(a.id)){ const g=assetOnMap.get(a.id); if(g) g.visible=false; req(); return; }
+  let g=assetOnMap.get(a.id);
+  if(!g){ const src=await loadAssetScene(a); if(!src) { req(); return; }
+    g=new THREE.Group(); g.userData.assetId=a.id; const inst=src.clone(true);
+    inst.traverse(n=>{ if(n.isMesh){ n.userData.base=n.material; n.userData.assetId=a.id; } });
+    g.add(inst); scene.add(g); assetOnMap.set(a.id,g); }
+  g.visible=true; const w=toWorld(a.placement.E,a.placement.N);
+  g.position.set(w.x,(a.placement.elev-HREF)*exag(),w.z); g.rotation.set(0,-(a.placement.heading||0)*Math.PI/180,0);
+  setEvidence(g.children[0], a, AB.evid && curAsset===a); req();
+}
+function assetFrame(){ for(const [id,g] of assetOnMap){ const a=ASSETS.find(x=>x.id===id); if(a&&g.visible) g.position.y=(a.placement.elev-HREF)*exag(); } }
+function pickAsset(cx,cy){
+  const groups=[...assetOnMap.values()].filter(g=>g.visible); if(!groups.length) return null;
+  ray.setFromCamera(ndc(cx,cy), cam()); const hit=ray.intersectObjects(groups,true)[0]; if(!hit) return null;
+  let n=hit.object; while(n && !n.userData.assetId) n=n.parent; return n?ASSETS.find(a=>a.id===n.userData.assetId):null;
+}
+function assetLabels(host){
+  host.querySelectorAll('.alab').forEach(d=>d.remove()); if(DR&&DR.on) return;
+  for(const a of ASSETS){ if(!a.placement||isAssetOff(a.id)) continue;
+    const w=toWorld(a.placement.E,a.placement.N); const top=a.model?18:2;
+    const s=project(w.x,(a.placement.elev-HREF)*exag()+top,w.z); if(!s.vis) continue;
+    const d=document.createElement('div'); d.className='pin alab'; d.innerHTML='<span></span>'; d.firstChild.textContent=a.name+(a.model?'':' · site');
+    d.style.left=s.x+'px'; d.style.top=s.y+'px'; d.onclick=()=>openAsset(a.id,false); host.appendChild(d); }
+}
+
+/* ---------- panel stage ---------- */
+async function initStage(){
+  if(AB.r) return; const cv=$('abView');
+  AB.r=new THREE.WebGLRenderer({canvas:cv, antialias:true, alpha:true}); AB.r.setPixelRatio(Math.min(devicePixelRatio,2)); AB.r.outputColorSpace=THREE.SRGBColorSpace;
+  AB.scene=new THREE.Scene(); AB.cam=new THREE.PerspectiveCamera(35,1,0.1,2000);
+  AB.scene.add(new THREE.HemisphereLight(0xeaf4f0,0x2a332f,1.25)); const d=new THREE.DirectionalLight(0xfff4e2,2.0); d.position.set(-40,60,50); AB.scene.add(d);
+  const d2=new THREE.DirectionalLight(0x9fd8d2,0.5); d2.position.set(50,20,-40); AB.scene.add(d2);
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(1,64), new THREE.MeshBasicMaterial({color:0x10252a, transparent:true, opacity:.9})); ground.rotation.x=-Math.PI/2; ground.name='ground'; AB.scene.add(ground); AB.ground=ground;
+  const {OrbitControls}=await import('three/addons/controls/OrbitControls.js');
+  AB.ctrl=new OrbitControls(AB.cam, cv); AB.ctrl.enableDamping=true; AB.ctrl.maxPolarAngle=Math.PI*0.495;
+  AB.ctrl.addEventListener('start',()=>{ AB.spin=false; }); AB.ctrl.addEventListener('end',()=>{ AB.lastInput=performance.now(); });
+  new ResizeObserver(sizeStage).observe($('abStage'));
+}
+function sizeStage(){ if(!AB.r) return; const el=$('abStage'); const w=el.clientWidth, h=el.clientHeight; if(!w||!h) return; AB.r.setSize(w,h,false); AB.cam.aspect=w/h; AB.cam.updateProjectionMatrix(); }
+function stageLoop(){
+  AB.raf=0; const visible=!$('abDetail').hidden && (!$('p-models').hidden || AB.big); if(!visible||!AB.r||!AB.ctrl) return;
+  if(!AB.spin && performance.now()-AB.lastInput>6000) AB.spin=true;
+  if(AB.spin && AB.root){ const t=AB.ctrl.target, p=AB.cam.position; const a=0.0018, x=p.x-t.x, z=p.z-t.z; p.x=t.x+x*Math.cos(a)-z*Math.sin(a); p.z=t.z+x*Math.sin(a)+z*Math.cos(a); }
+  AB.ctrl.update(); AB.r.render(AB.scene,AB.cam); AB.raf=requestAnimationFrame(stageLoop);
+}
+const kickStage=()=>{ if(!AB.raf) AB.raf=requestAnimationFrame(stageLoop); };
+async function showInStage(a){
+  await initStage(); sizeStage();
+  if(AB.root){ AB.scene.remove(AB.root); AB.root=null; }
+  $('abEmpty').hidden=true; $('abEvid').hidden=!a.confidence; $('abLegend').hidden=true;
+  if(!a.model){ $('abEmpty').hidden=false; $('abEmpty').innerHTML=`<div><b style="color:var(--fg)">Model file not in the collection yet</b><br>Location and sources are recorded.<br>${a.version||''}</div>`; AB.r.clear(); return; }
+  $('abEmpty').hidden=false; $('abEmpty').textContent='Loading model…';
+  const src=await loadAssetScene(a); if(curAsset!==a) return;
+  if(!src){ $('abEmpty').textContent='Could not load this model.'; return; }
+  $('abEmpty').hidden=true;
+  const root=src.clone(true); root.traverse(n=>{ if(n.isMesh) n.userData.base=n.material; }); AB.root=root; AB.scene.add(root);
+  const box=new THREE.Box3().setFromObject(root), size=box.getSize(new THREE.Vector3()), c=box.getCenter(new THREE.Vector3());
+  const R=Math.max(size.x,size.z)*0.75+2; AB.ground.scale.setScalar(R); AB.ground.position.set(c.x,box.min.y-0.02,c.z);
+  const dist=Math.max(size.x,size.y*1.4,size.z)*1.35+6;
+  AB.ctrl.target.set(c.x, box.min.y+size.y*0.38, c.z); AB.cam.position.set(c.x-dist*0.55, box.min.y+size.y*0.6+dist*0.32, c.z+dist*0.8); AB.cam.near=Math.max(0.05,dist/500); AB.cam.far=dist*20; AB.cam.updateProjectionMatrix();
+  AB.ctrl.minDistance=dist*0.15; AB.ctrl.maxDistance=dist*4; AB.spin=true;
+  applyEvidence(); kickStage();
+}
+function applyEvidence(){
+  const a=curAsset; if(!a) return; const on=AB.evid && !!a.confidence;
+  $('abEvid').setAttribute('aria-pressed',on); setEvidence(AB.root,a,on);
+  const g=assetOnMap.get(a.id); if(g) setEvidence(g.children[0],a,on);
+  const L=$('abLegend'); L.hidden=!on; if(on){ const used=new Set(); AB.root&&AB.root.traverse(n=>{ if(n.isMesh&&n.userData.confidence) used.add(n.userData.confidence); }); L.innerHTML=Object.entries(a.confidence).filter(([k])=>!used.size||used.has(k)).map(([k,[c,l]])=>`<span><i style="background:${c}"></i>${l}</span>`).join(''); }
+  req(); kickStage();
+}
+function closeBig(){ if(!AB.big) return; AB.big=false; const st=$('abStage'); if(AB.home) AB.home.insertBefore(st, AB.next); st.classList.remove('big'); $('abBig').setAttribute('aria-pressed',false); requestAnimationFrame(sizeStage); }
+
+/* ---------- panel content ---------- */
+const TYPE_LABEL={'photograph':'Photograph','hand-drawn plan':'Hand-drawn plan','written history':'Written history','field record':'Field record · MZ.Human','memorial':'Memorial','lidar':'Lidar survey','map':'Map','government record':'Government record'};
+const WEIGHT_LABEL={primary:'Used to build it', placement:'Used to place it', consulted:'Consulted, not used yet'};
+function renderAssetCards(){
+  $('abGrp').hidden=!ASSETS.length; $('abCount').textContent=ASSETS.length?`${ASSETS.length} reconstructions`:'';
+  $('abCards').innerHTML=ASSETS.map(a=>`<button class="acard" data-a="${a.id}" aria-pressed="${curAsset===a}"><b>${esc(a.name)}</b><small>${esc(a.era||'')}</small><small>${a.model?'3D model':'site + sources'} · ${a.sources.length} sources</small></button>`).join('');
+}
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function renderAssetDetail(){
+  const a=curAsset; $('abDetail').hidden=!a; if(!a) return;
+  $('abCap').textContent=a.name; $('abBigName').textContent=a.name; $('abBigText').textContent=`${a.era} · ${a.summary}`;
+  $('abSummary').textContent=a.summary;
+  const pl=a.placement;
+  $('abFacts').innerHTML=[
+    ['Standing', esc(a.era)], ['Model', esc(a.version)], a.stats&&['Size', esc(a.stats)],
+    pl&&['Location', `<span class="chip ${pl.status==='Confirmed'?'ok':'est'}">${esc(pl.status)}</span> ${pl.lat.toFixed(7)}, ${pl.lon.toFixed(7)} · ${pl.elev.toFixed(1)} m`],
+    pl&&['How placed', esc(pl.detail)]].filter(Boolean).map(([k,v])=>`<span>${k}</span><b>${v}</b>`).join('');
+  $('abOn').setAttribute('aria-pressed', !isAssetOff(a.id)); $('abOn').textContent = isAssetOff(a.id) ? '○ Off the map' : '● On the map';
+  $('abSrcCount').textContent=`${a.sources.length} sources`;
+  const groups=['primary','placement','consulted'];
+  $('abSrcs').innerHTML=groups.map(w=>{ const list=a.sources.filter(s=>(s.weight||'primary')===w); if(!list.length) return '';
+    return `<div class="lab" style="margin-top:4px">${WEIGHT_LABEL[w]}</div>`+list.map(s=>`<div class="src${s.thumb?'':' nothumb'}">${s.thumb?`<div class="th" style="background-image:url('${esc(s.thumb)}')"></div>`:''}
+      <div class="bd"><span class="ty">${esc(TYPE_LABEL[s.type]||s.type)}</span>${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>`:`<b>${esc(s.title)}</b>`}<span class="who">${esc(s.who||'')}</span><span class="use">${esc(s.used||'')}</span></div></div>`).join(''); }).join('');
+  $('abOpenGrp').hidden=!(a.open&&a.open.length); $('abOpen').innerHTML=(a.open||[]).map(q=>`<li>${esc(q)}</li>`).join('');
+  $('abLinks').innerHTML=(a.links||[]).map(l=>`<a class="btn ghost" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('');
+}
+function openAsset(id, fromMap){
+  const a=ASSETS.find(x=>x.id===id); if(!a) return; const changed=curAsset!==a; curAsset=a;
+  if(changed){ AB.evid=false; for(const [k,g] of assetOnMap) setEvidence(g.children[0], ASSETS.find(x=>x.id===k), false); }
+  S.assetSel=id; save(); openTab('models'); renderAssetCards(); renderAssetDetail(); if(changed||!AB.root) showInStage(a); else kickStage();
+}
+$('abCards').addEventListener('click',e=>{ const b=e.target.closest('[data-a]'); if(b) openAsset(b.dataset.a); });
+$('abEvid').onclick=()=>{ AB.evid=!AB.evid; applyEvidence(); };
+$('abBig').onclick=()=>{ AB.big=!AB.big; const st=$('abStage'); if(AB.big){ AB.home=st.parentNode; AB.next=st.nextSibling; $('app').appendChild(st); } else if(AB.home){ AB.home.insertBefore(st, AB.next); } st.classList.toggle('big',AB.big); $('abBig').setAttribute('aria-pressed',AB.big); requestAnimationFrame(()=>{ sizeStage(); kickStage(); }); if(AB.big && sheetSmall()) setSheet(false); };
+$('abGo').onclick=()=>{ const a=curAsset; if(!a||!a.placement) return; closeBig();
+  if(isAssetOff(a.id)){ S.assetsOff=S.assetsOff.filter(x=>x!==a.id); placeAssetOnMap(a); renderAssetDetail(); }
+  if(S.view.mode==='plan') setViewMode('3d');
+  const w=toWorld(a.placement.E,a.placement.N), gy=(a.placement.elev-HREF)*exag(); const hd=((a.placement.heading||0)+200)*Math.PI/180, d=a.model?95:70;
+  controls.target.set(w.x,gy+6,w.z); persp.position.set(w.x+Math.sin(hd)*d, gy+d*0.55, w.z-Math.cos(hd)*d); controls.update(); req(); save();
+  if(sheetSmall()) setSheet(false); };
+$('abOn').onclick=()=>{ const a=curAsset; if(!a) return; const off=new Set(S.assetsOff||[]); off.has(a.id)?off.delete(a.id):off.add(a.id); S.assetsOff=[...off]; placeAssetOnMap(a); renderAssetDetail(); save(); };
+addEventListener('keydown',e=>{ if(e.key==='Escape' && AB.big){ closeBig(); e.stopPropagation(); } },true);
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{ if(b.dataset.tab==='models'){ requestAnimationFrame(()=>{ sizeStage(); kickStage(); }); } }));
+
+async function initAssets(){
+  try{ const r=await fetch(DATA+'/assets.json'); if(r.ok) ASSETS=(await r.json()).assets||[]; }catch(e){}
+  renderAssetCards(); renderObjs();
+  if(!ASSETS.length) return;
+  ASSETS.forEach(a=>placeAssetOnMap(a));
+  curAsset=ASSETS.find(a=>a.id===S.assetSel)||ASSETS[0]; renderAssetCards(); renderAssetDetail();
+  if(!$('p-models').hidden) showInStage(curAsset);
+  else document.querySelector('#tabs [data-tab="models"]').addEventListener('click',()=>{ if(!AB.root) showInStage(curAsset); },{once:true});
+}
 
 /* ------------------------------------------------------------------ boot */
 async function boot(){
@@ -1712,6 +1931,7 @@ async function boot(){
   // restore imported files
   for(const o of S.objs){ if(o.kind==='mass'){ realizeMass(o); continue; } if(!IDB.db) continue; const f=await idbGet(o.id); if(f){ try{ await realize(o,f); }catch(e){ console.warn(e); } } }
   await initExtras();
+  await initAssets();
   renderObjs(); req();
 }
 boot();
