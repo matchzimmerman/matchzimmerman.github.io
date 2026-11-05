@@ -46,7 +46,7 @@ import * as THREE from 'three';
 const Q = new URLSearchParams(location.search);
 const CAPTURE = Q.get('capture') === '1';
 const RATE = Math.max(0.01, +(Q.get('rate') || 1));
-const LINES = +(Q.get('lines') || 720);
+const LINES = +(Q.get('lines') || (Math.min(innerWidth, innerHeight) < 700 ? 480 : 720));   // phones default to 480 lines
 let INFO = Q.get('info') !== '0';
 const AUDIO_WANTED = Q.get('audio') !== '0';
 const SEED = +(Q.get('seed') || 1);

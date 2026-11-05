@@ -46,6 +46,12 @@ A corrugated outbuilding on a rise that keeps to itself: sheltered and reclusive
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/) · [README](sources/bit-field-040-outbuilding/README.md)
 
+## MZ WORLD · WHITE CUBE (BIT FIELD 041, built 2026-11-05)
+
+One sculpture, one vacuum, many observers. MZ.Human's assemblage sculpture stands alone in an empty white room: guitar amps stacked on a pallet, a Timex stopped at 8:55, an iMac and a ViewSonic, a Kinect, weathered boards, a copper-wire crown of headphones, and an open case of red wiring. It is reconstructed from his photographs and video. Seven floating **MZ CAM** drones (the shared `lib/mzcam.js` crew from 48 PLANT) observe it, appear in each other's shots and cast printed shadows on the paper floor. The Kinect tilts to follow them and draws them on the ViewSonic. The room has no edges: it dissolves into unprinted paper. Every amp hums on its own degree, and the one under the live lens is the bass. Memory is attention: the crew comes to know the piece part by part over hours, the floor wears where they hover, and the stopped clock keeps the time it has run. Rarely the stack feeds back, the screens show the crew to itself, or the clock runs. Unlocated and without weather, by design. **On branch `mz-world/white-cube-041`; awaiting MZ.Human's review.**
+
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-041-white-cube/) · [README](sources/bit-field-041-white-cube/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
@@ -377,6 +383,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-040-outbuilding/`
+
+### BIT FIELD 041 — MZ WORLD · WHITE CUBE
+MZ.Human's assemblage sculpture (the pallet version), reconstructed from his photographs and walk-around video, printed in six inks on HEADLAND's engine with SRUTHÁN v3's surface-anchored hatching, alone in a white cube that dissolves into unprinted paper. Seven floating MZ CAM drones on the shared `MZTV/lib/mzcam.js` crew (OBSERVER, ORBIT, DETAIL, SIGNAL, DRIFT, LOW, TOP) plan their own shots from what the crew has looked at least. They hold still on air, appear in each other's shots and cast printed shadows; the director cuts on the 16th every 8–19 s. The Kinect tilts to follow the nearest drone and the ViewSonic draws what it sees; the iMac shows a warm field, as in the video. The Timex is stopped at 8:55:15, as in every photo. Memory: per-part attention that unlocks close-ups over hours, floor scuffs where drones hover low, and the clock's accumulated running time. Rarely the stack feeds back (a lens too near a speaker: rings across the grille, a ♭II howl, the crew flinches), the screens show the crew to itself (a print inside the print), or the clock runs for a minute or two. Tension ends in a stillness and a rupture into new inks (new: Tolex, Timex, Pallet, Cassette), line grammar, key light and harmonic centre. Sound: every amp hums on its own degree, the part under the live lens is the bass, and the beat between two hums sets the bar. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?cam=N ?plan=1 ?capture=1
+
+Path:
+`sources/bit-field-041-white-cube/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-041-white-cube/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
