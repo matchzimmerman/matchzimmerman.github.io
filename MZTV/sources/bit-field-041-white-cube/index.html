@@ -1,0 +1,1054 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MZ World White Cube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* MZ WORLD · WHITE CUBE — one sculpture, one vacuum, many observers; the info box is printed in the current inks */
+:root { --ink:#1b1d22; --paper:#f1eee6; --hot:#c8392e; --deep:#3a404a; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: light }
+html, body { height:100%; margin:0; background:var(--paper); overflow:hidden }
+canvas { display:block; width:100%; height:100% }
+#hud { position:fixed; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:min(500px, calc(100vw - 40px)); box-sizing:border-box; padding:11px 13px 10px; font:400 11px/1.5 var(--mono);
+  color:var(--ink); background:color-mix(in srgb, var(--paper) 90%, transparent); border:2px solid var(--ink);
+  letter-spacing:.01em; font-variant-numeric:tabular-nums; pointer-events:none }
+#hud b { font-weight:600 }
+#hud .t { display:flex; justify-content:space-between; gap:12px; font-weight:600; letter-spacing:.08em; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:6px }
+#hud .r { display:grid; grid-template-columns:1fr auto; gap:0 10px }
+#hud .r span:last-child { color:var(--deep); text-align:right }
+#hud .ev { color:var(--hot); font-weight:600 }
+#hud .log { margin-top:6px; padding-top:5px; border-top:1px dashed var(--ink); min-height:3em }
+#hud .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .cr { margin-top:6px; font-size:10px; letter-spacing:.06em; opacity:.8 }
+@media (max-width:560px) { #hud { font-size:9.5px; padding:8px 10px } }
+#tap { position:fixed; right:calc(20px + env(safe-area-inset-right,0px)); top:calc(20px + env(safe-area-inset-top,0px)); font:600 11px/1 var(--mono);
+  color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:8px 10px; letter-spacing:.08em; cursor:pointer }
+#plan { position:fixed; right:calc(20px + env(safe-area-inset-right,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px)); width:220px; height:220px;
+  border:2px solid var(--ink); background:var(--paper); display:none }
+</style>
+
+<div id="hud" hidden></div>
+<canvas id="plan" width="440" height="440"></canvas>
+<button id="tap" type="button" hidden>CLICK FOR SOUND</button>
+
+<!-- the drone crew, director and flight model are shared with 48 PLANT, TRACKSIDE and SITTER -->
+<script src="../../lib/mzcam.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ====================================================================== params */
+const Q = new URLSearchParams(location.search);
+const CAPTURE = Q.get('capture') === '1';
+const RATE = Math.max(0.01, +(Q.get('rate') || 1));
+const LINES = +(Q.get('lines') || 720);
+let INFO = Q.get('info') !== '0';
+const AUDIO_WANTED = Q.get('audio') !== '0';
+const SEED = +(Q.get('seed') || 1);
+const KEY = 'mzworld-white-cube-v1' + (Q.has('seed') ? '-s' + SEED : '');
+if (Q.get('fresh') === '1') { try { localStorage.removeItem(KEY); } catch (e) {} }
+const TZ = 'America/New_York';             // the log keeps real local time; nothing else here is located
+const TAU = Math.PI * 2, D2R = Math.PI / 180;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const TV = (p) => V(p.x, p.y, p.z);           // MZCam vector → THREE
+const MV = (p) => MZCam.V(p.x, p.y, p.z);     // THREE → MZCam vector
+function mulberry(s) { return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry(SEED * 7919 + (Date.now() % 100000));
+const rr = (a, b) => a + (b - a) * rnd();
+const pick = (a) => a[Math.floor(rnd() * a.length) % a.length];
+
+/* ====================================================================== clock */
+const fmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+function localParts(ms) {
+  const o = {}; for (const p of fmt.formatToParts(new Date(ms))) o[p.type] = p.value;
+  const h = +o.hour % 24, m = +o.minute, sec = +o.second;
+  return { h, m, sec, str: `${h < 10 ? '0' : ''}${h}:${o.minute}:${o.second}`, hour: h + m / 60 + sec / 3600 };
+}
+let simMs = Date.now();
+if (Q.has('ff')) simMs += (+Q.get('ff')) * 60e3;
+let simT = 0;
+// the Timex is stopped: it reads 8:55:15 in every photograph and in the video
+const CLOCK_STOPPED = 8 * 3600 + 55 * 60 + 15;
+const dial = (s) => { s = ((s % 43200) + 43200) % 43200; const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = Math.floor(s % 60); return `${h || 12}:${m < 10 ? '0' : ''}${m}:${x < 10 ? '0' : ''}${x}`; };
+
+/* ====================================================================== palettes (6 inks: INK DEEP SEA HOT GLOW PAPER) */
+const COLORWAYS = [
+  { name: 'TOLEX',          c: ['#1b1d22', '#3a404a', '#9ea7ab', '#c8392e', '#e8c35a', '#f1eee6'] },
+  { name: 'TIMEX',          c: ['#1a1a1e', '#44464f', '#b9b3a3', '#d24b3a', '#efe2b8', '#f6f3ec'] },
+  { name: 'SIGNAL FLARE',   c: ['#24123a', '#5b3fd1', '#6fd3c1', '#ff7a8a', '#ffd24a', '#fbf3e4'] },
+  { name: 'PALLET',         c: ['#21180f', '#5a4330', '#a99f85', '#d06a2c', '#e9c98a', '#f3ece0'] },
+  { name: 'PISTACHIO NIGHT',c: ['#10202b', '#1f4a6e', '#b6d97a', '#ff5a7a', '#f9e7b0', '#eef4ea'] },
+  { name: 'CASSETTE',       c: ['#14161f', '#2e3b5c', '#8fa6b8', '#e0563f', '#f0d28c', '#eff0ea'] },
+  { name: 'ULTRAMARINE',    c: ['#0c1440', '#1f3bb3', '#44b8e8', '#ff6a1a', '#ffd0a1', '#fff7ec'] },
+  { name: 'LICHEN',         c: ['#22261d', '#4b5b3a', '#a7c5a0', '#d9475b', '#e8d27c', '#f3eedf'] },
+];
+const hexV = (h) => { const n = parseInt(h.slice(1), 16); return V(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+const INK = 0, DEEP = 1, SEA = 2, HOT = 3, GLOW = 4, PAPER = 5;
+// material ids → [dark, mid, light] ink roles, hatch strength, speckle
+const MAT = [
+  /* 0 void    */ [SEA, PAPER, PAPER, 0.22, 0], /* 1 floor   */ [DEEP, SEA, PAPER, 0.4, 0],  /* 2 tolex   */ [INK, DEEP, SEA, 0.45, 0],
+  /* 3 grilleD */ [INK, DEEP, SEA, 1.0, 0],     /* 4 grilleS */ [DEEP, SEA, PAPER, 1.0, 0], /* 5 panel   */ [INK, SEA, PAPER, 0.6, 0],
+  /* 6 wood    */ [INK, DEEP, SEA, 1.0, 0],     /* 7 dark    */ [INK, INK, DEEP, 0.3, 0],   /* 8 red     */ [INK, HOT, HOT, 0.35, 0],
+  /* 9 white   */ [SEA, PAPER, PAPER, 0.4, 0],  /*10 silver  */ [DEEP, SEA, PAPER, 0.7, 0], /*11 board   */ [INK, DEEP, GLOW, 0.8, 1],
+  /*12 case    */ [INK, INK, DEEP, 0.5, 0],     /*13 drone   */ [INK, DEEP, SEA, 0.4, 0],  /*14 screen  */ [INK, DEEP, GLOW, 0.35, 0],
+  /*15 lamp    */ [GLOW, GLOW, PAPER, 0.0, 0],
+];
+
+/* ====================================================================== persistent state (memory) */
+const DEF = () => ({
+  v: 1, born: Date.now(), epoch: 1, epochStart: 0, epochLen: rr(50, 95) * 60, tension: 0, colorway: 0, cwVisits: [1, 0, 0, 0, 0, 0, 0, 0],
+  grammar: { period: 6.4, dith: 0.11, wob: 6, outline: 1, hatch: 1.0 }, center: 38, key: { az: 2.2, el: 1.05 },
+  uncanny: { next: rr(4, 9) * 60, counts: {}, last: {}, mem: {} }, log: [], runSec: 0, savedAt: Date.now(), logKind: {},
+  att: {}, known: {}, seen: {}, clock: CLOCK_STOPPED, clockRun: 0, scuff: '', cuts: 0,
+});
+let S = DEF();
+try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEF(), o); } } catch (e) {}
+simT = S.runSec || 0;
+function save() { try { S.runSec = simT; S.savedAt = Date.now(); S.scuff = scuffEncode(); localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function logEv(text) { S.log.unshift({ t: localParts(simMs).str, text }); if (S.log.length > 40) S.log.length = 40; }
+function logOnce(kind, text, gapMin = 45) { const l = S.logKind[kind]; if (l != null && simT - l < gapMin * 60 && l <= simT) return; S.logKind[kind] = simT; logEv(text); }
+if (!S.log.length) logEv('the sculpture was found as it is, in an empty white room'); else logEv('the white cube resumed (epoch ' + S.epoch + ')');
+
+/* ====================================================================== renderer + targets */
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: CAPTURE });
+renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.autoClear = true;
+document.body.prepend(renderer.domElement);
+let W = 2, H = 2, IW = 2, IH = 2;
+const NEAREST = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false };
+const rtData = new THREE.WebGLRenderTarget(2, 2, { ...NEAREST, depthBuffer: true });
+const rtPrint = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false });
+const rtKin = new THREE.WebGLRenderTarget(96, 72, { ...NEAREST, depthBuffer: true });     // what the Kinect sees
+const rtFeed = new THREE.WebGLRenderTarget(192, 120, { ...NEAREST, depthBuffer: true });  // a drone's lens, for the iMac
+const DUMMY = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); DUMMY.needsUpdate = true;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.03, 80);
+const kinCam = new THREE.PerspectiveCamera(43, 4 / 3, 0.05, 30);
+const feedCam = new THREE.PerspectiveCamera(40, 16 / 10, 0.03, 80);
+function resize() {
+  W = innerWidth; H = innerHeight; renderer.setSize(W, H, false);
+  IH = Math.min(LINES, H); IW = Math.round(IH * W / H);
+  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  PU.uRes.value.set(IW, IH);
+}
+
+/* ====================================================================== shaders */
+const COMMON = /* glsl */`
+uniform float uPerPx, uWobPx, uPxK;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+vec4 pack(float sh, float id, float line, float acc){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., clamp(line,0.,1.), acc>0.5?1.:0.); }
+// hatching carved into the surface (as SRUTHÁN v3): lines run along T, spaced in the surface's own coordinates,
+// and the spacing follows distance in octaves so the print keeps its density on screen. A still object keeps a still pattern.
+float lineAt(vec3 W, vec3 N, vec3 T, float dist, float extra){
+  vec3 A=cross(N,T); if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.)); if(dot(A,A)<1e-6) A=vec3(1.,0.,0.); A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float per=uPerPx*max(dist,0.05)*uPxK;
+  float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float p0=exp2(floor(L)), p1=p0*2.;
+  float s=dot(W,A), t=dot(W,B); float wk=uWobPx/max(uPerPx,0.1)*1.35;
+  float l0=cos((s+((vn(vec2(s,t)/(p0*7.)+3.1)-.5)*wk+extra)*p0)*6.2831853/p0);
+  float l1=cos((s+((vn(vec2(s,t)/(p1*7.)+3.1)-.5)*wk+extra)*p1)*6.2831853/p1);
+  return 0.5+0.5*mix(l0,l1,f); }
+// a physical pitch (a weave, a grain) that steps out to every 2nd, 4th… thread with distance
+float pitchLine(float s, float t, float dist, float pitch){
+  float per=uPerPx*max(dist,0.05)*uPxK;
+  float L=log2(max(per/pitch,1.)); float f=smoothstep(0.,1.,fract(L));
+  float p0=pitch*exp2(floor(L)), p1=p0*2.;
+  float wk=uWobPx/max(uPerPx,0.1)*0.4;
+  float w0=(vn(vec2(s/(p0*5.),t/(p0*11.))+1.7)-.5)*wk*p0, w1=(vn(vec2(s/(p1*5.),t/(p1*11.))+1.7)-.5)*wk*p1;
+  return 0.5+0.5*mix(cos((s+w0)*6.2831853/p0), cos((s+w1)*6.2831853/p1), f); }
+`;
+const SH = {   // shared uniforms (same objects referenced by every material)
+  uTime: { value: 0 }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
+  uAmb: { value: 0.62 }, uDiff: { value: 0.6 }, uFogD: { value: 9 }, uFogShade: { value: 0.93 },
+  uPerPx: { value: 6 }, uWobPx: { value: 6 }, uPxK: { value: 0.0012 },
+  uFb: { value: 0 }, uDr: { value: Array.from({ length: 7 }, () => new THREE.Vector4(0, -9, 0, 0)) },
+  uKin: { value: DUMMY }, uFeed: { value: DUMMY }, uScuff: { value: DUMMY }, uNum: { value: DUMMY },
+  uScr: { value: 0 }, uWake: { value: 0 }, uFbC: { value: V(0, -9, 0) }, uFbR: { value: 0.3 },
+};
+const OBJ_VERT = /* glsl */`
+uniform float uMover;
+attribute vec3 aT;
+varying vec3 vW, vN, vL, vT; varying vec2 vUv;
+void main(){
+  vec4 w=modelMatrix*vec4(position,1.);
+  vW=w.xyz; vN=normalize(mat3(modelMatrix)*normal); vL=uMover>0.5?position:w.xyz; vT=mat3(modelMatrix)*aT; vUv=uv;
+  gl_Position=projectionMatrix*viewMatrix*w;
+}`;
+const OBJ_FRAG = /* glsl */`
+${COMMON}
+uniform float uId, uMode, uEmit, uTime, uAmb, uDiff, uFogD, uFogShade, uMover, uAlb, uBW, uAccOn, uFbAcc, uFb, uScr, uWake;
+uniform vec3 uKeyD, uCamP, uT, uFbC; uniform float uFbR; uniform vec4 uDr[7];
+uniform sampler2D uKin, uFeed, uScuff, uNum;
+varying vec3 vW, vN, vL, vT; varying vec2 vUv;
+float sdBox(vec2 p, vec2 a, vec2 b){ vec2 c=(a+b)*.5, h=(b-a)*.5; vec2 d=abs(p-c)-h; return length(max(d,0.))+min(max(d.x,d.y),0.); }
+float footprint(vec2 p){   // the pallet, the case and the iMac's cabinet, as they sit on the floor
+  return min(min(sdBox(p,vec2(-.72,-.45),vec2(.32,.77)), sdBox(p,vec2(.28,.22),vec2(.86,.70))), sdBox(p,vec2(.02,-.90),vec2(.56,-.42))); }
+void main(){
+  vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
+  float dist=length(vW-uCamP);
+  float sh=uAmb+uDiff*max(dot(N,uKeyD),0.);
+  sh-=0.16*(1.-smoothstep(0.,0.35,vW.y))*step(0.01,vW.y)*step(uMode,0.5);   // a little occlusion where things meet the floor
+  float id=uId; vec3 T=uT; float acc=0.; float line=-1.;
+  float fog=1.-exp(-dist/uFogD);
+  if(uMode>0.5&&uMode<1.5){          // the floor: paper, with the sculpture's contact shadow, the drones' shadows and the scuffs they leave
+    id=1.; T=vec3(1.,0.,0.15); sh+=0.2;
+    vec2 sp=vW.xz+uKeyD.xz*0.22;
+    float fp=footprint(sp);
+    sh-=0.85*(1.-smoothstep(0.,0.32,fp))+0.3*(1.-smoothstep(0.,1.3,fp));
+    float edge=max(abs(vW.x),abs(vW.z)); sh-=0.7*smoothstep(5.94,5.995,edge)*(1.-fog);
+    for(int i=0;i<7;i++){ vec4 d=uDr[i]; if(d.y<0.) continue; vec2 q=vW.xz-(d.xz+uKeyD.xz*d.y*0.18); float r=0.1+0.07*d.y;
+      sh-=0.9*exp(-dot(q,q)/(r*r))/(1.+0.9*d.y); }
+    float sc=texture2D(uScuff,(vW.xz+6.)/12.).r; sh-=0.3*sc; if(sc>0.08) line=min(lineAt(vL,N,vec3(0.,0.,1.),dist,0.),lineAt(vL,N,T,dist,0.));
+  }
+  else if(uMode>1.5&&uMode<2.5){     // walls and ceiling: the vacuum
+    id=0.; T=vec3(0.,1.,0.); sh-=0.7*(1.-smoothstep(0.,0.03,vW.y))*(1.-fog);
+  }
+  else if(uMode>2.5&&uMode<3.5){     // grille cloth: a weave with a physical pitch; it shivers when the stack feeds back
+    vec3 A=cross(vec3(0.,1.,0.),N); A=dot(A,A)<1e-4?vec3(1.,0.,0.):normalize(A);
+    float s=dot(vL,A), t=vL.y; s+=uFb*0.004*sin(t*70.+uTime*36.);
+    line=min(pitchLine(s,t,dist,0.0055),pitchLine(t,s,dist,0.0055));
+    sh-=0.05*(vn(vec2(s,t)*9.)-0.5);
+    float rd=length(vW-uFbC); if(uFb>0.25&&rd<uFbR&&fract(rd*14.-uTime*2.6)<0.22) acc=1.;   // the howl, as rings across the cloth
+  }
+  else if(uMode>3.5&&uMode<4.5){     // weathered wood: grain along the board, nail heads along its edges
+    vec3 Tw=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.); T=Tw;
+    float a=uMover>0.5?vL.x:dot(vL,normalize(cross(N,Tw)+1e-5)), b=uMover>0.5?vL.y:dot(vL,Tw);
+    sh+=0.12*(vn(vec2(a*55.,b*2.5))-0.5)-0.06*smoothstep(0.6,0.9,vn(vec2(a*8.,b*0.9)+5.));
+    if(uBW>0.&&uMover>0.5&&abs(N.z)>0.5&&fract(b/0.085)<0.14&&abs(abs(a)-(uBW-0.013))<0.007){ id=7.; sh=0.12; }
+  }
+  else if(uMode>4.5&&uMode<5.5){     // a screen: off, the iMac's warm field, the Kinect's view, or another drone's lens
+    id=14.; T=vec3(0.,1.,0.);
+    vec3 Vd=normalize(uCamP-vW); float fres=pow(1.-max(dot(N,Vd),0.),2.);
+    float mode=uScr<0.?(uWake>0.5?3.:1.):uScr;
+    if(mode>2.5){   // the feed: a print inside the print
+      vec4 f=texture2D(uFeed,vUv); sh=0.15+0.85*f.r; line=f.b; if(floor(f.g*16.)==13.) sh*=0.5;
+    } else if(mode>1.5){   // the Kinect: drones in front of it, drawn as contours with its speckle inside
+      vec2 px=vec2(1./96.,1./72.);
+      float me=floor(texture2D(uKin,vUv).g*16.);
+      float e=0., ea=0.; for(int k=0;k<4;k++){ vec2 o=k==0?vec2(px.x,0.):k==1?vec2(-px.x,0.):k==2?vec2(0.,px.y):vec2(0.,-px.y);
+        float nb=floor(texture2D(uKin,vUv+o).g*16.); if((me==13.)!=(nb==13.)) e=1.; if(me!=nb) ea=1.; }
+      sh=0.1+0.04*step(0.5,fract(vUv.y*36.))+fres*0.1;
+      if(ea>0.5) sh=0.5;
+      if(me==13.) sh=hash(floor(vUv*vec2(96.,72.))+floor(uTime*8.))>0.7?0.55:0.22;
+      if(e>0.5) sh=0.95;
+      line=0.5;
+    } else if(mode>0.5){   // the iMac as the video shows it: a warm field with darker weather moving through it
+      float g=vn(vUv*vec2(2.2,1.6)+vec2(uTime*0.01,0.))*0.6+vn(vUv*6.+3.)*0.4;
+      sh=0.62+0.32*vUv.y+0.14*(g-0.5)-0.25*smoothstep(0.62,0.9,g);
+    } else { sh=0.08+0.35*fres+0.05*(vn(vUv*7.)-0.5); id=7.; }
+  }
+  else if(uMode>5.5&&uMode<6.5){     // the clock's face: hour and minute ticks, typeset numerals
+    vec2 p=vL.xy; float r=length(p); float a=atan(p.x,p.y);
+    float m=abs(fract(a/(6.2831853/60.)+0.5)-0.5), hr=abs(fract(a/(6.2831853/12.)+0.5)-0.5);
+    id=9.; sh=0.92;
+    if(r>0.132&&r<0.145&&m<0.05) { id=7.; sh=0.1; }
+    if(r>0.124&&r<0.145&&hr<0.035) { id=7.; sh=0.08; }
+    float nm=texture2D(uNum,p/0.3+0.5).r; if(nm>0.5&&r<0.125) { id=7.; sh=0.08; }
+    line=0.5;
+  }
+  else if(uMode>6.5&&uMode<7.5){     // the circuit board in the case: brown board, terminal strips, red wire everywhere
+    vec2 p=vL.xy; id=11.; sh=0.42+0.1*(vn(p*30.)-0.5);
+    float strip=step(abs(fract(p.y*7.+0.2)-0.5),0.07)*step(0.35,vn(vec2(p.x*9.,floor(p.y*7.+0.2))));
+    if(strip>0.5){ id=7.; sh=0.12; }
+    float c=abs(vn(p*64.+vec2(1.3,4.))-0.5), c2=abs(vn(p*41.+vec2(7.,2.))-0.5);
+    if(min(c,c2)<0.03){ id=8.; sh=0.55; acc=uFb>0.3?step(0.6,fract(p.x*9.-uTime*2.)):0.; }
+    line=0.5;
+  }
+  else if(uMode>7.5&&uMode<8.5){     // tolex: a pebbled cross hatch
+    line=lineAt(vL,N,vec3(1.,1.,0.),dist,0.)*0.7+0.3; sh+=0.06*(vn(vL.xy*90.+vL.z*40.)-0.5);
+  }
+  sh*=uAlb;
+  sh=0.06+0.6*sh;
+  if(uEmit>0.){ sh=uEmit; fog*=0.3; id=15.; }
+  if(uAccOn>0.5) acc=1.;
+  if(uFbAcc>0.5&&uFb>0.3) acc=step(0.55,fract(dot(vW,vec3(0.,9.,3.))-uTime*1.6));
+  sh=mix(sh,uFogShade,fog);
+  if(line<0.) line=lineAt(vL,N,T,dist,0.);
+  gl_FragColor=pack(sh,id,line,acc*(1.-fog));
+}`;
+function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
+    uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
+      uEmit: { value: 0 }, uMover: { value: 0 }, uAlb: { value: 1 }, uBW: { value: 0 }, uAccOn: { value: 0 }, uFbAcc: { value: 0 } }, extra)
+  });
+}
+
+/* ---------- print pass: linocut lines through six inks */
+const PU = {
+  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) },
+  uPal: { value: Array.from({ length: 6 }, () => V()) },
+  uTab: { value: MAT.map(m => V(m[0], m[1], m[2])) }, uHat: { value: MAT.map(m => m[3]) }, uSpk: { value: MAT.map(m => m[4]) },
+  uDith: { value: 0.11 }, uOutline: { value: 1 }, uHatch: { value: 1 }, uSeed: { value: rnd() * 100 },
+};
+const PRINT_FRAG = /* glsl */`
+uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uTab[16]; uniform float uHat[16]; uniform float uSpk[16];
+uniform float uDith, uOutline, uHatch, uSeed;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float b2(vec2 a){ a=floor(a); return fract(dot(a,vec2(0.5,a.y*0.75))); }
+float b4(vec2 a){ return b2(0.5*a)*0.25+b2(a); }
+float b8(vec2 a){ return b4(0.5*a)*0.25+b2(a); }
+int idAt(vec2 fc){ return int(floor(texture2D(uData,fc/uRes).g*16.)); }
+bool soft(int a,int b){
+  if((a==0||a==1)&&(b==0||b==1)) return true;     // the vacuum: the floor meets the wall in shade only, and the line fades with distance
+  if((a==3||a==4)&&(b==3||b==4)) return true;
+  if((a==6||a==7)&&(b==6||b==7)) return true;
+  if((a==11||a==8)&&(b==11||b==8)) return true;
+  if((a==14||a==15)&&(b==14||b==15)) return true;
+  return false; }
+void main(){
+  vec2 fc=gl_FragCoord.xy;
+  vec4 d=texture2D(uData,fc/uRes);
+  float s=d.r; int id=int(floor(d.g*16.)); float acc=d.a;
+  vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
+  float line=d.b*2.-1.;
+  float mid=1.-abs(2.*s-1.);
+  float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith;
+  int k=v<0.36?0:(v<0.69?1:2);
+  float ink=k==0?tab.x:(k==1?tab.y:tab.z);
+  if(uSpk[id]>0.5){ float h=hash(floor(fc/2.4)+uSeed); if(h>0.955){ ink=k==2?tab.y:tab.z; } }
+  if(id==0||id==1){ float h=hash(floor(fc/1.7)+uSeed*1.3); if(h>0.9993) ink=2.; }   // paper grain, fixed to the print
+  if(uOutline>0.5){
+    int il=idAt(fc+vec2(-1.,0.)), iu=idAt(fc+vec2(0.,-1.));
+    if((il!=id&&!soft(il,id))||(iu!=id&&!soft(iu,id))) ink=0.;
+  }
+  if(acc>0.5) ink=3.;   // accents (a tally, the stack feeding back) print over the outlines
+  gl_FragColor=vec4(uPal[int(ink+0.5)],1.);
+}`;
+const BLIT_FRAG = /* glsl */`uniform sampler2D uTex; varying vec2 vUv;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){ vec3 c=texture2D(uTex,vUv).rgb; float g=hash(floor(gl_FragCoord.xy*0.5)); c*=0.968+0.032*g; gl_FragColor=vec4(c,1.); }`;
+const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const printMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PRINT_FRAG, uniforms: PU, depthTest: false, depthWrite: false });
+const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { uTex: { value: rtPrint.texture } }, depthTest: false, depthWrite: false });
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
+
+/* ====================================================================== world build
+   metres; the sculpture's footprint is centred near the origin, +z is its front, +x is its right, y up.
+   Built from MZ.Human's photographs of the pallet version (four views) and the walk-around video IMG_2424.
+   Sizes are read from the photos against the known size of the Fender Twin (about 66 × 51 cm), so they are
+   estimates. Backs and undersides were not photographed and are inferred. Logos and the Bob Ross card are
+   left as blank plates and a blank tag. */
+const M4 = (x, y, z, ry = 0, rx = 0, rz = 0) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), V(1, 1, 1));
+function withT(g, m4, T) { if (m4) g.applyMatrix4(m4); const n = g.attributes.position.count, t = new Float32Array(n * 3); const tv = T.clone(); if (m4) tv.transformDirection(m4);
+  for (let i = 0; i < n; i++) { t[i * 3] = tv.x; t[i * 3 + 1] = tv.y; t[i * 3 + 2] = tv.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; }
+const boxG = (w, h, d, m4, T = V(0, 1, 0)) => withT(new THREE.BoxGeometry(w, h, d), m4, T);
+const cylG = (r0, r1, h, m4, seg = 14, T = V(0, 1, 0)) => withT(new THREE.CylinderGeometry(r0, r1, h, seg, 1), m4, T);
+const MESHES = [];
+function add(geo, mat, parent = scene) { const m = new THREE.Mesh(geo, mat); m.frustumCulled = false; parent.add(m); MESHES.push(m); return m; }
+function bx(x0, y0, z0, x1, y1, z1, mat, T, parent) { return add(boxG(x1 - x0, y1 - y0, z1 - z0, M4((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), T), mat, parent); }
+function tube(pts, r, mat, parent, seg = 40) { const c = new THREE.CatmullRomCurve3(pts); return add(withT(new THREE.TubeGeometry(c, seg, r, 5, false), null, V(0, 1, 0)), mat, parent); }
+
+const MT = {
+  void: objMat(0, 2), floor: objMat(1, 1),
+  tolex: objMat(2, 8, V(0, 1, 0), { uAlb: { value: 0.6 } }), grilleD: objMat(3, 3, V(0, 1, 0), { uAlb: { value: 0.72 } }), grilleS: objMat(4, 3, V(0, 1, 0), { uAlb: { value: 0.88 } }), grilleC: objMat(4, 3, V(0, 1, 0), { uAlb: { value: 0.74 } }),
+  panel: objMat(5, 0, V(1, 0, 0), { uAlb: { value: 0.7 } }), chrome: objMat(5, 0, V(1, 0, 0), { uAlb: { value: 1.2 } }),
+  pallet: objMat(6, 4, V(0, 0, 1), { uAlb: { value: 0.55 } }), dark: objMat(7, 0, V(1, 0, 0)), red: objMat(8, 0, V(0, 1, 0), { uFbAcc: { value: 1 } }),
+  white: objMat(9, 0, V(0, 1, 0)), silver: objMat(10, 0, V(1, 0, 0)), board: objMat(11, 7, V(1, 0, 0), { uMover: { value: 1 } }),
+  case: objMat(12, 0, V(1, 0, 0)), gold: objMat(14, 0, V(1, 0, 0), { uAlb: { value: 1.25 } }), copper: objMat(7, 0, V(0, 1, 0), { uAlb: { value: 1.4 } }),
+  cord: objMat(9, 0, V(0, 1, 0), { uAlb: { value: 0.95 } }), redWire: objMat(8, 0, V(0, 1, 0), { uFbAcc: { value: 1 } }),
+  face: objMat(9, 6, V(0, 1, 0), { uMover: { value: 1 } }),
+  scrMac: objMat(14, 5, V(0, 1, 0), { uScr: { value: -1 } }), scrKin: objMat(14, 5, V(0, 1, 0), { uScr: { value: 2 } }),
+  droneBody: objMat(13, 0, V(1, 0, 0), { uMover: { value: 1 } }), droneTrim: objMat(10, 0, V(1, 0, 0), { uMover: { value: 1 } }),
+};
+const woodMat = (bw) => objMat(6, 4, V(0, 1, 0), { uMover: { value: 1 }, uBW: { value: bw }, uAlb: { value: 0.7 } });
+
+/* ---------- the white cube */
+const ROOM = { x: 6, z: 6, y: 5.4 };
+{ const g = withT(new THREE.BoxGeometry(ROOM.x * 2, ROOM.y, ROOM.z * 2), M4(0, ROOM.y / 2 - 0.005, 0), V(0, 1, 0)); add(g, MT.void).material.side = THREE.BackSide;
+  add(withT(new THREE.PlaneGeometry(ROOM.x * 2, ROOM.z * 2), M4(0, 0, 0, 0, -Math.PI / 2), V(1, 0, 0)), MT.floor); }
+// floor scuffs: where the drones hover low, the paper wears (48 × 48 over the room)
+const SCUFF_N = 48; const scuff = new Uint8Array(SCUFF_N * SCUFF_N); const scuffF = new Float32Array(SCUFF_N * SCUFF_N);
+try { if (S.scuff) { const b = atob(S.scuff); for (let i = 0; i < Math.min(b.length, scuff.length); i++) { scuff[i] = b.charCodeAt(i); scuffF[i] = scuff[i]; } } } catch (e) {}
+function scuffEncode() { let s = ''; for (let i = 0; i < scuff.length; i++) s += String.fromCharCode(scuff[i]); return btoa(s); }
+const scuffTex = new THREE.DataTexture(scuff, SCUFF_N, SCUFF_N, THREE.RedFormat, THREE.UnsignedByteType);
+scuffTex.minFilter = scuffTex.magFilter = THREE.LinearFilter; scuffTex.flipY = false; scuffTex.needsUpdate = true; SH.uScuff.value = scuffTex;
+// numerals for the clock face (typeset at load in a plain sans; not Timex's own face)
+{ const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '700 30px Arial, Helvetica, sans-serif';
+  for (let i = 1; i <= 12; i++) { const a = i / 12 * TAU; g.fillText(String(i), 128 + Math.sin(a) * 93, 128 - Math.cos(a) * 93); }
+  const t = new THREE.CanvasTexture(c); t.flipY = true; t.minFilter = THREE.LinearFilter; SH.uNum.value = t; }
+
+/* ---------- amplifiers */
+const COMP = [];   // components the crew can attend to: { name, short, c, face, speaker, deg, r }
+const HULL = [];   // boxes the drones keep out of
+function amp(o) {
+  // o: { name, short, x0,x1,y0,y1,z0,z1, ry, grille, panel:'top'|'side'|'none', knobs, knobMat, badge, corners, handle, deg }
+  const g = new THREE.Group(); const w = o.x1 - o.x0, h = o.y1 - o.y0, d = o.z1 - o.z0;
+  g.position.set((o.x0 + o.x1) / 2, (o.y0 + o.y1) / 2, (o.z0 + o.z1) / 2); g.rotation.y = o.ry || 0; scene.add(g);
+  add(boxG(w, h, d, null, V(1, 0, 0)), MT.tolex, g);
+  const fz = d / 2 + 0.003; let gy0 = -h / 2 + 0.03, gy1 = h / 2 - 0.03, gx0 = -w / 2 + 0.025, gx1 = w / 2 - 0.025;
+  if (o.panel === 'top') { const ph = clamp(h * 0.2, 0.045, 0.085); add(boxG(w - 0.03, ph, 0.008, M4(0, h / 2 - ph / 2 - 0.012, fz), V(1, 0, 0)), MT.panel, g);
+    for (let i = 0; i < o.knobs; i++) { const x = -w / 2 + 0.05 + (w - 0.1) * (i + 0.5) / o.knobs; add(cylG(0.011, 0.012, 0.018, M4(x, h / 2 - ph / 2 - 0.012, fz + 0.01, 0, Math.PI / 2), 10), o.knobMat || MT.dark, g); }
+    if (o.chromeStrip) add(boxG(w - 0.04, 0.008, 0.004, M4(0, h / 2 - ph - 0.016, fz + 0.002)), MT.chrome, g);
+    gy1 = h / 2 - ph - 0.03; }
+  if (o.panel === 'side') { const pw = 0.075; add(boxG(pw, h - 0.04, 0.01, M4(w / 2 - pw / 2 - 0.012, 0, fz)), MT.chrome, g);
+    for (let i = 0; i < o.knobs; i++) { const y = -h / 2 + 0.05 + (h - 0.1) * (i + 0.5) / o.knobs; add(cylG(0.01, 0.011, 0.016, M4(w / 2 - pw / 2 - 0.012, y, fz + 0.012, 0, Math.PI / 2), 10), MT.dark, g); }
+    gx1 = w / 2 - pw - 0.025; }
+  add(boxG(gx1 - gx0, gy1 - gy0, 0.005, M4((gx0 + gx1) / 2, (gy0 + gy1) / 2, fz), V(0, 1, 0)), o.grille, g);
+  if (o.badge) add(boxG(o.badge[2], o.badge[3], 0.005, M4(gx0 + o.badge[0], gy1 - o.badge[1], fz + 0.004)), MT.chrome, g);   // a blank plate where the logo is
+  if (o.plate) add(boxG(0.07, 0.016, 0.004, M4(gx1 - 0.06, gy1 - 0.03, fz + 0.004)), MT.chrome, g);
+  if (o.handle) { add(boxG(0.17, 0.018, 0.035, M4(0, h / 2 + 0.03, 0)), MT.dark, g); add(boxG(0.02, 0.03, 0.03, M4(-0.085, h / 2 + 0.015, 0)), MT.dark, g); add(boxG(0.02, 0.03, 0.03, M4(0.085, h / 2 + 0.015, 0)), MT.dark, g); }
+  if (o.corners) for (const sx of [-1, 1]) for (const sy of [-1, 1]) add(boxG(0.035, 0.035, 0.035, M4(sx * (w / 2 - 0.012), sy * (h / 2 - 0.012), d / 2 - 0.012)), MT.dark, g);
+  add(boxG(w - 0.05, h - 0.06, 0.004, M4(0, 0, -d / 2 - 0.002)), MT.dark, g);   // the back panel (not photographed; inferred)
+  const c = V(0, 0, d / 2).applyEuler(g.rotation).add(g.position);
+  COMP.push({ name: o.name, short: o.short, c, face: V(0, 0, 1).applyEuler(g.rotation), speaker: true, deg: o.deg, r: Math.max(w, h) * 0.6, oct: o.oct || 0 });
+  return g;
+}
+// bottom row, on the pallet
+amp({ name: 'Fender Twin', short: 'TWIN', x0: -0.70, x1: -0.04, y0: 0.14, y1: 0.65, z0: 0.0, z1: 0.27, grille: MT.grilleD, panel: 'top', knobs: 12, knobMat: MT.red, chromeStrip: true, badge: [0.03, 0.035, 0.09, 0.022], plate: true, deg: 0 });
+amp({ name: 'Fender combo (lower right)', short: 'LOWER FENDER', x0: -0.04, x1: 0.44, y0: 0.14, y1: 0.56, z0: -0.02, z1: 0.24, grille: MT.grilleD, panel: 'none', badge: [0.03, 0.04, 0.08, 0.02], deg: 4 });
+// second row
+amp({ name: 'Ibanez bass amp', short: 'IBANEZ', x0: -0.70, x1: -0.40, y0: 0.65, y1: 0.98, z0: 0.02, z1: 0.25, grille: MT.grilleD, panel: 'top', knobs: 6, badge: [0.02, 0.03, 0.1, 0.02], corners: true, deg: 5 });
+amp({ name: 'Fender Frontman 15G', short: 'FRONTMAN', x0: -0.40, x1: -0.04, y0: 0.65, y1: 0.97, z0: 0.03, z1: 0.25, grille: MT.grilleS, panel: 'top', knobs: 7, badge: [0.03, 0.035, 0.08, 0.02], corners: true, deg: 3 });
+amp({ name: 'Fender Champ 12', short: 'CHAMP 12', x0: -0.02, x1: 0.44, y0: 0.56, y1: 0.98, z0: 0.0, z1: 0.24, grille: MT.grilleC, panel: 'top', knobs: 8, knobMat: MT.red, chromeStrip: true, badge: [0.03, 0.05, 0.1, 0.025], plate: true, handle: true, deg: 2 });
+// third row: the Marshall, and the Line 6 lying on its side with its control strip running up the right
+amp({ name: 'Marshall MG10', short: 'MARSHALL', x0: -0.70, x1: -0.43, y0: 0.98, y1: 1.24, z0: 0.03, z1: 0.23, grille: MT.grilleD, panel: 'none', badge: [0.02, 0.035, 0.1, 0.024], corners: true, deg: 1 });
+amp({ name: 'Line 6 Spider (on its side)', short: 'LINE 6', x0: -0.43, x1: -0.02, y0: 0.97, y1: 1.38, z0: 0.0, z1: 0.25, grille: MT.grilleD, panel: 'side', knobs: 9, badge: [0.03, 0.08, 0.025, 0.12], deg: 6 });
+// the MG10CD chassis out of its cabinet, gold faceplate forward, red tape across it
+{ const g = new THREE.Group(); g.position.set(-0.20, 1.415, 0.12); g.rotation.y = 0.05; scene.add(g);
+  add(boxG(0.34, 0.07, 0.004, M4(0, 0, 0.075)), MT.gold, g); add(boxG(0.30, 0.016, 0.003, M4(0, -0.018, 0.078)), MT.red, g);
+  for (let i = 0; i < 5; i++) add(cylG(0.009, 0.01, 0.014, M4(-0.11 + i * 0.05, 0.012, 0.083, 0, Math.PI / 2), 10), MT.dark, g);
+  add(boxG(0.33, 0.008, 0.15, M4(0, -0.031, 0)), MT.silver, g); add(boxG(0.06, 0.05, 0.05, M4(0.08, 0.0, -0.02)), MT.dark, g);
+  add(boxG(0.1, 0.02, 0.06, M4(-0.06, -0.02, -0.01)), MT.board, g);
+  COMP.push({ name: 'MG10CD chassis', short: 'MG10 CHASSIS', c: V(-0.2, 1.42, 0.2), face: V(0, 0, 1), speaker: false, deg: 4, oct: 1, r: 0.2 }); }
+// the Kinect, from the video: on the Line 6, behind the chassis; it tilts to follow whatever floats in front of it
+const KIN = { g: new THREE.Group(), tilt: 0, want: 0, target: -1, moving: false, pos: V(-0.24, 1.478, 0.05) };
+{ const base = new THREE.Group(); base.position.set(-0.24, 1.38, 0.05); scene.add(base);
+  add(boxG(0.08, 0.018, 0.07, M4(0, 0.009, 0)), MT.dark, base); add(boxG(0.022, 0.06, 0.02, M4(0, 0.045, 0)), MT.dark, base);
+  KIN.g.position.set(0, 0.098, 0); base.add(KIN.g);
+  add(boxG(0.28, 0.04, 0.062, null, V(1, 0, 0)), MT.dark, KIN.g);
+  for (const x of [-0.08, 0.02, 0.07]) add(cylG(0.008, 0.008, 0.004, M4(x, 0, 0.032, 0, Math.PI / 2), 10), MT.silver, KIN.g);
+  COMP.push({ name: 'Kinect', short: 'KINECT', c: V(-0.24, 1.48, 0.09), face: V(0, 0, 1), speaker: false, deg: 6, oct: 1, r: 0.15 }); }
+// the wire crown, top left: a small speaker box, copper wire looping up, three pairs of headphones, two loose drivers,
+// a blank pink tag where the Bob Ross card hangs, and a pipe-cleaner ornament at the top
+{ add(boxG(0.2, 0.2, 0.18, M4(-0.57, 1.34, 0.12, 0.25)), MT.tolex);
+  add(cylG(0.06, 0.07, 0.01, M4(-0.62, 1.35, 0.2, 0.25, Math.PI / 2), 16), MT.grilleD);
+  const cr = mulberry(41041); const cp = () => V(-0.78 + cr() * 0.66, 1.2 + cr() * 0.58, -0.06 + cr() * 0.36);
+  for (let i = 0; i < 13; i++) { const pts = []; let p = V(-0.55 + cr() * 0.3, 1.24, 0.05 + cr() * 0.15); for (let k = 0; k < 5; k++) { pts.push(p.clone()); p = p.clone().lerp(cp(), 0.7); } tube(pts, 0.0035, MT.copper, scene, 36); }
+  for (const [x, y, z, ry] of [[-0.75, 1.32, 0.14, 1.5], [-0.73, 1.16, 0.08, 1.3], [-0.68, 1.43, 0.02, 1.7]]) {   // headphones hanging on the left
+    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(0.1, ry, 0.15); scene.add(g);
+    add(withT(new THREE.TorusGeometry(0.085, 0.009, 6, 18, Math.PI), null, V(1, 0, 0)), MT.dark, g);
+    for (const s of [-1, 1]) add(cylG(0.042, 0.042, 0.03, M4(s * 0.085, -0.01, 0, 0, 0, Math.PI / 2), 16), MT.dark, g); }
+  for (const [x, y, z] of [[-0.47, 1.69, 0.1], [-0.63, 1.62, 0.16]]) { add(cylG(0.05, 0.02, 0.03, M4(x, y, z, 0, -1.1), 16), MT.dark); add(cylG(0.045, 0.045, 0.004, M4(x, y + 0.012, z + 0.012, 0, -1.1), 16), MT.grilleS); }
+  add(boxG(0.06, 0.085, 0.003, M4(-0.6, 1.3, 0.25, 0.2)), MT.red);                         // the tag
+  add(boxG(0.06, 0.06, 0.02, M4(-0.52, 1.74, 0.05, 0.4)), MT.dark);                        // a black clamp at the top
+  const oc = V(-0.3, 1.66, 0.12); const ocr = mulberry(777);
+  for (let i = 0; i < 9; i++) { const a = ocr() * TAU, e = 0.2 + ocr() * 1.1; const tip = oc.clone().add(V(Math.cos(a) * Math.cos(e), Math.sin(e), Math.sin(a) * Math.cos(e) * 0.6).multiplyScalar(0.07 + ocr() * 0.07));
+    tube([oc.clone(), oc.clone().lerp(tip, 0.5).add(V(0, 0.01, 0)), tip], 0.004, [MT.red, MT.gold, MT.grilleS, MT.red][i % 4], scene, 8); }
+  COMP.push({ name: 'the wire crown', short: 'WIRE CROWN', c: V(-0.55, 1.5, 0.14), face: V(-0.4, 0.2, 1).normalize(), speaker: false, deg: 5, oct: 1, r: 0.3 });
+  COMP.push({ name: 'the headphones', short: 'HEADPHONES', c: V(-0.74, 1.3, 0.1), face: V(-1, 0, 0.3).normalize(), speaker: false, deg: 3, oct: 1, r: 0.2 });
+  COMP.push({ name: 'the ornament', short: 'ORNAMENT', c: oc, face: V(0, 0.3, 1).normalize(), speaker: false, deg: 1, oct: 2, r: 0.12 }); }
+// the iMac on its white cabinet, behind the stack; its stand and back are inferred
+const SCR = {};
+{ bx(0.02, 0, -0.9, 0.56, 0.95, -0.42, MT.white);
+  const g = new THREE.Group(); g.position.set(0.29, 1.44, -0.33); g.rotation.set(-0.04, -0.06, 0); scene.add(g);
+  add(boxG(0.62, 0.5, 0.03, null, V(1, 0, 0)), MT.silver, g); add(boxG(0.6, 0.4, 0.003, M4(0, 0.03, 0.016)), MT.dark, g);
+  SCR.mac = add(withT(new THREE.PlaneGeometry(0.56, 0.35), M4(0, 0.03, 0.019), V(0, 1, 0)), MT.scrMac, g);
+  add(boxG(0.16, 0.3, 0.02, M4(0, -0.33, -0.1, 0, 0.25)), MT.silver, g);
+  COMP.push({ name: 'the iMac', short: 'iMAC', c: V(0.29, 1.47, -0.31), face: V(0, 0, 1), speaker: false, deg: 0, oct: 2, r: 0.32 });
+  COMP.push({ name: 'the white cabinet', short: 'CABINET', c: V(0.29, 0.5, -0.9), face: V(0, 0, -1), speaker: false, deg: 0, oct: 1, r: 0.3 }); }
+// the ViewSonic panel leaning on the Champ, white bezel, tilted back and turned toward the left
+{ const g = new THREE.Group(); g.position.set(0.12, 0.985, 0.17); g.rotation.set(-0.28, -0.3, 0.03, 'YXZ'); scene.add(g);
+  add(boxG(0.3, 0.42, 0.028, M4(0, 0.21, 0)), MT.white, g); SCR.kin = add(withT(new THREE.PlaneGeometry(0.255, 0.33), M4(0, 0.215, 0.0155), V(0, 1, 0)), MT.scrKin, g);
+  add(boxG(0.29, 0.03, 0.07, M4(0, 0.01, -0.04)), MT.white, g);
+  COMP.push({ name: 'the ViewSonic', short: 'VIEWSONIC', c: V(0.1, 1.19, 0.21), face: V(-0.3, 0.25, 1).normalize(), speaker: false, deg: 2, oct: 1, r: 0.22 }); }
+// weathered boards: fence pickets with a row of nails down each edge, rising behind the Champ
+const BOARDS = [[V(0.50, 0.56, -0.06), V(0.00, 1.82, -0.16), 0.13], [V(0.24, 0.57, -0.12), V(0.21, 1.50, -0.14), 0.10], [V(0.34, 0.57, -0.13), V(0.38, 1.63, -0.17), 0.11], [V(0.47, 0.56, -0.10), V(0.49, 1.47, -0.09), 0.09]];
+for (const [a, b, wdt] of BOARDS) { const L = a.distanceTo(b); const dir = b.clone().sub(a).normalize();
+  const m = add(withT(new THREE.BoxGeometry(wdt, L, 0.024), null, V(0, 1, 0)), woodMat(wdt / 2)); m.position.copy(a).lerp(b, 0.5); m.quaternion.setFromUnitVectors(V(0, 1, 0), dir); }
+COMP.push({ name: 'the boards', short: 'BOARDS', c: V(0.3, 1.4, -0.12), face: V(0, 0, 1), speaker: false, deg: 5, oct: 0, r: 0.3 });
+// the pallet: top boards run front to back, stringers across, a bottom deck
+{ const PX0 = -0.72, PX1 = 0.32, PZ0 = -0.45, PZ1 = 0.77;
+  for (let i = 0; i < 6; i++) { const x0 = PX0 + i * (PX1 - PX0 - 0.12) / 5; bx(x0, 0.115, PZ0, x0 + 0.12, 0.14, PZ1, MT.pallet, V(0, 0, 1)); }
+  for (const z of [PZ0 + 0.05, (PZ0 + PZ1) / 2, PZ1 - 0.05]) bx(PX0, 0.025, z - 0.045, PX1, 0.115, z + 0.045, MT.pallet, V(1, 0, 0));
+  for (let i = 0; i < 3; i++) { const x0 = PX0 + i * (PX1 - PX0 - 0.12) / 2; bx(x0, 0, PZ0, x0 + 0.12, 0.025, PZ1, MT.pallet, V(0, 0, 1)); }
+  COMP.push({ name: 'the pallet', short: 'PALLET', c: V(-0.3, 0.08, 0.77), face: V(0, 0, 1), speaker: false, deg: 0, oct: 0, r: 0.4 }); }
+// the cassette receiver on the VCR, front centre on the pallet
+{ bx(-0.19, 0.14, 0.28, 0.29, 0.232, 0.66, MT.silver); bx(-0.12, 0.17, 0.661, 0.12, 0.185, 0.664, MT.dark); bx(0.17, 0.18, 0.661, 0.25, 0.2, 0.664, MT.dark);
+  const g = new THREE.Group(); g.position.set(0.05, 0.299, 0.46); g.rotation.y = 0.04; scene.add(g);
+  add(boxG(0.4, 0.13, 0.32, null, V(1, 0, 0)), MT.tolex, g);
+  add(boxG(0.13, 0.075, 0.004, M4(-0.11, 0.005, 0.161)), MT.silver, g); add(boxG(0.11, 0.055, 0.005, M4(-0.11, 0.005, 0.163)), MT.dark, g);
+  for (let i = 0; i < 6; i++) add(boxG(0.006, 0.05, 0.004, M4(0.0 + i * 0.016, 0.005, 0.162)), MT.silver, g);
+  for (const x of [0.12, 0.165]) add(cylG(0.019, 0.02, 0.02, M4(x, -0.01, 0.168, 0, Math.PI / 2), 16), MT.chrome, g);
+  COMP.push({ name: 'the cassette receiver', short: 'CASSETTE', c: V(0.05, 0.3, 0.62), face: V(0, 0, 1), speaker: false, deg: 3, oct: 1, r: 0.2 });
+  COMP.push({ name: 'the VCR', short: 'VCR', c: V(0.05, 0.19, 0.66), face: V(0, 0, 1), speaker: false, deg: 6, oct: 0, r: 0.2 }); }
+// the clock: a Timex school clock leaning on the amps, sitting on the receiver; stopped at 8:55:15
+const CLK = {};
+{ const g = new THREE.Group(); g.position.set(-0.01, 0.53, 0.33); g.rotation.set(-0.16, 0.06, 0, 'YXZ'); scene.add(g); CLK.g = g;
+  add(cylG(0.166, 0.166, 0.045, M4(0, 0, 0, 0, Math.PI / 2), 40), MT.dark, g);
+  add(withT(new THREE.CircleGeometry(0.15, 40), M4(0, 0, 0.0232), V(0, 1, 0)), MT.face, g);
+  const hand = (len, w, back, z) => { const p = new THREE.Group(); p.position.z = z; g.add(p); add(boxG(w, len + back, 0.003, M4(0, (len - back) / 2, 0)), MT.dark, p); return p; };
+  CLK.h = hand(0.075, 0.011, 0.015, 0.027); CLK.m = hand(0.118, 0.008, 0.018, 0.03); CLK.s = hand(0.128, 0.0025, 0.03, 0.033);
+  add(cylG(0.007, 0.007, 0.012, M4(0, 0, 0.033, 0, Math.PI / 2), 10), MT.dark, g);
+  COMP.push({ name: 'the clock', short: 'CLOCK', c: V(-0.01, 0.53, 0.37), face: V(0, 0.16, 1).normalize(), speaker: false, deg: 0, oct: 1, r: 0.17 }); }
+function setClock(sec) { const s = ((sec % 43200) + 43200) % 43200; CLK.s.rotation.z = -(s % 60) / 60 * TAU; CLK.m.rotation.z = -(s % 3600) / 3600 * TAU; CLK.h.rotation.z = -s / 43200 * TAU; }
+setClock(S.clock);
+// the case, open on the floor front right: base with the circuit board, lid standing up behind it
+{ const g = new THREE.Group(); g.position.set(0.57, 0, 0.46); g.rotation.y = -0.12; scene.add(g);
+  const w = 0.54, d = 0.42, h = 0.165, t = 0.016;
+  add(boxG(w, 0.012, d, M4(0, 0.006, 0)), MT.case, g);
+  add(boxG(w, h, t, M4(0, h / 2, d / 2 - t / 2)), MT.case, g); add(boxG(w, h, t, M4(0, h / 2, -d / 2 + t / 2)), MT.case, g);
+  add(boxG(t, h, d, M4(w / 2 - t / 2, h / 2, 0)), MT.case, g); add(boxG(t, h, d, M4(-w / 2 + t / 2, h / 2, 0)), MT.case, g);
+  add(boxG(0.15, 0.025, 0.03, M4(0, h * 0.55, d / 2 + 0.02)), MT.case, g);
+  add(withT(new THREE.PlaneGeometry(w - 0.04, d - 0.04), M4(0, 0.11, 0, 0, -Math.PI / 2), V(1, 0, 0)), MT.board, g);
+  const lid = new THREE.Group(); lid.position.set(0, h, -d / 2); lid.rotation.x = -0.14; g.add(lid);
+  add(boxG(w, 0.44, 0.05, M4(0, 0.22, -0.025)), MT.case, lid); add(boxG(w - 0.05, 0.4, 0.004, M4(0, 0.22, 0.002)), MT.dark, lid);
+  COMP.push({ name: 'the circuit board in the case', short: 'CIRCUIT BOARD', c: V(0.57, 0.14, 0.5), face: V(0, 1, 0.5).normalize(), speaker: false, deg: 4, oct: 1, r: 0.25 }); }
+// wiring: the red bundle spilling from the case over the pallet, a white cord from the Champ down to the case, black leads
+{ const wr = mulberry(2424);
+  for (let i = 0; i < 16; i++) { const a = V(0.33, 0.06 + wr() * 0.08, 0.32 + wr() * 0.3), b = V(-0.05 + wr() * 0.3, 0.006, 0.66 + wr() * 0.22);
+    const m = a.clone().lerp(b, 0.5).add(V(wr() * 0.06, 0.03 + wr() * 0.05, wr() * 0.05)); tube([a, m, b], 0.0028, MT.redWire, scene, 16);
+    add(new THREE.SphereGeometry(0.006, 6, 4), MT.white).position.copy(b); }
+  tube([V(0.41, 0.925, 0.245), V(0.5, 0.75, 0.33), V(0.63, 0.42, 0.5), V(0.73, 0.17, 0.63)], 0.0024, MT.cord, scene, 40);
+  tube([V(0.37, 0.93, 0.245), V(0.36, 0.86, 0.255), V(0.38, 0.8, 0.252), V(0.4, 0.84, 0.25)], 0.0022, MT.cord, scene, 20);
+  tube([V(-0.3, 0.65, 0.272), V(-0.31, 0.56, 0.28), V(-0.305, 0.46, 0.283)], 0.003, MT.dark, scene, 12);
+  tube([V(0.0, 0.2, 0.66), V(-0.1, 0.15, 0.72), V(-0.25, 0.145, 0.7), V(-0.4, 0.15, 0.74), V(-0.5, 0.02, 0.85)], 0.003, MT.dark, scene, 30);
+  tube([V(-0.24, 1.48, 0.02), V(-0.36, 1.42, 0.27), V(-0.42, 1.0, 0.28), V(-0.5, 0.68, 0.28), V(-0.55, 0.66, 0.2)], 0.0035, MT.red, scene, 40);   // the Kinect's lead (red in the video)
+  COMP.push({ name: 'the red wires', short: 'RED WIRES', c: V(0.15, 0.04, 0.72), face: V(0, 1, 0.6).normalize(), speaker: false, deg: 1, oct: 1, r: 0.25 });
+  COMP.push({ name: 'the white cord', short: 'WHITE CORD', c: V(0.58, 0.52, 0.42), face: V(0.3, 0, 1).normalize(), speaker: false, deg: 2, oct: 2, r: 0.2 }); }
+// what the drones keep out of (the sculpture's envelope, as a few boxes)
+for (const b of [[-0.8, 0, -0.5, 0.35, 1.5, 0.8], [-0.82, 1.1, -0.1, -0.05, 1.86, 0.32], [-0.1, 0.5, -0.45, 0.62, 1.86, 0.3], [0.0, 0, -0.95, 0.6, 1.75, -0.35], [0.26, 0, 0.2, 0.9, 0.7, 0.72], [-0.45, 1.3, -0.05, 0.05, 1.56, 0.25]])
+  HULL.push({ a: V(b[0], b[1], b[2]), b: V(b[3], b[4], b[5]) });
+const CENTRE = V(-0.05, 0.95, 0.1);
+
+/* ---------- the drones: a printed cube with a lens barrel and a tally; they float, there is no air to push */
+function droneMesh() {
+  const g = new THREE.Group(); scene.add(g);
+  add(boxG(0.15, 0.13, 0.16, null, V(1, 0, 0)), MT.droneBody, g);
+  add(cylG(0.046, 0.05, 0.05, M4(0, 0, 0.1, 0, Math.PI / 2), 18), MT.dark, g);
+  add(cylG(0.032, 0.032, 0.004, M4(0, 0, 0.127, 0, Math.PI / 2), 18), MT.droneTrim, g);
+  add(boxG(0.11, 0.008, 0.12, M4(0, 0.069, -0.01)), MT.droneTrim, g);
+  const tm = objMat(15, 0, V(1, 0, 0), { uMover: { value: 1 } }); const tally = add(boxG(0.03, 0.018, 0.03, M4(0.045, 0.083, 0.045)), tm, g);
+  g.userData.tally = tm; return g;
+}
+
+/* ====================================================================== the uncanny (rare events where the sculpture itself is alive) */
+const EVT = {
+  feedback: { label: 'the stack fed back', min: 45, max: 110, cool: 35 * 60 },
+  wake:     { label: 'the screens showed the crew to itself', min: 60, max: 130, cool: 45 * 60 },
+  clock:    { label: 'the clock ran', min: 50, max: 140, cool: 40 * 60 },
+  hush:     { label: 'everything held still', min: 22, max: 34, cool: 0 },
+};
+const live = { ev: null, evT: 0, evDur: 0, fb: 0, wake: 0, clock: 0, calm: 1, why: '', fbAmp: null, flinch: 0 };
+function speakerNear() {   // a lens inside a speaker's throw
+  for (const d of crew.drones) { if (!d.cam) continue; const p = TV(d.pos), f = TV(d.cam.f);
+    for (const c of COMP) { if (!c.speaker) continue; const v = c.c.clone().sub(p); const dist = v.length(); if (dist > 0.78) continue;
+      if (c.face.dot(p.clone().sub(c.c)) <= 0) continue; if (f.dot(v.normalize()) < Math.cos(35 * D2R)) continue; return { d, c, dist }; } }
+  return null;
+}
+function watching() { let n = 0; for (const d of crew.drones) { if (!d.cam) continue; const p = TV(d.pos), f = TV(d.cam.f); const v = CENTRE.clone().sub(p); const dist = v.length();
+  if (dist < 6.5 && f.dot(v.normalize()) > Math.cos(d.fov.p * 0.5 * D2R)) n++; } return n; }
+function conditions() {
+  const sp = speakerNear(); const liveD = crew.liveDrone; const clockC = COMP.find(c => c.short === 'CLOCK');
+  return {
+    feedback: !!sp,
+    wake: watching() >= 5,
+    clock: !!liveD.cam && camSees(liveD, clockC.c, 0.8) && TV(liveD.pos).distanceTo(clockC.c) < 2.6 && !live.ev,
+    _sp: sp,
+  };
+}
+const why = {
+  feedback: (c) => c._sp ? `${c._sp.d.name} ${c._sp.dist.toFixed(2)} m from the ${c._sp.c.short}` : '',
+  wake: () => `${watching()} lenses on the piece at once`,
+  clock: () => 'the clock on air, the room quiet',
+};
+function similarity(name) {
+  const mem = S.uncanny.mem[name]; if (!mem || !mem.length) return 1;
+  const h = localParts(simMs).hour, subj = LENS.comp ? LENS.comp.short : ''; let s = 0;
+  for (const m of mem) { const dh = Math.min(Math.abs(m.h - h), 24 - Math.abs(m.h - h)) / 3, ds = m.subj === subj ? 0 : 1, dw = (m.w - watching()) / 2; s += Math.exp(-(dh * dh + ds + dw * dw)); }
+  return 1 + 1.2 * s / mem.length;
+}
+function startEvent(name, forced, c) {
+  const e = EVT[name]; live.ev = name; live.evT = 0; live.evDur = rr(e.min, e.max); live.why = forced ? 'forced by hand' : (why[name] ? why[name](c || conditions()) : '');
+  S.uncanny.counts[name] = (S.uncanny.counts[name] || 0) + 1; S.uncanny.last[name] = simT;
+  const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: localParts(simMs).hour, subj: LENS.comp ? LENS.comp.short : '', w: watching() }); if (mem.length > 12) mem.shift();
+  if (name === 'feedback') { const sp = (c && c._sp) || speakerNear(); live.fbAmp = sp ? sp.c : COMP.find(k => k.speaker && k.short === (LENS.comp && LENS.comp.speaker ? LENS.comp.short : 'TWIN')) || COMP[0]; }
+  if (name === 'clock') live.clockFrom = S.clock;
+  if (name !== 'hush') S.tension += 0.08;
+  logEv(e.label + (live.why ? ' · ' + live.why : ''));
+  AUD.event(name, true);
+}
+function endEvent() { const n = live.ev; live.ev = null; AUD.event(n, false);
+  if (n === 'clock') logEv(`the clock stopped again at ${dial(S.clock)}`);
+  if (n === 'feedback') logEv('the crew backed off the speakers');
+  if (n === 'hush') rupture('the stillness broke'); else S.uncanny.next = simT + rr(14, 34) * 60 * (1 - 0.05 * Math.min(S.epoch - 1, 6)); }
+function uncannyTick(dt) {
+  if (live.ev) { live.evT += dt; if (live.evT >= live.evDur) endEvent(); return; }
+  if (S.tension >= 1) { startEvent('hush'); return; }
+  if (simT < S.uncanny.next) return;
+  const c = conditions(); const opts = [];
+  for (const n of ['feedback', 'wake', 'clock']) { if (!c[n]) continue; const last = S.uncanny.last[n]; if (last != null && simT - last < EVT[n].cool && last <= simT) continue;
+    opts.push([n, similarity(n) / (1 + 0.4 * (S.uncanny.counts[n] || 0)) * (n === 'clock' ? 2 : 1)]); }
+  if (!opts.length) return;
+  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; for (const [n, w] of opts) { r -= w; if (r <= 0) { startEvent(n, false, c); return; } }
+}
+function rupture(reason) {
+  S.epoch++; const prev = S.colorway;
+  const w = COLORWAYS.map((_, i) => i === prev ? 0 : 1 / (1 + (S.cwVisits[i] || 0) * 0.8)); let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot, p = 0;
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) { p = i; break; } }
+  S.colorway = p; S.cwVisits[p] = (S.cwVisits[p] || 0) + 1;
+  S.grammar = { period: rr(5.0, 9.0), dith: rr(0.05, 0.2), wob: rr(2, 10), outline: rnd() < 0.85 ? 1 : 0, hatch: rr(0.75, 1.25) };
+  S.key = { az: rr(0, TAU), el: rr(0.7, 1.35) };   // the cube is relit from somewhere else
+  const centers = [38, 33, 36, 31, 41, 35]; S.center = centers[(centers.indexOf(S.center) + 1 + Math.floor(rnd() * 3)) % centers.length];
+  S.tension = 0; S.epochStart = simT; S.epochLen = rr(50, 95) * 60; S.uncanny.next = simT + rr(5, 12) * 60;
+  cwFrom = cwNow.map(v => v.clone()); cwMix = 0;
+  logEv(`RUPTURE → epoch ${S.epoch} · inks ${COLORWAYS[p].name} · relit from ${Math.round(S.key.az / D2R)}° · centre ${NOTE[S.center % 12]}` + (reason ? ' · ' + reason : ''));
+  AUD.rupture(); save();
+}
+const NOTE = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+
+/* ====================================================================== audio: the live lens is the microphone (the amps hum; the bass is whatever the lens looks at) */
+const AUD = {
+  ctx: null, ok: false, muted: false, step: 0, nextT: 0, bar: 0, chordI: 0, pend: [], barSec: 5.5, padUntil: 0, nextTick: 0, cur16: 0,
+  q(o) { if (this.ctx && this.ctx.state === 'running' && this.pend.length < 8) this.pend.push(o); },
+  async init() {
+    if (this.ctx || this.booting || !AUDIO_WANTED) return;
+    this.booting = true;
+    let ctx; try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { this.booting = false; return; }
+    this.wl = false;
+    try { await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET)); this.wl = true; }
+    catch (e) { try { const u = URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' })); await ctx.audioWorklet.addModule(u); this.wl = true; } catch (e2) {} }
+    this.ctx = ctx; this.build(); this.ok = true; this.booting = false; this.born = performance.now(); this.lastCT = ctx.currentTime; this.lastCTwall = performance.now(); this.silentFor = 0; this.nextT = 0; this.nextTick = 0;
+    if (ctx.state !== 'running') { tapBtn.hidden = false; ctx.resume().catch(() => {}); }
+    if (!this.timers) { this.timers = true; setInterval(() => this.sched(), 40); setInterval(() => this.watch(), 1000); }
+  },
+  rebuild(why) {
+    const old = this.ctx, oldOut = this.out; this.ctx = null; this.ok = false;
+    if (old) { try { oldOut.gain.setTargetAtTime(0, old.currentTime, 0.6); } catch (e) {} setTimeout(() => { try { if (old.state !== 'closed') old.close().catch(() => {}); } catch (e) {} }, 4000); }
+    if (why) console.warn('[audio] rebuild:', why);
+    this.init().then(() => { if (this.ctx) { const g = this.out.gain; g.value = 0; g.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 1.2); } });
+  },
+  build() {
+    const c = this.ctx; const g = (v = 1) => { const n = c.createGain(); n.gain.value = v; return n; };
+    const bq = (type, f, q = 0.7, gain = 0) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; n.gain.value = gain; return n; };
+    const curve = (fn) => { const a = new Float32Array(2048); for (let i = 0; i < 2048; i++) a[i] = fn(i / 1023.5 - 1); return a; };
+    const pan = (v) => { const p = c.createStereoPanner(); p.pan.value = v; return p; };
+    this.g = g; this.bq = bq;
+    const out = g(OUT_GAIN), master = g(1);
+    const hp = bq('highpass', 26), sat = c.createWaveShaper(); sat.curve = curve(x => Math.tanh(1.6 * x) / Math.tanh(1.6)); sat.oversample = '2x';
+    const shelf = bq('highshelf', 2000, 0.7, -10), lp = bq('lowpass', 6800, 0.5);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 2.4; comp.knee.value = 10; comp.attack.value = 0.03; comp.release.value = 0.35;
+    master.connect(hp).connect(sat).connect(shelf).connect(lp).connect(comp).connect(out).connect(c.destination);
+    this.an = c.createAnalyser(); this.an.fftSize = 2048; out.connect(this.an);
+    this.master = master; this.out = out;
+    // dub echo, unity-gain tanh in the loop; its feedback follows how many lenses are on the piece
+    const eIn = g(1), dL = c.createDelay(4), dR = c.createDelay(4), fbL = g(0.4), fbR = g(0.4), lpE = bq('lowpass', 1300), hpE = bq('highpass', 150);
+    const ush = c.createWaveShaper(); ush.curve = curve(Math.tanh);
+    const pL = pan(-0.6), pR = pan(0.6), eOut = g(0.5);
+    eIn.connect(dL); dL.connect(lpE).connect(hpE).connect(ush); ush.connect(fbL).connect(dR); dR.connect(fbR).connect(dL);
+    dL.connect(pL).connect(eOut); dR.connect(pR).connect(eOut); eOut.connect(master);
+    this.echo = { eIn, dL, dR, fbL, fbR };
+    // the room: a big empty cube, long and dim
+    const len = c.sampleRate * 4.8, ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let lpv = 0; for (let i = 0; i < len; i++) { lpv += (Math.random() * 2 - 1 - lpv) * 0.18; d[i] = lpv * Math.pow(1 - i / len, 2.2) * (i < c.sampleRate * 0.03 ? 0.3 : 1); } }
+    const conv = c.createConvolver(); conv.buffer = ir; const rIn = g(1), rOut = g(0.45); rIn.connect(conv).connect(rOut).connect(master);
+    this.room = { rIn, rOut };
+    const nb = (brown) => { const b = c.createBuffer(2, c.sampleRate * 9, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let l = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } } return b; };
+    this.white = nb(false); this.brown = nb(true);
+    const loop = (buf) => { if (this.wl) { try { return new AudioWorkletNode(c, 'mz-noise', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { brown: buf === this.brown } }); } catch (e) {} }
+      const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(c.currentTime + rr(0, 0.1), rr(0, 8)); return s; };
+    const bed = (buf, chain, p = 0, room = 0.4) => { const s = loop(buf); let n = s; chain.forEach(f => { n.connect(f); n = f; }); const gg = g(0), pp = pan(p); n.connect(gg).connect(pp); pp.connect(master); if (room) { const rs = g(room); pp.connect(rs).connect(this.room.rIn); } return { g: gg, p: pp, f: chain[0] }; };
+    this.roomTone = bed(this.brown, [bq('lowpass', 150, 0.6), bq('highpass', 35)], 0, 0.3);
+    this.hover = bed(this.brown, [bq('bandpass', 170, 1.4), bq('lowpass', 420)], 0, 0.2);
+    // every amplifier hums on its own degree; the Twin carries a second, slightly sharp hum, and their beat is the bar
+    this.humBus = g(1); const humLP = bq('lowpass', 560, 0.5); this.humBus.connect(humLP).connect(master); const hs = g(0.3); humLP.connect(hs).connect(this.room.rIn);
+    this.amps = COMP.filter(k => k.speaker).map(k => { const o = c.createOscillator(), o2 = c.createOscillator(); o.type = 'sine'; o2.type = 'sine';
+      const gg = g(0), g2 = g(0.22), pp = pan(0); o.connect(gg); o2.connect(g2).connect(gg); gg.connect(pp).connect(this.humBus); o.start(); o2.start(); return { k, o, o2, g: gg, p: pp }; });
+    { const o = c.createOscillator(); o.type = 'sine'; const gg = g(0); o.connect(gg); this.beat = { o, g: gg }; const pp = pan(-0.2); gg.connect(pp).connect(this.humBus); o.start(); }
+    // the tape (rare): a soft pad with wow on it, as from the cassette receiver
+    this.padBus = g(0); this.padLP = bq('lowpass', 620, 0.6); this.padBus.connect(this.padLP); this.padLP.connect(master); this.padLP.connect(this.room.rIn);
+    const wow = c.createOscillator(); wow.frequency.value = 0.55; const wowG = g(9); wow.connect(wowG); wow.start();
+    this.pad = [0, 1, 2].map(() => { const a = c.createOscillator(), b = c.createOscillator(); a.type = b.type = 'sawtooth'; b.detune.value = 8; a.detune.value = -6; wowG.connect(a.detune); wowG.connect(b.detune);
+      const gg = g(0.04); a.connect(gg); b.connect(gg); gg.connect(this.padBus); a.start(); b.start(); return { a, b }; });
+    // event voices: ♭II chord + a howl (feedback), high fifth in the room (screens), sub with a breath (the clock)
+    this.singG = g(0); this.singG.connect(master); this.singG.connect(this.room.rIn); this.singO = [0, 1, 2].map(() => { const o = c.createOscillator(); o.type = 'triangle'; const gg = g(0.05); o.connect(gg).connect(this.singG); o.start(); return o; });
+    { const o = c.createOscillator(); o.type = 'sine'; const f = bq('lowpass', 900, 2); const gg = g(0); o.connect(f).connect(gg); gg.connect(master); const es = g(0.5); gg.connect(es).connect(this.echo.eIn); o.start(); this.howl = { o, g: gg }; }
+    this.fifthG = g(0); this.fifthG.connect(this.room.rIn); const fd = g(0.35); this.fifthG.connect(fd).connect(master); this.fifthO = [0, 1].map(() => { const o = c.createOscillator(); o.type = 'sine'; o.connect(this.fifthG); o.start(); return o; });
+    { const o = c.createOscillator(); o.type = 'sine'; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
+    this.retune(true);
+  },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  deg(d, oct = 0) { const sc = [0, 1, 3, 5, 7, 8, 10]; const o = Math.floor(d / 7); return S.center + oct * 12 + sc[((d % 7) + 7) % 7] + 12 * o; },
+  retune(now) { if (!this.ctx) return; const t = this.ctx.currentTime; const tc = now ? 0.01 : 6;   // the hums retune slowly at rupture
+    this.amps.forEach(a => { const f = this.hz(this.deg(a.k.deg, a.k.oct)); a.o.frequency.setTargetAtTime(f, t, tc); a.o2.frequency.setTargetAtTime(f * 2, t, tc); });
+    this.beat.o.frequency.setTargetAtTime(this.hz(S.center) + BEAT.hz, t, now ? 0.01 : 2);
+    this.singO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([1, 3, 5][i], 1)), t, 0.5));
+    this.fifthO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([0, 4][i], 2)), t, 0.5));
+    this.sub.o.frequency.setTargetAtTime(this.hz(S.center - 12), t, tc); },
+  start() { if (!this.ctx) { this.init(); return; } this.ctx.resume().then(() => { tapBtn.hidden = true; }).catch(() => {}); },
+  watch() {
+    const c = this.ctx; if (!c) return;
+    if (c.state === 'closed') { this.rebuild('closed'); return; }
+    if (c.state === 'suspended') { c.resume().catch(() => {}); return; }
+    const now = performance.now();
+    if (c.currentTime !== this.lastCT) { this.lastCT = c.currentTime; this.lastCTwall = now; }
+    else if (now - this.lastCTwall > 6000) { this.rebuild('clock stalled'); return; }
+    const td = this.td || (this.td = new Float32Array(this.an.fftSize)); this.an.getFloatTimeDomainData(td);
+    let pk = 0, bad = false; for (let i = 0; i < td.length; i += 4) { const v = td[i]; if (!isFinite(v)) { bad = true; break; } pk = Math.max(pk, Math.abs(v)); }
+    if (bad) { this.rebuild('NaN in the mix'); return; }
+    this.silentFor = (pk < 1e-5 && !this.muted) ? this.silentFor + 1 : 0;
+    if (this.silentFor > 20) { this.rebuild('20 s of silence'); return; }
+    if (now - this.born > 3 * 3600e3) this.rebuild('3 h refresh');
+  },
+  mute() { this.muted = !this.muted; if (this.ctx) this.out.gain.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 0.1); },
+  lens(p, near = 1.5) { const v = p.clone().project(camera); const behind = v.z > 1; const d = p.distanceTo(camera.position);
+    return { pan: clamp(v.x, -1, 1) * (behind ? -0.4 : 0.85), g: (behind ? 0.35 : (Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 ? 1 : 0.55)) / (1 + d / near) }; },
+  voice(type, t, o) {
+    const c = this.ctx, g = this.g, bq = this.bq;
+    if (type === 'tick') {   // the clock ticking, while it runs
+      const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', 700, 4), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; const lp2 = bq('lowpass', 1100);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.002); gg.gain.exponentialRampToValueAtTime(0.0003, t + 0.045);
+      s.connect(f).connect(lp2).connect(gg).connect(p); p.connect(this.master); p.connect(this.room.rIn); s.start(t, rr(0, 7)); s.stop(t + 0.07); s.onended = () => p.disconnect(); return; }
+    if (type === 'crackle') {   // the board in the case, a dry contact somewhere
+      const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', rr(500, 950), 2.5), lp2 = bq('lowpass', 1150), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.001); gg.gain.exponentialRampToValueAtTime(0.0003, t + 0.025);
+      s.connect(f).connect(lp2).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); s.start(t, rr(0, 7)); s.stop(t + 0.05); s.onended = () => p.disconnect(); return; }
+    if (type === 'whirr') {   // the Kinect's tilt motor
+      const os = c.createOscillator(), f = bq('lowpass', 380, 1.2), gg = g(0), p = c.createStereoPanner(); os.type = 'sawtooth'; p.pan.value = o.pan;
+      os.frequency.setValueAtTime(92, t); os.frequency.linearRampToValueAtTime(118, t + o.d);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.06); gg.gain.setTargetAtTime(0, t + o.d, 0.05);
+      os.connect(f).connect(gg).connect(p); p.connect(this.master); os.start(t); os.stop(t + o.d + 0.4); os.onended = () => p.disconnect(); return; }
+    if (type === 'plink') {   // a tuned contact: the tape, a headphone driver, a knob touched
+      const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'sine'; os.frequency.value = this.hz(o.m);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.008); gg.gain.setTargetAtTime(0, t + o.d * 0.5, o.d * 0.25);
+      const f = bq('lowpass', 2000); os.connect(f).connect(gg).connect(p); p.connect(this.master); const es = g(0.7); p.connect(es).connect(this.echo.eIn); p.connect(this.room.rIn);
+      os.start(t); os.stop(t + o.d + 0.4); os.onended = () => p.disconnect(); return; }
+    if (type === 'swell') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('lowpass', 300, 0.7), gg = g(0); f.frequency.setValueAtTime(170, t); f.frequency.exponentialRampToValueAtTime(1200, t + o.d);
+      gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(o.v, t + o.d); gg.gain.linearRampToValueAtTime(0, t + o.d + 0.04);
+      s.connect(f).connect(gg); gg.connect(this.master); gg.connect(this.room.rIn); s.start(t, rr(0, 4)); s.stop(t + o.d + 0.1); s.onended = () => gg.disconnect(); return; }
+  },
+  sched() {
+    const c = this.ctx; if (!c || c.state !== 'running') return;
+    const ahead = c.currentTime + 0.5;
+    if (this.nextT < c.currentTime - 0.3) this.nextT = c.currentTime + 0.05;
+    if (this.nextTick < c.currentTime - 0.3) this.nextTick = c.currentTime + 0.05;
+    const hush = live.ev === 'hush';
+    while (this.nextT < ahead) {
+      const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16;
+      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, BEAT.bar, 0.5);
+        if (!hush && this.bar % 8 === 0 && rnd() < 0.22) this.padUntil = this.bar + 8 + Math.floor(rnd() * 9);
+        if (this.bar % 2 === 0 && this.bar < this.padUntil) this.chord(t); }
+      if (!hush) {
+        if (this.pend.length) { this.pend.sort((a, b) => b.v - a.v); const p = this.pend.shift(); if (this.pend.length > 3) this.pend.length = 3; if (p.v > 0.003) this.voice(p.type, t, p); }
+        const lc = this.lens(COMPS.board.c, 1.2); if (lc.g > 0.12 && rnd() < 0.05 * lc.g) this.voice('crackle', t + rr(0, sixteenth), { v: clamp(lc.g * 0.16, 0, 0.05), pan: lc.pan });
+        const lh = this.lens(COMPS.head.c, 1.0); if (lh.g > 0.2 && st % 4 === 0 && rnd() < 0.18) this.voice('plink', t, { m: this.deg(pick([0, 2, 4]), 3), v: clamp(lh.g * 0.03, 0, 0.012), pan: lh.pan, d: 0.3 });
+      }
+      this.step++; this.nextT += sixteenth; this.cur16 = st;
+    }
+    while (this.nextTick < ahead) { if (live.ev === 'clock') { const l = this.lens(COMPS.clock.c, 1.2); this.voice('tick', this.nextTick, { v: clamp(0.02 + l.g * 0.18, 0, 0.12), pan: l.pan }); } this.nextTick += 1; }
+    const tq = this.barSec / 16 * 3; this.echo.dL.delayTime.setTargetAtTime(tq, c.currentTime, 0.5); this.echo.dR.delayTime.setTargetAtTime(tq + this.barSec / 16, c.currentTime, 0.5);
+  },
+  chord(t) { const prog = [[0, 2, 4], [1, 3, 5], [5, 0, 2], [3, 5, 0]]; const ch = prog[this.chordI++ % prog.length];
+    this.pad.forEach((v, i) => { const hz = this.hz(this.deg(ch[i], 1)); v.a.frequency.setTargetAtTime(hz, t, 1.2); v.b.frequency.setTargetAtTime(hz, t, 1.2); }); },
+  event(name, on) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    if (name === 'feedback') { this.singG.gain.setTargetAtTime(on ? 0.42 : 0, t, on ? 4 : 2.5); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.15 });
+      if (on && live.fbAmp) this.howl.o.frequency.setTargetAtTime(this.hz(this.deg(live.fbAmp.deg, 3)), t, 0.3); }
+    if (name === 'wake') this.fifthG.gain.setTargetAtTime(on ? 0.03 : 0, t, 3);
+    if (name === 'hush' && on) this.voice('swell', t, { d: 6, v: 0.1 }); },
+  rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.2 });
+    this.voice('plink', t + this.barSec, { m: this.deg(0, 2), v: 0.08, pan: 0, d: 1.6 }); this.retune(false); },
+  frame(dt) {
+    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime;
+    const hush = live.ev === 'hush' ? 1 : 0, calm = live.calm, set = (p, v, tc = 0.6) => p.setTargetAtTime(v, t, tc);
+    set(this.roomTone.g.gain, 0.03 * (1 - 0.8 * hush), 2);
+    // the amps: each placed by the lens; the one the lens is on is the bass, held, with slow glides between cuts
+    this.amps.forEach(a => { const l = this.lens(a.k.c, 1.4); const subj = LENS.comp === a.k ? 1 : 0;
+      set(a.g.gain, (0.007 + 0.05 * l.g + 0.085 * subj + (live.fbAmp === a.k ? 0.06 * live.fb : 0)) * (1 - 0.95 * hush) * calm, subj ? 2.5 : 3); set(a.p.pan, l.pan * 0.7, 1); });
+    { const l = this.lens(COMPS.twin.c, 1.4); set(this.beat.g.gain, (0.012 + 0.05 * l.g + (LENS.comp === COMPS.twin ? 0.06 : 0)) * (1 - 0.95 * hush) * calm, 3);
+      set(this.beat.o.frequency, this.hz(S.center) + BEAT.hz, 2); }
+    // the nearest other drone to the live lens: a low, dry hover
+    let hv = 0, hp = 0; for (const d of crew.drones) { if (d.id === crew.live) continue; const l = this.lens(TV(d.pos), 0.9); if (l.g > hv) { hv = l.g; hp = l.pan; } }
+    set(this.hover.g.gain, clamp(hv, 0, 1) * 0.05 * (1 - hush), 0.8); set(this.hover.p.pan, hp, 0.5);
+    set(this.padBus.gain, (this.bar < this.padUntil ? 0.2 : 0) * (1 - hush), 6);
+    set(this.howl.g.gain, live.fb * 0.03 * (0.6 + 0.4 * Math.sin(simT * 1.3)), 0.6);
+    set(this.sub.g.gain, live.clock * 0.055 * (0.5 + 0.5 * Math.sin(simT * TAU / (this.barSec * 2))), 0.4);
+    const fb = clamp(0.25 + 0.06 * watching() + (live.ev ? 0.08 : 0), 0.2, 0.64); set(this.echo.fbL.gain, fb, 1); set(this.echo.fbR.gain, fb, 1);
+    set(this.room.rOut.gain, 0.4 + 0.15 * live.fb, 2);
+  },
+};
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(o){super();this.b=!!(o.processorOptions&&o.processorOptions.brown);this.l=[0,0];}
+process(_,outs){const o=outs[0];for(let c=0;c<o.length;c++){const d=o[c];let l=this.l[c]||0;for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(this.b){l=(l+0.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}this.l[c]=l;}return true;}}
+registerProcessor('mz-noise',N);`;
+const OUT_GAIN = 0.75;
+const COMPS = { twin: COMP.find(c => c.short === 'TWIN'), clock: COMP.find(c => c.short === 'CLOCK'), board: COMP.find(c => c.short === 'CIRCUIT BOARD'), head: COMP.find(c => c.short === 'HEADPHONES'),
+  kin: COMP.find(c => c.short === 'KINECT'), mac: COMP.find(c => c.short === 'iMAC'), view: COMP.find(c => c.short === 'VIEWSONIC') };
+// the bar is the beat between the Twin's hum and a second hum just above it; it drifts as the amps warm and settle
+const BEAT = { hz: 0.18, bar: 5.5 };
+function beatTick() { BEAT.hz = clamp(0.175 + 0.035 * Math.sin(simT / 1900 + S.epoch) + 0.015 * Math.sin(simT / 530), 0.152, 0.25); BEAT.bar = clamp(1 / BEAT.hz, 4.0, 6.6); }
+
+/* ====================================================================== camera crew (MZ CAM: drones that fly, hold, and are seen by each other; a director cuts on the 16th) */
+const ROLES = ['OBSERVER', 'ORBIT', 'DETAIL', 'SIGNAL', 'DRIFT', 'LOW', 'TOP'];
+const crew = new MZCam.Crew({
+  drones: ROLES.map((r, i) => ({ name: 'CAM ' + (i + 1), role: r, col: '#9ea7ab', pos: MZCam.V(Math.cos(i * 0.9) * 3.5, 1.2 + (i % 3) * 0.6, Math.sin(i * 0.9) * 3.5 + 0.5), fov: 36 })),
+  speed: 1.1, accel: 0.7, cruise: 2.2, minAlt: 0.14, arrive: 0.05, clearLive: false, stepMax: 0.05,
+  avoid: (p, d) => avoid(p, d),
+  gate: () => { if (HOLD) return false; if (!AUD.ctx || AUD.ctx.state !== 'running') return true; const ok = AUD.cur16 !== GATE.last; GATE.last = AUD.cur16; return ok; },
+  onCut: (from, to) => { S.cuts++; },
+});
+const GATE = { last: -1 }; let HOLD = false;
+const meshes = crew.drones.map(() => droneMesh());
+function inHull(p, pad) { for (const h of HULL) if (p.x > h.a.x - pad && p.x < h.b.x + pad && p.y > h.a.y - pad && p.y < h.b.y + pad && p.z > h.a.z - pad && p.z < h.b.z + pad) return h; return null; }
+function pushOut(p, pad) {   // out of the sculpture's envelope by the shortest way, never down through the floor
+  for (let k = 0; k < 4; k++) { const h = inHull(p, pad); if (!h) break;
+    const opts = [[p.x - (h.a.x - pad), 'x', h.a.x - pad], [(h.b.x + pad) - p.x, 'x', h.b.x + pad], [(h.b.y + pad) - p.y, 'y', h.b.y + pad], [p.z - (h.a.z - pad), 'z', h.a.z - pad], [(h.b.z + pad) - p.z, 'z', h.b.z + pad]];
+    opts.sort((a, b) => a[0] - b[0]); const o = opts[0]; p[o[1]] = o[2]; }
+  return p;
+}
+function avoid(p, d) {
+  const q = V(p.x, p.y, p.z); const pad = 0.22 + live.flinch;
+  pushOut(q, pad);
+  if (d.moving) for (const o of crew.drones) { if (o === d) continue; const v = q.clone().sub(TV(o.pos)); const l = v.length(); if (l < 0.32 && l > 1e-4) q.addScaledVector(v, (0.32 - l) / l * 0.5); }
+  if (d.id !== crew.live && d.moving && crew.liveDrone.cam) {   // slide out of the live lens while travelling, gently
+    const c = crew.liveDrone.cam; const v = q.clone().sub(TV(c.pos)); const z = v.dot(TV(c.f)), x = v.dot(TV(c.r)), y = v.dot(TV(c.u)), tn = Math.tan(c.fov * Math.PI / 360) * 1.15;
+    if (z > 0 && z < 5 && Math.abs(y) < z * tn && Math.abs(x) < z * tn * 1.8) { q.addScaledVector(TV(c.r), (x >= 0 ? 1 : -1) * 0.02); q.y += 0.006; } }
+  q.x = clamp(q.x, -ROOM.x + 0.4, ROOM.x - 0.4); q.z = clamp(q.z, -ROOM.z + 0.4, ROOM.z - 0.4); q.y = clamp(q.y, 0.14, ROOM.y - 0.5);
+  return MZCam.V(q.x, q.y, q.z);
+}
+function camSees(d, p, k = 1) { if (!d.cam) return false; const f = TV(d.cam.f); const v = p.clone().sub(TV(d.pos)).normalize(); return f.dot(v) > Math.cos(d.fov.p * 0.5 * D2R * k); }
+// attention: what the crew has looked at, and for how long; a part becomes known, and its close-ups open up
+// each part has its own threshold (1500–7500 weighted seconds), so the crew comes to know the piece over hours, not all at once
+const KNOWN_AT = (c) => 1500 + 6000 * ((Math.sin(c.short.length * 12.9898 + c.c.x * 78.233 + c.c.y * 37.719) * 43758.5453) % 1 + 1) % 1;
+const novelty = (c) => 1 / (1 + (S.att[c.short] || 0) / 240);
+function pickComp(filter, wNov = 1) { const cs = COMP.filter(filter); const w = cs.map(c => Math.pow(novelty(c), wNov) * (c.speaker ? 1.1 : 1) * rr(0.6, 1.4));
+  let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot; for (let i = 0; i < cs.length; i++) { r -= w[i]; if (r <= 0) return cs[i]; } return cs[0]; }
+function markNear(c, dmin, dmax, spread = 0.6) {   // a place in front of a part, outside the envelope
+  for (let k = 0; k < 12; k++) { const dir = c.face.clone().add(V(rr(-spread, spread), rr(-0.25, 0.45), rr(-spread, spread) * 0.5)).normalize();
+    const p = c.c.clone().addScaledVector(dir, rr(dmin, dmax)); p.y = clamp(p.y, 0.16, 3.8); if (!inHull(p, 0.24)) return p; }
+  return pushOut(c.c.clone().addScaledVector(c.face, dmax), 0.26);
+}
+function subTarget(c) {   // known parts get looked into: a knob, a corner, a detail off-centre
+  if (!S.known[c.short]) return c.c.clone();
+  return c.c.clone().add(V(rr(-1, 1) * c.r * 0.6, rr(-1, 1) * c.r * 0.5, 0));
+}
+let roleAired = '';
+function makeShot(d) {
+  const role = d.role; const hold = rr(8, 19); const base = rr(0.7, 1.3);
+  const S0 = { minHold: 8, maxHold: hold, minPrep: 0.6, pan: 1.6, aired: false, role,
+    onAir(t) { this.aired = true; roleAired = role; if (this.comp && !S.seen[this.comp.short]) { S.seen[this.comp.short] = 1; logEv(`${d.name} took the first ${role === 'DETAIL' ? 'close ' : ''}look at ${this.comp.name}`); } },
+    done(t, dd, cr) { return dd.id !== cr.live && (this.aired || t - dd.assignedAt > 75); },
+    want() { let w = base * this.wantK; if (role === roleAired) w *= 0.45; if (live.ev && this.subj && camSees(d, this.subj, 1.2)) w *= 2.2; if (this.comp) w *= 0.7 + 0.6 * novelty(this.comp); return w; },
+    wantK: 1 };
+  // OBSERVER works mostly from the photographed front; the backs are inferred
+  if (role === 'OBSERVER') { const a = rr(-1.25, 1.25) + (rnd() < 0.1 ? Math.PI : 0); const r = rr(4.0, 5.2); const p = V(Math.sin(a) * r, rr(1.3, 2.6), Math.cos(a) * r + 0.1);
+    const look = CENTRE.clone().add(V(rr(-0.3, 0.3), rr(-0.25, 0.1), 0)); const fov = rr(28, 40);
+    return Object.assign(S0, { label: 'WIDE', mark: { pos: MV(p) }, aim: (t) => ({ look: MV(look.clone().add(V(0.12 * Math.sin(t / 23), 0.05 * Math.sin(t / 31), 0))), fov }), pan: 0.8, wantK: 1.0, subj: CENTRE }); }
+  if (role === 'ORBIT') { const r = rr(2.3, 3.1), h = rr(1.0, 1.9), w0 = (rnd() < 0.5 ? 1 : -1) * TAU / 240, a0 = rr(0, TAU), t0 = simT; const fov = rr(30, 38);
+    return Object.assign(S0, { label: 'ORBIT', pose: (t) => ({ pos: MZCam.V(CENTRE.x + Math.sin(a0 + (t - t0) * w0) * r, h + 0.08 * Math.sin(t / 17), CENTRE.z + Math.cos(a0 + (t - t0) * w0) * r) }),
+      aim: () => ({ look: MV(CENTRE.clone().add(V(0, -0.1, 0))), fov }), pan: 1.4, wantK: 1.1, subj: CENTRE }); }
+  if (role === 'DETAIL') { const c = pickComp(k => true, 1.3); const p = markNear(c, 0.5, 0.95); const look = subTarget(c); const fov = rr(22, 32);
+    return Object.assign(S0, { label: 'DETAIL · ' + c.short, comp: c, mark: { pos: MV(p) }, aim: (t) => ({ look: MV(look.clone().add(V(0.01 * Math.sin(t / 7), 0.008 * Math.sin(t / 9), 0))), fov }), pan: 2.2, wantK: 1.15, subj: c.c }); }
+  if (role === 'SIGNAL') { const ele = ['KINECT', 'iMAC', 'VIEWSONIC', 'MG10 CHASSIS', 'CIRCUIT BOARD', 'CASSETTE', 'VCR', 'CLOCK', 'RED WIRES'];
+    const c = live.ev === 'wake' && rnd() < 0.7 ? pick([COMPS.mac, COMPS.view]) : pickComp(k => ele.includes(k.short), 1); const p = markNear(c, 0.8, 1.5, 0.8); const fov = rr(24, 34);
+    return Object.assign(S0, { label: 'SIGNAL · ' + c.short, comp: c, mark: { pos: MV(p) }, aim: () => ({ look: MV(c.c), fov }), pan: 1.8, wantK: 1.0, subj: c.c }); }
+  if (role === 'DRIFT') { const r0 = rr(1.6, 3.2), a0 = rr(0, TAU), t0 = simT, k1 = rr(0.5, 1.2), k2 = rr(0.3, 0.9); const fov = rr(32, 42); let tgt = pickComp(k => true, 2);
+    return Object.assign(S0, { label: 'DRIFT', comp: tgt, pose: (t) => { const u = (t - t0) / 60; const r = r0 + 0.5 * Math.sin(u * k2 * 2.1);
+        const p = V(CENTRE.x + Math.sin(a0 + u * k1 * 0.9) * r, 0.7 + 0.9 * (0.5 + 0.5 * Math.sin(u * k2 * 1.7 + 1)), CENTRE.z + Math.cos(a0 + u * k1 * 0.9) * r); return { pos: MV(pushOut(p, 0.3)) }; },
+      aim: (t) => ({ look: MV(tgt.c.clone().lerp(CENTRE, 0.35 + 0.3 * Math.sin(t / 19))), fov }), pan: 0.6, wantK: 0.9, subj: tgt.c }); }
+  if (role === 'LOW') { const a = rr(-1.0, 1.0); const r = rr(1.2, 2.2); const p = pushOut(V(Math.sin(a) * r - 0.1, rr(0.17, 0.3), Math.cos(a) * r + 0.2), 0.3); const fov = rr(40, 50);
+    const look = V(rr(-0.4, 0.3), rr(0.8, 1.3), 0.1);
+    return Object.assign(S0, { label: 'LOW', mark: { pos: MV(p) }, aim: () => ({ look: MV(look), fov }), pan: 1.0, wantK: 0.95, subj: CENTRE }); }
+  { const p = V(CENTRE.x + rr(-0.6, 0.6), rr(3.4, 4.1), CENTRE.z + rr(-0.4, 0.9)); const fov = rr(36, 46);   // TOP
+    return Object.assign(S0, { label: 'TOP', mark: { pos: MV(p) }, aim: () => ({ look: MV(V(-0.05, 0.4, 0.2)), fov }), pan: 0.9, wantK: 0.8, subj: CENTRE }); }
+}
+const LENS = { comp: null, dist: 0 };
+function lensSubject() {   // what the live lens is on: the nearest part near the centre of the frame
+  const d = crew.liveDrone; if (!d.cam) return; const p = TV(d.pos), f = TV(d.cam.f); let best = null, bs = 0;
+  for (const c of COMP) { const v = c.c.clone().sub(p); const dist = v.length(); const a = f.dot(v.normalize()); if (a < Math.cos(d.fov.p * 0.5 * D2R)) continue; const s = (a - 0.7) / (0.25 + dist); if (s > bs) { bs = s; best = c; } }
+  if (best !== LENS.comp && best) LENS.comp = best; LENS.dist = LENS.comp ? LENS.comp.c.distanceTo(p) : 0;
+}
+function attentionTick(dt) {
+  for (const d of crew.drones) { if (!d.cam) continue; const p = TV(d.pos), f = TV(d.cam.f); const onAir = d.id === crew.live ? 1 : 0.15;   // attention is what is near the middle of a frame
+    for (const c of COMP) { const v = c.c.clone().sub(p); const dist = v.length(); if (dist > 6) continue; if (f.dot(v.normalize()) < Math.cos(d.fov.p * 0.22 * D2R + Math.atan2(c.r, dist))) continue;
+      const w = onAir * dt / (1 + dist * 1.5); const a0 = S.att[c.short] || 0; S.att[c.short] = a0 + w; const K = KNOWN_AT(c);
+      if (a0 < K && a0 + w >= K && !S.known[c.short]) { S.known[c.short] = 1; logEv(`the crew knows ${c.name} now; its close-ups opened up`); } } }
+  for (const k in S.att) if (!isFinite(S.att[k])) S.att[k] = 0;
+}
+function scuffTick(dt) {
+  let ch = false;
+  for (const d of crew.drones) { if (d.pos.y > 0.7) continue; const i = Math.floor((d.pos.x + 6) / 12 * SCUFF_N), j = Math.floor((d.pos.z + 6) / 12 * SCUFF_N); if (i < 0 || j < 0 || i >= SCUFF_N || j >= SCUFF_N) continue;
+    const k = j * SCUFF_N + i; scuffF[k] = Math.min(255, scuffF[k] + dt * (0.7 - d.pos.y) / 0.7 * 255 / 5400); const v = Math.floor(scuffF[k]); if (v !== scuff[k]) { scuff[k] = v; ch = true; } }
+  if (ch && simT - (scuffTick.last || 0) > 4) { scuffTick.last = simT; scuffTex.needsUpdate = true; }
+}
+function kinectTick(dt) {   // the Kinect tilts (it only tilts) toward the nearest drone in front of it
+  const kp = KIN.pos; let best = -1, bd = 9;
+  crew.drones.forEach((d, i) => { const v = TV(d.pos).sub(kp); if (v.z < 0.6) return; const h = Math.atan2(v.x, v.z), e = Math.atan2(v.y, Math.hypot(v.x, v.z)); const dist = v.length();
+    if (Math.abs(h) < 28.5 * D2R && Math.abs(e - KIN.tilt) < 34 * D2R && dist < 4.5 && dist < bd) { bd = dist; best = i; } });
+  if (best !== KIN.target) { if (best >= 0 && simT - (KIN.lostAt ?? -1e9) > 300) logOnce('kin', `the Kinect found ${crew.drones[best].name}`, 60); if (best < 0) KIN.lostAt = simT; KIN.target = best; }
+  if (best >= 0) { const v = TV(crew.drones[best].pos).sub(kp); KIN.want = clamp(Math.atan2(v.y, Math.hypot(v.x, v.z)), -27 * D2R, 27 * D2R); }
+  const dd = KIN.want - KIN.tilt, mv = Math.abs(dd) > 1.5 * D2R && live.ev !== 'hush';
+  if (mv && !KIN.moving) { const l = AUD.lens(kp, 1.2); AUD.q({ type: 'whirr', v: 0.004 + l.g * 0.05, pan: l.pan, d: clamp(Math.abs(dd) / (12 * D2R), 0.3, 1.5) }); }
+  KIN.moving = mv; if (mv) KIN.tilt += Math.sign(dd) * Math.min(Math.abs(dd), 12 * D2R * dt);
+  KIN.g.rotation.x = -KIN.tilt;
+}
+
+/* ====================================================================== sim */
+let cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
+function step(dt) {
+  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000;
+  beatTick();
+  const hush = live.ev === 'hush';
+  if (!hush || live.calm > 0.2) {   // in the hush the drones hold where they are
+    crew.update(sdt * (hush ? live.calm : 1), simT);
+    for (const d of crew.free()) crew.assign(d, makeShot(d));
+    if (!crew.liveDrone.shot) crew.assign(crew.liveDrone, makeShot(crew.liveDrone));
+  }
+  crew.drones.forEach(d => { if (!isFinite(d.pos.x + d.pos.y + d.pos.z)) { d.pos = MZCam.V(3, 1.5, 3); d.vel = MZCam.V(); d.shot = null; } });
+  lensSubject(); attentionTick(sdt); scuffTick(sdt); kinectTick(sdt);
+  S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1); if (!isFinite(S.tension)) S.tension = 0;
+  uncannyTick(sdt);
+  const env = (name, a = 6, b = 6) => live.ev === name ? smoothstep(0, a, live.evT) * smoothstep(0, b, live.evDur - live.evT) : 0;
+  live.fb = lerp(live.fb, env('feedback', 5, 8), 1 - Math.exp(-sdt * 1.2)); live.flinch = 0.5 * smoothstep(0.2, 0.7, live.fb);
+  live.wake = lerp(live.wake, env('wake', 2, 3), 1 - Math.exp(-sdt * 2));
+  live.clock = lerp(live.clock, env('clock', 3, 3), 1 - Math.exp(-sdt * 1.5));
+  if (live.ev === 'clock' && live.evT > 1.5 && live.evT < live.evDur - 1.5) { S.clock += sdt; S.clockRun += sdt; }
+  if (!isFinite(S.clock)) S.clock = CLOCK_STOPPED;
+  live.calm = lerp(live.calm, hush ? 0.0 : 1, 1 - Math.exp(-sdt / (hush ? 3 : 2.5)));
+  if (simT - (S._saved || 0) > 60) { S._saved = simT; save(); }
+}
+
+/* ====================================================================== render */
+function applyLook(dt) {
+  const d = crew.liveDrone;
+  if (DIR_LOOK) { camera.position.copy(DIR_LOOK.p); camera.lookAt(DIR_LOOK.tgt); camera.fov = DIR_LOOK.fov; }
+  else if (d.cam) { camera.position.copy(TV(d.cam.pos)); camera.lookAt(TV(d.cam.look)); camera.fov = d.cam.fov; }
+  camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  if (!isFinite(camera.position.x)) { camera.position.set(0, 1.5, 4.5); camera.lookAt(CENTRE); }
+  SH.uCamP.value.copy(camera.position); SH.uTime.value = simT;
+  SH.uKeyD.value.set(Math.cos(S.key.az) * Math.cos(S.key.el), Math.sin(S.key.el), Math.sin(S.key.az) * Math.cos(S.key.el)).normalize();
+  SH.uFb.value = live.fb; if (live.fbAmp) { SH.uFbC.value.copy(live.fbAmp.c); SH.uFbR.value = live.fbAmp.r * 0.8; } SH.uWake.value = live.wake > 0.5 ? 1 : 0;
+  SH.uPxK.value = 2 * Math.tan(camera.fov * D2R / 2) / IH;
+  // the drones: placed, turned toward what they look at, tally on the live one; their shadows on the floor
+  crew.drones.forEach((dr, i) => { const m = meshes[i]; const bob = 0.004 * Math.sin(simT * 1.3 + i * 1.7) * live.calm; m.position.set(dr.pos.x, dr.pos.y + bob, dr.pos.z);
+    if (dr.cam) m.lookAt(TV(dr.cam.look)); m.userData.tally.uniforms.uEmit.value = i === crew.live ? 0.95 : 0; m.userData.tally.uniforms.uAccOn.value = i === crew.live ? 1 : 0;
+    SH.uDr.value[i].set(dr.pos.x, dr.pos.y, dr.pos.z, 1); });
+  setClock(S.clock);
+  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
+  const target = COLORWAYS[S.colorway].c.map(hexV);
+  for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
+  const gm = S.grammar; SH.uPerPx.value = gm.period * IH / 720; SH.uWobPx.value = gm.wob * IH / 720;
+  PU.uDith.value = gm.dith; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch;
+  const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
+  const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1]));
+}
+let frameN = 0;
+function auxPass(cam, rt, hide, swapKey) {   // render another lens into its own data target (a print inside the print)
+  const camP = SH.uCamP.value.clone(), pxk = SH.uPxK.value; const was = SH[swapKey].value; SH[swapKey].value = DUMMY;
+  hide.forEach(m => m.visible = false); SH.uCamP.value.copy(cam.position); SH.uPxK.value = 2 * Math.tan(cam.fov * D2R / 2) / rt.height;
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam);
+  hide.forEach(m => m.visible = true); SH.uCamP.value.copy(camP); SH.uPxK.value = pxk; SH[swapKey].value = was;
+}
+function render() {
+  frameN++;
+  if (frameN % 3 === 0) {   // what the Kinect sees, for the ViewSonic
+    KIN.g.updateMatrixWorld(); const kp = V(); KIN.g.getWorldPosition(kp); const kd = V(0, 0, 1).applyQuaternion(KIN.g.getWorldQuaternion(new THREE.Quaternion()));
+    kinCam.position.copy(kp).addScaledVector(kd, 0.04); kinCam.lookAt(kp.clone().addScaledVector(kd, 2)); kinCam.updateMatrixWorld();
+    auxPass(kinCam, rtKin, [SCR.kin], 'uKin'); SH.uKin.value = rtKin.texture;
+  }
+  if (live.wake > 0.05 && frameN % 2 === 0) {   // the screens wake: the iMac shows a drone's lens
+    const d = crew.drones.reduce((b, x) => (x.cam && camSees(x, COMPS.mac.c, 0.9) && x.id !== crew.live ? x : b), crew.drones[(crew.live + 1) % 7]);
+    if (d.cam) { feedCam.position.copy(TV(d.cam.pos)); feedCam.lookAt(TV(d.cam.look)); feedCam.fov = d.cam.fov; feedCam.updateProjectionMatrix(); feedCam.updateMatrixWorld();
+      auxPass(feedCam, rtFeed, [SCR.mac, meshes[d.id]], 'uFeed'); SH.uFeed.value = rtFeed.texture; }
+  }
+  const liveMesh = meshes[crew.live]; liveMesh.visible = !!DIR_LOOK;
+  renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
+  liveMesh.visible = true;
+  quad.material = printMat; renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
+  quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  if (PLAN_ON) drawPlan();
+}
+let DIR_LOOK = null;
+
+/* ---------- the plan (key C): the room from above, each drone with its cone; the live one carries the tally */
+let PLAN_ON = Q.get('plan') === '1'; const planEl = document.getElementById('plan'); planEl.style.display = PLAN_ON ? 'block' : 'none'; const pg = planEl.getContext('2d');
+function drawPlan() {
+  if (frameN % 4 && frameN > 4) return; const Wp = planEl.width, sc = Wp / 12.5, o = Wp / 2; const ink = css0(cwNow[0]), deep = css0(cwNow[1]), hot = css0(cwNow[3]), paper = css0(cwNow[5]);
+  pg.fillStyle = paper; pg.fillRect(0, 0, Wp, Wp); pg.strokeStyle = deep; pg.lineWidth = 2; pg.strokeRect(o - 6 * sc, o - 6 * sc, 12 * sc, 12 * sc);
+  pg.fillStyle = ink; pg.fillRect(o - 0.72 * sc, o - 0.45 * sc, 1.04 * sc, 1.22 * sc); pg.fillRect(o + 0.28 * sc, o + 0.22 * sc, 0.58 * sc, 0.48 * sc); pg.fillRect(o + 0.02 * sc, o - 0.9 * sc, 0.54 * sc, 0.48 * sc);
+  pg.font = '600 18px "JetBrains Mono", monospace';
+  crew.drones.forEach(d => { const x = o + d.pos.x * sc, y = o + d.pos.z * sc; const lv = d.id === crew.live;
+    if (d.cam) { const a = Math.atan2(d.cam.f.z, d.cam.f.x), half = d.fov.p * D2R / 2; pg.fillStyle = lv ? hot : deep; pg.globalAlpha = lv ? 0.35 : 0.14; pg.beginPath(); pg.moveTo(x, y); pg.arc(x, y, lv ? 90 : 55, a - half, a + half); pg.closePath(); pg.fill(); pg.globalAlpha = 1; }
+    pg.fillStyle = lv ? hot : ink; pg.fillRect(x - 6, y - 6, 12, 12); pg.fillStyle = ink; pg.fillText(String(d.id + 1), x + 9, y - 8); });
+}
+const css0 = (v) => `rgb(${Math.round(v.x * 255)},${Math.round(v.y * 255)},${Math.round(v.z * 255)})`;
+
+/* ====================================================================== info box */
+const hud = document.getElementById('hud'); hud.hidden = !INFO;
+const tapBtn = document.getElementById('tap');
+function hudUpdate() {
+  if (!INFO) return; const rp = localParts(simMs); const d = crew.liveDrone; const sh = d.shot || {};
+  const known = COMP.filter(c => S.known[c.short]).length; const least = COMP.slice().sort((a, b) => (S.att[a.short] || 0) - (S.att[b.short] || 0))[0];
+  const bassN = LENS.comp ? NOTE[AUD.deg(LENS.comp.deg, LENS.comp.oct) % 12] : '—';
+  const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
+  const kin = KIN.target >= 0 ? `follows ${crew.drones[KIN.target].name} · tilt ${(KIN.tilt / D2R).toFixed(0)}°` : `sees no one · tilt ${(KIN.tilt / D2R).toFixed(0)}°`;
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · WHITE CUBE</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  <div class="r"><span>VACUUM · no place, no weather · real ${rp.str.slice(0, 5)}</span><span>${watching()} of 7 lenses on the piece</span></div>
+  <div class="r"><span>AMP BEAT Twin ↔ its twin ${BEAT.hz.toFixed(3)} Hz</span><span>→ bar ${AUD.barSec.toFixed(1)} s</span></div>
+  <div class="r"><span>LENS on ${LENS.comp ? LENS.comp.short : '—'} · ${LENS.dist.toFixed(1)} m</span><span>→ bass ${bassN}, its hum</span></div>
+  <div class="r"><span>KINECT ${kin}</span><span>→ ViewSonic figure</span></div>
+  <div class="r"><span>ATTENTION ${known}/${COMP.length} parts known · least seen: ${least.short}</span><span>→ curiosity</span></div>
+  <div class="r"><span>CLOCK stopped at ${dial(S.clock)}${S.clockRun > 1 ? ` (has run ${Math.floor(S.clockRun / 60)}m ${Math.floor(S.clockRun % 60)}s)` : ''}</span><span>${d.name} · ${sh.label || '—'} · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
+  ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
+  <div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
+}
+
+/* ====================================================================== loop, keys, API */
+addEventListener('resize', resize); resize();
+renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
+renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); scuffTex.needsUpdate = true; console.warn('[gl] context restored'); });
+beatTick();
+// pre-warm: it was running before you arrived (the drones are already on their marks, one is on air)
+{ crew.drones.forEach(d => crew.assign(d, makeShot(d)));
+  for (let i = 0; i < 260; i++) step(0.25);
+  const ready = crew.drones.filter(d => crew.ready(d)); crew.cutTo(ready.length ? pick(ready) : crew.drones[0]); crew.liveSince = simT - rr(0, 6);
+  if (Q.has('cam')) { const n = clamp(+Q.get('cam') | 0, 0, 6); crew.cutTo(crew.drones[n]); HOLD = true; } }
+function frame(dt) {
+  try { step(dt); applyLook(dt); render(); AUD.frame(dt); }
+  catch (e) { console.error(e); }
+}
+let lastT = performance.now(), hudT = 0;
+function raf(now) { const dt = (now - lastT) / 1000; lastT = now; frame(dt); hudT += dt; if (hudT > 0.5) { hudT = 0; hudUpdate(); } requestAnimationFrame(raf); }
+if (!CAPTURE) requestAnimationFrame(raf);
+addEventListener('beforeunload', save);
+addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
+  if (k === 'i') { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); }
+  if (k === 'm') AUD.mute();
+  if (k === 'c') { PLAN_ON = !PLAN_ON; planEl.style.display = PLAN_ON ? 'block' : 'none'; }
+  if (k === 'r' && !live.ev) { logEv('a hand on the sculpture (human intervention)'); S.tension = 1; }
+  AUD.start(); });
+addEventListener('pointerdown', () => AUD.start());
+tapBtn.addEventListener('click', () => AUD.start());
+AUD.init(); hudUpdate();
+
+window.MZ = {
+  tick(dt = 1 / 30) { frame(dt); hudUpdate(); },
+  advance(sec, dt = 0.25) { for (let t = 0; t < sec; t += dt) step(dt); applyLook(sec); render(); hudUpdate(); },
+  force(name) { if (live.ev) { const was = live.ev; endEvent(); if (was === 'hush' && name === 'rupture') return; } if (name === 'rupture') { rupture('forced by hand'); return; } startEvent(name, true); },
+  cam(i) { crew.cutTo(crew.drones[clamp(i | 0, 0, 6)]); HOLD = true; },
+  release() { HOLD = false; },
+  look(p, t, fov = 30) { DIR_LOOK = p ? { p: V(...p), tgt: V(...t), fov } : null; },
+  ink(i) { S.colorway = i; cwMix = 1; cwFrom = COLORWAYS[i].c.map(hexV); },
+  grammar(g) { Object.assign(S.grammar, g); },
+  h: () => 0,
+  geo: { room: ROOM, centre: CENTRE.toArray(), comps: COMP.map(c => ({ name: c.name, short: c.short, c: c.c.toArray() })) },
+  setWx() { /* the vacuum has no weather */ },
+  analyser() { return AUD.an; },
+  att(short, sec) { if (sec != null) S.att[short] = sec; return S.att[short] || 0; },
+  clock(sec) { if (sec != null) S.clock = sec; return dial(S.clock); },
+  get state() { return { S, live: { ...live, fbAmp: live.fbAmp && live.fbAmp.short }, cam: crew.liveDrone.name, shot: crew.liveDrone.shot && crew.liveDrone.shot.label, lens: LENS.comp && LENS.comp.short,
+    drones: crew.drones.map(d => ({ name: d.name, role: d.role, status: d.status, label: d.shot && d.shot.label, pos: [d.pos.x, d.pos.y, d.pos.z] })), kinect: { target: KIN.target, tilt: KIN.tilt / D2R }, beat: { ...BEAT }, watching: watching() }; },
+  crew, audio: AUD,
+};
+</script>
