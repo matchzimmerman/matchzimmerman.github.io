@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>McDonogh Ground Survey</title>
-<meta name="description" content="McDonogh School's lost buildings on 2024 lidar: Foxleigh Mansion and the water tower in 3D, with every source behind them.">
+<meta name="description" content="McDonogh School's lost buildings on 2024 lidar: Foxleigh Mansion, the water tower and McDonogh Station in 3D, with every source behind them.">
 <meta name="theme-color" content="#061012">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -1841,7 +1841,7 @@ function applyEvidence(){
 function closeBig(){ if(!AB.big) return; AB.big=false; const st=$('abStage'); if(AB.home) AB.home.insertBefore(st, AB.next); st.classList.remove('big'); $('abBig').setAttribute('aria-pressed',false); requestAnimationFrame(sizeStage); }
 
 /* ---------- panel content ---------- */
-const TYPE_LABEL={'photograph':'Photograph','hand-drawn plan':'Hand-drawn plan','written history':'Written history','field record':'Field record · MZ.Human','memorial':'Memorial','lidar':'Lidar survey','map':'Map','government record':'Government record'};
+const TYPE_LABEL={'photograph':'Photograph','drawing':'Drawing','hand-drawn plan':'Hand-drawn plan','written history':'Written history','field record':'Field record · MZ.Human','memorial':'Memorial','lidar':'Lidar survey','map':'Map','government record':'Government record'};
 const WEIGHT_LABEL={primary:'Used to build it', placement:'Used to place it', consulted:'Consulted, not used yet'};
 function renderAssetCards(){
   $('abGrp').hidden=!ASSETS.length; $('abCount').textContent=ASSETS.length?`${ASSETS.length} reconstructions`:'';
@@ -1860,9 +1860,10 @@ function renderAssetDetail(){
   $('abOn').setAttribute('aria-pressed', !isAssetOff(a.id)); $('abOn').textContent = isAssetOff(a.id) ? '○ Off the map' : '● On the map';
   $('abSrcCount').textContent=`${a.sources.length} sources`;
   const groups=['primary','placement','consulted'];
+  const rel=u=>u&&!/^(https?:|\/|\.\.|data:)/.test(u)?DATA+'/'+u:u;
   $('abSrcs').innerHTML=groups.map(w=>{ const list=a.sources.filter(s=>(s.weight||'primary')===w); if(!list.length) return '';
-    return `<div class="lab" style="margin-top:4px">${WEIGHT_LABEL[w]}</div>`+list.map(s=>`<div class="src${s.thumb?'':' nothumb'}">${s.thumb?`<div class="th" style="background-image:url('${esc(s.thumb)}')"></div>`:''}
-      <div class="bd"><span class="ty">${esc(TYPE_LABEL[s.type]||s.type)}</span>${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>`:`<b>${esc(s.title)}</b>`}<span class="who">${esc(s.who||'')}</span><span class="use">${esc(s.used||'')}</span></div></div>`).join(''); }).join('');
+    return `<div class="lab" style="margin-top:4px">${WEIGHT_LABEL[w]}</div>`+list.map(s=>`<div class="src${s.thumb?'':' nothumb'}">${s.thumb?`<div class="th" style="background-image:url('${esc(rel(s.thumb))}')"></div>`:''}
+      <div class="bd"><span class="ty">${esc(TYPE_LABEL[s.type]||s.type)}</span>${s.url?`<a href="${esc(rel(s.url))}" target="_blank" rel="noopener">${esc(s.title)}</a>`:`<b>${esc(s.title)}</b>`}<span class="who">${esc(s.who||'')}</span><span class="use">${esc(s.used||'')}</span></div></div>`).join(''); }).join('');
   $('abOpenGrp').hidden=!(a.open&&a.open.length); $('abOpen').innerHTML=(a.open||[]).map(q=>`<li>${esc(q)}</li>`).join('');
   $('abLinks').innerHTML=(a.links||[]).map(l=>`<a class="btn ghost" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('');
 }
