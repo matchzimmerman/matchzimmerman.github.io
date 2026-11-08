@@ -46,6 +46,12 @@ A corrugated outbuilding on a rise that keeps to itself: sheltered and reclusive
 
 [Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/) · [README](sources/bit-field-040-outbuilding/README.md)
 
+## MZ WORLD · BREAKWATER (BIT FIELD 042, published 2026-11-08)
+
+A stone breakwater takes every wave so the harbour behind it stays calm. From the harbour it is almost invisible; from the open water it looks like nothing but hardness. Its one straight tone never changes, but the air between it and each camera clips it, so far and seaward operators hear it harsh. Nine operators are polled, again and again, on whether it is nice or kind; most answer "neither", and the closest one never answers. Impacts are recorded forever, and shelter is never written down. Misreadings build pressure until everything holds still and the world branches: a storm that confirms every harsh reading, or a rain that carries the message through clean and washes the salt from the stone. New: the readings are printed in the same six inks as the place, and the stone courses are the line grammar. Unlocated by design. **Awaiting MZ.Human's review.**
+
+[Open autonomous world](https://matchzimmerman.com/MZTV/sources/bit-field-042-breakwater/) · [README](sources/bit-field-042-breakwater/README.md)
+
 ## Working lineages
 
 MZTV contains multiple parallel research lineages rather than one sequential style replacing another.
@@ -377,6 +383,15 @@ Path:
 
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-040-outbuilding/`
+
+### BIT FIELD 042 — MZ WORLD · BREAKWATER
+A cut-stone breakwater with armour rock, a parapet and a small harbour light, the harbour and its moored boats in its lee, printed in six inks on OUTBUILDING's engine with HEADLAND's sea. The wall is the central figure: live swell from the Galway Bay marine point drives impacts along its seaward toe, spray and overtopping (some of which lands on the boats), and the bar length. Its straight tone (D2, never retuned) reaches each camera clean or clipped according to distance and side. Printed readings: polls of nine operators (mostly "neither"; CAM 01, the closest, never answers), receipts ("REQUEST: last instance of shelter · RESULT: none on record · HARBOUR STATUS: calm") and contradictory wave reports with identical timestamps. Memory is lopsided: impacts are kept, shelter is never recorded, calm is only remembered briefly; salt crust and rust weather the stone. Rarely the harbour goes to glass (♭II), the harbour side holds the light, or the wall breathes. Pressure ends in a hold, then a storm (garbled, clipped text, all readings harsh) or a rain (the message printed clean, the tone undistorted, salt washed), then re-inking (new: Salt Print, Storm Glass, Harbour Lamp, Slate Rain). Keys: R hand, C say it plainly, D pull the distortion off. Unlocated; five-minute night. Params: ?info=0 ?text=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-042-breakwater/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-042-breakwater/`
 
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.

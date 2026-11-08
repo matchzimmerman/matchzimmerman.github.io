@@ -1,0 +1,1435 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MZ World Breakwater</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* MZ WORLD · BREAKWATER — a wall that takes every wave so the harbour stays calm, printed; the info box is printed in the current inks */
+:root { --ink:#16202a; --paper:#efebe1; --hot:#c8553d; --deep:#34506a; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
+html, body { height:100%; margin:0; background:var(--ink); overflow:hidden }
+canvas { display:block; width:100%; height:100% }
+#hud { position:fixed; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:min(500px, calc(100vw - 40px)); box-sizing:border-box; padding:11px 13px 10px; font:400 11px/1.5 var(--mono);
+  color:var(--ink); background:color-mix(in srgb, var(--paper) 90%, transparent); border:2px solid var(--ink);
+  letter-spacing:.01em; font-variant-numeric:tabular-nums; pointer-events:none }
+#hud b { font-weight:600 }
+#hud .t { display:flex; justify-content:space-between; gap:12px; font-weight:600; letter-spacing:.08em; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:6px }
+#hud .r { display:grid; grid-template-columns:1fr auto; gap:0 10px }
+#hud .r span:last-child { color:var(--deep); text-align:right }
+#hud .ev { color:var(--hot); font-weight:600 }
+#hud .log { margin-top:6px; padding-top:5px; border-top:1px dashed var(--ink); min-height:3em }
+#hud .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .cr { margin-top:6px; font-size:10px; letter-spacing:.06em; opacity:.8 }
+@media (max-width:560px) { #hud { font-size:9.5px; padding:8px 10px } }
+#tap { position:fixed; right:calc(20px + env(safe-area-inset-right,0px)); top:calc(20px + env(safe-area-inset-top,0px)); font:600 11px/1 var(--mono);
+  color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:8px 10px; letter-spacing:.08em; cursor:pointer }
+</style>
+
+<div id="hud" hidden></div>
+<button id="tap" type="button" hidden>CLICK FOR SOUND</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ====================================================================== params */
+const Q = new URLSearchParams(location.search);
+const CAPTURE = Q.get('capture') === '1';
+const RATE = Math.max(0.01, +(Q.get('rate') || 1));
+const LINES = +(Q.get('lines') || 720);
+let INFO = Q.get('info') !== '0';
+const TEXT_ON = Q.get('text') !== '0';
+const AUDIO_WANTED = Q.get('audio') !== '0';
+const SEED = +(Q.get('seed') || 1);
+const LIVE_WX = Q.get('live') !== '0';
+const KEY = 'mzworld-breakwater-v1' + (Q.has('seed') ? '-s' + SEED : '');
+if (Q.get('fresh') === '1') { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+const LAT = 53.27, LON = -9.05;            // town-level (Galway Bay): drives sun, moon and weather only
+const MLAT = 53.2, MLON = -9.65;           // the marine point for the swell (the same one HEADLAND reads)
+const TZ = 'Europe/Dublin';
+const TAU = Math.PI * 2, D2R = Math.PI / 180;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+function mulberry(s) { return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry(SEED * 7919 + (Date.now() % 100000));
+const rr = (a, b) => a + (b - a) * rnd();
+const pick = (a) => a[Math.floor(rnd() * a.length)];
+const prnd = mulberry(42042);               // fixed salt: the place is the same for every seed
+const pr = (a, b) => a + (b - a) * prnd();
+
+/* ====================================================================== clock */
+const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', weekday: 'short', month: 'numeric' });
+function localParts(ms) {
+  const o = {}; for (const p of fmt.formatToParts(new Date(ms))) o[p.type] = p.value;
+  const h = +o.hour % 24, m = +o.minute, sec = +o.second;
+  return { h, m, sec, str: `${h < 10 ? '0' : ''}${h}:${o.minute}:${o.second}`, hour: h + m / 60 + sec / 3600, wd: o.weekday, month: +o.month,
+    weekend: o.weekday === 'Sat' || o.weekday === 'Sun' };
+}
+let simMs = Date.now();
+if (Q.has('ff')) simMs += (+Q.get('ff')) * 60e3;
+let simT = 0;
+
+/* ====================================================================== noise + terrain (metres; +x north, +z east, y up; sea level 0) */
+function hash2(x, y) { let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + 104729; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+function fbm(x, y) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 4; i++) { s += a * vnoise(x * f, y * f); f *= 2.03; a *= 0.5; } return s; }
+// the wall runs north along x at z = 0 from the south shore; open sea to the west (z < 0), the harbour to the east (z > 0)
+const X0 = -132, X1 = 96, CREST = 4.2, PARA = 6.1, HZ = 3.5;
+const southShore = (z) => -128 + 9 * Math.sin(z * 0.017 + 0.4) + 6 * Math.sin(z * 0.051);
+const eastShore = (x) => 158 + 12 * Math.sin(x * 0.019 + 1.1) - 95 * smoothstep(120, 240, x);
+const landD = (x, z) => Math.max(southShore(z) - x, z - eastShore(x));   // > 0 on land
+function groundH(x, z) {
+  const d = landD(x, z);
+  const basin = z > 0 && x < X1 + 40 && z < eastShore(x) ? 1.6 : 0;
+  const floor = -6.5 - 2 * fbm(x * 0.01 + 4, z * 0.01) + basin;
+  const land = 1.2 + 0.06 * Math.max(d, 0) + 3.5 * fbm(x * 0.012 + 1, z * 0.012 + 7) + 10 * smoothstep(50, 260, d) * fbm(x * 0.006, z * 0.006 + 3)
+    + 3.4 * Math.exp(-Math.pow(z / 16, 2)) * smoothstep(-110, -150, x);   // the root of the wall is built up
+  return lerp(floor, land, smoothstep(-14, 6, d));
+}
+function shelterAt(x, z) { return smoothstep(0, 5, z) * smoothstep(X1 + 60, X1 - 40, x - 0.35 * z); }
+function wallDist(p) { if (p.x > X1) return Math.max(0, Math.hypot(p.x - X1, p.z) - 7); const x = clamp(p.x, X0, X1); return Math.hypot(p.x - x, Math.max(0, p.z > 0 ? p.z - HZ : -p.z - 4)); }
+
+/* ====================================================================== sun + moon */
+function sunMoon(ms) {
+  const d = ms / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * D2R, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, e = (23.439 - 0.00000036 * d) * D2R;
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const lst = (gmst * 15 + LON) * D2R, la = LAT * D2R;
+  const place = (lon, lat) => {
+    const ra = Math.atan2(Math.cos(e) * Math.sin(lon) - Math.tan(lat) * Math.sin(e), Math.cos(lon));
+    const dec = Math.asin(Math.sin(lat) * Math.cos(e) + Math.cos(lat) * Math.sin(e) * Math.sin(lon));
+    const ha = lst - ra;
+    const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+    const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+    return { el, az };
+  };
+  const sun = place(L, 0);
+  const Lm = (218.316 + 13.176396 * d) * D2R, Mm = (134.963 + 13.064993 * d) * D2R, F = (93.272 + 13.229350 * d) * D2R;
+  const mlon = Lm + 6.289 * D2R * Math.sin(Mm), mlat = 5.128 * D2R * Math.sin(F);
+  const moon = place(mlon, mlat);
+  const phase = ((mlon - L) % TAU + TAU) % TAU;
+  return { sun, moon, illum: 0.5 * (1 - Math.cos(phase)) };
+}
+const azElToVec = (az, el) => V(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
+const fromBearingTravel = (deg) => { const b = deg * D2R; return new THREE.Vector2(-Math.cos(b), -Math.sin(b)); };
+/* ---------- the world clock: real noon is world noon; the afternoon stretches into a long sunset, the whole night
+   passes in five minutes around real midnight, and then the dawn. Weather stays real time. */
+const DARK_EL = -3 * D2R, NIGHT_REAL = 300e3, DAY = 86400e3, HALF = 43200e3;
+const SOLAR_MID0 = Date.UTC(2026, 0, 1) + (-LON / 15) * 3600e3;   // solar midnight, roughly, in UTC
+const NIGHTS = new Map();
+const sunEl = (ms) => sunMoon(ms).sun.el;
+function nightAround(t) {
+  const k = Math.round((t - SOLAR_MID0) / DAY); let n = NIGHTS.get(k); if (n) return n;
+  const m0 = SOLAR_MID0 + k * DAY; let M = m0, lo = 9;
+  for (let d = -40; d <= 40; d++) { const e = sunEl(m0 + d * 60e3); if (e < lo) { lo = e; M = m0 + d * 60e3; } }
+  const cross = (a, b, falling) => { for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if ((sunEl(m) > DARK_EL) === falling) a = m; else b = m; } return (a + b) / 2; };
+  const D = cross(M - HALF, M, true), A = cross(M, M + HALF, false);
+  n = { M, D: Math.min(D, M), A: Math.max(A, M) }; NIGHTS.set(k, n); if (NIGHTS.size > 8) NIGHTS.delete(NIGHTS.keys().next().value); return n;
+}
+function worldOf(t) {
+  const n = nightAround(t), h = NIGHT_REAL / 2, noonP = n.M - HALF, noonN = n.M + HALF;
+  if (t < n.M - h) return noonP + (t - noonP) / (n.M - h - noonP) * (n.D - noonP);
+  if (t > n.M + h) return n.A + (t - (n.M + h)) / (noonN - (n.M + h)) * (noonN - n.A);
+  return n.D + (t - (n.M - h)) / NIGHT_REAL * (n.A - n.D);
+}
+let WMS = worldOf(simMs);
+function seekWorldHour(want) {   // move the real clock forward to the next moment the world shows hour `want`
+  const diff = (t) => { const d = localParts(worldOf(t)).hour - want; return ((d % 24) + 36) % 24 - 12; };
+  let best = simMs, bd = 99; for (let t = simMs; t < simMs + DAY; t += 120e3) { const d = Math.abs(diff(t)); if (d < bd) { bd = d; best = t; } }
+  for (let t = best - 120e3; t < best + 120e3; t += 2e3) { const d = Math.abs(diff(t)); if (d < bd) { bd = d; best = t; } }
+  simMs = best; WMS = worldOf(simMs);
+}
+if (Q.has('hour')) seekWorldHour(+Q.get('hour'));
+const compass = (deg) => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+
+
+/* ====================================================================== palettes (6 inks: INK DEEP SEA HOT GLOW PAPER) */
+const COLORWAYS = [
+  { name: 'SALT PRINT',     c: ['#121c28', '#22466e', '#6fa2b2', '#cf5a3c', '#e8c170', '#efebe1'] },
+  { name: 'STORM GLASS',    c: ['#141a22', '#3a4658', '#a3b4bd', '#d0663a', '#dfd0a0', '#f1eee6'] },
+  { name: 'SIGNAL FLARE',   c: ['#24123a', '#5b3fd1', '#6fd3c1', '#ff7a8a', '#ffd24a', '#fbf3e4'] },
+  { name: 'HARBOUR LAMP',   c: ['#1d1a24', '#4a4466', '#9ab8a8', '#e86a3a', '#f5d27f', '#f6f0e2'] },
+  { name: 'PISTACHIO NIGHT',c: ['#10202b', '#1f4a6e', '#b6d97a', '#ff5a7a', '#f9e7b0', '#eef4ea'] },
+  { name: 'SLATE RAIN',     c: ['#1a1f24', '#43505c', '#9fb2b0', '#c7603f', '#e3cf94', '#f0ede4'] },
+  { name: 'ULTRAMARINE',    c: ['#0c1440', '#1f3bb3', '#44b8e8', '#ff6a1a', '#ffd0a1', '#fff7ec'] },
+  { name: 'LICHEN',         c: ['#22261d', '#4b5b3a', '#a7c5a0', '#d9475b', '#e8d27c', '#f3eedf'] },
+];
+const hexV = (h) => { const n = parseInt(h.slice(1), 16); return V(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+const INK = 0, DEEP = 1, SEA = 2, HOT = 3, GLOW = 4, PAPER = 5;
+// material ids → [dark, mid, light] ink roles, hatch strength, speckle
+const MAT = [
+  /* 0 sky     */ [DEEP, HOT, PAPER, 0.9, 1], /* 1 sun/held light */ [HOT, GLOW, PAPER, 1.0, 0], /* 2 sea */ [INK, DEEP, SEA, 1.0, 0],
+  /* 3 foam/salt */ [SEA, PAPER, PAPER, 0.7, 0], /* 4 stone */ [INK, SEA, PAPER, 1.0, 0],  /* 5 rock     */ [INK, DEEP, SEA, 1.0, 0],
+  /* 6 wood    */ [INK, DEEP, GLOW, 1.0, 0],  /* 7 dark    */ [INK, INK, DEEP, 0.3, 0],   /* 8 grass   */ [DEEP, SEA, GLOW, 0.9, 0],
+  /* 9 white   */ [DEEP, PAPER, PAPER, 0.5, 0], /*10 paving  */ [DEEP, SEA, PAPER, 0.8, 0], /*11 rust    */ [INK, HOT, GLOW, 1.0, 0],
+  /*12 hull    */ [INK, HOT, HOT, 0.7, 0],    /*13 cloud   */ [SEA, PAPER, PAPER, 0.8, 0], /*14 moon    */ [DEEP, SEA, PAPER, 0.8, 0],
+  /*15 lamp    */ [GLOW, GLOW, PAPER, 0.0, 0],
+];
+
+/* ====================================================================== persistent state (memory) */
+const NCAM = 9;
+const DEF = () => ({
+  v: 1, born: Date.now(), epoch: 1, epochStart: 0, epochLen: rr(50, 95) * 60, tension: 0, colorway: 0, cwVisits: [1, 0, 0, 0, 0, 0, 0, 0],
+  grammar: { period: 6.8, dith: 0.12, wob: 7, outline: 1, hatch: 1.0, courseK: 1 }, center: 38,
+  uncanny: { next: rr(4, 9) * 60, counts: {}, last: {}, mem: {} }, log: [], runSec: 0,
+  // the record is lopsided on purpose: every impact is kept, shelter is never written down
+  salt: 0.3, rust: 0.16, impacts: 0, cams: Array.from({ length: NCAM }, () => ({ imp: 0 })), clear: 0,
+  branch: { storm: 0, rain: 0 }, force: null, poll: { next: rr(1.2, 3) * 60, n: 0 }, reportAt: -1e9, wave: 0,
+  savedAt: Date.now(), logKind: {}, boat: {},
+});
+let S = DEF();
+try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEF(), o); } } catch (e) {}
+if (!Array.isArray(S.cams) || S.cams.length !== NCAM) S.cams = DEF().cams;
+const T0 = S.runSec || 0; simT = T0;
+{ // while the source was dark the clearness faded
+  const awayH = clamp((Date.now() - (S.savedAt || Date.now())) / 3600e3, 0, 1e4); S.clear *= Math.exp(-awayH / 2.2); }
+function save() { try { S.runSec = simT; S.savedAt = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function logEv(text) { S.log.unshift({ t: localParts(WMS).str, text }); if (S.log.length > 40) S.log.length = 40; }
+function logOnce(kind, text, gapMin = 45) { const l = S.logKind[kind]; if (l != null && simT - l < gapMin * 60 && l <= simT) return; S.logKind[kind] = simT; logEv(text); }
+if (!S.log.length) logEv('the wall was found as it is'); else logEv('the wall resumed (epoch ' + S.epoch + ')');
+
+/* ====================================================================== renderer + targets */
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: CAPTURE });
+renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.autoClear = true;
+document.body.prepend(renderer.domElement);
+let W = 2, H = 2, IW = 2, IH = 2;
+const rtData = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, generateMipmaps: false });
+const rtPrint = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 16000);
+function resize() {
+  W = innerWidth; H = innerHeight; renderer.setSize(W, H, false);
+  IH = Math.min(LINES, H); IW = Math.round(IH * W / H);
+  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  PU.uRes.value.set(IW, IH); txtSize(); if (typeof spray !== 'undefined') spray.material.uniforms.uPtMax.value = 14 * IH / 720;
+}
+
+/* ====================================================================== shaders */
+const COMMON = /* glsl */`
+uniform float uPerPx, uWobPx, uPxK, uCourseK;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+vec4 pack(float sh, float id, float line, float acc){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., clamp(line,0.,1.), acc>0.5?1.:0.); }
+// the hatching is carved into the surface (as SRUTHÁN v3): lines run along T, spaced across it in the surface's own coordinates,
+// and the spacing follows distance in octaves so the print keeps its density on screen. A still object keeps a still pattern.
+float lineAt(vec3 W, vec3 N, vec3 T, float dist, float extra){
+  vec3 A=cross(N,T); if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.)); if(dot(A,A)<1e-6) A=vec3(1.,0.,0.); A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float per=uPerPx*max(dist,0.05)*uPxK;
+  float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float p0=exp2(floor(L)), p1=p0*2.;
+  float s=dot(W,A), t=dot(W,B); float wk=uWobPx/max(uPerPx,0.1)*1.35;
+  float l0=cos((s+((vn(vec2(s,t)/(p0*7.)+3.1)-.5)*wk+extra)*p0)*6.2831853/p0);
+  float l1=cos((s+((vn(vec2(s,t)/(p1*7.)+3.1)-.5)*wk+extra)*p1)*6.2831853/p1);
+  return 0.5+0.5*mix(l0,l1,f); }
+// the stone courses are the line grammar: lines sit on the courses themselves, and step out to every 2nd, 4th… course with distance
+float courseLine(float s, float t, float dist, float pitch){
+  float per=uPerPx*max(dist,0.05)*uPxK;
+  float L=log2(max(per/pitch,1.)*uCourseK); float f=smoothstep(0.,1.,fract(L));
+  float p0=pitch*exp2(floor(L)), p1=p0*2.;
+  float wk=uWobPx/max(uPerPx,0.1)*0.5;
+  float w0=(vn(vec2(s/(p0*5.),t/(p0*11.))+1.7)-.5)*wk*p0, w1=(vn(vec2(s/(p1*5.),t/(p1*11.))+1.7)-.5)*wk*p1;
+  return 0.5+0.5*mix(cos((s+w0)*6.2831853/p0), cos((s+w1)*6.2831853/p1), f); }
+`;
+const SH = {   // shared uniforms (same objects referenced by every material)
+  uTime: { value: 0 }, uSunD: { value: V(0, 1, 0) }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
+  uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 900 }, uFogShade: { value: 0.6 }, uDay: { value: 1 }, uSkyB: { value: 0.6 },
+  uPerPx: { value: 6 }, uWobPx: { value: 7 }, uPxK: { value: 0.0012 }, uCourseK: { value: 1 },
+  uSalt: { value: 0.3 }, uRust: { value: 0.16 }, uWet: { value: 0 }, uWindL: { value: V() }, uCalm: { value: 1 },
+  uBreath: { value: 0 }, uGlowH: { value: 0 }, uStorm: { value: 0 },
+  uLamp: { value: Array.from({ length: 6 }, () => new THREE.Vector4()) },
+};
+const OBJ_VERT = /* glsl */`
+uniform float uTime, uCloth, uMover, uCalm, uBreath; uniform vec3 uWindL;
+attribute vec3 aT;
+varying vec3 vW, vN, vL, vT; varying float vC;
+void main(){
+  vC=0.;
+  vec4 lp=vec4(position,1.); vec3 ln=normal; vec3 lt=aT;
+  #ifdef USE_INSTANCING
+    lp=instanceMatrix*lp; ln=mat3(instanceMatrix)*ln; lt=mat3(instanceMatrix)*lt;
+  #endif
+  vec4 w=modelMatrix*lp; vec3 n=normalize(mat3(modelMatrix)*ln);
+  vec3 wl=uWindL*uCalm;
+  if(uCloth>2.5&&uCloth<4.5){   // grass blades bend with the wind
+    float hgt=max(position.y,0.); float ph=sin(uTime*2.1+w.x*1.7+w.z*1.3)+0.5*sin(uTime*3.3+w.x*4.+w.z*3.);
+    float k=1.5*hgt*hgt; w.xz+=(wl.xz*(0.75+0.3*ph)+vec2(ph,ph*0.6)*0.05*uCalm)*k; w.y-=k*0.2*length(wl.xz);
+    vC=0.05*ph*hgt;
+  }
+  if(uCloth>5.5&&uCloth<6.5){   // the wall breathes with the swell: its seaward face swells and settles
+    float k=smoothstep(-4.,1.5,w.y)*(1.-0.5*smoothstep(4.,6.,w.y))*step(w.z,0.5);
+    w.z+=uBreath*0.2*k*sin(w.x*0.045-uTime*0.55);
+  }
+  vW=w.xyz; vN=n; vL=uMover>0.5?position:w.xyz; vT=mat3(modelMatrix)*lt;
+  gl_Position=projectionMatrix*viewMatrix*w;
+}`;
+const OBJ_FRAG = /* glsl */`
+${COMMON}
+uniform float uId, uMode, uEmit, uTime, uAmb, uDiff, uFogD, uFogShade, uSkyB, uDay;
+uniform float uSalt, uRust, uWet, uGlowH; uniform vec4 uLamp[6];
+uniform vec3 uKeyD, uCamP, uT;
+varying vec3 vW, vN, vL, vT; varying float vC;
+const float X0=${X0.toFixed(1)}, X1=${X1.toFixed(1)}, CREST=${CREST.toFixed(2)};
+float lights(vec3 N){
+  float s=0.;
+  for(int i=0;i<6;i++){ vec4 L=uLamp[i]; if(L.w<0.01) continue;
+    vec3 q=L.xyz-vW; float d2=dot(q,q); vec3 qd=q/sqrt(max(d2,1e-4));
+    s+=L.w*max(dot(N,qd),0.)*exp(-d2/70.)*0.9; }
+  return s; }
+void main(){
+  vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
+  float dist=length(vW-uCamP);
+  float sh=uAmb+uDiff*max(dot(N,uKeyD),0.)+vC;
+  float id=uId; vec3 T=uT; float acc=0.; float line=-1.;
+  if(uMode>0.5&&uMode<1.5){          // the wall: dressed stone in courses; paving on the walk
+    if(N.y>0.7){
+      vec2 q=vec2(vW.x/1.5,vW.z/0.95); float row=floor(q.y); q.x+=0.5*mod(row,2.);
+      vec2 f=fract(q); float j=min(min(f.x,1.-f.x)*1.5,min(f.y,1.-f.y)*0.95);
+      id=10.; T=vec3(1.,0.,0.);
+      sh+=0.08*(hash(floor(q)+3.)-0.5)-0.1*uWet;
+      float px=0.95/(max(dist,0.05)*uPxK);
+      if(j<0.03&&px>4.) sh-=0.2;
+      float sm=vn(vW.xz*0.9+5.)*0.6+vn(vW.xz*3.1)*0.4+0.3*smoothstep(1.5,-3.5,vW.z);   // salt blown over the top, worst at the seaward edge
+      if(sm>1.2-uSalt*0.8){ id=3.; sh+=0.1; }
+    } else {
+      vec3 A=cross(vec3(0.,1.,0.),N); A=dot(A,A)<1e-4?vec3(1.,0.,0.):normalize(A);
+      float s=dot(vW,A), t=vW.y; float CH=0.62;
+      float course=floor(t/CH); float ty=fract(t/CH);
+      float bl=1.2+0.7*hash(vec2(course,7.)); float bx=s/bl+hash(vec2(course,3.)); float bi=floor(bx), fx=fract(bx);
+      float joint=min(min(fx,1.-fx)*bl,min(ty,1.-ty)*CH);
+      float px=CH/(max(dist,0.05)*uPxK); float show=smoothstep(2.5,7.,px);
+      id=4.; T=normalize(vec3(A.x,0.,A.z));
+      sh+=0.11*(hash(vec2(bi,course))-0.5)*(0.4+0.6*show)+0.05*(vn(vec2(s,t)*2.7)-0.5);
+      if(joint<0.045) sh-=0.2*show;
+      float seaward=smoothstep(-0.2,-0.6,N.z), harbour=smoothstep(0.3,0.7,N.z);
+      float m=vn(vec2(s,t)*1.2+5.)*0.55+vn(vec2(s,t)*4.6+1.)*0.45+0.3*(1.-abs(t-2.)/5.);
+      if(m>1.25-uSalt*(0.95*seaward+0.35)){ id=3.; sh+=0.14; }
+      sh-=0.12*smoothstep(1.2,-0.5,t);   // the wet band at the waterline
+      // rust runs down the harbour face from the iron on the walk
+      float k=floor((vW.x-X0-8.)/16.+0.5); float bx0=X0+8.+16.*k; float dx=abs(vW.x-bx0+0.3*(vn(vec2(t*0.7,k))-0.5));
+      float run=CREST-t;
+      if(harbour>0.5&&dx<0.16+0.12*vn(vec2(t*1.3,k+2.))&&run>0.&&run<uRust*7.*(0.5+vn(vec2(k,9.)))){ id=11.; sh-=0.18; }
+      sh+=uGlowH*harbour*(0.14+0.08*vn(vec2(s*0.2,t*0.3)));
+      if(uGlowH*harbour>0.55&&id==4.&&vn(vec2(s*0.15,course*0.7))>0.45) id=1.;
+      line=courseLine(t,s,dist,CH);
+    }
+  }
+  else if(uMode>1.5&&uMode<2.5){     // ground: shingle at the water, grass above
+    if(vW.y<1.5){ id=5.; T=normalize(vec3(1.,0.,0.6)); sh+=0.12*(vn(vW.xz*2.3)-0.5)-0.15*smoothstep(1.5,0.,vW.y); if(hash(floor(vW.xz*5.))>0.93) sh+=0.12; }
+    else { id=8.; float a=0.5+0.7*(vn(vW.xz*0.05)-0.5); T=normalize(vec3(cos(a),0.,sin(a))); sh+=0.12*(vn(vW.xz*0.2)-0.5)-0.05*uWet; }
+  }
+  else if(uMode>2.5&&uMode<3.5){ T=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.); sh+=0.08*(vn(vec2(dot(vL,T)*0.8,dot(vL,cross(T,N))*30.))-0.5); }
+  else if(uMode>4.5&&uMode<5.5){     // armour rock
+    id=5.; T=normalize(vec3(0.3,1.,0.2)); sh+=0.14*(vn(vW.xz*1.1+vW.y)-0.5)+0.1*N.y;
+    sh-=0.14*smoothstep(1.6,-0.4,vW.y);
+    float m=vn(vW.xz*2.+vW.y*1.7)*0.6+0.4*hash(floor(vW.xz*6.+vW.y*4.));
+    if(N.y>0.35&&vW.y>0.6&&m>1.12-uSalt*0.7){ id=3.; sh+=0.1; }
+  }
+  else if(uMode>6.5&&uMode<7.5){     // concrete: the slip, the quay
+    id=10.; T=vec3(0.,0.,1.); sh+=0.08*(vn(vW.xz*3.+vW.y*4.)-0.5)-0.1*uWet-0.05;
+  }
+  else if(uMode>7.5&&uMode<8.5){     // glass: dark, with a little sky in it
+    vec3 Vd=normalize(uCamP-vW); float fres=pow(1.-max(dot(N,Vd),0.),2.);
+    sh=0.06+0.32*fres*uSkyB+0.08*(vn(vW.yz*3.)-0.5); id=7.; T=vec3(0.,1.,0.);
+  }
+  else if(uMode>8.5&&uMode<9.5){     // iron: bollards, ladders; rust takes it with every misreading
+    id=7.; float r=vn(vL.xz*2.3+vL.y*3.1)*0.6+vn(vL.yz*7.)*0.4; if(r>1.05-uRust*0.9){ id=11.; sh-=0.04; }
+  }
+  sh=0.08+0.55*sh;
+  sh+=lights(N);
+  float fog=1.-exp(-dist/uFogD);
+  if(uEmit>0.){ sh=uEmit; fog*=0.35; id=15.; }
+  sh=mix(sh,uFogShade,fog);
+  if(line<0.) line=lineAt(vL,N,T,dist,0.);
+  gl_FragColor=pack(sh,id,line,acc*(1.-fog));
+}`;
+function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
+    uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
+      uEmit: { value: 0 }, uCloth: { value: 0 }, uMover: { value: 0 } }, extra)
+  });
+}
+
+/* ---------- sea: gerstner swell from the live weather, damped behind the wall */
+const NW = 6, NC = 6;
+const SHELTER_GLSL = `float shelter(vec2 p){ return smoothstep(0.,5.,p.y)*smoothstep(${(X1 + 60).toFixed(1)},${(X1 - 40).toFixed(1)},p.x-0.35*p.y); }`;
+const seaU = { uW: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uW2: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },
+  uC: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uHarb: { value: 0 }, uHt: { value: null }, uHtB: { value: new THREE.Vector4(-400, -300, 1000, 1100) },
+  uKeyUp: { value: 1 } };
+const SEA_VERT = /* glsl */`
+uniform vec4 uW[8]; uniform vec4 uW2[8]; uniform float uTime, uCalm, uHarb; uniform vec3 uCamP; uniform sampler2D uHt; uniform vec4 uHtB;
+varying vec3 vW; varying vec2 vXZ; varying float vCrest, vSh, vDep;
+${SHELTER_GLSL}
+void main(){
+  vec2 x0=position.xz; float fade=uCalm*(1.-smoothstep(1500.,5000.,length(x0-uCamP.xz)));
+  float sh=shelter(x0); fade*=1.-sh*(0.93+0.07*uHarb);
+  float dep=30.; vec2 tuv=(x0-uHtB.xy)/uHtB.zw;
+  if(tuv.x>0.&&tuv.x<1.&&tuv.y>0.&&tuv.y<1.){ dep=-(texture2D(uHt,tuv).r*80.-20.); fade*=clamp(dep/4.,0.12,1.); }
+  vec3 d=vec3(0.); float crest=0.;
+  for(int i=0;i<${NW};i++){ vec4 a=uW[i]; vec4 b=uW2[i];
+    float ph=a.z*dot(a.xy,x0)-b.x*uTime+b.z; float A=a.w*fade;
+    d.x+=b.y*A*a.x*cos(ph); d.z+=b.y*A*a.y*cos(ph); d.y+=A*sin(ph); crest+=b.y*A*a.z*sin(ph); }
+  vec3 w=vec3(x0.x+d.x,d.y,x0.y+d.z); vW=w; vXZ=x0; vCrest=crest; vSh=sh; vDep=dep;
+  gl_Position=projectionMatrix*viewMatrix*vec4(w,1.);
+}`;
+const SEA_FRAG = /* glsl */`
+${COMMON}
+uniform vec4 uW[8]; uniform vec4 uW2[8]; uniform vec4 uC[8];
+uniform vec3 uKeyD, uCamP; uniform float uTime, uCalm, uHarb, uAmb, uDiff, uFogD, uFogShade, uKeyUp, uSkyB, uDay, uStorm;
+varying vec3 vW; varying vec2 vXZ; varying float vCrest, vSh, vDep;
+const float X1=${X1.toFixed(1)};
+void main(){
+  vec2 x0=vXZ; float dist=length(vW-uCamP);
+  float fade=uCalm*(1.-smoothstep(1500.,5000.,length(x0-uCamP.xz)))*(1.-vSh*(0.93+0.07*uHarb))*clamp(vDep/4.,0.12,1.);
+  vec3 n=vec3(0.,1.,0.);
+  for(int i=0;i<${NW};i++){ vec4 a=uW[i]; vec4 b=uW2[i]; float ph=a.z*dot(a.xy,x0)-b.x*uTime+b.z; float A=a.w*fade;
+    n.x-=A*a.z*a.x*cos(ph); n.z-=A*a.z*a.y*cos(ph); }
+  float cf=uCalm*(1.-smoothstep(120.,900.,dist))*(1.-vSh*(0.55+0.45*uHarb));
+  for(int i=0;i<${NC};i++){ vec4 c=uC[i]; float w=sqrt(9.81*c.z); float ph=c.z*dot(c.xy,vW.xz)-w*uTime+float(i)*1.7;
+    n.x-=c.w*cf*c.z*c.x*cos(ph); n.z-=c.w*cf*c.z*c.y*cos(ph); }
+  n=normalize(n);
+  vec3 Vd=normalize(uCamP-vW);
+  float lam=max(dot(n,uKeyD),0.);
+  float fres=pow(1.-max(dot(n,Vd),0.),4.);
+  vec3 R=reflect(-Vd,n); float spec=pow(max(dot(R,uKeyD),0.),160.)*uKeyUp;
+  float sh=(uAmb*0.8+uDiff*0.35*lam+0.1*uSkyB+0.42*fres*uSkyB)*0.78+spec*1.7-0.08*uStorm;
+  float glass=vSh*uHarb; sh=mix(sh,0.1+0.8*fres*uSkyB+0.3*uSkyB+spec*2.2,glass);   // the harbour gone to glass
+  float bands=vn(vW.xz*0.08+vec2(uTime*0.05,0.));
+  float shore=smoothstep(4.5,0.6,vDep+(bands-0.5)*3.-1.4*sin(uTime*0.55+vDep*1.2))*(1.-0.8*vSh);
+  // the armour: its toe line runs 13 m seaward of the wall and around the head
+  float dT=vW.x<X1?abs(vW.z+13.):abs(length(vW.xz-vec2(X1,0.))-13.);
+  float onSea=vW.x<X1?step(vW.z,-2.):1.;
+  float wallF=onSea*smoothstep(4.5,0.5,dT-2.4*max(vW.y,0.)-2.5*uStorm+(bands-0.5)*2.5)*(0.5+0.65*vn(vW.xz*0.12+uTime*0.07));
+  float crest=smoothstep(0.3-0.14*uStorm,0.62-0.24*uStorm,vCrest)*(0.55+0.7*vn(vW.xz*0.05+uTime*0.02));
+  float foam=max(max(shore,crest),wallF)*(1.-smoothstep(1200.,3000.,dist));
+  float id=2.;
+  if(foam>0.5){ id=3.; sh=0.55+0.35*lam+0.15*bands+0.2*uDay; }
+  vec3 T=normalize(vec3(-uW[0].y,0.,uW[0].x)*(1.-glass)+vec3(1.,0.,0.)*glass+0.5*vec3(n.x,0.,n.z));
+  float fog=1.-exp(-dist/(uFogD*2.4));
+  sh=mix(sh,uFogShade*0.85,fog);
+  gl_FragColor=pack(sh,id,lineAt(vW,vec3(0.,1.,0.),T,dist,0.),0.);
+}`;
+
+/* ---------- sky */
+const SKY_FRAG = /* glsl */`
+${COMMON}
+uniform vec3 uSunD, uCamP; uniform float uDay, uCloud, uTime; uniform vec2 uWind;
+varying vec3 vW;
+void main(){
+  vec3 d=normalize(vW-uCamP); float el=d.y;
+  float sg=pow(max(dot(d,uSunD),0.),5.)*smoothstep(-0.25,0.05,uSunD.y);
+  float low=smoothstep(-0.28,0.,uSunD.y)*(1.-smoothstep(0.12,0.5,uSunD.y));
+  float az=pow(max(dot(normalize(d.xz+1e-4),normalize(uSunD.xz+1e-4)),0.),2.);
+  float band=(1.-smoothstep(0.,0.32,max(el,0.)))*az*low;
+  float sh=mix(0.1,0.58,uDay)+0.36*sg-0.16*smoothstep(0.,0.7,el)*uDay+0.12*(1.-smoothstep(0.,0.2,el))*uDay+0.42*band;
+  float id=0.; float per=uPerPx*uPxK;
+  float line=0.5+0.5*cos(asin(clamp(el,-1.,1.))/per*6.2831853);
+  if(el>0.){
+    vec2 cp=d.xz/max(el,0.035)*500.+uWind*uTime*6.;
+    float cl=vn(cp*0.0016)*0.62+vn(cp*0.0055+3.)*0.38;
+    float thr=1.05-uCloud*0.75;
+    float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
+    if(cov>0.5){ id=13.; sh=mix(0.3,0.86,uDay)-0.45*(cl-thr)+0.28*sg; line=0.5+0.5*cos((asin(el)+0.03*cl)/per*6.2831853); }
+  }
+  gl_FragColor=pack(sh,id,line,0.);
+}`;
+const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
+const DISC_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); gl_Position.z=gl_Position.w*0.99998; }`;
+const DISC_FRAG = /* glsl */`
+${COMMON}
+uniform float uIsMoon, uIllum, uDim; varying vec2 vUv;
+void main(){ vec2 p=vUv*2.-1.; float r=length(p); if(r>1.) discard;
+  float sh=uIsMoon>0.5?0.55+0.4*uIllum-0.25*smoothstep(0.,1.,p.x*(1.-uIllum)*2.):0.92-0.3*smoothstep(0.5,1.,r);
+  gl_FragColor=pack(sh*uDim,uIsMoon>0.5?14.:1.,0.5+0.5*cos(p.y*22.),0.); }`;
+
+/* ---------- points (spray off the armour and over the wall) */
+const PT_VERT = /* glsl */`attribute float aLife; uniform float uScale, uPtMax; varying float vLife; varying vec3 vW;
+void main(){ vLife=aLife; vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; vec4 mv=viewMatrix*w; gl_Position=projectionMatrix*mv;
+  gl_PointSize=aLife>0.?clamp(uScale*(1.5-0.7*aLife)/max(-mv.z,1.),0.,uPtMax):0.; }`;
+const PT_FRAG = /* glsl */`${COMMON}
+uniform vec3 uCamP; uniform float uFogD, uFogShade; varying float vLife; varying vec3 vW;
+void main(){ if(vLife<=0.) discard; vec2 c=gl_PointCoord*2.-1.; if(dot(c,c)>1.) discard; if(hash(gl_FragCoord.xy*0.37)>0.3+0.65*vLife) discard;
+  float fog=1.-exp(-length(vW-uCamP)/uFogD); gl_FragColor=pack(mix(0.86,uFogShade,fog),3.,0.5+0.5*c.y,0.); }`;
+
+/* ---------- print pass: linocut lines through six inks, and the text printed on the same grid */
+const PU = {
+  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) },
+  uPal: { value: Array.from({ length: 6 }, () => V()) },
+  uTab: { value: MAT.map(m => V(m[0], m[1], m[2])) }, uHat: { value: MAT.map(m => m[3]) }, uSpk: { value: MAT.map(m => m[4]) },
+  uDith: { value: 0.12 }, uOutline: { value: 1 }, uHatch: { value: 1 },
+  uSeed: { value: rnd() * 100 }, uRain: { value: 0 }, uRainDir: { value: new THREE.Vector2(0.3, -1).normalize() }, uTime: { value: 0 },
+  uText: { value: null }, uTextB: { value: new THREE.Vector4(0, 0, 1, 1) }, uTextOn: { value: TEXT_ON ? 1 : 0 }, uMis: { value: 0 },
+};
+const PRINT_FRAG = /* glsl */`
+uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uTab[16]; uniform float uHat[16]; uniform float uSpk[16];
+uniform float uDith, uOutline, uHatch, uSeed, uRain, uTime, uTextOn, uMis; uniform vec2 uRainDir;
+uniform sampler2D uText; uniform vec4 uTextB;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float b2(vec2 a){ a=floor(a); return fract(dot(a,vec2(0.5,a.y*0.75))); }
+float b4(vec2 a){ return b2(0.5*a)*0.25+b2(a); }
+float b8(vec2 a){ return b4(0.5*a)*0.25+b2(a); }
+int idAt(vec2 fc){ return int(floor(texture2D(uData,fc/uRes).g*16.)); }
+bool fam(int a,int b,int x,int y){ return (a==x||a==y)&&(b==x||b==y); }
+bool soft(int a,int b){
+  bool sa=(a==0||a==13||a==1||a==14), sb=(b==0||b==13||b==1||b==14);
+  if(sa&&sb) return true;
+  if(fam(a,b,2,3)) return true;
+  bool ta=(a==4||a==3||a==11||a==1), tb=(b==4||b==3||b==11||b==1); if(ta&&tb) return true;
+  if(fam(a,b,10,3)||fam(a,b,5,3)||fam(a,b,5,8)) return true;
+  return false; }
+void main(){
+  vec2 fc=gl_FragCoord.xy;
+  vec4 d=texture2D(uData,fc/uRes);
+  float s=d.r; int id=int(floor(d.g*16.)); float acc=d.a;
+  vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
+  float line=d.b*2.-1.;
+  float mid=1.-abs(2.*s-1.);
+  float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith;
+  int k=v<0.36?0:(v<0.69?1:2);
+  float ink=k==0?tab.x:(k==1?tab.y:tab.z);
+  if(uSpk[id]>0.5){ float h=hash(floor(fc/2.6)+uSeed); if(h>0.968){ if(s<0.28) ink=5.; else if(k==2) ink=tab.y; else if(k==1) ink=tab.x; } }
+  if(uOutline>0.5){
+    int il=idAt(fc+vec2(-1.,0.)), iu=idAt(fc+vec2(0.,-1.));
+    if((il!=id&&!soft(il,id))||(iu!=id&&!soft(iu,id))) ink=0.;
+  }
+  if(acc>0.5) ink=3.;
+  if(uRain>0.01){
+    vec2 rp=vec2(dot(fc,vec2(-uRainDir.y,uRainDir.x)), dot(fc,uRainDir)+uTime*520.);
+    vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
+    if(h>1.-uRain*0.06 && fract(rp.y/46.)<0.35 && fract(rp.x/5.)<0.3) ink=(s<0.5)?float(tab.z):5.;
+  }
+  if(uTextOn>0.5){   // the readings, printed: an INK knock-out, then PAPER (or HOT) on top, misregistered when the air is harsh
+    vec2 tp=(fc-uTextB.xy)/uTextB.zw;
+    if(tp.x>0.&&tp.x<1.&&tp.y>0.&&tp.y<1.){
+      vec4 tx=texture2D(uText,tp); vec4 tm=texture2D(uText,tp+vec2(uMis,0.)/uTextB.zw);
+      if(tx.g>0.5) ink=0.;
+      if(tm.b>0.5) ink=3.;
+      if(tx.r>0.5) ink=5.;
+      if(tx.b>0.5&&uMis<0.5) ink=3.;
+    }
+  }
+  gl_FragColor=vec4(uPal[int(ink+0.5)],1.);
+}`;
+const BLIT_FRAG = /* glsl */`uniform sampler2D uTex; varying vec2 vUv;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){ vec3 c=texture2D(uTex,vUv).rgb; float g=hash(floor(gl_FragCoord.xy*0.5)); c*=0.965+0.035*g; gl_FragColor=vec4(c,1.); }`;
+const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const printMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PRINT_FRAG, uniforms: PU, depthTest: false, depthWrite: false });
+const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { uTex: { value: rtPrint.texture } }, depthTest: false, depthWrite: false });
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
+
+/* ====================================================================== world build */
+const M4 = (x, y, z, ry = 0, rx = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(sx, sy, sz));
+function withT(g, m4, T) { g.applyMatrix4(m4); const n = g.attributes.position.count, t = new Float32Array(n * 3); const tv = T.clone().transformDirection(m4);
+  for (let i = 0; i < n; i++) { t[i * 3] = tv.x; t[i * 3 + 1] = tv.y; t[i * 3 + 2] = tv.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; }
+const box = (w, h, d, m4, T = V(0, 1, 0)) => withT(new THREE.BoxGeometry(w, h, d), m4, T);
+const cyl = (r0, r1, h, m4, seg = 10, T = V(0, 1, 0)) => withT(new THREE.CylinderGeometry(r0, r1, h, seg, 1), m4, T);
+const clean = (g) => { g = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'aT') g.deleteAttribute(k); if (!g.attributes.normal) g.computeVertexNormals(); return g; };
+const merged = (list, mat) => { const m = new THREE.Mesh(mergeGeometries(list.map(clean)), mat); scene.add(m); return m; };
+
+// ground (and a height texture so the sea knows its depth)
+const TER = { x0: -400, z0: -300, sx: 1000, sz: 1100 };
+{
+  const g = new THREE.PlaneGeometry(TER.sx, TER.sz, 250, 275); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i) + TER.x0 + TER.sx / 2, z = p.getZ(i) + TER.z0 + TER.sz / 2; p.setXYZ(i, x, groundH(x, z), z); }
+  g.computeVertexNormals(); withT(g, new THREE.Matrix4(), V(1, 0, 0));
+  scene.add(new THREE.Mesh(g, objMat(8, 2, V(1, 0, 0))));
+  const N = 256, data = new Uint8Array(N * N * 4);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const x = TER.x0 + (i + 0.5) / N * TER.sx, z = TER.z0 + (j + 0.5) / N * TER.sz;
+    const v = clamp((groundH(x, z) + 20) / 80, 0, 1) * 255; const o = (j * N + i) * 4; data[o] = data[o + 1] = data[o + 2] = v; data[o + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  seaU.uHt.value = tex; seaU.uHtB.value.set(TER.x0, TER.z0, TER.sx, TER.sz);
+}
+// distant land: a ridge far to the north across the bay, low islands far to the west
+{
+  const ridge = (pts) => { const pos = [], idx = []; pts.forEach((q, i) => { pos.push(q[0], q[1], q[2], q[0], -30, q[2]); if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return withT(g, new THREE.Matrix4(), V(1, 0, 0)); };
+  const hills = []; for (let z = -9000; z <= 4000; z += 120) hills.push([5200 + 300 * Math.sin(z * 0.0004), 120 + 240 * fbm(z * 0.0009, 1.3) + 110 * Math.exp(-Math.pow((z + 1500) / 2200, 2)), z]);
+  scene.add(new THREE.Mesh(ridge(hills), objMat(8, 0, V(0, 0, 1))));
+  const east = []; for (let x = -3000; x <= 6000; x += 120) east.push([x, 60 + 140 * fbm(x * 0.001, 4.1), 2600 + 200 * Math.sin(x * 0.0005)]);
+  scene.add(new THREE.Mesh(ridge(east), objMat(8, 0, V(1, 0, 0))));
+  const isl = []; for (let x = -4000; x <= 3000; x += 100) isl.push([x, Math.max(0, 60 * Math.sin((x + 4000) / 7000 * Math.PI) * (0.6 + 0.6 * fbm(x * 0.002, 9))) - 4, -10500]);
+  scene.add(new THREE.Mesh(ridge(isl), objMat(5, 0, V(0, 1, 0))));
+}
+// sea: a polar grid around the wall
+{
+  const RINGS = 200, SEG = 192, K = 0.035, RMAX = 14000, den = Math.exp(RINGS * K) - 1;
+  const pos = [0, 0, 0], idx = [];
+  for (let i = 1; i <= RINGS; i++) { const r = RMAX * (Math.exp(i * K) - 1) / den;
+    for (let j = 0; j < SEG; j++) { const a = j / SEG * TAU; pos.push(Math.cos(a) * r, 0, Math.sin(a) * r); } }
+  for (let j = 0; j < SEG; j++) idx.push(0, 1 + (j + 1) % SEG, 1 + j);
+  for (let i = 1; i < RINGS; i++) for (let j = 0; j < SEG; j++) {
+    const a = 1 + (i - 1) * SEG + j, b = 1 + (i - 1) * SEG + (j + 1) % SEG, c = 1 + i * SEG + j, d = 1 + i * SEG + (j + 1) % SEG;
+    idx.push(a, b, c, b, d, c);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  const m = new THREE.ShaderMaterial({ vertexShader: SEA_VERT, fragmentShader: SEA_FRAG, uniforms: Object.assign({}, SH, seaU), side: THREE.DoubleSide });
+  const sea = new THREE.Mesh(g, m); sea.frustumCulled = false; scene.add(sea);
+}
+// sky dome, sun, moon
+const skyU = Object.assign({}, SH, { uCloud: { value: 0.5 }, uWind: { value: new THREE.Vector2(1, 0) } });
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 48, 24), new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthWrite: false }));
+sky.renderOrder = -3; sky.frustumCulled = false; scene.add(sky);
+const discMat = (isMoon) => new THREE.ShaderMaterial({ vertexShader: DISC_VERT, fragmentShader: DISC_FRAG, depthWrite: false,
+  uniforms: Object.assign({}, SH, { uIsMoon: { value: isMoon ? 1 : 0 }, uIllum: { value: 1 }, uDim: { value: 1 } }) });
+const sunM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(false)); sunM.renderOrder = -2; sunM.frustumCulled = false; scene.add(sunM);
+const moonM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(true)); moonM.renderOrder = -2; moonM.frustumCulled = false; scene.add(moonM);
+
+/* ---------- the breakwater */
+const BW_ = { lamps: [], beacon: null, beaconP: V(X1 + 1, CREST + 7.3, -0.5), bollards: [] };
+{
+  // cross-section (z, y): harbour face, walk, parapet, battered seaward face; extruded north along x
+  const sec = [[3.5, -5], [3.5, CREST], [-2.3, CREST], [-2.3, PARA], [-3.9, PARA], [-4.3, 4.4], [-8, -5]];
+  const shape = new THREE.Shape(sec.map(([z, y]) => new THREE.Vector2(-z, y)));
+  const XS = X0 - 14, Lw = X1 - XS;
+  let g = new THREE.ExtrudeGeometry(shape, { depth: Lw, bevelEnabled: false, steps: 120 });
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const u = p.getX(i), v = p.getY(i), w = p.getZ(i); p.setXYZ(i, XS + w, v, -u); }
+  g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = g.index ? g.toNonIndexed() : g; g.computeVertexNormals(); withT(g, new THREE.Matrix4(), V(1, 0, 0));
+  const wallMat = objMat(4, 1, V(1, 0, 0), { uCloth: { value: 6 } });
+  scene.add(new THREE.Mesh(g, wallMat));
+  // the roundhead and its light
+  const head = []; head.push(cyl(6.4, 8.4, 9.2, M4(X1, -0.4, -0.5), 36));
+  scene.add(new THREE.Mesh(mergeGeometries(head.map(clean)), objMat(4, 1, V(1, 0, 0))));
+  const white = [], dark = [], iron = [], conc = [];
+  white.push(cyl(1.05, 1.15, 6.4, M4(X1 + 1, CREST + 3.2, -0.5), 18));
+  dark.push(cyl(1.7, 1.7, 0.16, M4(X1 + 1, CREST + 6.5, -0.5), 18), cyl(0.0, 0.85, 0.7, M4(X1 + 1, CREST + 8.25, -0.5), 14));
+  for (let a = 0; a < 8; a++) iron.push(box(0.05, 0.9, 0.05, M4(X1 + 1 + Math.cos(a / 8 * TAU) * 1.6, CREST + 7.0, -0.5 + Math.sin(a / 8 * TAU) * 1.6)));
+  const lantern = new THREE.Mesh(withT(new THREE.CylinderGeometry(0.72, 0.72, 1.1, 12), new THREE.Matrix4(), V(0, 1, 0)), objMat(7, 8));
+  lantern.position.copy(BW_.beaconP); scene.add(lantern); BW_.beacon = lantern;
+  // bollards and ladders on the harbour edge
+  for (let x = X0 + 8; x < X1 - 6; x += 16) { iron.push(cyl(0.2, 0.26, 0.7, M4(x, CREST + 0.35, 2.85), 12), cyl(0.3, 0.3, 0.1, M4(x, CREST + 0.72, 2.85), 12)); BW_.bollards.push(V(x, CREST + 0.78, 2.85)); }
+  for (const lx of [-70, 16, 64]) { for (const o of [-0.26, 0.26]) iron.push(box(0.06, 5.6, 0.06, M4(lx + o, 1.4, 3.6)));
+    for (let y = -1.2; y < CREST; y += 0.36) iron.push(box(0.52, 0.04, 0.05, M4(lx, y, 3.62), V(1, 0, 0))); }
+  // lamps along the walk
+  for (const lx of [-104, -48, 8, 62]) { iron.push(cyl(0.07, 0.1, 4.3, M4(lx, CREST + 2.15, 2.95), 8), box(0.06, 0.06, 0.7, M4(lx, CREST + 4.25, 2.7), V(0, 0, 1)));
+    const h = new THREE.Mesh(withT(new THREE.BoxGeometry(0.32, 0.22, 0.32), new THREE.Matrix4(), V(0, 1, 0)), objMat(7, 0)); h.position.set(lx, CREST + 4.12, 2.42); scene.add(h);
+    BW_.lamps.push({ p: V(lx, CREST + 3.6, 2.2), head: h }); }
+  merged(white, objMat(9, 0)); merged(dark, objMat(7, 0)); merged(iron, objMat(7, 9));
+  BW_.ironMat = iron.length;
+}
+/* ---------- armour rock heaped on the seaward face */
+const ROCKS = [];
+const rockTop = (dz) => 3.1 - dz * 0.5;   // dz = metres seaward of z = -6
+{
+  let g = new THREE.IcosahedronGeometry(1, 1); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const f = 0.78 + 0.42 * vnoise(x * 1.7 + 3, y * 1.7 + z * 1.3); p.setXYZ(i, x * f, y * f * 0.8, z * f); }
+  g = g.index ? g.toNonIndexed() : g; g.computeVertexNormals(); withT(g, new THREE.Matrix4(), V(0, 1, 0));
+  const place = (x, z, dz, s) => ROCKS.push({ m: M4(x, rockTop(dz) + pr(-0.4, 0.2), z, pr(0, TAU), pr(-0.5, 0.5), pr(-0.5, 0.5), s * pr(0.9, 1.5), s * pr(0.7, 1.1), s * pr(0.9, 1.4)), x, z, y: rockTop(dz) });
+  for (let x = X0 - 6; x < X1; x += pr(1.5, 2.1)) for (let j = 0; j < 7; j++) { const dz = j * 2.05 + pr(-0.5, 0.5); place(x + pr(-0.7, 0.7), -6.2 - dz, dz, pr(0.95, 1.6)); }
+  for (let a = -1.75; a < 1.3; a += 0.09) for (let j = 0; j < 7; j++) { const dz = j * 2.05 + pr(-0.5, 0.5), r = 6.6 + dz; place(X1 + Math.cos(a) * r, -0.5 + Math.sin(a) * r, dz, pr(1.0, 1.7)); }
+  const im = new THREE.InstancedMesh(g, objMat(5, 5), ROCKS.length); ROCKS.forEach((r, i) => im.setMatrixAt(i, r.m)); im.frustumCulled = false; scene.add(im);
+}
+/* ---------- the shore: a slip, a few houses with their windows, lamps; grass on the root */
+const HOUSES = [];
+const SHORE_LAMPS = [];
+{
+  const walls = [], roofs = [], conc = [];
+  conc.push(box(7, 0.35, 32, M4(-30, -0.05, 140, 0, -0.1), V(0, 0, 1)));
+  [-112, -84, -56, -22, 14, 46].forEach((x, i) => {
+    const z = eastShore(x) + 16 + pr(0, 10), y = groundH(x, z), w = pr(6, 9), d = pr(5.5, 7.5), h = pr(3.2, 5.4), yaw = pr(-0.1, 0.1);
+    walls.push(box(w, h + 1.5, d, M4(x, y + h / 2 - 0.75, z, yaw), V(0, 1, 0)));
+    const ang = 0.62, half = d / 2 + 0.3, slope = half / Math.cos(ang);
+    for (const sg of [-1, 1]) roofs.push(box(w + 0.5, 0.12, slope, M4(x, y + h + half * Math.tan(ang) / 2, z + sg * half / 2, yaw, sg * ang), V(0, 0, 1)));
+    const wins = [];
+    for (const o of [-w / 4, w / 4]) { const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.1), objMat(7, 8)); pane.position.set(x + o, y + h * 0.55, z - d / 2 - 0.03); pane.rotation.y = Math.PI; scene.add(pane); wins.push({ mat: pane.material, lit: 0 }); }
+    HOUSES.push({ p: V(x, y + 1.5, z - d / 2 - 1.5), wins, off: 0 });
+  });
+  merged(walls, objMat(9, 0)); merged(roofs, objMat(7, 3)); merged(conc, objMat(10, 7));
+  for (const [x, dz] of [[-38, 7], [20, 9]]) { const z = eastShore(x) + dz, y = groundH(x, z);
+    const pole = new THREE.Mesh(withT(new THREE.CylinderGeometry(0.08, 0.1, 5, 8), M4(0, 2.5, 0), V(0, 1, 0)), objMat(7, 0)); pole.position.set(x, y, z); scene.add(pole);
+    const h = new THREE.Mesh(withT(new THREE.BoxGeometry(0.3, 0.2, 0.3), new THREE.Matrix4(), V(0, 1, 0)), objMat(7, 0)); h.position.set(x, y + 5.05, z); scene.add(h);
+    SHORE_LAMPS.push({ p: V(x, y + 4.4, z), head: h }); }
+  // grass tufts on the land around the root of the wall
+  const g = new THREE.ConeGeometry(0.035, 1, 3, 1); g.translate(0, 0.5, 0); withT(g, new THREE.Matrix4(), V(0, 1, 0));
+  const spots = [];
+  for (let i = 0; i < 5200; i++) { const x = pr(-230, -126), z = pr(-120, 70); const y = groundH(x, z); if (y > 1.7 && landD(x, z) > 4) spots.push([x, z, y, pr(0.25, 0.75)]); }
+  const im = new THREE.InstancedMesh(g, objMat(8, 0, V(0, 1, 0), { uCloth: { value: 3.5 } }), spots.length);
+  spots.forEach(([x, z, y, h], i) => im.setMatrixAt(i, M4(x, y - 0.02, z, pr(0, TAU), pr(-0.15, 0.15), pr(-0.15, 0.15), 1, h, 1))); im.frustumCulled = false; scene.add(im);
+}
+/* ---------- boats: moored in the lee; one goes out to work */
+function hullGeo(L, Wd, Hh) {
+  const g = new THREE.BoxGeometry(L, Hh, Wd, 8, 1, 2); const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const u = x / L + 0.5;
+    const taper = u > 0.55 ? 1 - Math.pow((u - 0.55) / 0.45, 1.5) * 0.94 : 1 - 0.12 * smoothstep(0.15, 0, u); const bot = y < 0 ? 0.55 : 1;
+    p.setXYZ(i, x, y + (u > 0.65 ? (u - 0.65) * 1.1 * Hh : 0) * (y > 0 ? 1 : 0.2), z * taper * bot); }
+  g.deleteAttribute('uv'); const ng = g.toNonIndexed(); ng.computeVertexNormals(); return withT(ng, new THREE.Matrix4(), V(1, 0, 0));
+}
+const mv = { uMover: { value: 1 } };
+const BMAT = { hot: objMat(12, 3, V(1, 0, 0), mv), white: objMat(9, 3, V(1, 0, 0), mv), dark: objMat(7, 3, V(1, 0, 0), mv), deck: objMat(6, 3, V(1, 0, 0), mv), cab: objMat(9, 0, V(0, 1, 0), mv), mast: objMat(6, 3, V(0, 1, 0), mv) };
+const BOATS = [
+  { home: V(-94, 0, 15), L: 6.2, col: 'hot', mast: 0, cab: 1 }, { home: V(-64, 0, 24), L: 7.6, col: 'white', mast: 7.5, cab: 1 },
+  { home: V(-36, 0, 12), L: 5.0, col: 'hot', mast: 0, cab: 0 }, { home: V(2, 0, 27), L: 8.4, col: 'white', mast: 9, cab: 1 },
+  { home: V(36, 0, 16), L: 5.6, col: 'dark', mast: 0, cab: 0 }, { home: V(-12, 0, 46), L: 9.2, col: 'hot', mast: 0, cab: 1, works: true },
+].map((b, i) => {
+  const gr = new THREE.Group(); const Wd = b.L * 0.36, Hh = b.L * 0.17;
+  gr.add(new THREE.Mesh(hullGeo(b.L, Wd, Hh), BMAT[b.col]));
+  const dk = new THREE.Mesh(withT(new THREE.BoxGeometry(b.L * 0.8, 0.06, Wd * 0.8), M4(-b.L * 0.06, Hh * 0.5, 0), V(1, 0, 0)), BMAT.deck); gr.add(dk);
+  if (b.cab) gr.add(new THREE.Mesh(withT(new THREE.BoxGeometry(b.L * 0.26, b.L * 0.16, Wd * 0.7), M4(-b.L * 0.12, Hh * 0.5 + b.L * 0.08, 0), V(0, 1, 0)), BMAT.cab));
+  if (b.mast) gr.add(new THREE.Mesh(withT(new THREE.CylinderGeometry(0.05, 0.07, b.mast, 6), M4(b.L * 0.12, Hh * 0.5 + b.mast / 2, 0), V(0, 1, 0)), BMAT.mast));
+  scene.add(gr);
+  const buoy = new THREE.Mesh(withT(new THREE.SphereGeometry(0.32, 10, 6), new THREE.Matrix4(), V(0, 1, 0)), objMat(9, 0)); scene.add(buoy);
+  return Object.assign(b, { g: gr, buoy, Wd, Hh, pos: b.home.clone(), yaw: 0, kick: 0, kph: rnd() * TAU, state: 'moored', path: [], speed: 0, until: rr(10, 40) * 60 });
+});
+const WORK = BOATS.find(b => b.works);
+/* ---------- gulls */
+function gullMesh() {
+  const g = new THREE.Group(); const m = objMat(9, 0, V(1, 0, 0)), dm = objMat(7, 0, V(1, 0, 0));
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.5, 6), m); body.rotation.x = Math.PI / 2; g.add(body);
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.1, 0, 0, -0.12, 0.5, 0.03, -0.04, 0.5, 0.03, -0.04, 0.78, -0.02, -0.14, 0, 0, -0.12], 3)); wg.computeVertexNormals();
+  const tip = new THREE.BufferGeometry(); tip.setAttribute('position', new THREE.Float32BufferAttribute([0.6, 0.0, -0.07, 0.78, -0.02, -0.14, 0.66, 0.0, -0.13], 3)); tip.computeVertexNormals();
+  const wl = new THREE.Group(), wr = new THREE.Group(); wl.add(new THREE.Mesh(wg, m), new THREE.Mesh(tip, dm)); wr.add(new THREE.Mesh(wg, m), new THREE.Mesh(tip, dm)); wr.scale.x = -1;
+  g.add(wl, wr); g.userData.w = [wl, wr]; scene.add(g); return g;
+}
+const PERCH = [];
+for (let x = -112; x < 88; x += 22) PERCH.push({ kind: 'pt', p: V(x + pr(-3, 3), PARA + 0.1, -3.1) });
+BW_.bollards.forEach((p, i) => { if (i % 2 === 0) PERCH.push({ kind: 'pt', p: p.clone() }); });
+PERCH.push({ kind: 'pt', p: V(X1 + 1, CREST + 8.62, -0.5) }, { kind: 'pt', p: V(X1 + 2.6, CREST + 6.62, -0.5) });
+BOATS.forEach((b, i) => PERCH.push({ kind: 'boat', i }));
+ROCKS.filter((r, i) => i % 97 === 0).forEach(r => PERCH.push({ kind: 'pt', p: V(r.x, r.y + 0.9, r.z) }));
+const perchPos = (k) => { if (k.kind !== 'boat') return k.p.clone(); const b = BOATS[k.i]; const o = V(b.mast ? b.L * 0.12 : -b.L * 0.42, b.mast ? b.Hh * 0.5 + b.mast + 0.05 : b.Hh * 0.6, 0); return o.applyMatrix4(b.g.matrixWorld); };
+const gulls = Array.from({ length: 7 }, (_, i) => ({ g: gullMesh(), pos: V(rr(-60, 60), rr(20, 40), rr(-80, 60)), vel: V(), state: 'away', perch: -1, until: rr(10, 90), ph: rnd() * TAU, glide: rnd() < 0.5 }));
+// spray
+const SPRAY_N = 1100;
+const sprayGeo = new THREE.BufferGeometry(); const sprayPos = new Float32Array(SPRAY_N * 3), sprayLife = new Float32Array(SPRAY_N), sprayVel = new Float32Array(SPRAY_N * 3);
+sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPos, 3)); sprayGeo.setAttribute('aLife', new THREE.BufferAttribute(sprayLife, 1));
+const spray = new THREE.Points(sprayGeo, new THREE.ShaderMaterial({ vertexShader: PT_VERT, fragmentShader: PT_FRAG, uniforms: Object.assign({}, SH, { uScale: { value: 900 }, uPtMax: { value: 14 } }) }));
+spray.frustumCulled = false; scene.add(spray); let sprayI = 0;
+function spawnSpray(p, s, n, over) { for (let k = 0; k < n; k++) { const i = sprayI = (sprayI + 1) % SPRAY_N;
+  sprayPos[i * 3] = p.x + rr(-2.5, 2.5); sprayPos[i * 3 + 1] = p.y + rr(0, 1); sprayPos[i * 3 + 2] = p.z + rr(-1.5, 1.5);
+  sprayVel[i * 3] = rr(-2, 2); sprayVel[i * 3 + 1] = rr(3.5, 8.5) * s * (over ? 1.45 : 1); sprayVel[i * 3 + 2] = over ? rr(2.5, 7) * s : rr(-0.5, 3.0); sprayLife[i] = 1; } }
+
+/* ====================================================================== weather (live, town-level; swell from the marine point) */
+const WX = { wind: 6, gust: 9, windDir: 245, cloud: 0.6, precip: 0, temp: 11, hum: 84, swellH: 1.5, swellT: 10, swellDir: 265, live: false };
+const WXT = Object.assign({}, WX);
+const MONTH_T = [6, 6, 7, 9, 11, 14, 15, 15, 13, 11, 8, 6];
+function synthWx(ms) { const h = ms / 3600e3; const lp = localParts(ms); const base = MONTH_T[lp.month - 1];
+  return { wind: clamp(6 + 3.5 * Math.sin(h * 0.7) + 1.6 * Math.sin(h * 2.3 + 1), 0.5, 18), gust: 0, windDir: 240 + 45 * Math.sin(h * 0.31),
+    cloud: clamp(0.6 + 0.35 * Math.sin(h * 0.9 + 1), 0, 1), precip: Math.max(0, Math.sin(h * 1.7) * 1.6 - 1.0),
+    temp: base + 2.5 * Math.sin((lp.hour - 9) / 24 * TAU) + 1.5 * Math.sin(h * 0.26), hum: clamp(82 + 10 * Math.sin(h * 0.5), 40, 100),
+    swellH: 1.45 + 0.8 * Math.sin(h * 0.21), swellT: 10 + 2.6 * Math.sin(h * 0.17), swellDir: 265 + 18 * Math.sin(h * 0.12) }; }
+Object.assign(WXT, synthWx(simMs)); WXT.gust = WXT.wind * 1.6; Object.assign(WX, WXT);
+async function fetchWx() {
+  if (!LIVE_WX) return;
+  try {
+    const [a, b] = await Promise.all([
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms`).then(r => r.json()),
+      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${MLAT}&longitude=${MLON}&current=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`).then(r => r.json()).catch(() => null),
+    ]);
+    const c = a.current; const m = b && b.current; const prev = { ...WXT };
+    Object.assign(WXT, { wind: c.wind_speed_10m, gust: c.wind_gusts_10m ?? c.wind_speed_10m * 1.6, windDir: c.wind_direction_10m, cloud: c.cloud_cover / 100, precip: c.precipitation, temp: c.temperature_2m, hum: c.relative_humidity_2m });
+    if (m) { const sh = m.swell_wave_height ?? m.wave_height, sp = m.swell_wave_period ?? m.wave_period, sd = m.swell_wave_direction ?? m.wave_direction;
+      if (sh != null) WXT.swellH = clamp(sh, 0.15, 7); if (sp != null) WXT.swellT = clamp(sp, 4, 18); if (sd != null) WXT.swellDir = sd; }
+    if (!WX.live) logEv('live weather arrived');
+    else if (Math.abs(prev.swellH - WXT.swellH) > 0.3) logEv(`swell ${prev.swellH.toFixed(1)} → ${WXT.swellH.toFixed(1)} m`);
+    else if ((prev.precip < 0.05) !== (WXT.precip < 0.05)) logEv(WXT.precip >= 0.05 ? 'rain on the harbour' : 'the rain stopped');
+    WX.live = true; WXT.live = true;
+  } catch (e) { WX.live = false; }
+}
+fetchWx(); setInterval(fetchWx, 15 * 60e3);
+// what the world actually feels: the live weather, with its own storm or rain laid over it when it branches
+const EF = { swellH: 1.5, swellT: 10, wind: 6, cloud: 0.6, precip: 0 };
+function effWx() {
+  const st = live.storm, rn = live.rainB;
+  EF.swellH = WX.swellH * (1 + 1.3 * st); EF.swellT = WX.swellT; EF.wind = WX.wind + 11 * st;
+  EF.cloud = Math.max(WX.cloud, st, 0.85 * rn); EF.precip = WX.precip + 2.4 * st + 1.3 * rn;
+}
+/* ---------- waves from weather */
+const WAVES = [];
+function rebuildWaves() {
+  WAVES.length = 0;
+  const sd = fromBearingTravel(WX.swellDir), wd = fromBearingTravel(WX.windDir);
+  const sA = Math.atan2(sd.y, sd.x), wA = Math.atan2(wd.y, wd.x);
+  const amp = EF.swellH * 0.5;
+  [[0, 1, 0.48], [0.2, 0.86, 0.24], [-0.27, 1.13, 0.17], [0.42, 0.74, 0.11]].forEach(([da, pm, af], i) => {
+    const T = EF.swellT * pm, w = TAU / T, k = w * w / 9.81, a = sA + da; WAVES.push({ dx: Math.cos(a), dz: Math.sin(a), k, A: amp * af, w, Q: 0, ph: i * 1.31 }); });
+  const wT = clamp(0.55 * Math.sqrt(EF.wind) + 1.2, 1.5, 5), ww = TAU / wT, wk = ww * ww / 9.81, wa = 0.012 * Math.pow(EF.wind, 1.35);
+  [[0, 0.6], [0.5, 0.4]].forEach(([da, af], i) => WAVES.push({ dx: Math.cos(wA + da), dz: Math.sin(wA + da), k: wk * (1 + i * 0.4), A: wa * af, w: ww * Math.sqrt(1 + i * 0.4), Q: 0, ph: 2.1 + i }));
+  const sumKA = WAVES.reduce((s, q) => s + q.k * q.A, 0) || 1;
+  WAVES.forEach((q, i) => { q.Q = clamp(0.62 / sumKA, 0, 1.4); seaU.uW.value[i].set(q.dx, q.dz, q.k, q.A); seaU.uW2.value[i].set(q.w, q.Q, q.ph, 0); });
+  for (let i = 0; i < NC; i++) { const a = wA + (i - 2.5) * 0.35, L = 2.5 + i * 1.3, k = TAU / L; seaU.uC.value[i].set(Math.cos(a), Math.sin(a), k, clamp(EF.wind / 14, 0.05, 1.3) * 0.05 / (1 + i * 0.25)); }
+}
+function waveH(x, z, t) { let y = 0; for (const q of WAVES) y += q.A * Math.sin(q.k * (q.dx * x + q.dz * z) - q.w * t + q.ph); return y * SH.uCalm.value; }
+function waveHE(x, z, t) {   // as the sea shader has it: damped in the lee and in the shallows
+  const sh = shelterAt(x, z), dep = -groundH(x, z);
+  return waveH(x, z, t) * (1 - sh * (0.93 + 0.07 * seaU.uHarb.value)) * clamp(dep / 4, 0.12, 1)
+    + 0.04 * clamp(EF.wind / 10, 0, 2) * (1 - sh * 0.6 * (1 + seaU.uHarb.value)) * Math.sin(t * 2.3 + x * 0.7 + z * 0.4) * SH.uCalm.value; }
+const harbourChop = () => (EF.swellH * 0.07 + 0.03 * clamp(EF.wind / 10, 0, 2)) * (1 - seaU.uHarb.value) * SH.uCalm.value;
+
+/* ====================================================================== the uncanny (rare events where the place itself is alive) */
+const EVT = {
+  still:  { label: 'the harbour went to glass', min: 90, max: 180, cool: 45 * 60 },
+  glow:   { label: 'the harbour side of the wall held the light', min: 70, max: 150, cool: 50 * 60 },
+  breath: { label: 'the wall breathed with the swell', min: 90, max: 190, cool: 35 * 60 },
+  hush:   { label: 'everything held still', min: 22, max: 34, cool: 0 },
+  storm:  { label: 'it grew into a storm', min: 150, max: 210, cool: 0 },
+  rain:   { label: 'it came as rain', min: 150, max: 200, cool: 0 },
+};
+const live = { ev: null, evT: 0, evDur: 0, still: 0, glow: 0, breath: 0, calm: 1, storm: 0, rainB: 0, why: '', branch: null };
+function conditions() {
+  const sunEl = SUNM.sun.el / D2R;
+  return {
+    still: EF.swellH >= 0.8 && WX.wind < 13,
+    glow: sunEl > -1.5 && sunEl < 18 && harbourChop() < 0.3,
+    breath: WX.swellT >= 8 && EF.swellH >= 0.7,
+  };
+}
+const why = {
+  still: () => `swell ${EF.swellH.toFixed(1)} m outside, the harbour behind the wall`,
+  glow: () => `sun ${(SUNM.sun.el / D2R).toFixed(0)}°, the harbour side caught it`,
+  breath: () => `swell period ${WX.swellT.toFixed(1)} s`,
+};
+function similarity(name) {
+  const mem = S.uncanny.mem[name]; if (!mem || !mem.length) return 1;
+  const h = localParts(WMS).hour; let s = 0;
+  for (const m of mem) { const dh = Math.min(Math.abs(m.h - h), 24 - Math.abs(m.h - h)) / 3, ds = (m.sw - WX.swellH) / 0.8, dw = (m.wi - WX.wind) / 4; s += Math.exp(-(dh * dh + ds * ds + dw * dw)); }
+  return 1 + 1.2 * s / mem.length;
+}
+function startEvent(name, forced) {
+  const e = EVT[name]; live.ev = name; live.evT = 0; live.evDur = rr(e.min, e.max); live.why = forced ? 'forced by hand' : (why[name] ? why[name]() : '');
+  S.uncanny.counts[name] = (S.uncanny.counts[name] || 0) + 1; S.uncanny.last[name] = simT;
+  if (why[name]) { const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: localParts(WMS).hour, sw: WX.swellH, wi: WX.wind }); if (mem.length > 12) mem.shift(); S.tension += 0.07; }
+  logEv(e.label + (live.why ? ' · ' + live.why : ''));
+  AUD.event(name, true);
+  if (name === 'still') receipt(true);
+  if (name === 'hush') { TXT.q.length = 0; TXT.cur = null; TXT.need = true; }
+  if (name === 'storm') stormText();
+  if (name === 'rain') rainText();
+}
+function chooseBranch() {
+  if (S.force) { const f = S.force; S.force = null; return f; }
+  const w = clamp(0.5 + 0.06 * S.branch.rain + 0.05 * S.branch.storm + 0.25 * smoothstep(80, 98, WX.hum) + (WX.precip > 0.1 ? 0.3 : 0) - 0.2 * smoothstep(10, 18, WX.wind), 0.15, 0.85);
+  return rnd() < w ? 'rain' : 'storm';
+}
+function endEvent() { const n = live.ev; live.ev = null; AUD.event(n, false);
+  if (n === 'hush') { const b = chooseBranch(); startEvent(b); return; }
+  if (n === 'storm') { S.branch.storm++; S.rust = Math.min(0.95, S.rust + 0.02); S.salt = Math.min(0.95, S.salt + 0.05); rupture('the storm confirmed every harsh reading'); return; }
+  if (n === 'rain') { S.branch.rain++; S.clear = 1; rupture('the rain washed some salt from the stone'); pollNow(); return; }
+  S.uncanny.next = simT + rr(14, 34) * 60 * (1 - 0.05 * Math.min(S.epoch - 1, 6)); }
+function uncannyTick(dt) {
+  if (live.ev) { live.evT += dt; if (live.evT >= live.evDur) endEvent(); return; }
+  if (S.tension >= 1) { startEvent('hush'); return; }
+  if (simT < S.uncanny.next) return;
+  const c = conditions(); const opts = [];
+  for (const n of ['still', 'glow', 'breath']) { if (!c[n]) continue; const last = S.uncanny.last[n]; if (last != null && simT - last < EVT[n].cool && last <= simT) continue;
+    opts.push([n, similarity(n) / (1 + 0.4 * (S.uncanny.counts[n] || 0)) * (n === 'still' ? 1.4 : 1)]); }
+  if (!opts.length) return;
+  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; for (const [n, w] of opts) { r -= w; if (r <= 0) { startEvent(n); return; } }
+}
+function rupture(reason) {
+  S.epoch++; const prev = S.colorway;
+  const w = COLORWAYS.map((_, i) => i === prev ? 0 : 1 / (1 + (S.cwVisits[i] || 0) * 0.8)); let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot, pk = 0;
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) { pk = i; break; } }
+  S.colorway = pk; S.cwVisits[pk] = (S.cwVisits[pk] || 0) + 1;
+  S.grammar = { period: rr(5.2, 9.5), dith: rr(0.05, 0.2), wob: rr(2, 11), outline: rnd() < 0.8 ? 1 : 0, hatch: rr(0.75, 1.25), courseK: [1, 1, 2, 3][Math.floor(rnd() * 4)] };
+  const centers = [38, 33, 36, 31, 41, 35]; S.center = centers[(centers.indexOf(S.center) + 1 + Math.floor(rnd() * 3)) % centers.length];
+  S.tension = 0; S.epochStart = simT; S.epochLen = rr(50, 95) * 60; S.uncanny.next = simT + rr(5, 12) * 60;
+  cwFrom = cwNow.map(v => v.clone()); cwMix = 0;
+  logEv(`RUPTURE → epoch ${S.epoch} · inks ${COLORWAYS[pk].name} · courses every ${S.grammar.courseK} · centre ${NOTE[S.center % 12]}` + (reason ? ' · ' + reason : ''));
+  AUD.rupture(); save();
+}
+const NOTE = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+
+/* ====================================================================== the readings (text printed into the world; no people, only the system talking to itself) */
+const TXT = { q: [], cur: null, cv: document.createElement('canvas'), need: true, w: 2, h: 2, px: 12, tex: null };
+TXT.cx = TXT.cv.getContext('2d');
+function txtSize() {
+  TXT.w = Math.max(64, Math.round(IW * 0.62)); TXT.h = Math.max(32, Math.round(IH * 0.46)); TXT.px = Math.max(9, Math.round(IH * 0.026));
+  TXT.cv.width = TXT.w; TXT.cv.height = TXT.h;
+  if (TXT.tex) TXT.tex.dispose(); TXT.tex = new THREE.CanvasTexture(TXT.cv); TXT.tex.minFilter = TXT.tex.magFilter = THREE.NearestFilter; TXT.tex.generateMipmaps = false;
+  PU.uText.value = TXT.tex; PU.uTextB.value.set(Math.round(IW * 0.03), IH - TXT.h - Math.round(IH * 0.05), TXT.w, TXT.h); TXT.need = true;
+}
+const CAM = (i) => 'CAM ' + String(i + 1).padStart(2, '0');
+function say(lines, o = {}) {
+  const b = { lines: lines.map(l => typeof l === 'string' ? { s: l, ink: 'p' } : l), mode: o.mode || 'type', hold: o.hold ?? 28, t: 0, shown: -1, done: 0, kind: o.kind || '' };
+  if (o.now) { TXT.q.length = 0; TXT.cur = b; TXT.need = true; } else { TXT.q.push(b); if (TXT.q.length > 3) TXT.q.splice(0, TXT.q.length - 3); }
+}
+function txtTick(dt) {
+  if (!TXT.cur && TXT.q.length) { TXT.cur = TXT.q.shift(); TXT.need = true; }
+  const b = TXT.cur; if (!b) return;
+  b.t += dt;
+  const total = b.lines.reduce((s, l) => s + l.s.length, 0);
+  let want;
+  if (b.mode === 'type') want = Math.min(total, Math.floor(b.t * 24));
+  else { const nl = Math.min(b.lines.length, Math.floor(b.t / Math.max(AUD.barSec, 2)) + 1); want = b.lines.slice(0, nl).reduce((s, l) => s + l.s.length, 0); }
+  if (want !== b.shown) {
+    let acc = 0, li = -1; for (let i = 0; i < b.lines.length; i++) { if (want > acc && want <= acc + b.lines[i].s.length) li = i; acc += b.lines[i].s.length; }
+    if (li !== b.li) { b.li = li; if (li >= 0) AUD.typeTick(b.mode); }
+    b.shown = want; TXT.need = true; }
+  if (b.mode === 'garble') { const f = Math.floor(b.t * 9); if (f !== b.gf) { b.gf = f; TXT.need = true; } }
+  if (b.shown >= total) { b.done += dt; if (b.done > b.hold) { TXT.cur = null; TXT.need = true; } }
+}
+const GARB = '#%/\\|=_*+:░▒▓<>';
+function txtDraw() {
+  if (!TXT.need) return; TXT.need = false;
+  const c = TXT.cx, b = TXT.cur; c.clearRect(0, 0, TXT.w, TXT.h);
+  if (b && TEXT_ON) {
+    const px = TXT.px, lh = Math.round(px * 1.38); c.font = `600 ${px}px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace`; c.textBaseline = 'top';
+    let left = b.shown;
+    b.lines.forEach((l, i) => {
+      if (left <= 0) return; let s = l.s.slice(0, left); left -= l.s.length;
+      const y = 3 + i * lh; let x = 3;
+      if (b.mode === 'garble') { const g = mulberry((b.gf || 0) * 131 + i * 17); s = s.split('').map(ch => ch !== ' ' && g() < 0.34 ? GARB[Math.floor(g() * GARB.length)] : ch).join(''); x += Math.round((g() - 0.5) * px * 0.6); }
+      c.fillStyle = '#00ff00'; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [2, 1]]) c.fillText(s, x + dx, y + dy);
+      c.fillStyle = l.ink === 'h' || b.mode === 'garble' ? '#0000ff' : '#ff0000'; c.fillText(s, x, y);
+    });
+    if (b.mode === 'garble') { const g = mulberry((b.gf || 0) * 977 + 5); for (let k = 0; k < 9; k++) c.clearRect(0, Math.floor(g() * TXT.h), TXT.w, 1 + Math.floor(g() * 3)); }
+  }
+  TXT.tex.needsUpdate = true;
+}
+// the operators are asked to classify the wall. CAM 01 is always the closest, and it never answers.
+const CALM = new Float32Array(NCAM);   // the calm each operator saw lately: not kept, it leaves no trace
+function reception(i) {   // how far the wall's straight tone has to travel to reach this operator, and through what
+  const c = CREW[i]; const d = wallDist(c.p); const sea = c.p.z < -HZ && c.p.x < X1 + 10, harb = c.p.z > HZ && c.p.x < X1 + 40;
+  return clamp(smoothstep(3, 190, d) * 0.78 + (sea ? 0.24 : 0) - (harb ? 0.12 : 0), 0, 1);
+}
+function reading(i) {
+  const r = reception(i), share = 1 - Math.exp(-S.cams[i].imp / 30000), calm = CALM[i], clr = S.clear;
+  const pK = 0.42 * clr * (1 - 0.4 * r);
+  const pP = 0.24 * calm * (1 - r) * (1 - clr) + 0.25 * clr;
+  const pH = clamp(0.08 + 0.4 * share * r + 0.3 * r, 0, 0.75) * (1 - 0.8 * clr);
+  let u = rnd(); if ((u -= pK) < 0) return 'kind'; if ((u -= pP) < 0) return pick(['protective', 'steady']);
+  if ((u -= pH) < 0) return pick(['harsh', 'cold', 'aggressive', 'harsh', 'selfish', 'blunt']); return 'neither';
+}
+const HARSH = new Set(['harsh', 'cold', 'aggressive', 'selfish', 'blunt']);
+function poll(storm) {
+  const ids = [1, 2, 3, 4, 5, 6, 7, 8].sort(() => rnd() - 0.5).slice(0, 3).sort((a, b) => a - b);
+  const res = ids.map(i => [i, storm ? pick(['harsh', 'aggressive', 'cold', 'harsh']) : reading(i)]);
+  let mis = 0;
+  for (const [, r] of res) { if (HARSH.has(r)) { mis++; S.tension += 0.014; S.rust = Math.min(0.95, S.rust + 0.0015); } else if (r === 'neither') S.tension += 0.007; else S.tension = Math.max(0, S.tension - 0.006); }
+  say(['NICE? — no reading', 'KIND? — ' + (S.clear > 0.45 ? 'faint reading' : 'no reading'), ...res.map(([i, r]) => `${CAM(i)}: ${r}`), { s: `${CAM(0)}: [no signal]`, ink: 'h' }], { kind: 'poll', hold: 26, now: storm });
+  logEv(`a reading: ${res.map(r => r[1]).join(', ')} · ${CAM(0)} no signal` + (mis ? ` · rust ${(S.rust * 100).toFixed(0)}%` : ''));
+  S.poll.n++; S.poll.next = simT + rr(7, 13) * 60;
+}
+function pollNow() { poll(false); }
+function harbourStatus() { const h = harbourChop(); return h < 0.18 ? 'calm' : h < 0.35 ? 'settled' : 'unsettled'; }
+function receipt(now) { say(['REQUEST: last instance of shelter', 'RESULT: none on record', `HARBOUR STATUS: ${harbourStatus()}`], { kind: 'receipt', hold: 22, now }); logOnce('receipt', 'asked for the last shelter: none on record · harbour ' + harbourStatus(), 20); }
+function waveReport() {
+  const ts = localParts(WMS).str; S.wave++;
+  const h = pick([1, 2, 4]), a = pick([5, 6, 8]), c = pick([5, 6, 7, 8].filter(x => x !== a));
+  say([`WAVE ${String(S.wave).padStart(4, '0')}`, `${ts} ${CAM(h)}: protective`, `${ts} ${CAM(a)}: aggressive`, `${ts} ${CAM(c)}: cold`], { kind: 'report', hold: 20 });
+  logEv(`wave ${S.wave}: protective, aggressive, cold — all at ${ts}`); S.reportAt = simT;
+}
+const MESSAGE = ['rather than let it stew', 'it stung', 'I thought you would see me more clearly than that', "I'm choosing sadness", 'rather than letting it grow into anger'];
+function stormText() { poll(true); say(MESSAGE.map(s => ({ s, ink: 'h' })), { mode: 'garble', hold: 40 }); }
+function rainText() { say(MESSAGE, { mode: 'line', hold: 60, now: true }); }
+function pollTick(dt) {
+  if (live.ev === 'hush' || live.ev === 'storm' || live.ev === 'rain') return;
+  if (simT >= S.poll.next) { poll(false); if (rnd() < 0.3) receipt(false); }
+}
+
+
+/* ====================================================================== audio: the live lens is the microphone; the wall has one straight tone that never changes */
+const WALL_NOTE = 38;   // D2. The harmonic centre moves at rupture; the wall's tone does not.
+const AUD = {
+  ctx: null, ok: false, muted: false, step: 0, nextT: 0, bar: 0, chordI: 0, pend: [], barSec: 5.5, padUntil: 0, partial: null, dist: 0.4,
+  q(o) { if (this.ctx && this.ctx.state === 'running' && this.pend.length < 8) this.pend.push(o); },
+  async init() {
+    if (this.ctx || this.booting || !AUDIO_WANTED) return;
+    this.booting = true;
+    let ctx; try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { this.booting = false; return; }
+    this.wl = false;
+    try { await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET)); this.wl = true; }
+    catch (e) { try { const u = URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' })); await ctx.audioWorklet.addModule(u); this.wl = true; } catch (e2) {} }
+    this.ctx = ctx; this.build(); this.ok = true; this.booting = false; this.born = performance.now(); this.lastCT = ctx.currentTime; this.lastCTwall = performance.now(); this.silentFor = 0; this.nextT = 0;
+    if (ctx.state !== 'running') { tapBtn.hidden = false; ctx.resume().catch(() => {}); }
+    if (!this.timers) { this.timers = true; setInterval(() => this.sched(), 40); setInterval(() => this.watch(), 1000); }
+  },
+  rebuild(why) {
+    const old = this.ctx, oldOut = this.out; this.ctx = null; this.ok = false;
+    if (old) { try { oldOut.gain.setTargetAtTime(0, old.currentTime, 0.6); } catch (e) {} setTimeout(() => { try { if (old.state !== 'closed') old.close().catch(() => {}); } catch (e) {} }, 4000); }
+    if (why) console.warn('[audio] rebuild:', why);
+    this.init().then(() => { if (this.ctx) { const g = this.out.gain; g.value = 0; g.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 1.2); } });
+  },
+  build() {
+    const c = this.ctx; const g = (v = 1) => { const n = c.createGain(); n.gain.value = v; return n; };
+    const bq = (type, f, q = 0.7, gain = 0) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; n.gain.value = gain; return n; };
+    const curve = (fn) => { const a = new Float32Array(2048); for (let i = 0; i < 2048; i++) a[i] = fn(i / 1023.5 - 1); return a; };
+    const pan = (v) => { const p = c.createStereoPanner(); p.pan.value = v; return p; };
+    this.g = g; this.bq = bq;
+    const out = g(OUT_GAIN), master = g(1);
+    const hp = bq('highpass', 26), sat = c.createWaveShaper(); sat.curve = curve(x => Math.tanh(1.6 * x) / Math.tanh(1.6)); sat.oversample = '2x';
+    const shelf = bq('highshelf', 2000, 0.7, -10), lp = bq('lowpass', 6800, 0.5);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 2.4; comp.knee.value = 10; comp.attack.value = 0.03; comp.release.value = 0.35;
+    master.connect(hp).connect(sat).connect(shelf).connect(lp).connect(comp).connect(out).connect(c.destination);
+    this.an = c.createAnalyser(); this.an.fftSize = 2048; out.connect(this.an);
+    this.master = master; this.out = out;
+    // dub echo, unity-gain tanh in the loop
+    const eIn = g(1), dL = c.createDelay(4), dR = c.createDelay(4), fbL = g(0.4), fbR = g(0.4), lpE = bq('lowpass', 1400), hpE = bq('highpass', 160);
+    const ush = c.createWaveShaper(); ush.curve = curve(Math.tanh);
+    const pL = pan(-0.6), pR = pan(0.6), eOut = g(0.55);
+    eIn.connect(dL); dL.connect(lpE).connect(hpE).connect(ush); ush.connect(fbL).connect(dR); dR.connect(fbR).connect(dL);
+    dL.connect(pL).connect(eOut); dR.connect(pR).connect(eOut); eOut.connect(master);
+    this.echo = { eIn, dL, dR, fbL, fbR };
+    // room
+    const len = c.sampleRate * 4.2, ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let lpv = 0; for (let i = 0; i < len; i++) { lpv += (Math.random() * 2 - 1 - lpv) * 0.22; d[i] = lpv * Math.pow(1 - i / len, 2.6); } }
+    const conv = c.createConvolver(); conv.buffer = ir; const rIn = g(1), rOut = g(0.5); rIn.connect(conv).connect(rOut).connect(master);
+    this.room = { rIn, rOut };
+    const nb = (brown) => { const b = c.createBuffer(2, c.sampleRate * 9, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let l = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } } return b; };
+    this.white = nb(false); this.brown = nb(true);
+    const loop = (buf) => { if (this.wl) { try { return new AudioWorkletNode(c, 'mz-noise', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { brown: buf === this.brown } }); } catch (e) {} }
+      const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(c.currentTime + rr(0, 0.1), rr(0, 8)); return s; };
+    const bed = (buf, chain, p = 0, room = 0.4) => { const s = loop(buf); let n = s; chain.forEach(f => { n.connect(f); n = f; }); const gg = g(0), pp = pan(p); n.connect(gg).connect(pp); pp.connect(master); if (room) { const rs = g(room); pp.connect(rs).connect(this.room.rIn); } return { g: gg, p: pp, f: chain[0] }; };
+    // the place
+    this.seaOut = [-0.5, 0.5].map(p => bed(this.brown, [bq('lowpass', 320, 0.6)], p, 0.35));
+    this.lap = bed(this.brown, [bq('lowpass', 190, 0.7), bq('highpass', 50)], 0, 0.4);
+    this.wind = bed(this.white, [bq('bandpass', 360, 0.6), bq('lowpass', 850)], 0, 0.3);
+    this.rain = bed(this.white, [bq('bandpass', 760, 0.6), bq('lowpass', 1100)], 0, 0.5);
+    this.rumble = bed(this.brown, [bq('lowpass', 125, 0.9), bq('highpass', 45)], 0, 0.3);
+    this.engine = bed(this.brown, [bq('lowpass', 150, 1.4)], 0, 0.2);
+    // the wall's voice: one straight tone. The air between it and the lens decides whether it arrives clean or clipped.
+    this.toneBus = g(1);
+    this.tone = [[1, 0.5, 'sine'], [2, 0.16, 'sine'], [1, 0.1, 'triangle']].map(([m, v, ty]) => { const o = c.createOscillator(); o.type = ty; o.frequency.value = this.hz(WALL_NOTE) * m; const gg = g(v); o.connect(gg).connect(this.toneBus); o.start(); return o; });
+    this.clean = g(0); const clp = bq('lowpass', 520, 0.5); this.toneBus.connect(this.clean).connect(clp).connect(master); const cs = g(0.3); clp.connect(cs).connect(this.room.rIn);
+    const drive = g(1.6), clip = c.createWaveShaper(); clip.curve = curve(x => Math.max(-1, Math.min(1, x * 3.2)));
+    const squash = c.createDynamicsCompressor(); squash.threshold.value = -32; squash.ratio.value = 14; squash.knee.value = 2; squash.attack.value = 0.002; squash.release.value = 0.06;
+    const hl1 = bq('lowpass', 1050, 0.6), hl2 = bq('lowpass', 1500, 0.5), hh = bq('highpass', 70);
+    this.harsh = g(0); this.toneBus.connect(drive).connect(clip).connect(squash).connect(hl1).connect(hl2).connect(hh).connect(this.harsh).connect(master);
+    const hs = g(0.12); this.harsh.connect(hs).connect(this.echo.eIn);
+    // a partial that leans toward a phrygian degree now and then
+    { const o = c.createOscillator(); o.type = 'sine'; const gg = g(0); const plp = bq('lowpass', 900); o.connect(gg).connect(plp).connect(master); const s2 = g(0.6); gg.connect(s2).connect(this.echo.eIn); o.start(); this.part = { o, g: gg }; }
+    // pad (rare; it stays for the rain)
+    this.padBus = g(0); this.padLP = bq('lowpass', 640, 0.6); this.padBus.connect(this.padLP); this.padLP.connect(master); this.padLP.connect(this.room.rIn);
+    this.pad = [0, 1, 2].map(() => { const a = c.createOscillator(), b = c.createOscillator(); a.type = b.type = 'sawtooth'; b.detune.value = 8; a.detune.value = -6; const gg = g(0.04); a.connect(gg); b.connect(gg); gg.connect(this.padBus); a.start(); b.start(); return { a, b }; });
+    // event voices: ♭II chord (the harbour goes to glass), a high fifth in the room (the held light), a sub with a breath (the wall breathes)
+    this.singG = g(0); this.singG.connect(master); this.singG.connect(this.room.rIn); this.singO = [0, 1, 2].map(() => { const o = c.createOscillator(); o.type = 'triangle'; const gg = g(0.05); o.connect(gg).connect(this.singG); o.start(); return o; });
+    this.fifthG = g(0); this.fifthG.connect(this.room.rIn); const fd = g(0.4); this.fifthG.connect(fd).connect(master); this.fifthO = [0, 1].map(() => { const o = c.createOscillator(); o.type = 'sine'; o.connect(this.fifthG); o.start(); return o; });
+    { const o = c.createOscillator(); o.type = 'sine'; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
+    this.retune(true);
+  },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  deg(d, oct = 0) { const sc = [0, 1, 3, 5, 7, 8, 10]; const o = Math.floor(d / 7); return S.center + oct * 12 + sc[((d % 7) + 7) % 7] + 12 * o; },
+  retune(now) { if (!this.ctx) return; const t = this.ctx.currentTime; const tc = now ? 0.01 : 6;
+    this.singO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([1, 3, 5][i], 1)), t, 0.5));
+    this.fifthO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([0, 4][i], 2)), t, 0.5));
+    this.sub.o.frequency.setTargetAtTime(this.hz(S.center - 12), t, tc); },
+  start() { if (!this.ctx) { this.init(); return; } this.ctx.resume().then(() => { tapBtn.hidden = true; }).catch(() => {}); },
+  watch() {
+    const c = this.ctx; if (!c) return;
+    if (c.state === 'closed') { this.rebuild('closed'); return; }
+    if (c.state === 'suspended') { c.resume().catch(() => {}); return; }
+    const now = performance.now();
+    if (c.currentTime !== this.lastCT) { this.lastCT = c.currentTime; this.lastCTwall = now; }
+    else if (now - this.lastCTwall > 6000) { this.rebuild('clock stalled'); return; }
+    const td = this.td || (this.td = new Float32Array(this.an.fftSize)); this.an.getFloatTimeDomainData(td);
+    let pk = 0, bad = false; for (let i = 0; i < td.length; i += 4) { const v = td[i]; if (!isFinite(v)) { bad = true; break; } pk = Math.max(pk, Math.abs(v)); }
+    if (bad) { this.rebuild('NaN in the mix'); return; }
+    this.silentFor = (pk < 1e-5 && !this.muted) ? this.silentFor + 1 : 0;
+    if (this.silentFor > 20) { this.rebuild('20 s of silence'); return; }
+    if (now - this.born > 3 * 3600e3) this.rebuild('3 h refresh');
+  },
+  mute() { this.muted = !this.muted; if (this.ctx) this.out.gain.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 0.1); },
+  lens(p, near = 40) { const v = p.clone().project(camera); const behind = v.z > 1; const d = p.distanceTo(camera.position);
+    return { pan: clamp(v.x, -1, 1) * (behind ? -0.4 : 0.85), g: (behind ? 0.35 : (Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 ? 1 : 0.55)) / (1 + d / near) }; },
+  typeTick(mode) { if (!this.ctx || this.ctx.state !== 'running' || live.ev === 'hush') return; this.voice(mode === 'line' ? 'tink' : 'tick', this.ctx.currentTime + 0.02, mode === 'line' ? { m: this.deg(0, 3), v: 0.012, pan: -0.5 } : { v: 0.012, pan: -0.55 }); },
+  voice(type, t, o) {
+    const c = this.ctx, g = this.g, bq = this.bq;
+    if (type === 'thump') { const s = c.createBufferSource(); s.buffer = this.brown; const f = bq('lowpass', 210 + 160 * o.s, 0.8), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      const os = c.createOscillator(); os.type = 'sine'; os.frequency.setValueAtTime(62, t); os.frequency.exponentialRampToValueAtTime(38, t + 0.4); const og = g(0);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v * 1.4, t + 0.03); gg.gain.setTargetAtTime(0, t + 0.1, 0.5 + o.s * 0.5);
+      og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(o.v * 0.6, t + 0.01); og.gain.exponentialRampToValueAtTime(0.0005, t + 0.8);
+      s.connect(f).connect(gg).connect(p); os.connect(og).connect(p); p.connect(this.master); p.connect(this.room.rIn); if (o.throw) p.connect(this.echo.eIn);
+      s.start(t, rr(0, 7)); s.stop(t + 3.5); os.start(t); os.stop(t + 1); s.onended = () => p.disconnect(); return; }
+    if (type === 'hiss') {  // spray coming over the wall
+      const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', 520, 0.8), lp2 = bq('lowpass', 950), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.08); gg.gain.setTargetAtTime(0, t + 0.3, 0.45);
+      s.connect(f).connect(lp2).connect(gg).connect(p); p.connect(this.master); p.connect(this.room.rIn); s.start(t, rr(0, 6)); s.stop(t + 2.6); s.onended = () => p.disconnect(); return; }
+    if (type === 'tick') {  // the readings printing
+      const s = c.createBufferSource(); s.buffer = this.white; const f = bq('bandpass', 1000, 3), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; const lp2 = bq('lowpass', 1200);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.002); gg.gain.exponentialRampToValueAtTime(0.0003, t + 0.04);
+      s.connect(f).connect(lp2).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); s.start(t, rr(0, 7)); s.stop(t + 0.07); s.onended = () => p.disconnect(); return; }
+    if (type === 'tink') {  // halyards on the masts; tuned
+      const os = c.createOscillator(), o2 = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = o2.type = 'sine'; const f0 = this.hz(o.m);
+      os.frequency.value = f0; o2.frequency.value = f0 * 2.76; const g2 = g(0.25);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.004); gg.gain.exponentialRampToValueAtTime(0.0003, t + 0.9);
+      const f = bq('lowpass', 2200); os.connect(gg); o2.connect(g2).connect(gg); gg.connect(f).connect(p); p.connect(this.master); const es = g(0.6); p.connect(es).connect(this.echo.eIn); p.connect(this.room.rIn);
+      os.start(t); o2.start(t); os.stop(t + 1); o2.stop(t + 1); os.onended = () => p.disconnect(); return; }
+    if (type === 'gull') { const os = c.createOscillator(), f = bq('lowpass', 1100, 1), gg = g(0), p = c.createStereoPanner(); os.type = 'sawtooth'; p.pan.value = o.pan;
+      const f0 = rr(520, 700); os.frequency.setValueAtTime(f0, t); os.frequency.linearRampToValueAtTime(f0 * 0.72, t + 0.32);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.04); gg.gain.setTargetAtTime(0, t + 0.26, 0.05);
+      os.connect(f).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); os.start(t); os.stop(t + 0.6); os.onended = () => p.disconnect(); return; }
+    if (type === 'swell') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('lowpass', 300, 0.7), gg = g(0); f.frequency.setValueAtTime(180, t); f.frequency.exponentialRampToValueAtTime(1300, t + o.d);
+      gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(o.v, t + o.d); gg.gain.linearRampToValueAtTime(0, t + o.d + 0.04);
+      s.connect(f).connect(gg); gg.connect(this.master); gg.connect(this.room.rIn); s.start(t, rr(0, 4)); s.stop(t + o.d + 0.1); s.onended = () => gg.disconnect(); return; }
+  },
+  sched() {
+    const c = this.ctx; if (!c || c.state !== 'running') return;
+    const ahead = c.currentTime + 0.5;
+    if (this.nextT < c.currentTime - 0.3) this.nextT = c.currentTime + 0.05;
+    const hush = live.ev === 'hush';
+    while (this.nextT < ahead) {
+      const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16;
+      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(EF.swellT * 0.55, 4.0, 6.6), 0.5);
+        if (!hush && this.bar % 8 === 0 && rnd() < 0.2) this.padUntil = this.bar + 8 + Math.floor(rnd() * 9);
+        if (live.ev === 'rain') this.padUntil = Math.max(this.padUntil, this.bar + 4);
+        if (this.bar % 2 === 0 && this.bar < this.padUntil) this.chord(t);
+        if (!hush && this.bar % 4 === 0 && rnd() < 0.3 && !this.partial) this.partial = { until: this.bar + 2 + Math.floor(rnd() * 4), d: [1, 3, 4, 5][Math.floor(rnd() * 4)] };
+        if (this.partial && this.bar >= this.partial.until) this.partial = null; }
+      if (!hush) {
+        if (this.pend.length) { this.pend.sort((a, b) => b.v - a.v); const p = this.pend.shift(); if (this.pend.length > 3) this.pend.length = 3;
+          if (p.v > 0.004) this.voice(p.type, t, p); }
+        if (EF.wind > 2.5 && st % 2 === 1 && rnd() < 0.045 * clamp(EF.wind / 6, 0, 2)) { const b = pick(BOATS.filter(x => x.mast)); const l = this.lens(b.pos, 22);
+          this.voice('tink', t, { m: this.deg([0, 4, 3, 1][Math.floor(rnd() * 4)], 3), v: clamp(0.004 + l.g * 0.05, 0, 0.04), pan: l.pan }); }
+      }
+      this.step++; this.nextT += sixteenth; this.cur16 = st;
+    }
+    const tq = this.barSec / 16 * 3; this.echo.dL.delayTime.setTargetAtTime(tq, c.currentTime, 0.5); this.echo.dR.delayTime.setTargetAtTime(tq + this.barSec / 16, c.currentTime, 0.5);
+  },
+  chord(t) { const prog = [[0, 2, 4], [1, 3, 5], [5, 0, 2], [3, 5, 0]]; const ch = prog[this.chordI++ % prog.length];
+    this.pad.forEach((v, i) => { const hz = this.hz(this.deg(ch[i], 1)); v.a.frequency.setTargetAtTime(hz, t, 1.2); v.b.frequency.setTargetAtTime(hz, t, 1.2); }); },
+  event(name, on) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    if (name === 'still') { this.singG.gain.setTargetAtTime(on ? 0.42 : 0, t, on ? 5 : 3); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.16 }); }
+    if (name === 'glow') this.fifthG.gain.setTargetAtTime(on ? 0.03 : 0, t, 3);
+    if (name === 'hush' && on) this.voice('swell', t, { d: 6, v: 0.1 });
+    if (name === 'storm' && on) { this.voice('swell', t, { d: this.barSec, v: 0.2 }); this.voice('thump', t + this.barSec, { s: 1.2, v: 0.5, pan: 0, throw: true }); }
+    if (name === 'rain' && on) this.voice('swell', t, { d: this.barSec * 1.5, v: 0.08 }); },
+  rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.18 });
+    this.voice('thump', t + this.barSec, { s: 1, v: 0.45, pan: 0, throw: true }); this.retune(false); },
+  frame(dt) {
+    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime;
+    const hush = live.ev === 'hush' ? 1 : 0, calm = live.calm, set = (p, v, tc = 0.6) => p.setTargetAtTime(v, t, tc);
+    const cp = camera.position, harbSide = cp.z > HZ && cp.x < X1 + 30;
+    const ls = this.lens(V(clamp(cp.x, X0, X1), 1, -13), 60);
+    this.seaOut.forEach((s, i) => { set(s.g.gain, ((0.035 + 0.02 * EF.swellH) * (0.35 + 2 * ls.g) * (harbSide ? 0.55 : 1) + 0.08 * live.storm) * calm, 0.4); set(s.f.frequency, 220 + 60 * EF.swellH + 120 * ls.g, 0.5); });
+    const ll = this.lens(V(clamp(cp.x, X0, 60), 0.3, 12), 30); set(this.lap.g.gain, 0.025 * (0.3 + 2 * ll.g) * calm * (1 - 0.6 * live.still), 0.6); set(this.lap.p.pan, ll.pan * 0.6, 1);
+    set(this.wind.g.gain, Math.pow(EF.wind, 1.25) * 0.0024 * calm, 0.8); set(this.wind.f.frequency, 240 + EF.wind * 18, 1); set(this.wind.p.pan, 0.45 * Math.sin(simT * 0.06), 1);
+    set(this.rain.g.gain, clamp(EF.precip, 0, 4) * 0.011 * (1 - 0.7 * hush), 1);
+    set(this.rumble.g.gain, live.storm * 0.42, 2);
+    const lw = this.lens(WORK.pos, 25); set(this.engine.g.gain, (WORK.state === 'moored' ? 0 : 0.1) * (0.1 + 2.5 * lw.g), 0.5); set(this.engine.p.pan, lw.pan, 0.3);
+    // the straight tone: always the same; only the air it crosses changes
+    const d = this.dist; set(this.clean.gain, 0.13 * (1 - d) * (1 + 0.25 * live.rainB), 0.6); set(this.harsh.gain, 0.05 * d * (1 - 0.35 * live.storm), 0.6);
+    if (this.partial && !hush) { set(this.part.o.frequency, this.hz(this.deg(this.partial.d, 2)), 2.5); set(this.part.g.gain, 0.03, 3); } else set(this.part.g.gain, 0, 2.5);
+    set(this.padBus.gain, (this.bar < this.padUntil ? 0.2 + 0.2 * (1 - SH.uDay.value) + 0.15 * live.rainB : 0) * (1 - hush), 6);
+    set(this.padLP.frequency, 380 + clamp(WX.temp, -5, 30) * 12, 3);
+    set(this.sub.g.gain, live.breath * 0.18 * (0.5 + 0.5 * Math.sin(simT * TAU / (EF.swellT * 1.5))) + 0.06 * live.storm, 0.4);
+    const fb = clamp(0.3 + (WX.hum - 60) / 110 + (live.ev ? 0.1 : 0), 0.2, 0.66); set(this.echo.fbL.gain, fb, 1); set(this.echo.fbR.gain, fb, 1);
+    set(this.room.rOut.gain, 0.38 + 0.25 * clamp(EF.precip, 0, 1) + 0.2 * (1 - SH.uDay.value), 2);
+  },
+};
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(o){super();this.b=!!(o.processorOptions&&o.processorOptions.brown);this.l=[0,0];}
+process(_,outs){const o=outs[0];for(let c=0;c<o.length;c++){const d=o[c];let l=this.l[c]||0;for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(this.b){l=(l+0.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}this.l[c]=l;}return true;}}
+registerProcessor('mz-noise',N);`;
+const OUT_GAIN = 0.75;
+let PULLED = false, PREWARM = true;   // key D: a hand pulls the distortion off, so the tone is heard as it always was
+
+/* ====================================================================== camera crew (observational: operators hold and drift; the mixer cuts. CAM 01 is the closest.) */
+const gp = (x, z, up) => V(x, groundH(x, z) + up, z);
+const lastHit = { p: V(-30, 2, -12), t: -1e9, s: 0 };
+const CREW = [
+  { name: 'PARAPET', fov: 48, p: V(-22, CREST + 1.75, 1.2), upd(c, t) { c.p.y = CREST + 1.75 + 0.03 * Math.sin(t * 0.5); c.tgt.set(60 + 18 * Math.sin(t / 71), CREST + 0.9, -1.2 + 1.5 * Math.sin(t / 53)); } },
+  { name: 'HARBOUR STEPS', fov: 44, p: V(12, 1.3, 15), upd(c, t) { c.p.y = 1.3 + 0.8 * waveHE(c.p.x, c.p.z, t); c.tgt.set(12 + 18 * Math.sin(t / 61), 3.0, 3.5); } },
+  { name: 'MOORINGS', fov: 40, p: V(-48, 1.5, 48), upd(c, t) { c.p.y = 1.5 + 0.85 * waveHE(c.p.x, c.p.z, t); c.tgt.set(-26 + 10 * Math.sin(t / 77), 2.2, 14); } },
+  { name: 'HARBOUR LIGHT', fov: 46, p: V(X1 - 3, CREST + 2.2, 2.2), upd(c, t) { c.tgt.set(-60, 3.4, -4 + 3 * Math.sin(t / 67)); } },
+  { name: 'SLIPWAY', fov: 52, p: gp(-38, eastShore(-38) + 4, 1.7), upd(c, t) { c.tgt.set(10 + 20 * Math.sin(t / 89), 3, 0); } },
+  { name: 'HEADLAND', fov: 40, p: gp(-178, -62, 2.2), upd(c, t) { c.tgt.set(-40 + 22 * Math.sin(t / 83), 2.5, -12); } },
+  { name: 'LONG LENS', fov: 11, p: gp(-192, -24, 2.6), upd(c, t) { c.tgt.lerp(longTarget(t), 0.02); } },
+  { name: 'OPEN WATER', fov: 44, p: V(60, 2.4, -170), upd(c, t) { c.p.y = 2.4 + 0.85 * waveHE(c.p.x, c.p.z, t); c.tgt.set(10 + 25 * Math.sin(t / 97), 3, -2); } },
+  { name: 'ARMOUR', fov: 54, p: V(-52, 3.7, -10.5), upd(c, t) { c.tgt.set(20, 1.2 + 0.6 * Math.sin(t / 41), -13); } },
+];
+function longTarget(t) {
+  if (simT - lastHit.t < 40) return lastHit.p.clone().add(V(0, 3, 0));
+  if (WORK.state !== 'moored') return WORK.pos.clone().add(V(0, 1.5, 0));
+  return [BW_.beaconP.clone(), V(-20, CREST + 1, 1), BOATS[3].pos.clone().add(V(0, 2, 0))][Math.floor(t / 110) % 3];
+}
+CREW.forEach(c => { c.tgt = V(0, 2, 0); c.upd(c, 0); if (c.name === 'LONG LENS') c.tgt.copy(BW_.beaconP); });
+const DIR = { cur: 0, prev: -1, until: 6, pendingCut: -1 };
+function camSees(c, p) { const f = c.tgt.clone().sub(c.p).normalize(); const d = p.clone().sub(c.p).normalize(); return f.dot(d) > Math.cos((c.fov * 0.55) * D2R * 1.3); }
+const SEAWARD = new Set(['HEADLAND', 'LONG LENS', 'OPEN WATER', 'ARMOUR']), HARBOUR = new Set(['HARBOUR STEPS', 'MOORINGS', 'SLIPWAY']);
+function chooseShot() {
+  const w = CREW.map((c, i) => {
+    if (i === DIR.cur) return 0; let x = 1; if (i === DIR.prev) x *= 0.35;
+    if (SEAWARD.has(c.name)) x *= 0.75 + 0.35 * EF.swellH;
+    if (c.name === 'LONG LENS') x *= simT - lastHit.t < 20 && lastHit.s > 0.8 ? 1.6 : 0.9;
+    if (live.ev === 'still' && HARBOUR.has(c.name)) x *= 2.4;
+    if (live.ev === 'storm' && SEAWARD.has(c.name)) x *= 2;
+    if (live.ev === 'rain' && (HARBOUR.has(c.name) || c.name === 'PARAPET')) x *= 2;
+    if (live.ev === 'glow' && camSees(c, V(0, 2.5, 3.5))) x *= 2.2;
+    if (live.ev === 'breath' && camSees(c, V(-20, 2, -5))) x *= 2.2;
+    return x; });
+  let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; } return 0;
+}
+function cut(i) { DIR.prev = DIR.cur; DIR.cur = i; DIR.until = simT + rr(8, 19) * (CREW[i].name === 'LONG LENS' ? 1.3 : 1); }
+
+/* ====================================================================== sim */
+let SUNM = sunMoon(WMS), SUND = V(), MOOND = V();
+let cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
+const PROBES = [];
+for (let x = X0 + 6; x <= X1 - 4; x += 12) PROBES.push({ p: V(x, 0, -13), prev: 0, cool: rr(0, 6) });
+for (const a of [-1.2, -0.7, -0.25, 0.25]) PROBES.push({ p: V(X1 + Math.cos(a) * 13, 0, -0.5 + Math.sin(a) * 13), prev: 0, cool: rr(0, 6), head: true });
+let lastWxRebuild = -1e9;
+function impact(pr, h, s) {
+  S.impacts++; S.salt = Math.min(0.95, S.salt + 0.000005 * s);
+  const top = pr.p.clone().setY(clamp(h, 0, 3) + 1.5);
+  CREW.forEach((c, i) => { if (camSees(c, top) && c.p.distanceTo(top) < 800) S.cams[i].imp++; });
+  if (top.distanceTo(camera.position) < 900) spawnSpray(top, s, Math.round(8 + 20 * s), false);
+  const over = !pr.head && rnd() < smoothstep(0.75, 1.3, s) * 0.5 + 0.65 * live.storm;
+  if (over) {   // it comes over the wall: some of it lands on the boats
+    spawnSpray(V(pr.p.x, PARA - 0.5, -3.4), s, Math.round(14 + 26 * s), true);
+    let hit = 0; BOATS.forEach(b => { if (b.state === 'moored' && Math.abs(b.pos.x - pr.p.x) < 15 && b.pos.z < 26) { b.kick = Math.min(1.5, b.kick + 0.5 * s); hit++; } });
+    if (hit) logOnce('splash', 'spray came over the wall onto the boats', 25);
+    const l = AUD.lens(V(pr.p.x, CREST, 0), 30); AUD.q({ type: 'hiss', v: clamp(0.01 + l.g * 0.16 * s, 0, 0.12), pan: l.pan });
+  }
+  lastHit.p.copy(top); lastHit.t = simT; lastHit.s = s;
+  const l = AUD.lens(top, 40); AUD.q({ type: 'thump', s, v: clamp(l.g * 1.4 * s, 0, 0.55), pan: l.pan, throw: s > 0.85 && rnd() < 0.35 });
+  if (s > 1.02 && simT - S.reportAt > 22 * 60 && !live.ev && !PREWARM) waveReport();
+}
+function shoreTick(dt, t) {
+  for (const pr of PROBES) { const h = waveH(pr.p.x, pr.p.z, t); pr.cool -= dt;
+    const thr = 0.32 * EF.swellH * live.calm;
+    if (pr.prev < thr && h >= thr && pr.cool <= 0 && live.calm > 0.5) { pr.cool = EF.swellT * 0.6;
+      let s = clamp(EF.swellH / 2.2 * (0.8 + 0.4 * rnd()), 0.15, 1.5); if (rnd() < 0.04) s = Math.min(1.6, s * 1.5);   // now and then a set wave
+      impact(pr, h, s); }
+    pr.prev = h; }
+  const hold = live.calm < 0.2;
+  for (let i = 0; i < SPRAY_N; i++) { if (sprayLife[i] <= 0) continue; if (hold) continue;
+    sprayLife[i] -= dt * 0.42; sprayVel[i * 3 + 1] -= 9.8 * dt * 0.8;
+    sprayPos[i * 3] += sprayVel[i * 3] * dt; sprayPos[i * 3 + 1] += sprayVel[i * 3 + 1] * dt; sprayPos[i * 3 + 2] += sprayVel[i * 3 + 2] * dt;
+    const x = sprayPos[i * 3], y = sprayPos[i * 3 + 1], z = sprayPos[i * 3 + 2];
+    if (y < -0.5 || (x > X0 && x < X1 && z > -3.9 && z < HZ && y < CREST)) sprayLife[i] = 0; }
+  sprayGeo.attributes.position.needsUpdate = true; sprayGeo.attributes.aLife.needsUpdate = true;
+}
+function mooredPos(b) { const wd = fromBearingTravel(WX.windDir); return V(b.home.x + wd.x * b.L * 0.75, 0, b.home.z + wd.y * b.L * 0.75); }
+function boatTick(dt, t) {
+  const wd = fromBearingTravel(WX.windDir); const bow = V(-wd.x, 0, -wd.y); const sunEl = SUNM.sun.el / D2R;
+  // the working boat keeps its own day
+  const w = WORK; w.until -= dt;
+  if (w.state === 'moored' && w.until <= 0) {
+    if (sunEl > 3 && EF.swellH < 2.2 && EF.wind < 12 && !live.ev) { w.state = 'out'; w.path = [V(60, 0, 52), V(150, 0, 40), V(360, 0, -220), V(rr(300, 800), 0, rr(-1100, -500))]; logEv('the working boat went out'); }
+    else w.until = rr(10, 30) * 60; }
+  if (w.state === 'away' && (w.until <= 0 || sunEl < -1 || EF.swellH > 2.8 || live.ev === 'storm')) { w.state = 'in'; w.path = [V(360, 0, -220), V(150, 0, 40), V(60, 0, 52), mooredPos(w)]; }
+  BOATS.forEach(b => {
+    if (b.state === 'out' || b.state === 'in') {
+      const tg = b.path[0]; const to = tg.clone().sub(b.pos); to.y = 0; const d = to.length();
+      b.speed = lerp(b.speed, b.path.length === 1 && b.state === 'in' ? clamp(d * 0.3, 0.6, 4.5) : 4.5, 1 - Math.exp(-dt / 6));
+      if (d > 0.5) { const a = Math.atan2(-to.z, to.x); let da = ((a - b.yaw + Math.PI * 3) % TAU) - Math.PI; b.yaw += clamp(da, -dt * 0.35, dt * 0.35); }
+      b.pos.x += Math.cos(b.yaw) * b.speed * dt; b.pos.z -= Math.sin(b.yaw) * b.speed * dt;
+      if (d < 6) { b.path.shift(); if (!b.path.length) { if (b.state === 'out') { b.state = 'away'; b.until = rr(20, 50) * 60; } else { b.state = 'moored'; b.until = rr(40, 120) * 60; logEv('the working boat came in under the wall'); } } }
+    } else if (b.state === 'moored') {
+      const tgtYaw = Math.atan2(-bow.z, bow.x) + 0.25 * Math.sin(t * 0.05 + b.kph); let da = ((tgtYaw - b.yaw + Math.PI * 3) % TAU) - Math.PI; b.yaw += da * (1 - Math.exp(-dt / 30));
+      const fx = Math.cos(b.yaw), fz = -Math.sin(b.yaw); b.pos.set(b.home.x - fx * b.L * 0.75, 0, b.home.z - fz * b.L * 0.75);
+    }
+    b.kick *= Math.exp(-dt / 3.5);
+    const fx = Math.cos(b.yaw), fz = -Math.sin(b.yaw);
+    const y = waveHE(b.pos.x, b.pos.z, t), yf = waveHE(b.pos.x + fx * b.L * 0.4, b.pos.z + fz * b.L * 0.4, t), ys = waveHE(b.pos.x - fz * b.Wd * 0.5, b.pos.z + fx * b.Wd * 0.5, t);
+    const k = b.kick * Math.sin(t * 2.6 + b.kph);
+    b.g.position.set(b.pos.x, y + 0.05 - b.Hh * 0.2, b.pos.z); b.g.rotation.set(0, 0, 0); b.g.rotateY(b.yaw);
+    b.g.rotateZ(Math.atan2(yf - y, b.L * 0.4) + 0.04 * k); b.g.rotateX(Math.atan2(ys - y, b.Wd * 0.5) * 0.8 + 0.18 * k);
+    if (!isFinite(b.pos.x)) { b.pos.copy(b.home); b.state = 'moored'; }
+    b.g.updateMatrixWorld();
+    b.buoy.position.set(b.home.x, waveHE(b.home.x, b.home.z, t) + 0.12, b.home.z); b.buoy.visible = b.state === 'moored' || !b.works;
+    b.g.visible = b.state !== 'away' || b.pos.distanceTo(camera.position) < 3000;
+  });
+}
+function pickPerch(c) { const used = new Set(gulls.filter(k => k !== c && k.perch >= 0).map(k => k.perch)); let i = 0, tries = 0;
+  do { i = Math.floor(rnd() * PERCH.length); } while ((used.has(i) || (PERCH[i].kind === 'boat' && BOATS[PERCH[i].i].state !== 'moored')) && ++tries < 30); return i; }
+function gullTick(dt, t) {
+  const sunEl = SUNM.sun.el / D2R; const day = sunEl > -3; let calls = 0; const hush = live.ev === 'hush';
+  gulls.forEach((c, i) => {
+    if (hush) return;
+    c.until -= dt;
+    if (!day && c.state !== 'away' && c.state !== 'roost') { c.state = 'roost'; c.tgt = V(300 + i * 20, 30, 400); }
+    if (day && c.state === 'away' && rnd() < dt / 150) { c.state = 'fly'; c.perch = pickPerch(c); c.pos.set(rr(-200, 200), 40, rr(-300, 300)); c.until = rr(60, 200); }
+    if (c.state === 'perch' && (c.until <= 0 || live.storm > 0.4 || (PERCH[c.perch].kind === 'boat' && BOATS[PERCH[c.perch].i].state !== 'moored'))) { c.state = 'fly'; c.perch = pickPerch(c); c.until = rr(60, 220); }
+    if (c.state === 'away') { c.g.visible = false; return; }
+    const wheel = c.state === 'fly' && c.until > 0 && live.storm > 0.3;
+    const tgt = c.state === 'roost' ? c.tgt : wheel ? V(-20 + 60 * Math.cos(t * 0.1 + i), 25 + 6 * Math.sin(t * 0.3 + i), 30 + 50 * Math.sin(t * 0.1 + i)) : perchPos(PERCH[c.perch]);
+    const to = tgt.clone().sub(c.pos); const dist = to.length();
+    if (c.state === 'roost' && dist < 8) { c.state = 'away'; c.g.visible = false; return; }
+    const perched = c.state === 'perch';
+    if (!perched) { const lift = dist > 12 ? V(0, 0.3, 0) : V(); const want = to.normalize().add(lift).multiplyScalar(clamp(dist * 0.6, 2.5, 10)); c.vel.lerp(want, 1 - Math.exp(-dt * 1.3));
+      c.pos.addScaledVector(c.vel, dt); if (dist < 0.5 && c.state === 'fly' && !wheel) { c.state = 'perch'; c.until = rr(40, 260); c.vel.set(0, 0, 0); } }
+    else c.pos.lerp(tgt, 1 - Math.exp(-dt * 6));
+    if (!isFinite(c.pos.x)) { c.pos.set(0, 30, -60); c.vel.set(0, 0, 0); c.state = 'fly'; }
+    const m = c.g; m.visible = true; m.position.copy(c.pos); if (!perched && c.vel.lengthSq() > 0.05) m.rotation.y = Math.atan2(c.vel.x, c.vel.z);
+    c.ph += dt * (perched ? 0 : 7); const flap = perched ? -1.3 : (c.glide && dist > 15 ? 0.12 + 0.05 * Math.sin(c.ph * 0.3) : Math.sin(c.ph) * 0.55 + 0.1); m.userData.w[0].rotation.z = flap; m.userData.w[1].rotation.z = -flap;
+    if (calls < 1 && rnd() < dt / (perched ? 80 : 35)) { const l = AUD.lens(c.pos, 30); if (l.g > 0.005 && AUD.ctx && AUD.ctx.state === 'running') { const n = 1 + Math.floor(rnd() * 3); for (let k = 0; k < n; k++) AUD.voice('gull', AUD.ctx.currentTime + 0.02 + k * 0.38, { pan: l.pan, v: clamp(l.g * 1.6, 0, 0.045) }); calls++; } }
+  });
+}
+function lightsTick(dt) {
+  const sunEl = SUNM.sun.el / D2R; const dusk = sunEl < -1.5; const lp = localParts(WMS);
+  const on = dusk ? 1 : 0;
+  BW_.lamps.forEach((l, i) => { l.on = lerp(l.on || 0, on, 1 - Math.exp(-dt / 2)); l.head.material.uniforms.uEmit.value = l.on > 0.5 ? 1 : 0; SH.uLamp.value[i].set(l.p.x, l.p.y, l.p.z, l.on * 0.9); });
+  // the harbour light: one flash every 4 s from dusk to dawn
+  const fl = dusk && ((simT % 4) < 0.9) ? 1 : 0; BW_.beacon.material.uniforms.uEmit.value = fl ? 1 : 0; BW_.beacon.material.uniforms.uMode.value = fl ? 0 : 8;
+  SH.uLamp.value[4].set(BW_.beaconP.x, BW_.beaconP.y - 1, BW_.beaconP.z, fl * 1.2);
+  SHORE_LAMPS.forEach((l, i) => { l.on = lerp(l.on || 0, on, 1 - Math.exp(-dt / 3)); l.head.material.uniforms.uEmit.value = l.on > 0.5 ? 1 : 0; if (i === 0) SH.uLamp.value[5].set(l.p.x, l.p.y, l.p.z, l.on * 0.8); });
+  HOUSES.forEach((h, i) => { if (dusk && h.offAt == null) h.offAt = rr(0, 1) < 0.25 ? 99 : rr(20, 300); if (!dusk) h.offAt = null;
+    h.wins.forEach((w, k) => { const want = dusk && (i + k) % 3 !== 2 && (h.offAt == null || h.offAt > 0); w.lit = lerp(w.lit, want ? 1 : 0, 1 - Math.exp(-dt / 0.8)); w.mat.uniforms.uEmit.value = w.lit > 0.5 ? 0.62 : 0; });
+    if (h.offAt != null && h.offAt < 99) h.offAt -= dt; });
+}
+function memoryTick(dt) {
+  S.salt = clamp(S.salt - EF.precip * dt / 3600 * 0.03 - live.rainB * dt / 170 * 0.13, 0.05, 0.95);
+  S.clear *= Math.exp(-dt / 7800);
+  for (const k of ['salt', 'rust', 'clear', 'impacts', 'tension']) if (!isFinite(S[k])) S[k] = DEF()[k];
+  S.cams.forEach(c => { if (!isFinite(c.imp)) c.imp = 0; });
+}
+function camsTick(dt) {   // what each operator saw: impacts go on the record; calm is only remembered for a while
+  const calmNow = harbourChop() < 0.2 ? 1 : 0; const H = V(-10, 0.5, 50);
+  CREW.forEach((c, i) => { const sees = c.p.z > HZ || camSees(c, H); const tgt = sees && calmNow ? 1 : 0; CALM[i] = lerp(CALM[i], tgt, 1 - Math.exp(-dt / (tgt ? 240 : 600))); });
+}
+
+function step(dt) {
+  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000; WMS = worldOf(simMs);
+  if (!WX.live) { Object.assign(WXT, synthWx(simMs)); WXT.gust = WXT.wind * 1.6; }
+  for (const k of ['wind', 'gust', 'cloud', 'precip', 'temp', 'hum', 'swellH', 'swellT']) { WX[k] = lerp(WX[k], WXT[k], 1 - Math.exp(-sdt / 90)); if (!isFinite(WX[k])) WX[k] = WXT[k] || 0; }
+  for (const k of ['windDir', 'swellDir']) { const d = ((WXT[k] - WX[k] + 540) % 360) - 180; WX[k] += d * (1 - Math.exp(-sdt / 120)); if (!isFinite(WX[k])) WX[k] = 250; }
+  SUNM = sunMoon(WMS); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
+  // the branches and the events, as envelopes
+  const env = (n, a, b) => live.ev === n ? smoothstep(0, a, live.evT) * smoothstep(0, b, live.evDur - live.evT) : 0;
+  live.storm = lerp(live.storm, env('storm', 25, 30), 1 - Math.exp(-sdt / 2));
+  live.rainB = lerp(live.rainB, env('rain', 15, 25), 1 - Math.exp(-sdt / 2));
+  live.still = lerp(live.still, env('still', 30, 25), 1 - Math.exp(-sdt / 2));
+  live.glow = lerp(live.glow, env('glow', 20, 20), 1 - Math.exp(-sdt / 2));
+  live.breath = lerp(live.breath, env('breath', 15, 15) * Math.sin(simT * TAU / (WX.swellT * 1.5)), 1 - Math.exp(-sdt * 2));
+  live.calm = lerp(live.calm, live.ev === 'hush' ? 0.02 : 1, 1 - Math.exp(-sdt / (live.ev === 'hush' ? 3 : 2.5)));
+  SH.uCalm.value = live.calm; seaU.uHarb.value = live.still;
+  effWx();
+  if (simT - lastWxRebuild > 2) { rebuildWaves(); lastWxRebuild = simT; }
+  shoreTick(sdt, simT); boatTick(sdt, simT); gullTick(sdt, simT); lightsTick(sdt); memoryTick(sdt);
+  if (Math.floor(simT) !== Math.floor(simT - sdt)) camsTick(1);
+  S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1); if (!isFinite(S.tension)) S.tension = 0;
+  uncannyTick(sdt); pollTick(sdt); txtTick(sdt);
+  // the tone, as this lens hears it
+  const want = live.ev === 'storm' ? 1 : (live.ev === 'rain' || PULLED) ? 0 : Math.max(reception(DIR.cur), live.storm) * (1 - live.rainB);
+  AUD.dist = lerp(AUD.dist, want, 1 - Math.exp(-sdt / 2)); if (!isFinite(AUD.dist)) AUD.dist = 0.4;
+  if (simT >= DIR.until && DIR.pendingCut < 0) DIR.pendingCut = chooseShot();
+  if (DIR.pendingCut >= 0 && (!AUD.ctx || AUD.ctx.state !== 'running' || AUD.cur16 !== DIR.last16)) { cut(DIR.pendingCut); DIR.pendingCut = -1; }
+  DIR.last16 = AUD.cur16;
+  CREW.forEach(c => { c.upd(c, simT); const fl = Math.max(groundH(c.p.x, c.p.z), 0.3); if (c.p.y < fl + 0.6) c.p.y = fl + 0.6; });
+  if (simT - (S._saved || 0) > 60) { S._saved = simT; save(); }
+}
+
+/* ====================================================================== render */
+function applyLook(dt) {
+  const c = DIR.look || CREW[DIR.cur]; camera.position.copy(c.p); camera.lookAt(c.tgt); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  if (!isFinite(camera.position.x)) { camera.position.set(-30, 6, 1); camera.lookAt(60, 4, 0); }
+  SH.uCamP.value.copy(camera.position); SH.uTime.value = simT;
+  const sEl = SUNM.sun.el, mEl = SUNM.moon.el;
+  const day = smoothstep(-0.2, 0.18, sEl); SH.uDay.value = day; SH.uSunD.value.copy(SUND);
+  const cloudDim = 1 - 0.55 * EF.cloud;
+  if (sEl > -0.06) { SH.uKeyD.value.copy(SUND); SH.uDiff.value = (0.18 + 0.62 * smoothstep(-0.06, 0.35, sEl)) * cloudDim; seaU.uKeyUp.value = smoothstep(-0.05, 0.1, sEl) * cloudDim; }
+  else { SH.uKeyD.value.copy(mEl > 0 ? MOOND : V(0, 1, 0)); SH.uDiff.value = mEl > 0 ? 0.2 * SUNM.illum * cloudDim : 0.04; seaU.uKeyUp.value = mEl > 0 ? 0.5 * SUNM.illum * cloudDim : 0; }
+  SH.uAmb.value = (0.13 + 0.3 * day + 0.08 * EF.cloud * day) * (1 - 0.25 * live.storm);
+  SH.uFogD.value = clamp(1400 - 900 * smoothstep(82, 100, WX.hum) - 250 * clamp(EF.precip, 0, 2.5), 160, 1600);
+  SH.uFogShade.value = 0.12 + 0.55 * day * (1 - 0.3 * live.storm); SH.uSkyB.value = (0.2 + 0.6 * day) * (1 - 0.3 * live.storm);
+  SH.uSalt.value = S.salt; SH.uRust.value = S.rust; SH.uWet.value = clamp(EF.precip * 0.5 + live.storm, 0, 1);
+  SH.uBreath.value = live.breath; SH.uGlowH.value = live.glow * (0.6 + 0.4 * day); SH.uStorm.value = live.storm;
+  const wd = fromBearingTravel(WX.windDir); const gustNow = EF.wind + (WX.gust - WX.wind) * Math.max(0, Math.sin(simT * 0.37) * Math.sin(simT * 0.13));
+  SH.uWindL.value.set(wd.x, 0, wd.y).multiplyScalar(clamp(gustNow / 10, 0, 1.8));
+  SH.uPxK.value = 2 * Math.tan(camera.fov * D2R / 2) / IH;
+  skyU.uCloud.value = EF.cloud; skyU.uWind.value.set(wd.x, wd.y).multiplyScalar(EF.wind);
+  sky.position.copy(camera.position);
+  const place = (m, dir, deg, up) => { m.position.copy(camera.position).addScaledVector(dir, 2500); m.quaternion.copy(camera.quaternion); const s = 2 * 2500 * Math.tan(deg * D2R); m.scale.set(s, s, 1); m.visible = up; };
+  place(sunM, SUND, 2.6, sEl > -0.08 && live.storm < 0.6); place(moonM, MOOND, 1.5, mEl > -0.05 && sEl < 0.1);
+  sunM.material.uniforms.uDim.value = 1 - 0.35 * EF.cloud; moonM.material.uniforms.uIllum.value = SUNM.illum;
+  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
+  const target = COLORWAYS[S.colorway].c.map(hexV);
+  for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
+  const gm = S.grammar; SH.uPerPx.value = gm.period * IH / 720; SH.uWobPx.value = gm.wob * IH / 720; SH.uCourseK.value = gm.courseK || 1;
+  PU.uDith.value = gm.dith; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch;
+  PU.uRain.value = clamp(EF.precip / 2, 0, 1); PU.uRainDir.value.set(wd.x * (0.35 + 0.5 * live.storm), -1).normalize(); PU.uTime.value = simT;
+  PU.uMis.value = live.ev === 'storm' ? Math.round(2 + 3 * Math.abs(Math.sin(simT * 1.7))) : 0;
+  const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
+  const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1]));
+}
+function render() {
+  txtDraw();
+  renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
+  quad.material = printMat; renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
+  quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+}
+
+/* ====================================================================== info box */
+const hud = document.getElementById('hud'); hud.hidden = !INFO;
+const tapBtn = document.getElementById('tap');
+function hudUpdate() {
+  if (!INFO) return; const lp = localParts(WMS); const rp = localParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360;
+  const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
+  const over = live.storm > 0.05 ? ` (the world's storm: ${EF.swellH.toFixed(1)} m)` : '';
+  const cam = CREW[DIR.cur]; const pct = Math.round(AUD.dist * 100);
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · BREAKWATER</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  <div class="r"><span>WORLD ${lp.str.slice(0, 5)} · real ${rp.str.slice(0, 5)} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>LOCAL · ${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
+  <div class="r"><span>SWELL ${WX.swellH.toFixed(1)} m · ${WX.swellT.toFixed(1)} s from ${compass(WX.swellDir)}${over}</span><span>→ impacts, bar ${AUD.barSec.toFixed(1)} s</span></div>
+  <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · HUMIDITY ${WX.hum.toFixed(0)}%${EF.precip > 0.05 ? ' · RAIN ' + EF.precip.toFixed(1) + ' mm' + (live.rainB > 0.05 || live.storm > 0.05 ? " (the world's)" : '') : ''}</span><span>→ spray, chop, echo</span></div>
+  <div class="r"><span>THE WALL straight tone ${NOTE[WALL_NOTE % 12]}${Math.floor(WALL_NOTE / 12) - 1}, unchanged${PULLED ? ' · distortion pulled off by hand' : ''}</span><span>→ ${CAM(DIR.cur)} hears it ${pct}% clipped</span></div>
+  <div class="r"><span>IMPACTS on record ${S.impacts.toLocaleString('en-GB')} · SHELTER on record 0</span><span>→ salt ${(S.salt * 100).toFixed(0)}%, rust ${(S.rust * 100).toFixed(0)}%</span></div>
+  <div class="r"><span>HARBOUR chop ${harbourChop().toFixed(2)} m (${harbourStatus()}) · outside ${EF.swellH.toFixed(1)} m</span><span>${CAM(DIR.cur)} ${cam.name} · pressure ${Math.min(99, S.tension * 100) | 0}%</span></div>
+  ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
+  <div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
+}
+
+/* ====================================================================== loop, keys, API */
+addEventListener('resize', resize); resize();
+if (document.fonts && document.fonts.load) document.fonts.load('600 20px "JetBrains Mono"').then(() => { TXT.need = true; }).catch(() => {});
+renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
+renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); console.warn('[gl] context restored'); });
+SUNM = sunMoon(WMS); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el)); effWx(); rebuildWaves();
+cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : Math.floor(rnd() * CREW.length));
+if (Q.has('cam')) DIR.until = 1e12;
+// pre-warm: it was running before you arrived (the boats settle, the gulls are on the wall)
+{ if (SUNM.sun.el > -0.05) gulls.forEach((c, i) => { if (rnd() < 0.8) { c.state = 'perch'; c.perch = pickPerch(c); BOATS.forEach(b => b.g.updateMatrixWorld()); c.pos.copy(perchPos(PERCH[c.perch])); c.until = rr(20, 200); } });
+  if (S.boat && S.boat.away) { WORK.state = 'away'; WORK.until = rr(5, 30) * 60; WORK.pos.set(600, 0, -800); }
+  const pollAt = S.poll.next; S.poll.next = 1e12;
+  for (let i = 0; i < 240; i++) step(0.25);
+  S.poll.next = Math.max(pollAt, simT + 20); TXT.q.length = 0; TXT.cur = null; PREWARM = false; }
+function frame(dt) {
+  try { step(dt); applyLook(dt); render(); AUD.frame(dt); }
+  catch (e) { console.error(e); }
+}
+let lastT = performance.now(), hudT = 0;
+function raf(now) { const dt = (now - lastT) / 1000; lastT = now; frame(dt); hudT += dt; if (hudT > 0.5) { hudT = 0; hudUpdate(); } requestAnimationFrame(raf); }
+if (!CAPTURE) requestAnimationFrame(raf);
+addEventListener('beforeunload', () => { S.boat = { away: WORK.state !== 'moored' }; save(); });
+addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
+  if (k === 'i') { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); }
+  if (k === 'm') AUD.mute();
+  if (k === 'r' && !live.ev) { logEv('a hand on the wall (human intervention)'); S.tension = 1; }
+  if (k === 'c' && !live.ev) { logEv('a hand chose to say it plainly (human intervention)'); S.force = 'rain'; S.tension = 1; }
+  if (k === 'd') { PULLED = !PULLED; logEv(PULLED ? 'a hand pulled the distortion off: the tone as it always was (human intervention)' : 'the hand let go of the distortion'); }
+  AUD.start(); });
+addEventListener('pointerdown', () => AUD.start());
+tapBtn.addEventListener('click', () => AUD.start());
+AUD.init(); hudUpdate();
+window.MZ = {
+  tick(dt = 1 / 30) { frame(dt); hudUpdate(); },
+  advance(sec, dt = 0.25) { for (let t = 0; t < sec; t += dt) step(dt); applyLook(sec); render(); hudUpdate(); },
+  force(name) {
+    if (name === 'poll') { poll(false); return; } if (name === 'receipt') { receipt(true); return; } if (name === 'report') { waveReport(); return; }
+    if (live.ev) { const was = live.ev; live.ev = null; AUD.event(was, false); if (was === 'hush' && name === 'rupture') { rupture('forced by hand'); return; } }
+    if (name === 'rupture') { rupture('forced by hand'); return; }
+    startEvent(name, true); },
+  cam(i) { cut(i); DIR.until = 1e12; },
+  look(p, t, fov = 30) { DIR.look = p ? { p: V(...p), tgt: V(...t), fov } : null; },
+  ink(i) { S.colorway = i; cwMix = 1; cwFrom = COLORWAYS[i].c.map(hexV); },
+  grammar(g) { Object.assign(S.grammar, g); },
+  h: (x, z) => groundH(x, z),
+  geo: { X0, X1, CREST, PARA, HZ, beacon: BW_.beaconP.toArray() },
+  seekHour(h) { seekWorldHour(h); },
+  get worldHour() { return localParts(WMS).hour; },
+  pull(v) { PULLED = v == null ? !PULLED : !!v; },
+  weather(o = {}) { if (o.salt != null) S.salt = clamp(o.salt, 0.05, 0.95); if (o.rust != null) S.rust = clamp(o.rust, 0, 0.95); if (o.clear != null) S.clear = clamp(o.clear, 0, 1); },
+  say(lines, o) { say(lines, Object.assign({ now: true }, o)); },
+  get state() { return { S, live: { ...live }, WX: { ...WX }, EF: { ...EF }, cam: CREW[DIR.cur].name, dist: AUD.dist, boats: BOATS.map(b => b.state), gulls: gulls.map(c => c.state), text: TXT.cur ? TXT.cur.kind || TXT.cur.mode : null, calm: Array.from(CALM) }; },
+  setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
+  analyser() { return AUD.an; },
+  audio: AUD,
+};
+</script>
