@@ -156,6 +156,12 @@ input[type=range]{width:100%;accent-color:var(--amber);height:22px;margin:0}
 .btn.ghost{background:transparent}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#abAdjPanel{display:grid;gap:8px;padding:10px;border:1px solid var(--line,#2b3a3d);border-radius:8px;background:rgba(214,162,58,.06)}
+#abAdjPanel .row{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:6px;font:500 10.5px var(--mono)}
+#abAdjPanel .row>span{color:var(--faint);text-transform:uppercase;letter-spacing:.08em;font-size:9.5px}
+#abAdjPanel .nud{display:flex;gap:4px;flex-wrap:wrap}#abAdjPanel .nud button{flex:1;min-width:34px;padding:5px 3px;font:500 11px var(--mono)}
+#abAdjRead{font:500 10.5px var(--mono);color:var(--dim);line-height:1.5;font-variant-numeric:tabular-nums}
+.chip.adj{background:#d6a23a;color:#111}
 .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);cursor:pointer}
 .toggle input{accent-color:var(--amber);width:16px;height:16px}
 .note{font-size:12px;line-height:1.45;color:var(--dim);margin:0}
@@ -390,6 +396,17 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         </div>
         <p class="note" id="abSummary"></p>
         <div class="btns"><button class="btn" id="abGo">⌖ Show on the ground</button><button class="btn" id="abOn" aria-pressed="true">● On the map</button></div>
+        <div class="btns" id="abAdjBtns"><button class="btn" id="abAdj" aria-pressed="false">✥ Adjust placement</button><button class="btn ghost" id="abAdjReset" title="Back to the recorded placement">↺ Reset to recorded</button></div>
+        <div id="abAdjPanel" hidden>
+          <div class="seg" id="abAdjMode"><button data-v="translate" aria-pressed="true">Move</button><button data-v="rotate" aria-pressed="false">Rotate</button><button data-v="off" aria-pressed="false">Nudge only</button></div>
+          <div class="row"><span>Step</span><div class="seg" id="abAdjStep"><button data-v="0.1" aria-pressed="false">0.1 m</button><button data-v="0.5" aria-pressed="true">0.5 m</button><button data-v="2" aria-pressed="false">2 m</button></div></div>
+          <div class="row"><span>Move</span><div class="nud"><button data-n="N">N ↑</button><button data-n="S">S ↓</button><button data-n="W">W ←</button><button data-n="E">E →</button></div></div>
+          <div class="row"><span>Turn</span><div class="nud"><button data-r="-5">−5°</button><button data-r="-1">−1°</button><button data-r="1">+1°</button><button data-r="5">+5°</button></div></div>
+          <div class="row"><span>Height</span><div class="nud"><button data-h="-1">−</button><button data-h="1">+</button><button data-h="ground" title="Set the base to the lidar ground under the model">On ground</button></div></div>
+          <div id="abAdjRead"></div>
+          <div class="btns"><button class="btn" id="abAdjCopy">Copy placement</button><button class="btn" id="abAdjDone">Done</button></div>
+          <p class="note" style="margin:0">Drag the arrows on the model, or nudge. Changes save in this browser only; use Copy placement to share them so the recorded placement can be updated.</p>
+        </div>
         <div class="facts" id="abFacts"></div>
         <div class="lab">Built from <output id="abSrcCount"></output></div>
         <div class="srcs" id="abSrcs"></div>
@@ -518,9 +535,12 @@ const S = {
 };
 let LS_KEY = 'mcd-ground-survey.v1';
 let HAD_SAVED=false;
-function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = s.objs||[]; S.pending = s.pending||{}; } }catch(e){} }
+function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = s.objs||[]; S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
 let saveT = 0;
-function save(){ clearTimeout(saveT); saveT = setTimeout(()=>{ try{ syncViewState(); localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }, 300); }
+let saveFirst = 0;
+function saveNow(){ clearTimeout(saveT); saveFirst=0; try{ syncViewState(); localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
+function save(){ clearTimeout(saveT); const now=performance.now(); if(!saveFirst) saveFirst=now; saveT = setTimeout(saveNow, now-saveFirst>1000 ? 0 : 300); }
+addEventListener('pagehide', ()=>{ if(saveFirst) saveNow(); }); document.addEventListener('visibilitychange', ()=>{ if(document.hidden && saveFirst) saveNow(); });
 
 /* IndexedDB for imported files (best effort) */
 const IDB = {db:null};
@@ -815,7 +835,7 @@ controls.zoomToCursor = true; controls.enabled = false;
 controls.addEventListener('change', ()=>{ req(); });
 tc.addEventListener('dragging-changed', e=>{ controls.enabled = S.view.mode==='3d' && !e.value; });
 tc.addEventListener('change', req);
-tc.addEventListener('objectChange', ()=>{ const o=selObj(); if(o){ readBack(o); fillEditor(); save(); } });
+tc.addEventListener('objectChange', ()=>{ if(AD.on){ readAdj(); return; } const o=selObj(); if(o){ readBack(o); fillEditor(); save(); } });
 
 /* plan-mode pan / zoom */
 const PZ = {pts:new Map(), start:null};
@@ -1307,6 +1327,7 @@ function applyLook(o){
 }
 function updateBox(){ const o=selObj(); if(!o||!o.wrap||!o.wrap.visible){ boxHelper.visible=false; return; } boxHelper.box.setFromObject(o.wrap); boxHelper.visible=true; }
 function updateGizmo(){
+  if(AD.on){ attachAdj(); return; }
   const o=selObj(); const mode=$('gizSeg').querySelector('[aria-pressed="true"]').dataset.v;
   if(!o||!o.wrap||mode==='off'||tool==='align'||tool==='gcp'||(o.kind==='image'&&o.geo)){ tc.detach(); req(); return; }
   tc.attach(o.wrap); tc.setMode(mode);
@@ -1315,7 +1336,7 @@ function updateGizmo(){
   req();
 }
 $('gizSeg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; $('gizSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); updateGizmo(); };
-function select(id){ selId=id; renderObjs(); fillEditor(); updateGizmo(); updateBox(); req(); }
+function select(id){ if(id&&AD.on) stopAdj(); selId=id; renderObjs(); fillEditor(); updateGizmo(); updateBox(); req(); }
 function renderObjs(){
   $('objCount').textContent=(ASSETS.length+S.objs.length)||'';
   const L=$('objList');
@@ -1862,8 +1883,9 @@ function renderAssetDetail(){
   const pl=a.placement;
   $('abFacts').innerHTML=[
     ['Standing', esc(a.era)], ['Model', esc(a.version)], a.stats&&['Size', esc(a.stats)],
-    pl&&['Location', `<span class="chip ${pl.status==='Confirmed'?'ok':'est'}">${esc(pl.status)}</span> ${pl.lat.toFixed(7)}, ${pl.lon.toFixed(7)} · ${pl.elev.toFixed(1)} m`],
+    pl&&['Location', `${adjOf(a)?'<span class="chip adj">Adjusted by you</span> ':''}<span class="chip ${pl.status==='Confirmed'?'ok':'est'}">${esc(pl.status)}</span> ${pl.lat.toFixed(7)}, ${pl.lon.toFixed(7)} · ${pl.elev.toFixed(1)} m`],
     pl&&['How placed', esc(pl.detail)]].filter(Boolean).map(([k,v])=>`<span>${k}</span><b>${v}</b>`).join('');
+  $('abAdjReset').disabled=!adjOf(a); $('abAdj').disabled=!pl; if(AD.on && AD.id!==a.id) stopAdj(); renderAdjRead();
   $('abOn').setAttribute('aria-pressed', !isAssetOff(a.id)); $('abOn').textContent = isAssetOff(a.id) ? '○ Off the map' : '● On the map';
   $('abSrcCount').textContent=`${a.sources.length} sources`;
   const groups=['primary','placement','consulted'];
@@ -1888,6 +1910,50 @@ $('abGo').onclick=()=>{ const a=curAsset; if(!a||!a.placement) return; closeBig(
   const w=toWorld(a.placement.E,a.placement.N), gy=(a.placement.elev-HREF)*exag(); const hd=((a.placement.heading||0)+200)*Math.PI/180, d=a.model?95:70;
   controls.target.set(w.x,gy+6,w.z); persp.position.set(w.x+Math.sin(hd)*d, gy+d*0.55, w.z-Math.cos(hd)*d); controls.update(); req(); save();
   if(sheetSmall()) setSheet(false); };
+/* ---------- adjust placement (per-viewer; exportable) ---------- */
+const AD={on:false, id:null, mode:'translate', step:0.5};
+const adjOf=a=>a&&S.assetAdj&&S.assetAdj[a.id];
+function applyAdj(a){ const o=adjOf(a); const base=a.placement0||a.placement; a.placement={...base, ...(o||{})};
+  if(o){ const [lat,lon]=utmToLL(a.placement.E,a.placement.N); a.placement.lat=lat; a.placement.lon=lon; } }
+function setAdj(a, ch){ S.assetAdj=S.assetAdj||{}; const b=a.placement0; const cur={E:a.placement.E,N:a.placement.N,elev:a.placement.elev,heading:a.placement.heading||0,...ch};
+  cur.heading=((cur.heading%360)+360)%360; ['E','N','elev'].forEach(k=>cur[k]=+cur[k].toFixed(2)); cur.heading=+cur.heading.toFixed(1);
+  const same=Math.abs(cur.E-b.E)<0.005&&Math.abs(cur.N-b.N)<0.005&&Math.abs(cur.elev-b.elev)<0.005&&Math.abs(cur.heading-(b.heading||0))<0.05;
+  if(same) delete S.assetAdj[a.id]; else S.assetAdj[a.id]=cur;
+  applyAdj(a); placeAssetOnMap(a); renderAssetDetail(); renderAdjRead(); save(); }
+function adjGroup(){ return AD.id ? assetOnMap.get(AD.id) : null; }
+function attachAdj(){ const g=adjGroup(); if(!g||AD.mode==='off'){ tc.detach(); req(); return; }
+  tc.attach(g); tc.setMode(AD.mode);
+  if(AD.mode==='translate'){ tc.showX=true; tc.showZ=true; tc.showY=S.view.mode==='3d'; } else { tc.showX=false; tc.showZ=false; tc.showY=true; } req(); }
+function readAdj(){ const a=ASSETS.find(x=>x.id===AD.id), g=adjGroup(); if(!a||!g) return;
+  const u=toUTM(g.position.x,g.position.z); const elev=g.position.y/exag()+HREF; const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(g.quaternion); const heading=Math.atan2(fwd.x,-fwd.z)*180/Math.PI;
+  S.assetAdj=S.assetAdj||{}; const cur={E:+u.E.toFixed(2),N:+u.N.toFixed(2),elev:+elev.toFixed(2),heading:+(((heading%360)+360)%360).toFixed(1)};
+  S.assetAdj[a.id]=cur; applyAdj(a); renderAdjRead(); clearTimeout(AD.t); AD.t=setTimeout(()=>{ renderAssetDetail(); save(); },250); }
+function startAdj(){ const a=curAsset; if(!a||!a.placement) return; closeBig();
+  if(isAssetOff(a.id)){ S.assetsOff=S.assetsOff.filter(x=>x!==a.id); placeAssetOnMap(a); }
+  AD.on=true; AD.id=a.id; select(null); $('abAdjPanel').hidden=false; $('abAdj').setAttribute('aria-pressed',true); $('abAdj').textContent='✥ Adjusting…';
+  if(!assetOnMap.get(a.id)) placeAssetOnMap(a).then(attachAdj); else attachAdj(); renderAdjRead(); requestAnimationFrame(()=>$('abAdjPanel').scrollIntoView({block:'nearest',behavior:'smooth'}));
+  toast('Drag the arrows on '+a.name+', or use the nudge buttons.', 3200); }
+function stopAdj(){ AD.on=false; AD.id=null; tc.detach(); $('abAdjPanel').hidden=true; $('abAdj').setAttribute('aria-pressed',false); $('abAdj').textContent='✥ Adjust placement'; req(); }
+function renderAdjRead(){ const a=curAsset; const el=$('abAdjRead'); if(!el||!a||!a.placement) return; const p=a.placement, b=a.placement0||p;
+  const dE=p.E-b.E, dN=p.N-b.N, dist=Math.hypot(dE,dN), dh=((p.heading||0)-(b.heading||0)+540)%360-180, dz=p.elev-b.elev;
+  el.innerHTML=`${p.lat.toFixed(7)}, ${p.lon.toFixed(7)}<br>E ${p.E.toFixed(2)} · N ${p.N.toFixed(2)} · ${p.elev.toFixed(2)} m · heading ${(p.heading||0).toFixed(1)}°`+
+    (adjOf(a)?`<br><span style="color:#d6a23a">moved ${dist.toFixed(2)} m (${dN>=0?'N':'S'} ${Math.abs(dN).toFixed(2)}, ${dE>=0?'E':'W'} ${Math.abs(dE).toFixed(2)}) · turned ${dh>=0?'+':''}${dh.toFixed(1)}° · ${dz>=0?'+':''}${dz.toFixed(2)} m</span>`:'<br>at the recorded placement'); }
+$('abAdj').onclick=()=>{ AD.on ? stopAdj() : startAdj(); };
+$('abAdjDone').onclick=stopAdj;
+$('abAdjReset').onclick=()=>{ const a=curAsset; if(!a||!adjOf(a)) return; delete S.assetAdj[a.id]; applyAdj(a); placeAssetOnMap(a); renderAssetDetail(); if(AD.on) attachAdj(); save(); toast('Back to the recorded placement'); };
+$('abAdjMode').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; AD.mode=b.dataset.v; $('abAdjMode').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); attachAdj(); };
+$('abAdjStep').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; AD.step=+b.dataset.v; $('abAdjStep').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); };
+$('abAdjPanel').addEventListener('click',e=>{ const b=e.target.closest('button'); const a=curAsset; if(!b||!a||!a.placement) return; const p=a.placement, st=AD.step;
+  if(b.dataset.n){ const d={N:[0,st],S:[0,-st],E:[st,0],W:[-st,0]}[b.dataset.n]; setAdj(a,{E:p.E+d[0],N:p.N+d[1]}); }
+  else if(b.dataset.r){ setAdj(a,{heading:(p.heading||0)+(+b.dataset.r)}); }
+  else if(b.dataset.h){ if(b.dataset.h==='ground'){ const w=toWorld(p.E,p.N); const h=heightAt(w.x,w.z); if(h!=null) setAdj(a,{elev:h}); } else setAdj(a,{elev:p.elev+(+b.dataset.h)*Math.min(st,0.5)}); }
+  else return; if(AD.on) attachAdj(); });
+$('abAdjCopy').onclick=async()=>{ const a=curAsset; if(!a||!a.placement) return; const p=a.placement, b=a.placement0||p;
+  const txt=JSON.stringify({asset:a.id, name:a.name, placement:{E:p.E,N:p.N,elev:p.elev,heading:p.heading||0,lat:+p.lat.toFixed(7),lon:+p.lon.toFixed(7)}, recorded:{E:b.E,N:b.N,elev:b.elev,heading:b.heading||0}, adjusted:new Date().toISOString().slice(0,16)},null,1);
+  try{ await navigator.clipboard.writeText(txt); toast('Placement copied. Paste it into a message to update the record.'); }
+  catch(e){ const bl=new Blob([txt],{type:'application/json'}); const u=URL.createObjectURL(bl); const l=document.createElement('a'); l.href=u; l.download=a.id+'-placement.json'; l.click(); setTimeout(()=>URL.revokeObjectURL(u),2000); toast('Placement downloaded'); } };
+addEventListener('keydown',e=>{ if(e.key==='Escape' && AD.on && !AB.big){ stopAdj(); } });
+tc.addEventListener('mouseUp',()=>{ if(AD.on){ const a=ASSETS.find(x=>x.id===AD.id); if(a){ placeAssetOnMap(a); renderAssetDetail(); save(); } } });
 $('abOn').onclick=()=>{ const a=curAsset; if(!a) return; const off=new Set(S.assetsOff||[]); off.has(a.id)?off.delete(a.id):off.add(a.id); S.assetsOff=[...off]; placeAssetOnMap(a); renderAssetDetail(); save(); };
 addEventListener('keydown',e=>{ if(e.key==='Escape' && AB.big){ closeBig(); e.stopPropagation(); } },true);
 document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{ if(b.dataset.tab==='models'){ requestAnimationFrame(()=>{ sizeStage(); kickStage(); }); } }));
@@ -1896,6 +1962,7 @@ async function initAssets(){
   try{ const r=await fetch(DATA+'/assets.json'); if(r.ok) ASSETS=(await r.json()).assets||[]; }catch(e){}
   renderAssetCards(); renderObjs();
   if(!ASSETS.length) return;
+  ASSETS.forEach(a=>{ if(a.placement){ a.placement0={...a.placement}; applyAdj(a); } });
   ASSETS.forEach(a=>placeAssetOnMap(a));
   curAsset=ASSETS.find(a=>a.id===S.assetSel)||ASSETS[0]; renderAssetCards(); renderAssetDetail();
   if(!$('p-models').hidden) showInStage(curAsset);
