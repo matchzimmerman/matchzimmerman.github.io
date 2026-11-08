@@ -467,8 +467,13 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
   <div id="loading" class="float"><div style="text-align:center"><div id="loadText">LOADING GROUND MODEL</div><div class="bar"><i id="loadBar"></i></div></div></div>
 </div>
 
+<script>
+window.__gsFail=function(msg){var l=document.getElementById('loading'),t=document.getElementById('loadText');if(!l||l.hidden)return;
+ t.innerHTML=msg+'<br><button onclick="location.reload()" style="margin-top:10px;font:inherit;padding:6px 14px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer">Retry</button>';};
+setTimeout(function(){if(!window.__gsDone)window.__gsFail(window.__gsStarted?'Still loading the ground model. The connection may be slow.':'The 3D engine did not start.');},30000);
+</script>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+{"imports":{"three":"./lib/three/three.module.js","three/addons/":"./lib/three/addons/"}}
 </script>
 <script type="module">
 import * as THREE from 'three';
@@ -544,8 +549,9 @@ const tiles = [];            // [r*cols+c] => {c,r,state,data,tex,mesh,itex,ista
 const dummy = new THREE.DataTexture(new Uint8Array(4),1,1);
 dummy.needsUpdate = true;
 
+async function fetchRetry(url,tries=3){ let last; for(let i=0;i<tries;i++){ try{ const r=await fetch(url,i?{cache:'reload'}:undefined); if(r.ok) return r; last=new Error(url.split('/').pop()+' '+r.status); }catch(e){ last=e; } await new Promise(z=>setTimeout(z,600*(i+1))); } throw last; }
 async function decodeImage(url){
-  const r = await fetch(url); if(!r.ok) throw new Error(url+' '+r.status);
+  const r = await fetchRetry(url);
   const blob = await r.blob();
   let bmp; try{ bmp = await createImageBitmap(blob,{colorSpaceConversion:'none',premultiplyAlpha:'none'}); }catch(e){ bmp = await createImageBitmap(blob); }
   const cv = document.createElement('canvas'); cv.width=bmp.width; cv.height=bmp.height;
@@ -1902,7 +1908,7 @@ async function boot(){
   try{
     try{ const sr = await fetch('sites.json'); if(sr.ok){ SITES = (await sr.json()).sites; } }catch(e){}
     if(SITES && SITES.length){ const want = location.hash.slice(1); SITE = SITES.find(s=>s.slug===want) || SITES[0]; DATA = SITE.path; buildSiteBar(); }
-    M = await (await fetch(DATA+'/meta.json')).json();
+    M = await (await fetchRetry(DATA+'/meta.json')).json();
   }catch(e){ $('loadText').textContent='Could not load the survey data'; return; }
   E0=M.e0; NTOP=M.ntop; GW=M.cols*M.tile; GH=M.rows*M.tile; WM=GW*M.res; HM=GH*M.res; Ec=E0+WM/2; Nc=NTOP-HM/2;
   G.uHalf.value.set(WM/2, HM/2); G.uHmin.value=M.hmin; G.uHmax.value=M.hmax; G.uWater.value=M.bathy?0:(M.water||0); WF = M.bathy ? (M.waterflat||0) : 0; G.uWaterFlat.value = WF; HB = M.hbase ?? 100; G.uHBase.value = HB;
@@ -1928,7 +1934,7 @@ async function boot(){
   if(S.view.mode==='3d' && S.view.t3){ S.view.mode='plan'; setViewMode('3d'); persp.position.fromArray(S.view.t3.p); controls.target.fromArray(S.view.t3.t); controls.update(); }
   else { S.view.mode='plan'; applyPlanCam(); }
   resize();
-  $('loading').hidden=true;
+  $('loading').hidden=true; window.__gsDone=true;
   if(DV && DV.tab) openTab(DV.tab);
   // restore imported files
   for(const o of S.objs){ if(o.kind==='mass'){ realizeMass(o); continue; } if(!IDB.db) continue; const f=await idbGet(o.id); if(f){ try{ await realize(o,f); }catch(e){ console.warn(e); } } }
@@ -1936,7 +1942,8 @@ async function boot(){
   await initAssets();
   renderObjs(); req();
 }
-boot();
+window.__gsStarted=true;
+boot().catch(e=>{ console.error(e); window.__gsFail('Could not load the ground model ('+String(e&&e.message||e).slice(0,80)+')'); });
 </script>
 
 </html>
