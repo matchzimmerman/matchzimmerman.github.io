@@ -1951,7 +1951,7 @@ $('abAdjPanel').addEventListener('click',e=>{ const b=e.target.closest('button')
 $('abAdjCopy').onclick=async()=>{ const a=curAsset; if(!a||!a.placement) return; const p=a.placement, b=a.placement0||p;
   const txt=JSON.stringify({asset:a.id, name:a.name, placement:{E:p.E,N:p.N,elev:p.elev,heading:p.heading||0,lat:+p.lat.toFixed(7),lon:+p.lon.toFixed(7)}, recorded:{E:b.E,N:b.N,elev:b.elev,heading:b.heading||0}, adjusted:new Date().toISOString().slice(0,16)},null,1);
   try{ await navigator.clipboard.writeText(txt); toast('Placement copied. Paste it into a message to update the record.'); }
-  catch(e){ const bl=new Blob([txt],{type:'application/json'}); const u=URL.createObjectURL(bl); const l=document.createElement('a'); l.href=u; l.download=a.id+'-placement.json'; l.click(); setTimeout(()=>URL.revokeObjectURL(u),2000); toast('Placement downloaded'); } };
+  catch(e){ const el=$('abAdjRead'); el.insertAdjacentHTML('beforeend','<textarea readonly style="width:100%;height:120px;margin-top:6px;font:500 10px var(--mono);background:transparent;color:inherit;border:1px solid var(--line,#2b3a3d);border-radius:6px"></textarea>'); const ta=el.querySelector('textarea'); ta.value=txt; ta.focus(); ta.select(); toast('Copying is blocked here. The placement is selected below; copy it from there.', 4200); } };
 addEventListener('keydown',e=>{ if(e.key==='Escape' && AD.on && !AB.big){ stopAdj(); } });
 tc.addEventListener('mouseUp',()=>{ if(AD.on){ const a=ASSETS.find(x=>x.id===AD.id); if(a){ placeAssetOnMap(a); renderAssetDetail(); save(); } } });
 $('abOn').onclick=()=>{ const a=curAsset; if(!a) return; const off=new Set(S.assetsOff||[]); off.has(a.id)?off.delete(a.id):off.add(a.id); S.assetsOff=[...off]; placeAssetOnMap(a); renderAssetDetail(); save(); };
