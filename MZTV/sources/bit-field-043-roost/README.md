@@ -1,13 +1,13 @@
 # MZTV · BIT FIELD 043 · MZ WORLD · ROOST
 
-TWISTED TREE's world, unchanged, with flat black and white creatures from Match Zimmerman's linocut spread through it. Woods, twisted tree, bridges, dry stream beds, wooden birds, eleven-camera crew, inks, events, memory and sound are BIT FIELD 035 Study 003. BIT FIELD 035 itself is untouched.
+TWISTED TREE's world, unchanged, with flat black and white creatures drawn by Robert Penn spread through it. Woods, twisted tree, bridges, dry stream beds, wooden birds, eleven-camera crew, inks, events, memory and sound are BIT FIELD 035 Study 003. BIT FIELD 035 itself is untouched.
 
 **Status:** on the branch `mz-world/roost-043`, not published to `main`. Awaiting MZ.Human's review.
 **Live (once merged):** https://matchzimmerman.com/MZTV/sources/bit-field-043-roost/
 **Params, keys, console:** as BIT FIELD 035, plus `MZ.figs` and `MZ.setInfo(v)`. Default `?lines` is 1080 (720 on phones). **Tap the info card** to remove it; tap the world to bring it back.
 
 ## The figures
-Twelve creatures, five chicks, a nest and an egg, cut from the print into jointed flat parts (`creatures.png`: red = marks, green = silhouette). Always pure black and white whatever the colourway, with a paper keyline so they leave the woods. They turn to whichever lens is live. Each keeps its own stretch of the world:
+Twelve creatures, five chicks, a nest and an egg, cut from Robert Penn's black and white print into jointed flat parts (`creatures.png`: red = marks, green = silhouette). Always pure black and white whatever the colourway, with a paper keyline so they leave the woods. They turn to whichever lens is live. Each keeps its own stretch of the world:
 
 | Figure | Where |
 |---|---|
