@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MZ WORLDS · OVERFLIGHT</title>
+<style>
+:root { --ink:#12232b; --paper:#efe6d2; --deep:#1f4a55; --hot:#e0562a; --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace }
+html,body { margin:0; height:100%; background:var(--ink); overflow:hidden }
+iframe { position:fixed; inset:0; width:100vw; height:100vh; border:0; display:block; background:var(--ink) }
+#hud { position:fixed; z-index:5; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px)); width:340px;
+  background:var(--paper); color:var(--ink); border:2px solid var(--ink); padding:8px 10px; font:500 11px/1.42 var(--mono); font-variant-numeric:tabular-nums; pointer-events:none }
+#hud .t { display:flex; justify-content:space-between; gap:12px; font-weight:600; letter-spacing:.08em; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:6px }
+#hud .r { display:grid; grid-template-columns:auto 1fr; gap:0 10px }
+#hud .r span:last-child { color:var(--deep); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .log { margin-top:6px; padding-top:5px; border-top:1px dashed var(--ink); min-height:5.6em }
+#hud .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .cr { margin-top:6px; font-size:10px; letter-spacing:.06em; opacity:.8 }
+#tap { position:fixed; z-index:6; right:calc(20px + env(safe-area-inset-right,0px)); top:calc(20px + env(safe-area-inset-top,0px)); font:600 11px/1 var(--mono);
+  color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:8px 10px; letter-spacing:.08em; cursor:pointer }
+@media (max-width:560px) { #hud { font-size:10px; width:calc(100vw - 32px); left:calc(16px + env(safe-area-inset-left,0px)); bottom:calc(16px + env(safe-area-inset-bottom,0px)) } }
+</style>
+</head>
+<body>
+<div id="hud" hidden></div>
+<button id="tap" type="button" hidden>CLICK FOR SOUND</button>
+<script>
+'use strict';
+(() => {
+/* ====================================================================== params */
+const Q = new URLSearchParams(location.search);
+const CAPTURE = Q.get('capture') === '1';
+const RATE = Math.max(0.01, +(Q.get('rate') || 1));
+const LINES = +(Q.get('lines') || 720);
+const SEED = +(Q.get('seed') || 1);
+const AUDIO = Q.get('audio') !== '0' && !CAPTURE;
+const FRESH = Q.get('fresh') === '1';
+let INFO = Q.get('info') !== '0';
+const KEY = 'mzworld-overflight-v1' + (Q.has('seed') ? '-s' + SEED : '');
+const store = { get() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }, set(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }, clear() { try { localStorage.removeItem(KEY); } catch (e) {} } };
+if (FRESH) store.clear();
+
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const V = { add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s], lerp: (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)], len: (a) => Math.hypot(a[0], a[1], a[2]) };
+const ease = (u) => u * u * (3 - 2 * u);
+let rngS = (SEED * 2654435761) >>> 0;
+const rnd = () => { rngS = (rngS + 0x6D2B79F5) >>> 0; let t = rngS; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const rr = (a, b) => lerp(a, b, rnd());
+
+/* ====================================================================== the worlds
+   Each world keeps its own source, clock, weather, memory and sound; this page only flies a camera through window.MZ.
+   Loaded with ?seed so the worlds run on their own state keys and never touch a stream's evolved memory (standard rule 12).
+   pts are sections in flight order; scale is in that world's own metres. */
+const W = [
+  { slug: 'headland',  hours: [13, 16], name: 'HEADLAND',     dir: '../bit-field-031-headland/',     c: [-20, 6, -150],  pts: [[-140, -30], [-65, -105], [-15, -175], [50, -245], [125, -175], [45, -95]],  clear: 34, high: [170, 300], speed: 46, R: 300, wet: 1 },
+  { slug: 'seals',     hours: [13, 16], name: 'SEALS SEE',    dir: '../bit-field-036-seals-see/',    c: [-120, 0, -10],  pts: [[60, 20], [10, 18], [-60, -10], [-190, -10], [-300, 40], [-200, -140], [-60, -100]], clear: 30, high: [150, 280], speed: 44, R: 300, wet: 1 },
+  { slug: 'breakwater',hours: [11, 15], name: 'BREAKWATER',   dir: '../bit-field-042-breakwater/',   c: [-20, 3, 0],     pts: [[-192, -24], [-120, -44], [-48, 48], [12, 16], [90, -6], [60, -170], [-40, -92]],   clear: 24, high: [120, 230], speed: 38, R: 220, wet: 1 },
+  { slug: 'lochraven', hours: [13, 16], name: 'LOCH RAVEN',   dir: '../bit-field-034-loch-raven/',   c: [0, 22, 0],      pts: [[-126, -36], [-61, 17], [0, -70], [41, -89], [89, 21], [31, 108], [-103, 138]],      clear: 26, high: [130, 230], speed: 36, R: 220, wet: 1 },
+  { slug: 'outbuilding',hours: [11, 15], name:'OUTBUILDING',  dir: '../bit-field-040-outbuilding/',  c: [0, 3, 3],       pts: [[-31, -7], [-10, -25], [-6, -41], [20, -25], [15, 10], [-13, 27], [-15, 47]],       clear: 13, high: [36, 66],   speed: 15, R: 62,  wet: 0 },
+  { slug: 'skate',     hours: [17.5, 19.5], name: 'SKATE GARDEN', dir: '../bit-field-037-skate-garden/', c: [8, 1, 0],       pts: [[-50, 0], [-11, -6], [9, -4], [25, 2], [41, 0], [54, 0]],                            clear: 9,  high: [30, 56],   speed: 15, R: 62,  wet: 0 },
+  { slug: 'field',     hours: [17.5, 19.5], name: 'FLOWER FIELD', dir: '../bit-field-039-flower-field/', c: [0, 1, 6],       pts: [[-40, -24], [-14, -4], [0, 13], [24, 26], [44, 30], [30, -20]],                      clear: 10, high: [34, 62],   speed: 16, R: 64,  wet: 0 },
+  { slug: 'tree',      hours: [9, 11.5], name: 'TWISTED TREE', dir: '../bit-field-035-twisted-tree/', c: [6.5, 4, 26],    pts: [[-15, 8], [-2, 12], [6.5, 29], [15, 20], [2, 42]],                                   clear: 15, high: [34, 58],   speed: 11, R: 44,  wet: 0 },
+];
+const bySlug = (s) => W.find((w) => w.slug === s);
+
+/* ====================================================================== memory */
+const fresh = () => ({ cur: Q.get('start') || 'headland', visits: {}, sky: {}, log: [], crossings: 0, trail: [] });
+const M = Object.assign(fresh(), store.get() || {}); if (Q.has('start')) M.cur = Q.get('start'); if (!bySlug(M.cur)) M.cur = 'headland';
+const log = (s) => { const d = new Date(); const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0'); M.log.unshift(`${hh}:${mm} ${s}`); M.log.length = Math.min(M.log.length, 40); };
+const save = () => store.set(M);
+
+/* ====================================================================== stations (one iframe per world on air) */
+const hud = document.getElementById('hud'), tap = document.getElementById('tap'); hud.hidden = !INFO;
+const freshed = new Set();
+function station(w) {
+  const f = document.createElement('iframe');
+  const p = new URLSearchParams({ info: '0', seed: String(SEED), lines: String(LINES), hour: rr(w.hours[0], w.hours[1]).toFixed(2) }); // always flown in daylight (rule 1 broken on purpose; see README)
+  if (!AUDIO) p.set('audio', '0'); if (CAPTURE) p.set('capture', '1'); if (RATE !== 1) p.set('rate', String(RATE));
+  if (FRESH && !freshed.has(w.slug)) { p.set('fresh', '1'); freshed.add(w.slug); }
+  f.src = w.dir + 'index.html?' + p; f.allow = 'autoplay'; f.title = w.name; f.style.zIndex = 1;
+  document.body.prepend(f);
+  const st = { w, f, born: now, ready: false, h: null, level: 0 };
+  if (AUDIO) { const iv = setInterval(() => { try { const cw = f.contentWindow; if (!cw || cw.location.href === 'about:blank' || !cw.AudioNode) return; clearInterval(iv); bus(st, cw); } catch (e) {} }, 3); setTimeout(() => clearInterval(iv), 30000); }
+  return st;
+}
+const mz = (st) => { try { return st.f.contentWindow.MZ || null; } catch (e) { return null; } };
+const QUIET = '#hud,#vsw,#mix,#tap,#ib{display:none!important}';
+function probe(st) { if (st.ready) return true; const m = mz(st); if (m) { try { const d = st.f.contentDocument, e = d.createElement('style'); e.textContent = QUIET; d.head.appendChild(e); } catch (e) {} } if (m && m.look && m.h) { st.ready = true; st.m = m; st.h = (x, z) => { const y = m.h(x, z); return isFinite(y) ? y : 0; }; } else if (m && m.look) { st.ready = true; st.m = m; st.h = () => 0; } return st.ready; }
+// one fader per station, after the world's own master and before the speakers. The world's source, mix and watchdog stay untouched;
+// installed before its scripts run so a waiting world is silent from its first sample, and it survives the world's own graph rebuilds.
+function bus(st, cw) { const P = cw.AudioNode.prototype, oc = P.connect; P.connect = function (d, ...a) { if (d === this.context.destination && !this.__mzBus) { const c = this.context; let b = c.__mzBus; if (!b) { b = c.createGain(); b.__mzBus = true; b.gain.value = st.level; oc.call(b, c.destination); c.__mzBus = b; } return oc.call(this, b, ...a); } return oc.call(this, d, ...a); }; }
+function setLevel(st, v) { st.level = v; if (!AUDIO || !st.m) return; const a = st.m.audio; try { const b = a && a.ctx && a.ctx.__mzBus; if (b) b.gain.setTargetAtTime(v, a.ctx.currentTime, .35); } catch (e) {} }
+function dropStation(st) { try { const a = st.m && st.m.audio; if (a && a.ctx && a.ctx.state !== 'closed') a.ctx.close(); } catch (e) {} st.f.src = 'about:blank'; st.f.remove(); }
+
+/* ====================================================================== flight paths */
+function catmull(p0, p1, p2, p3, t) { const f = (a, b, c, d) => .5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t); return [f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]; }
+function route(st, from, n) { // terrain-following path through consecutive sections
+  const P = st.w.pts, pick = []; for (let i = 0; i < n; i++) pick.push(P[(from + i) % P.length]);
+  const pad = [[2 * pick[0][0] - pick[1][0], 2 * pick[0][1] - pick[1][1]], ...pick, [2 * pick[n - 1][0] - pick[n - 2][0], 2 * pick[n - 1][1] - pick[n - 2][1]]];
+  const S = []; const per = 48;
+  for (let i = 1; i < pad.length - 2; i++) for (let k = 0; k < per; k++) S.push(catmull(pad[i - 1], pad[i], pad[i + 1], pad[i + 2], k / per));
+  S.push(pick[n - 1]);
+  const g = S.map((s) => Math.max(st.h(s[0], s[1]), 0)); const N = S.length, win = 14;
+  let y = g.map((_, i) => { let m = -1e9; for (let j = Math.max(0, i - win); j <= Math.min(N - 1, i + win); j++) m = Math.max(m, g[j]); return m + st.w.clear; });
+  for (let r = 0; r < 4; r++) y = y.map((_, i) => { let a = 0, c = 0; for (let j = Math.max(0, i - 6); j <= Math.min(N - 1, i + 6); j++) { a += y[j]; c++; } return a / c; });
+  y = y.map((v, i) => Math.max(v, g[i] + st.w.clear * .55));
+  const pts = S.map((s, i) => [s[0], y[i], s[1]]), L = [0]; for (let i = 1; i < N; i++) L.push(L[i - 1] + V.len(V.sub(pts[i], pts[i - 1])));
+  const at = (s) => { s = clamp(s, 0, L[N - 1]); let a = 0, b = N - 1; while (b - a > 1) { const m = (a + b) >> 1; if (L[m] <= s) a = m; else b = m; } return V.lerp(pts[a], pts[b], (s - L[a]) / Math.max(1e-6, L[b] - L[a])); };
+  return { at, len: L[N - 1], g: (s) => { const p = at(s); return Math.max(st.h(p[0], p[2]), 0); } };
+}
+
+/* ====================================================================== the shots */
+const SHOT = {
+  // fast and low-ish: straight through several sections of the world
+  run(st) { const w = st.w, n = 3 + Math.floor(rnd() * Math.min(3, w.pts.length - 2)), r = route(st, Math.floor(rnd() * w.pts.length), n);
+    const sp = w.speed * rr(.95, 1.45), dur = clamp(r.len / sp, 9, 26), ahead = w.clear * 3.2;
+    return { kind: 'run', name: 'SECTION RUN', dur, f(u) { const s = r.len * lerp(ease(u), u, .72); const p = r.at(s); const q = r.at(s + ahead); const t = [q[0], lerp(q[1], r.g(s + ahead), .78), q[2]]; return { p, t, fov: 62 + 10 * Math.sin(Math.PI * u) }; } }; },
+  // height: a wide orbit looking down at the whole place
+  orbit(st) { const w = st.w, H = rr(w.high[0], w.high[1]), R = w.R * rr(.8, 1.15), a0 = rnd() * 6.283, dir = rnd() < .5 ? -1 : 1, dur = rr(20, 32);
+    return { kind: 'high', name: 'ALTITUDE', dur, f(u) { const a = a0 + dir * u * .55; const p = [w.c[0] + Math.cos(a) * R, H + w.c[1], w.c[2] + Math.sin(a) * R]; return { p, t: [w.c[0] + 16 * Math.sin(u * 2), w.c[1], w.c[2]], fov: 46 }; } }; },
+  // height: one long line across the whole place, nose down
+  pass(st) { const w = st.w, H = rr(w.high[0], w.high[1]) * .82, a = rnd() * 6.283, R = w.R * 1.25, dx = Math.cos(a), dz = Math.sin(a), side = rr(-.3, .3) * w.R, dur = rr(14, 22);
+    const c = w.c, off = [-dz * side, dx * side];
+    return { kind: 'high', name: 'HIGH PASS', dur, f(u) { const s = lerp(-R, R, u); const x = c[0] + dx * s + off[0], z = c[2] + dz * s + off[1]; const k = s + w.R * .7; return { p: [x, H + c[1], z], t: [c[0] + dx * k + off[0], c[1], c[2] + dz * k + off[1]], fov: 54 }; } }; },
+  // the world's own observational crew keeps filming
+  crew() { return { kind: 'crew', name: 'WORLD CREW', dur: rr(14, 28), crew: true, f: () => null }; },
+  // arrive out of the shared sky
+  dive(st) { const w = st.w, a = rnd() * 6.283, H = w.high[1] * 1.25, R = w.R * 1.5, i = Math.floor(rnd() * w.pts.length), e = w.pts[i], y1 = Math.max(st.h(e[0], e[1]), 0) + w.clear * 1.15;
+    const p0 = [e[0] + Math.cos(a) * R, y1 + H, e[1] + Math.sin(a) * R], p1 = [e[0], y1, e[1]], far = [e[0] - Math.cos(a) * w.R * 2, y1 - w.clear, e[1] - Math.sin(a) * w.R * 2];
+    return { kind: 'dive', name: 'DIVE', dur: 9, f(u) { const k = Math.pow(u, 1.7); const p = V.lerp(p0, p1, k); const h = -Math.cos(a), g = -Math.sin(a), pitch = lerp(.42, -.2, ease(clamp((u - .08) * 1.5, 0, 1))); return { p, t: [p[0] + h * 100, p[1] + pitch * 100, p[2] + g * 100], fov: lerp(58, 68, u) }; } }; }, // starts in open sky: the same print of air the last world climbed into
+  // leave into the shared sky: nose comes up to the horizon, where the next world is waiting
+  climb(st) { const w = st.w, e = w.pts[Math.floor(rnd() * w.pts.length)], y0 = Math.max(st.h(e[0], e[1]), 0) + w.clear * 1.2, a = rnd() * 6.283, H = w.high[1] * 1.4, D = w.R;
+    const p0 = [e[0], y0, e[1]], p1 = [e[0] + Math.cos(a) * D, y0 + H, e[1] + Math.sin(a) * D], d = [Math.cos(a), Math.sin(a)];
+    return { kind: 'climb', name: 'CLIMB', dur: 9, f(u, hold) { const k = u * u * (.4 + .6 * u); const p = hold ? V.add(p1, [d[0] * hold * w.speed * .2, 0, d[1] * hold * w.speed * .2]) : V.lerp(p0, p1, k); const dn = lerp(.28, -.42, ease(clamp(u * 1.25, 0, 1))); return { p, t: [p[0] + d[0] * 100, p[1] - dn * 100, p[2] + d[1] * 100], fov: lerp(68, 58, u) }; } }; },
+};
+
+/* ====================================================================== the dissolve: a printer's ordered dither across the two stations */
+const BAYER = [0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21];
+const MASKS = []; { const b = 5, c = document.createElement('canvas'); c.width = c.height = 8 * b; const g = c.getContext('2d');
+  for (let lv = 0; lv <= 32; lv++) { g.clearRect(0, 0, 40, 40); g.fillStyle = '#000'; for (let i = 0; i < 64; i++) if (BAYER[i] / 64 >= lv / 32) g.fillRect((i % 8) * b, (i >> 3) * b, b, b); MASKS.push(`url(${c.toDataURL()})`); } }
+function mask(f, v) { if (v <= 0) { f.style.webkitMaskImage = f.style.maskImage = ''; return; } const m = MASKS[clamp(Math.round(v * 32), 0, 32)]; f.style.webkitMaskImage = f.style.maskImage = m; f.style.webkitMaskSize = f.style.maskSize = '40px 40px'; }
+
+/* ====================================================================== the broadcast */
+var now = 0;
+let air = null, next = null, nextW = null, why = '', shot = null, shotT = 0, hold = 0, stay = 0, cross = null, lastKind = '', forceCross = false;
+let camP = null, spd = 0, spdLP = 0, agl = 0, inkT = 0, wxT = 0, saveT = 0, hudT = 0, audT = 0, skyNow = null;
+const dataFor = (st) => { try { return st.m.state; } catch (e) { return null; } };
+const skyOf = (d) => { const w = d && d.WX; if (!w) return null; return [clamp((+w.wind || 0) / 20, 0, 1.5), clamp(+w.cloud || 0, 0, 1), clamp((+w.precip || 0) / 2, 0, 1), clamp((+w.hum || 0) / 100, 0, 1)]; };
+
+function choose(forced) { // the next world is the one whose sky last looked most like this one, weighted toward the least visited
+  const cands = W.filter((w) => w !== air.w && !M.trail.slice(-2).includes(w.slug));
+  if (forced) { const f = bySlug(forced); if (f && f !== air.w) return { w: f, why: 'forced' }; }
+  const minV = Math.min(...W.map((w) => M.visits[w.slug] || 0));
+  const scored = cands.map((w) => { const s = M.sky[w.slug]; let sim = .5; if (s && skyNow) sim = 1 / (1 + 3 * Math.hypot(...s.map((v, i) => v - skyNow[i]))); const wetBias = (air.w.wet === w.wet) ? 1.25 : 1; const wt = (1 / (1 + (M.visits[w.slug] || 0) - minV)) * (.35 + sim * sim * 2) * wetBias; return { w, sim, wt, known: !!s }; });
+  let tot = scored.reduce((a, s) => a + s.wt, 0), r = rnd() * tot; for (const s of scored) { r -= s.wt; if (r <= 0) return { w: s.w, why: s.known ? `sky match ${s.sim.toFixed(2)}` : 'never flown under this sky' }; }
+  return { w: scored[0].w, why: 'nearest' };
+}
+function startShot(s) { shot = s; shotT = 0; hold = 0; lastKind = s.kind; if (air.m) air.m.look(null); }
+function pickShot() { const r = rnd(); let k = r < .22 ? 'orbit' : r < .42 ? 'pass' : r < .78 ? 'run' : 'crew'; if (k === 'crew' && lastKind === 'crew') k = 'run'; return k; }
+function arrive(st) { air = st; st.f.style.zIndex = 2; M.cur = st.w.slug; M.visits[st.w.slug] = (M.visits[st.w.slug] || 0) + 1; M.trail.push(st.w.slug); M.trail = M.trail.slice(-8); stay = rr(150, 300); startShot(SHOT.dive(st)); save(); }
+function beginCross() {
+  const from = air, to = next, s = SHOT.dive(to); to.pre = s; const f0 = s.f(0);
+  if (skyNow) M.sky[from.w.slug] = skyNow;
+  forceCross = false; M.crossings++; log(`${from.w.name} → ${to.w.name} · ${why}`);
+  cross = { from, to, t: 0, dur: 4.2 }; to.f.style.zIndex = 1; from.f.style.zIndex = 2; to.m.look(f0.p, f0.t, f0.fov); setLevel(to, 1); setLevel(from, 0);
+}
+function finishCross() { const { from, to } = cross; mask(from.f, 0); dropStation(from); cross = null; next = null; nextW = null; const pre = to.pre; air = to; air.f.style.zIndex = 2; M.cur = to.w.slug; M.visits[to.w.slug] = (M.visits[to.w.slug] || 0) + 1; M.trail.push(to.w.slug); M.trail = M.trail.slice(-8); stay = rr(150, 300); startShot(pre); save(); }
+
+function update(dt) {
+  now += dt;
+  if (!air) return;
+  if (!air.m) { if (probe(air)) { arrive(air); if (AUDIO) setLevel(air, 1); log(`ON AIR · ${air.w.name}`); } return; }
+  if (next && !next.ready) { probe(next); if (next.ready) { setLevel(next, 0); log(`${next.w.name} waiting in the sky`); } else if (now - next.born > 45) { log(`${next.w.name} did not answer · staying`); dropStation(next); next = null; nextW = null; stay = 40; } }
+  // keep any world not on air silent, even after its own audio watchdog rebuilds
+  audT -= dt; if (audT <= 0 && AUDIO) { audT = .25; if (next && next.ready && !cross) setLevel(next, 0); else if (!cross) setLevel(air, 1); }
+  if (cross) {
+    cross.t += dt; const u = clamp(cross.t / cross.dur, 0, 1); mask(cross.from.f, ease(u));
+    const pre = cross.to.pre.f(0); cross.to.m.look(pre.p, pre.t, pre.fov);
+    if (cross.from.m && shot) { hold += dt; flyNow(cross.from, shot, 1, hold); }
+    if (u >= 1) finishCross();
+    return;
+  }
+  if (!shot) return;
+  stay -= dt; shotT += dt;
+  if ((stay < 30 || forceCross) && !next) { const c = choose(forceCross === true ? null : forceCross); nextW = c.w; why = c.why; next = station(c.w); }
+  const u = clamp(shotT / shot.dur, 0, 1);
+  if (shot.kind === 'climb' && u >= 1) { hold += dt; if (next && next.ready) { beginCross(); flyNow(air, shot, 1, hold); return; } }
+  flyNow(air, shot, u, hold);
+  if (u >= 1 && shot.kind !== 'climb') {
+    if (stay <= 0 || forceCross) { forceCross = false; startShot(SHOT.climb(air)); }
+    else startShot(SHOT[pickShot()](air));
+  }
+}
+function flyNow(st, s, u, h) {
+  if (s.crew) { st.m.look(null); return; }
+  const c = s.f(u, h); if (!c) return;
+  const d = V.len(V.sub(c.t, c.p));
+  st.m.look(c.p, c.t, c.fov, d, .02);
+  if (camP) { const v = V.len(V.sub(c.p, camP)) / Math.max(1e-3, lastDt); spd = v; spdLP += (v - spdLP) * .08; } camP = c.p;
+  agl = c.p[1] - Math.max(st.h(c.p[0], c.p[2]), 0);
+}
+
+/* ====================================================================== info box */
+const css = (s) => { const v = getComputedStyle(document.documentElement).getPropertyValue(s); return v; };
+function inks() { try { const rs = air.f.contentDocument.documentElement.style; for (const k of ['--ink', '--paper', '--hot', '--deep']) { const v = rs.getPropertyValue(k); if (v) document.documentElement.style.setProperty(k, v); } } catch (e) {} }
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function hudUpdate() {
+  if (!INFO || !air) return;
+  const crewCam = shot && shot.crew ? (() => { const d = dataFor(air); return d && d.cam ? ' · ' + d.cam : ''; })() : '';
+  const flying = shot && !shot.crew;
+  const r = [
+    ['WORLD', `${air.w.name} · ${Object.keys(M.visits).length}/${W.length} flown`],
+    ['SHOT', cross ? 'CROSSING' : (shot ? shot.name + crewCam : '…')],
+    ['ALT', flying ? `${Math.round(agl)} m · ${Math.round(spdLP)} m/s` : 'on the ground'],
+    ['SKY', skyNow ? `wind ${(skyNow[0] * 20).toFixed(0)} · cloud ${Math.round(skyNow[1] * 100)}%` : '…'],
+    ['NEXT', nextW ? `${nextW.name} · ${why}` : `in ${Math.max(0, Math.round(stay))} s`],
+    ['CROSSINGS', String(M.crossings)],
+  ];
+  hud.innerHTML = `<div class="t"><span>MZ WORLDS · OVERFLIGHT</span></div>` + r.map(([a, b]) => `<div class="r"><span>${a}</span><span>${esc(b)}</span></div>`).join('') +
+    `<div class="log">${M.log.slice(0, 4).map((l) => `<div>${esc(l)}</div>`).join('')}</div><div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
+}
+
+/* ====================================================================== loop, keys, API */
+let lastDt = 1 / 60;
+function frame(dt) {
+  lastDt = dt; update(dt);
+  if (CAPTURE) { for (const s of [air, next]) if (s && s.m) s.m.tick(dt); }
+  wxT -= dt; if (wxT <= 0 && air && air.m) { wxT = 1; const d = dataFor(air); const k = skyOf(d); if (k) skyNow = k; }
+  inkT -= dt; if (inkT <= 0 && air && air.m) { inkT = .5; inks(); }
+  hudT -= dt; if (hudT <= 0) { hudT = .25; hudUpdate(); }
+  saveT -= dt; if (saveT <= 0) { saveT = 60; save(); }
+}
+air = station(bySlug(M.cur)); air.f.style.zIndex = 2;
+if (!CAPTURE) { let last = performance.now(); (function loop(t) { requestAnimationFrame(loop); const dt = clamp((t - last) / 1000, 0, .1); last = t; frame(dt * RATE); })(last); }
+addEventListener('beforeunload', save);
+addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
+  if (k === 'i') { INFO = !INFO; hud.hidden = !INFO; }
+  if (k === 'm' && air && air.m && air.m.audio) air.m.audio.mute();
+  if (k === 'r') { forceCross = true; log('a human hand sent the camera up (human intervention)'); stay = 0; } });
+const startAudio = () => { for (const s of [air, next]) if (s && s.m && s.m.audio) { try { s.m.audio.start(); } catch (e) {} } tap.hidden = true; };
+addEventListener('pointerdown', startAudio); tap.addEventListener('click', startAudio);
+if (AUDIO) setInterval(() => { try { const a = air && air.m && air.m.audio; tap.hidden = !(a && a.ctx && a.ctx.state !== 'running'); } catch (e) {} }, 1000);
+
+window.MZH = {
+  tick(dt = 1 / 30) { frame(dt); },
+  shot(k) { if (air && air.m && SHOT[k]) startShot(SHOT[k](air)); },
+  cross(slug) { forceCross = slug || true; stay = 0; if (shot && shot.kind !== 'climb') startShot(SHOT.climb(air)); },
+  get worlds() { return W.map((w) => w.slug); },
+  get state() { return { cur: air && air.w.slug, ready: !!(air && air.m), shot: shot && shot.name, kind: shot && shot.kind, u: shot ? shotT / shot.dur : 0, cross: !!cross, next: nextW && nextW.slug, nextReady: !!(next && next.ready), stay, agl, spd: spdLP, M, cam: camP }; },
+  get air() { return air && air.m; },
+};
+})();
+</script>
+</body>
+</html>
