@@ -2,7 +2,7 @@
 
 One sculpture, one vacuum, many observers. MZ.Human's assemblage sculpture stands alone in an empty white room: a stack of guitar amps on a pallet with a stopped clock, two screens, a Kinect, weathered boards, a crown of copper wire and headphones, and an open case of red wiring. Seven floating MZ CAMs observe it, compose it and broadcast it. Nothing else is in the room. It is printed every frame as carved lines in six inks on HEADLAND's engine, with SRUTHÁN v3's surface-anchored hatching and 48 PLANT's camera crew.
 
-**Status:** built 2026-11-05 on branch `mz-world/white-cube-041`. Not published to `main`. Awaiting MZ.Human's review.
+**Status:** built 2026-11-05, detail pass 2026-11-07, on branch `mz-world/white-cube-041`. Not published to `main`. Awaiting MZ.Human's review.
 **Brief:** HARIL EXCHANGE · INTENTION REPORT 001 (`matchzimmerman/haril-studio#25`)
 **Live (once merged):** https://matchzimmerman.com/MZTV/sources/bit-field-041-white-cube/
 **OBS:** Browser Source → that URL · 1920×1080 · enable "Control audio via OBS"
@@ -16,7 +16,7 @@ One sculpture, one vacuum, many observers. MZ.Human's assemblage sculpture stand
 - **Measured from the photos:** each part's position, layering and relative size, read against the Fender Twin (about 66 × 51 cm). Every size is an estimate.
 - **Merged from two moments:** the photos show the screens off. The video shows the piece running: the iMac shows a warm field, and the ViewSonic shows a line figure from the Kinect. The video also shows the Kinect on the Line 6 and the MG10 chassis moved elsewhere. This world keeps the chassis where the photos have it, puts the Kinect behind it, and runs the screens as the video shows them.
 - **Inferred, not photographed:** the backs of the amps, the iMac's stand and back, the white cabinet under the iMac (one shows in the video), and the undersides.
-- **Left blank on purpose:** brand logos are blank chrome plates, and the Bob Ross card is a blank pink tag. The clock's numerals are typeset in a plain sans, not Timex's face.
+- **Left blank on purpose:** brand logos are drawn as chrome script lines with no letters, and the Bob Ross card is a blank pink card. The clock's numerals are typeset in a plain sans, not Timex's face.
 - **Documentary detail:** the Timex is stopped. It reads 8:55:15 in every photograph and in the video, with the second hand in the same place each time. The world keeps it stopped.
 
 ## Deliberate breaks from the HEADLAND standard
@@ -41,6 +41,18 @@ One sculpture, one vacuum, many observers. MZ.Human's assemblage sculpture stand
   - Wiring: a red wire bundle spilling across the pallet, a white cord from the Champ down to the case, black leads, and the Kinect's red lead.
 - **The Kinect** only tilts, as the real one does: ±27° at about 12°/s, with a motor whirr. It follows the nearest drone in front of it.
 - **The screens:** the ViewSonic shows the Kinect's view as a line sketch, with drones drawn bright and the Kinect's speckle inside them. The iMac shows a warm field.
+
+## Detail (v2, 2026-11-07)
+A second pass, modelled from close crops of the photographs, so DETAIL and SIGNAL close-ups hold up the way the photos do:
+- **Amps:** rounded tolex corners; welting along the front edges; a tolex lip framing each grille, with silver piping where the photos show it; black control panels with skirted knobs and pointer lines, input jacks, rocker switches and a lit pilot jewel (the piece is on in the video); chrome or black corner protectors; the Champ's strap handle; the Line 6's control strip with its knobs and its side handle. Backs are inferred: two tolex-covered panels with the speaker's magnet seen between them.
+- **Logos:** each script logo is drawn as a flowing chrome line with no letters, in the logo's place and at its slant.
+- **Pallet:** five top slats with wide gaps, a nail pair at every crossing, checks across the end grain, three stringers and a bottom deck.
+- **Pickets:** broken tops, and nails driven through so their points stand out of both edges.
+- **The case:** moulded shell with ribs, a front handle, two latches hanging open, a hinge bar; inside, rows of black terminal strips with screws and about a hundred short runs of red and black wire; the red bundle leaves the case with a white tag on every lead.
+- **Cassette receiver and VCR:** cassette door and window with reels, transport buttons, the vertical slot grille, display, two big chrome knobs, vent slots on top; the VCR's light band, tape door, disc tray, display and buttons.
+- **Small things:** the clock's moulded rim and centre cap; headphones with headbands, yokes and ear pads, their cords hanging; drivers with basket, cone, surround, dust cap and magnet (in the crown box and loose in the wire); thinner, looser copper wire; the card on its string, a black clamp, straws and a feather in the ornament; the iMac's black glass, camera and aluminium stand; the ViewSonic's bezel; the MG10CD's knobs, jacks, transformer, board, capacitors and teal ties; the Kinect's base, glass front and lenses; RCA leads with their plugs over the pallet; the white cord's round puck.
+- **Framing:** DETAIL drones now work 32–72 cm from a part at 18–28°, and SIGNAL 55–120 cm; the envelope the drones keep out of was tightened to let them that close.
+- **Cost:** about 97,000 triangles. Everything that never moves is merged into one mesh per material, so the scene has 80 meshes (276 before this pass).
 
 ## Life (the crew is the life of the room)
 - **Seven MZ CAMs** on the shared `MZTV/lib/mzcam.js`, the same crew as 48 PLANT, TRACKSIDE and SITTER, so the flight model is not duplicated:
@@ -149,10 +161,11 @@ Run on 2026-11-05 in headless Chromium with SwiftShader (software WebGL). Stills
   - 60–120 Hz was the loudest band in every case.
   - No clicks: the only window above 5 kHz louder than −60 dBFS was the recorder starting at t = 0.
   - The clock's sub was turned down after a first recording put 30–60 Hz 4 dB above 60–120 Hz.
+- **Detail pass (2026-11-07):** photo-matched renders of the front, panels, base, crown, case and back; every event forced and a rupture; 3 simulated hours (8 events, 3 ruptures, 17 parts known, mean hold 13.2 s, no NaN); no console errors. Software frame rate at 640×360, `?lines=240`: 5.3 fps (5.7 before the pass).
 - **Load, same machine, 640×360, `?lines=240`, software rendering:** WHITE CUBE ran at 5.7 fps, HEADLAND at 2.3 and OUTBUILDING at 1.0. That makes it the lightest of the three, but these are software numbers; it has not been measured on a GPU.
 
 ## Known limits
 - It has only been rendered in software (SwiftShader). GPU load on the streaming machine has not been measured; use `?lines=540` or `?lines=420` if it struggles. Each frame also renders the Kinect's view (96 × 72, every third frame) and, during the screens event, a drone feed (192 × 120).
-- The reconstruction is by eye from four photographs and a video. It has not been measured against the sculpture. Small parts (the copper crown, the ornament, the wiring) are composed to match the photos' density and silhouette, not wire for wire.
+- The reconstruction is by eye from four photographs and a video. It has not been measured against the sculpture. Small parts (the copper crown, the ornament, the case wiring, knob counts on the smaller amps) are composed to match the photos' density and silhouette, not wire for wire or knob for knob.
 - The backs are inferred.
 - The experimental mode the brief mentions (procedural screens and sound beyond what the video shows) is not built. The only extensions beyond the documentary are the three events, each logged as an event.

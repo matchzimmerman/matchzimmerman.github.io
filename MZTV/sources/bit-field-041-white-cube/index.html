@@ -41,6 +41,8 @@ canvas { display:block; width:100%; height:100% }
 </script>
 <script type="module">
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* ====================================================================== params */
 const Q = new URLSearchParams(location.search);
@@ -257,7 +259,7 @@ void main(){
     line=0.5;
   }
   else if(uMode>6.5&&uMode<7.5){     // the circuit board in the case: brown board, terminal strips, red wire everywhere
-    vec2 p=vL.xy; id=11.; sh=0.42+0.1*(vn(p*30.)-0.5);
+    vec2 p=abs(N.y)>0.5?vL.xz:vL.xy; id=11.; sh=0.42+0.1*(vn(p*30.)-0.5);
     float strip=step(abs(fract(p.y*7.+0.2)-0.5),0.07)*step(0.35,vn(vec2(p.x*9.,floor(p.y*7.+0.2))));
     if(strip>0.5){ id=7.; sh=0.12; }
     float c=abs(vn(p*64.+vec2(1.3,4.))-0.5), c2=abs(vn(p*41.+vec2(7.,2.))-0.5);
@@ -348,7 +350,7 @@ const cylG = (r0, r1, h, m4, seg = 14, T = V(0, 1, 0)) => withT(new THREE.Cylind
 const MESHES = [];
 function add(geo, mat, parent = scene) { const m = new THREE.Mesh(geo, mat); m.frustumCulled = false; parent.add(m); MESHES.push(m); return m; }
 function bx(x0, y0, z0, x1, y1, z1, mat, T, parent) { return add(boxG(x1 - x0, y1 - y0, z1 - z0, M4((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), T), mat, parent); }
-function tube(pts, r, mat, parent, seg = 40) { const c = new THREE.CatmullRomCurve3(pts); return add(withT(new THREE.TubeGeometry(c, seg, r, 5, false), null, V(0, 1, 0)), mat, parent); }
+function tube(pts, r, mat, parent, seg = 40) { const c = new THREE.CatmullRomCurve3(pts); return add(withT(new THREE.TubeGeometry(c, Math.max(6, Math.round(seg * 0.6)), r, r < 0.0025 ? 4 : 5, false), null, V(0, 1, 0)), mat, parent); }
 
 const MT = {
   void: objMat(0, 2), floor: objMat(1, 1),
@@ -356,10 +358,12 @@ const MT = {
   panel: objMat(5, 0, V(1, 0, 0), { uAlb: { value: 0.7 } }), chrome: objMat(5, 0, V(1, 0, 0), { uAlb: { value: 1.2 } }),
   pallet: objMat(6, 4, V(0, 0, 1), { uAlb: { value: 0.55 } }), dark: objMat(7, 0, V(1, 0, 0)), red: objMat(8, 0, V(0, 1, 0), { uFbAcc: { value: 1 } }),
   white: objMat(9, 0, V(0, 1, 0)), silver: objMat(10, 0, V(1, 0, 0)), board: objMat(11, 7, V(1, 0, 0), { uMover: { value: 1 } }),
-  case: objMat(12, 0, V(1, 0, 0)), gold: objMat(14, 0, V(1, 0, 0), { uAlb: { value: 1.25 } }), copper: objMat(7, 0, V(0, 1, 0), { uAlb: { value: 1.4 } }),
+  case: objMat(12, 0, V(1, 0, 0)), gold: objMat(14, 0, V(1, 0, 0), { uAlb: { value: 1.25 } }), copper: objMat(7, 0, V(0, 1, 0), { uAlb: { value: 1.9 } }),
   cord: objMat(9, 0, V(0, 1, 0), { uAlb: { value: 0.95 } }), redWire: objMat(8, 0, V(0, 1, 0), { uFbAcc: { value: 1 } }),
   face: objMat(9, 6, V(0, 1, 0), { uMover: { value: 1 } }),
   scrMac: objMat(14, 5, V(0, 1, 0), { uScr: { value: -1 } }), scrKin: objMat(14, 5, V(0, 1, 0), { uScr: { value: 2 } }),
+  jewel: objMat(8, 0, V(0, 1, 0), { uAccOn: { value: 1 } }), glass: objMat(7, 0, V(1, 0, 0), { uAlb: { value: 1.7 } }),
+  stripe: objMat(4, 0, V(1, 0, 0), { uAlb: { value: 0.95 } }), plastic: objMat(7, 0, V(1, 0, 0), { uAlb: { value: 1.3 } }),
   droneBody: objMat(13, 0, V(1, 0, 0), { uMover: { value: 1 } }), droneTrim: objMat(10, 0, V(1, 0, 0), { uMover: { value: 1 } }),
 };
 const woodMat = (bw) => objMat(6, 4, V(0, 1, 0), { uMover: { value: 1 }, uBW: { value: bw }, uAlb: { value: 0.7 } });
@@ -380,147 +384,329 @@ scuffTex.minFilter = scuffTex.magFilter = THREE.LinearFilter; scuffTex.flipY = f
   for (let i = 1; i <= 12; i++) { const a = i / 12 * TAU; g.fillText(String(i), 128 + Math.sin(a) * 93, 128 - Math.cos(a) * 93); }
   const t = new THREE.CanvasTexture(c); t.flipY = true; t.minFilter = THREE.LinearFilter; SH.uNum.value = t; }
 
+/* ---------- detail helpers (v2: the close-ups have to hold up the way the photographs do) */
+const br = mulberry(41041); const brr = (a, b) => a + (b - a) * br();   // build randomness is seeded, so the sculpture is the same on every load
+const rbox = (w, h, d, r, m4, T = V(1, 0, 0), seg = 2) => withT(new RoundedBoxGeometry(w, h, d, seg, Math.max(1e-4, Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4))), m4, T);
+const torG = (R, r, m4, arc = TAU, segR = 6, segT = 22) => withT(new THREE.TorusGeometry(R, r, segR, segT, arc), m4, V(1, 0, 0));
+const sphG = (r, m4, ws = 10, hs = 6) => withT(new THREE.SphereGeometry(r, ws, hs), m4, V(0, 1, 0));
+const coneG = (r0, r1, h, m4, seg = 18) => withT(new THREE.CylinderGeometry(r0, r1, h, seg, 1, true), m4, V(0, 1, 0));
+const Z90 = Math.PI / 2;
+// a script line where a logo would be: a flowing chrome stroke with loops, standing in for the lettering, which is left off
+function scriptMark(parent, x, y, z, w, h, tilt, mat) {
+  const pts = []; const n = 14, ph = br() * 6;
+  for (let i = 0; i <= n; i++) { const u = i / n; const loop = Math.sin(u * 23 + ph) * 0.35 + Math.sin(u * 9 + ph * 2) * 0.25;
+    pts.push(V(-w / 2 + w * u + Math.cos(u * 23 + ph) * w * 0.018, (loop + (u < 0.15 ? 0.4 : 0)) * h * 0.5, 0).applyAxisAngle(V(0, 0, 1), tilt).add(V(x, y, z))); }
+  tube(pts, Math.max(0.0016, h * 0.09), mat, parent, 60);
+  tube([V(-w * 0.5, -h * 0.45, 0), V(0, -h * 0.62, 0), V(w * 0.48, -h * 0.4, 0)].map(q => q.applyAxisAngle(V(0, 0, 1), tilt).add(V(x, y, z))), Math.max(0.0013, h * 0.06), mat, parent, 16);
+}
+// a knob on a panel whose face points +z: skirt, body, cap and a pointer line
+function knob(parent, x, y, z, r, mat, skirt = true) {
+  const a = brr(-2.5, 2.5);
+  if (skirt) add(cylG(r * 1.25, r * 1.32, 0.004, M4(x, y, z + 0.002, 0, Z90), 16), mat === MT.red ? MT.dark : MT.silver, parent);
+  add(cylG(r * 0.8, r, 0.014, M4(x, y, z + 0.011, 0, Z90), 14), mat, parent);
+  add(cylG(r * 0.45, r * 0.76, 0.004, M4(x, y, z + 0.02, 0, Z90), 12), mat === MT.dark ? MT.silver : mat, parent);
+  add(boxG(0.0018, r * 0.7, 0.002, M4(x + Math.sin(a) * r * 0.42, y + Math.cos(a) * r * 0.42, z + 0.0225, 0, 0, -a)), MT.white, parent);
+}
+function jack(parent, x, y, z, r = 0.0065) { add(cylG(r, r, 0.006, M4(x, y, z + 0.003, 0, Z90), 12), MT.chrome, parent); add(cylG(r * 0.5, r * 0.5, 0.0075, M4(x, y, z + 0.0035, 0, Z90), 8), MT.dark, parent); }
+function rocker(parent, x, y, z) { add(boxG(0.016, 0.024, 0.006, M4(x, y, z + 0.003)), MT.dark, parent); add(boxG(0.012, 0.009, 0.006, M4(x, y + 0.005, z + 0.007, 0, -0.35)), MT.silver, parent); }
+function screw(parent, x, y, z) { add(cylG(0.0028, 0.0028, 0.002, M4(x, y, z + 0.001, 0, Z90), 8), MT.chrome, parent); }
+// a loudspeaker driver facing local +z: basket ring, cone, surround and dust cap
+function driver(parent, r, m4) {
+  const g = new THREE.Group(); g.matrixAutoUpdate = false; g.matrix.copy(m4); parent.add(g); g.updateMatrixWorld(true);
+  add(torG(r, 0.004, null, TAU, 5, 26), MT.chrome, g);
+  add(torG(r * 0.86, r * 0.09, M4(0, 0, -0.002), TAU, 5, 26), MT.dark, g);
+  add(coneG(r * 0.8, r * 0.26, r * 0.42, M4(0, 0, -r * 0.23, 0, -Z90), 20), MT.grilleD, g);
+  add(sphG(r * 0.26, M4(0, 0, -r * 0.42)).scale(1, 1, 0.45), MT.dark, g);
+  add(cylG(r * 0.42, r * 0.42, r * 0.3, M4(0, 0, -r * 0.62, 0, Z90), 16), MT.dark, g);   // the magnet
+  return g;
+}
+// a pair of over-ear headphones, headband up; their cord hangs down from the left cup
+function headphones(m4, cordLen = 0.3) {
+  const g = new THREE.Group(); g.matrixAutoUpdate = false; g.matrix.copy(m4); scene.add(g); g.updateMatrixWorld(true);
+  add(torG(0.088, 0.006, null, Math.PI, 5, 22), MT.silver, g);
+  add(torG(0.082, 0.011, M4(0, 0, 0, 0, 0, Math.PI * 0.28), Math.PI * 0.44, 6, 14), MT.dark, g);
+  for (const s of [-1, 1]) {
+    add(boxG(0.012, 0.04, 0.02, M4(s * 0.088, -0.012, 0)), MT.dark, g);
+    add(cylG(0.041, 0.043, 0.026, M4(s * 0.094, -0.04, 0, 0, 0, Z90), 18), MT.dark, g);
+    add(torG(0.031, 0.011, M4(s * 0.079, -0.04, 0, s * Z90), TAU, 6, 18), MT.tolex, g);
+  }
+  const p0 = V(-0.1, -0.06, 0).applyMatrix4(g.matrixWorld); const pts = [p0];
+  for (let k = 1; k <= 4; k++) pts.push(p0.clone().add(V(brr(-0.03, 0.03), -cordLen * k / 4, brr(-0.03, 0.03))));
+  tube(pts, 0.0022, MT.dark, scene, 24);
+}
+
 /* ---------- amplifiers */
 const COMP = [];   // components the crew can attend to: { name, short, c, face, speaker, deg, r }
 const HULL = [];   // boxes the drones keep out of
 function amp(o) {
-  // o: { name, short, x0,x1,y0,y1,z0,z1, ry, grille, panel:'top'|'side'|'none', knobs, knobMat, badge, corners, handle, deg }
+  // o: { name, short, x0..z1, ry, grille, piping, panel:'top'|'side'|'none', panelMat, knobs, knobMat, skirt, jacks, rockers, jewel,
+  //      script, badge:[x,y,w,h], badgeMat, roundBadge, plate, corners:mat, handle, sideHandle, openBack, deg }
   const g = new THREE.Group(); const w = o.x1 - o.x0, h = o.y1 - o.y0, d = o.z1 - o.z0;
   g.position.set((o.x0 + o.x1) / 2, (o.y0 + o.y1) / 2, (o.z0 + o.z1) / 2); g.rotation.y = o.ry || 0; scene.add(g);
-  add(boxG(w, h, d, null, V(1, 0, 0)), MT.tolex, g);
-  const fz = d / 2 + 0.003; let gy0 = -h / 2 + 0.03, gy1 = h / 2 - 0.03, gx0 = -w / 2 + 0.025, gx1 = w / 2 - 0.025;
-  if (o.panel === 'top') { const ph = clamp(h * 0.2, 0.045, 0.085); add(boxG(w - 0.03, ph, 0.008, M4(0, h / 2 - ph / 2 - 0.012, fz), V(1, 0, 0)), MT.panel, g);
-    for (let i = 0; i < o.knobs; i++) { const x = -w / 2 + 0.05 + (w - 0.1) * (i + 0.5) / o.knobs; add(cylG(0.011, 0.012, 0.018, M4(x, h / 2 - ph / 2 - 0.012, fz + 0.01, 0, Math.PI / 2), 10), o.knobMat || MT.dark, g); }
-    if (o.chromeStrip) add(boxG(w - 0.04, 0.008, 0.004, M4(0, h / 2 - ph - 0.016, fz + 0.002)), MT.chrome, g);
-    gy1 = h / 2 - ph - 0.03; }
-  if (o.panel === 'side') { const pw = 0.075; add(boxG(pw, h - 0.04, 0.01, M4(w / 2 - pw / 2 - 0.012, 0, fz)), MT.chrome, g);
-    for (let i = 0; i < o.knobs; i++) { const y = -h / 2 + 0.05 + (h - 0.1) * (i + 0.5) / o.knobs; add(cylG(0.01, 0.011, 0.016, M4(w / 2 - pw / 2 - 0.012, y, fz + 0.012, 0, Math.PI / 2), 10), MT.dark, g); }
-    gx1 = w / 2 - pw - 0.025; }
-  add(boxG(gx1 - gx0, gy1 - gy0, 0.005, M4((gx0 + gx1) / 2, (gy0 + gy1) / 2, fz), V(0, 1, 0)), o.grille, g);
-  if (o.badge) add(boxG(o.badge[2], o.badge[3], 0.005, M4(gx0 + o.badge[0], gy1 - o.badge[1], fz + 0.004)), MT.chrome, g);   // a blank plate where the logo is
-  if (o.plate) add(boxG(0.07, 0.016, 0.004, M4(gx1 - 0.06, gy1 - 0.03, fz + 0.004)), MT.chrome, g);
-  if (o.handle) { add(boxG(0.17, 0.018, 0.035, M4(0, h / 2 + 0.03, 0)), MT.dark, g); add(boxG(0.02, 0.03, 0.03, M4(-0.085, h / 2 + 0.015, 0)), MT.dark, g); add(boxG(0.02, 0.03, 0.03, M4(0.085, h / 2 + 0.015, 0)), MT.dark, g); }
-  if (o.corners) for (const sx of [-1, 1]) for (const sy of [-1, 1]) add(boxG(0.035, 0.035, 0.035, M4(sx * (w / 2 - 0.012), sy * (h / 2 - 0.012), d / 2 - 0.012)), MT.dark, g);
-  add(boxG(w - 0.05, h - 0.06, 0.004, M4(0, 0, -d / 2 - 0.002)), MT.dark, g);   // the back panel (not photographed; inferred)
+  add(rbox(w, h, d, 0.016), MT.tolex, g);
+  const fz = d / 2, pip = o.piping || MT.dark, e = 0.005;
+  // welting along the front edges
+  add(cylG(0.0032, 0.0032, w - 0.03, M4(0, h / 2 - e, fz - e, 0, 0, Z90), 6), pip, g); add(cylG(0.0032, 0.0032, w - 0.03, M4(0, -h / 2 + e, fz - e, 0, 0, Z90), 6), pip, g);
+  add(cylG(0.0032, 0.0032, h - 0.03, M4(w / 2 - e, 0, fz - e), 6), pip, g); add(cylG(0.0032, 0.0032, h - 0.03, M4(-w / 2 + e, 0, fz - e), 6), pip, g);
+  let top = h / 2 - 0.02, bot = -h / 2 + 0.02, lef = -w / 2 + 0.02, rig = w / 2 - 0.02;
+  if (o.panel === 'top') {
+    const ph = clamp(h * 0.18, 0.045, 0.078), py = top - ph / 2;
+    add(boxG(rig - lef, ph, 0.006, M4(0, py, fz + 0.003), V(1, 0, 0)), o.panelMat || MT.dark, g);
+    screw(g, lef + 0.008, py, fz + 0.006); screw(g, rig - 0.008, py, fz + 0.006);
+    let x = lef + 0.022;
+    for (let i = 0; i < (o.jacks || 1); i++) { jack(g, x, py, fz + 0.006); x += 0.022; }
+    const right = rig - 0.02 - (o.rockers || 0) * 0.022 - (o.jewel ? 0.022 : 0) - (o.script ? o.script + 0.01 : 0);
+    const n = o.knobs || 0, x0 = x + 0.008, step = (right - x0) / Math.max(1, n);
+    for (let i = 0; i < n; i++) knob(g, x0 + step * (i + 0.5), py - 0.002, fz + 0.006, Math.min(0.0115, step * 0.36), o.knobMat || MT.dark, o.skirt !== false);
+    x = right + 0.012;
+    if (o.script) { scriptMark(g, x + o.script / 2, py + 0.008, fz + 0.007, o.script, 0.011, 0.1, MT.chrome); x += o.script + 0.012; }
+    for (let i = 0; i < (o.rockers || 0); i++) { rocker(g, x, py, fz + 0.006); x += 0.022; }
+    if (o.jewel) add(sphG(0.0062, M4(x, py, fz + 0.008)), MT.jewel, g);
+    if (o.chromeStrip) add(boxG(rig - lef, 0.006, 0.004, M4(0, top - ph - 0.004, fz + 0.002)), MT.chrome, g);
+    top -= ph + 0.012;
+  }
+  if (o.panel === 'side') {   // a control strip running up the right edge (the Line 6, lying on its side)
+    const pw = 0.08, px = rig - pw / 2;
+    add(rbox(pw, top - bot, 0.008, 0.003, M4(px, (top + bot) / 2, fz + 0.004)), o.panelMat || MT.panel, g);
+    add(boxG(0.006, top - bot - 0.02, 0.004, M4(px - pw / 2 + 0.006, (top + bot) / 2, fz + 0.009)), MT.chrome, g);
+    const n = o.knobs || 0;
+    for (let i = 0; i < n; i++) knob(g, px + 0.012, bot + 0.07 + (top - bot - 0.1) * i / Math.max(1, n - 1), fz + 0.008, 0.0095, MT.silver, false);
+    jack(g, px + 0.012, bot + 0.03, fz + 0.008); jack(g, px - 0.015, bot + 0.03, fz + 0.008);
+    add(rbox(0.024, 0.12, 0.003, 0.0015, M4(px - 0.018, (top + bot) / 2 + 0.03, fz + 0.01)), MT.chrome, g);   // the logo, left blank, running up the strip
+    rig -= pw + 0.008;
+  }
+  // the baffle: a tolex lip framing the grille, the grille cloth just behind it
+  const gx = (lef + rig) / 2, gy = (top + bot) / 2, gw = rig - lef, gh = top - bot, L = 0.011;
+  add(boxG(gw, L, 0.006, M4(gx, top - L / 2, fz + 0.003)), MT.tolex, g); add(boxG(gw, L, 0.006, M4(gx, bot + L / 2, fz + 0.003)), MT.tolex, g);
+  add(boxG(L, gh, 0.006, M4(lef + L / 2, gy, fz + 0.003)), MT.tolex, g); add(boxG(L, gh, 0.006, M4(rig - L / 2, gy, fz + 0.003)), MT.tolex, g);
+  if (o.piping) add(boxG(gw - 2 * L, 0.0025, 0.004, M4(gx, top - L - 0.002, fz + 0.002)), o.piping, g);
+  add(boxG(gw - 2 * L, gh - 2 * L, 0.004, M4(gx, gy, fz + 0.001), V(0, 1, 0)), o.grille, g);
+  if (o.badge) scriptMark(g, lef + L + o.badge[0] + o.badge[2] / 2, top - L - o.badge[1], fz + 0.005, o.badge[2], o.badge[3], o.badgeTilt ?? 0.14, o.badgeMat || MT.chrome);   // where the logo is: a script line, no letters
+  if (o.roundBadge) add(cylG(0.014, 0.014, 0.004, M4(rig - L - 0.03, top - L - 0.025, fz + 0.005, 0, Z90), 18), MT.chrome, g);
+  if (o.plate) scriptMark(g, rig - L - 0.05, top - L - 0.022, fz + 0.005, 0.06, 0.012, 0.06, MT.chrome);
+  if (o.corners) for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    add(rbox(0.032, 0.032, 0.032, 0.006, M4(sx * (w / 2 - 0.011), sy * (h / 2 - 0.011), sz * (d / 2 - 0.011))), o.corners, g);
+    if (o.corners === MT.chrome) screw(g, sx * (w / 2 - 0.012), sy * (h / 2 - 0.012), sz > 0 ? d / 2 + 0.005 : -d / 2 - 0.008); }
+  if (o.handle) { add(rbox(0.2, 0.016, 0.042, 0.007, M4(0, h / 2 + 0.022, 0)), MT.dark, g);
+    for (const s of [-1, 1]) add(rbox(0.036, 0.024, 0.052, 0.008, M4(s * 0.11, h / 2 + 0.011, 0)), MT.chrome, g); }
+  if (o.sideHandle) { add(rbox(0.016, 0.2, 0.042, 0.007, M4(-w / 2 - 0.022, 0, 0)), MT.dark, g);
+    for (const s of [-1, 1]) add(rbox(0.024, 0.036, 0.052, 0.008, M4(-w / 2 - 0.011, s * 0.11, 0)), MT.chrome, g); }
+  // the back (not photographed; inferred): two tolex-covered panels with the speaker's magnet seen between them
+  if (o.openBack !== false) { const bz = -d / 2;
+    add(boxG(w - 0.04, h - 0.04, 0.002, M4(0, 0, bz + 0.03)), MT.dark, g);
+    add(boxG(w - 0.034, h * 0.34, 0.012, M4(0, h / 2 - 0.017 - h * 0.17, bz + 0.004)), MT.tolex, g);
+    add(boxG(w - 0.034, h * 0.2, 0.012, M4(0, -h / 2 + 0.017 + h * 0.1, bz + 0.004)), MT.tolex, g);
+    add(cylG(Math.min(0.05, w * 0.12), Math.min(0.05, w * 0.12), 0.03, M4(0, -h * 0.06, bz + 0.05, 0, Z90), 18), MT.dark, g);
+    add(cylG(0.012, 0.012, 0.004, M4(0, -h * 0.06, bz + 0.034, 0, Z90), 10), MT.silver, g); }
   const c = V(0, 0, d / 2).applyEuler(g.rotation).add(g.position);
   COMP.push({ name: o.name, short: o.short, c, face: V(0, 0, 1).applyEuler(g.rotation), speaker: true, deg: o.deg, r: Math.max(w, h) * 0.6, oct: o.oct || 0 });
   return g;
 }
 // bottom row, on the pallet
-amp({ name: 'Fender Twin', short: 'TWIN', x0: -0.70, x1: -0.04, y0: 0.14, y1: 0.65, z0: 0.0, z1: 0.27, grille: MT.grilleD, panel: 'top', knobs: 12, knobMat: MT.red, chromeStrip: true, badge: [0.03, 0.035, 0.09, 0.022], plate: true, deg: 0 });
-amp({ name: 'Fender combo (lower right)', short: 'LOWER FENDER', x0: -0.04, x1: 0.44, y0: 0.14, y1: 0.56, z0: -0.02, z1: 0.24, grille: MT.grilleD, panel: 'none', badge: [0.03, 0.04, 0.08, 0.02], deg: 4 });
+amp({ name: 'Fender Twin', short: 'TWIN', x0: -0.70, x1: -0.04, y0: 0.14, y1: 0.65, z0: 0.0, z1: 0.27, grille: MT.grilleD, panel: 'top', knobs: 11, knobMat: MT.red, jacks: 4, rockers: 3, jewel: true, chromeStrip: true, badge: [0.02, 0.03, 0.1, 0.026], plate: true, corners: MT.chrome, deg: 0 });
+amp({ name: 'Fender combo (lower right)', short: 'LOWER FENDER', x0: -0.04, x1: 0.44, y0: 0.14, y1: 0.56, z0: -0.02, z1: 0.24, grille: MT.grilleD, piping: MT.silver, panel: 'none', badge: [0.03, 0.06, 0.09, 0.024], roundBadge: true, corners: MT.chrome, deg: 4 });
 // second row
-amp({ name: 'Ibanez bass amp', short: 'IBANEZ', x0: -0.70, x1: -0.40, y0: 0.65, y1: 0.98, z0: 0.02, z1: 0.25, grille: MT.grilleD, panel: 'top', knobs: 6, badge: [0.02, 0.03, 0.1, 0.02], corners: true, deg: 5 });
-amp({ name: 'Fender Frontman 15G', short: 'FRONTMAN', x0: -0.40, x1: -0.04, y0: 0.65, y1: 0.97, z0: 0.03, z1: 0.25, grille: MT.grilleS, panel: 'top', knobs: 7, badge: [0.03, 0.035, 0.08, 0.02], corners: true, deg: 3 });
-amp({ name: 'Fender Champ 12', short: 'CHAMP 12', x0: -0.02, x1: 0.44, y0: 0.56, y1: 0.98, z0: 0.0, z1: 0.24, grille: MT.grilleC, panel: 'top', knobs: 8, knobMat: MT.red, chromeStrip: true, badge: [0.03, 0.05, 0.1, 0.025], plate: true, handle: true, deg: 2 });
+amp({ name: 'Ibanez bass amp', short: 'IBANEZ', x0: -0.70, x1: -0.40, y0: 0.65, y1: 0.98, z0: 0.02, z1: 0.25, grille: MT.grilleD, panel: 'top', knobs: 6, skirt: false, jacks: 1, rockers: 1, badge: [0.012, 0.035, 0.1, 0.022], badgeTilt: 0, badgeMat: MT.white, corners: MT.dark, deg: 5 });
+amp({ name: 'Fender Frontman 15G', short: 'FRONTMAN', x0: -0.40, x1: -0.04, y0: 0.65, y1: 0.97, z0: 0.03, z1: 0.25, grille: MT.grilleS, piping: MT.silver, panel: 'top', knobs: 7, skirt: false, jacks: 1, rockers: 1, jewel: true, script: 0.04, badge: [0.02, 0.04, 0.085, 0.024], corners: MT.dark, deg: 3 });
+amp({ name: 'Fender Champ 12', short: 'CHAMP 12', x0: -0.02, x1: 0.44, y0: 0.56, y1: 0.98, z0: 0.0, z1: 0.24, grille: MT.grilleC, piping: MT.silver, panel: 'top', knobs: 8, knobMat: MT.red, jacks: 2, rockers: 1, jewel: true, script: 0.045, chromeStrip: true, badge: [0.025, 0.055, 0.11, 0.028], handle: true, corners: MT.chrome, deg: 2 });
 // third row: the Marshall, and the Line 6 lying on its side with its control strip running up the right
-amp({ name: 'Marshall MG10', short: 'MARSHALL', x0: -0.70, x1: -0.43, y0: 0.98, y1: 1.24, z0: 0.03, z1: 0.23, grille: MT.grilleD, panel: 'none', badge: [0.02, 0.035, 0.1, 0.024], corners: true, deg: 1 });
-amp({ name: 'Line 6 Spider (on its side)', short: 'LINE 6', x0: -0.43, x1: -0.02, y0: 0.97, y1: 1.38, z0: 0.0, z1: 0.25, grille: MT.grilleD, panel: 'side', knobs: 9, badge: [0.03, 0.08, 0.025, 0.12], deg: 6 });
-// the MG10CD chassis out of its cabinet, gold faceplate forward, red tape across it
+amp({ name: 'Marshall MG10', short: 'MARSHALL', x0: -0.70, x1: -0.43, y0: 0.98, y1: 1.24, z0: 0.03, z1: 0.23, grille: MT.grilleD, piping: MT.white, panel: 'none', badge: [0.02, 0.05, 0.12, 0.03], badgeTilt: 0.04, badgeMat: MT.white, corners: MT.dark, deg: 1 });
+amp({ name: 'Line 6 Spider (on its side)', short: 'LINE 6', x0: -0.43, x1: -0.02, y0: 0.97, y1: 1.38, z0: 0.0, z1: 0.25, grille: MT.grilleD, panel: 'side', panelMat: MT.dark, knobs: 10, sideHandle: true, corners: MT.dark, deg: 6 });
+// the MG10CD chassis out of its cabinet: gold faceplate forward with red tape across it, teal ties round it, the board and transformer bare behind
 { const g = new THREE.Group(); g.position.set(-0.20, 1.415, 0.12); g.rotation.y = 0.05; scene.add(g);
-  add(boxG(0.34, 0.07, 0.004, M4(0, 0, 0.075)), MT.gold, g); add(boxG(0.30, 0.016, 0.003, M4(0, -0.018, 0.078)), MT.red, g);
-  for (let i = 0; i < 5; i++) add(cylG(0.009, 0.01, 0.014, M4(-0.11 + i * 0.05, 0.012, 0.083, 0, Math.PI / 2), 10), MT.dark, g);
-  add(boxG(0.33, 0.008, 0.15, M4(0, -0.031, 0)), MT.silver, g); add(boxG(0.06, 0.05, 0.05, M4(0.08, 0.0, -0.02)), MT.dark, g);
-  add(boxG(0.1, 0.02, 0.06, M4(-0.06, -0.02, -0.01)), MT.board, g);
+  add(boxG(0.34, 0.07, 0.003, M4(0, 0, 0.075)), MT.gold, g); add(boxG(0.31, 0.017, 0.002, M4(0, -0.02, 0.0775)), MT.red, g);
+  jack(g, -0.15, 0.008, 0.076, 0.006); jack(g, 0.15, 0.008, 0.076, 0.006);
+  for (let i = 0; i < 5; i++) knob(g, -0.105 + i * 0.045, 0.01, 0.076, 0.0085, MT.gold, false);
+  rocker(g, 0.12, 0.01, 0.076);
+  add(boxG(0.33, 0.004, 0.15, M4(0, -0.033, 0)), MT.silver, g); add(boxG(0.33, 0.06, 0.003, M4(0, -0.005, -0.075)), MT.silver, g);
+  add(boxG(0.003, 0.06, 0.15, M4(-0.164, -0.005, 0)), MT.silver, g); add(boxG(0.003, 0.06, 0.15, M4(0.164, -0.005, 0)), MT.silver, g);
+  add(rbox(0.055, 0.046, 0.042, 0.004, M4(0.085, -0.008, -0.03)), MT.dark, g); add(cylG(0.018, 0.018, 0.04, M4(0.085, -0.008, -0.03, 0, 0, Z90), 14), MT.copper, g);   // the transformer
+  add(boxG(0.17, 0.003, 0.1, M4(-0.06, -0.028, -0.01)), MT.board, g);
+  for (let i = 0; i < 9; i++) { const x = -0.13 + br() * 0.14, z = -0.05 + br() * 0.08, r = 0.004 + br() * 0.006; add(cylG(r, r, 0.008 + br() * 0.014, M4(x, -0.02, z), 10), br() < 0.5 ? MT.dark : MT.silver, g); }
+  for (let i = 0; i < 6; i++) { const a = V(-0.12 + br() * 0.15, -0.024, -0.04 + br() * 0.06), b = V(-0.14 + br() * 0.28, 0.0, 0.07); tube([a.clone(), a.clone().lerp(b, 0.5).add(V(0, 0.02, 0)), b], 0.0016, i % 2 ? MT.redWire : MT.dark, g, 10); }
+  for (const x of [-0.06, 0.03, 0.1]) { add(boxG(0.006, 0.076, 0.003, M4(x, 0, 0.078)), MT.stripe, g); add(boxG(0.006, 0.003, 0.16, M4(x, 0.037, 0)), MT.stripe, g); add(boxG(0.008, 0.008, 0.006, M4(x, 0.037, 0.08)), MT.stripe, g); }
   COMP.push({ name: 'MG10CD chassis', short: 'MG10 CHASSIS', c: V(-0.2, 1.42, 0.2), face: V(0, 0, 1), speaker: false, deg: 4, oct: 1, r: 0.2 }); }
 // the Kinect, from the video: on the Line 6, behind the chassis; it tilts to follow whatever floats in front of it
 const KIN = { g: new THREE.Group(), tilt: 0, want: 0, target: -1, moving: false, pos: V(-0.24, 1.478, 0.05) };
 { const base = new THREE.Group(); base.position.set(-0.24, 1.38, 0.05); scene.add(base);
-  add(boxG(0.08, 0.018, 0.07, M4(0, 0.009, 0)), MT.dark, base); add(boxG(0.022, 0.06, 0.02, M4(0, 0.045, 0)), MT.dark, base);
+  add(withT(new THREE.CylinderGeometry(0.04, 0.045, 0.016, 22).scale(1.6, 1, 1), M4(0, 0.008, 0), V(1, 0, 0)), MT.dark, base);
+  add(rbox(0.024, 0.07, 0.02, 0.006, M4(0, 0.05, -0.004)), MT.dark, base);
   KIN.g.position.set(0, 0.098, 0); base.add(KIN.g);
-  add(boxG(0.28, 0.04, 0.062, null, V(1, 0, 0)), MT.dark, KIN.g);
-  for (const x of [-0.08, 0.02, 0.07]) add(cylG(0.008, 0.008, 0.004, M4(x, 0, 0.032, 0, Math.PI / 2), 10), MT.silver, KIN.g);
+  add(rbox(0.28, 0.04, 0.064, 0.014), MT.dark, KIN.g); add(boxG(0.265, 0.03, 0.002, M4(0, 0, 0.0322)), MT.glass, KIN.g);
+  add(cylG(0.007, 0.007, 0.004, M4(-0.085, 0, 0.034, 0, Z90), 12), MT.silver, KIN.g);
+  add(cylG(0.009, 0.009, 0.004, M4(0.02, 0, 0.034, 0, Z90), 14), MT.silver, KIN.g); add(torG(0.011, 0.0015, M4(0.02, 0, 0.035)), MT.chrome, KIN.g);
+  add(cylG(0.0075, 0.0075, 0.004, M4(0.07, 0, 0.034, 0, Z90), 12), MT.silver, KIN.g);
+  add(sphG(0.0028, M4(-0.03, 0, 0.034)), MT.jewel, KIN.g);
   COMP.push({ name: 'Kinect', short: 'KINECT', c: V(-0.24, 1.48, 0.09), face: V(0, 0, 1), speaker: false, deg: 6, oct: 1, r: 0.15 }); }
-// the wire crown, top left: a small speaker box, copper wire looping up, three pairs of headphones, two loose drivers,
-// a blank pink tag where the Bob Ross card hangs, and a pipe-cleaner ornament at the top
-{ add(boxG(0.2, 0.2, 0.18, M4(-0.57, 1.34, 0.12, 0.25)), MT.tolex);
-  add(cylG(0.06, 0.07, 0.01, M4(-0.62, 1.35, 0.2, 0.25, Math.PI / 2), 16), MT.grilleD);
-  const cr = mulberry(41041); const cp = () => V(-0.78 + cr() * 0.66, 1.2 + cr() * 0.58, -0.06 + cr() * 0.36);
-  for (let i = 0; i < 13; i++) { const pts = []; let p = V(-0.55 + cr() * 0.3, 1.24, 0.05 + cr() * 0.15); for (let k = 0; k < 5; k++) { pts.push(p.clone()); p = p.clone().lerp(cp(), 0.7); } tube(pts, 0.0035, MT.copper, scene, 36); }
-  for (const [x, y, z, ry] of [[-0.75, 1.32, 0.14, 1.5], [-0.73, 1.16, 0.08, 1.3], [-0.68, 1.43, 0.02, 1.7]]) {   // headphones hanging on the left
-    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(0.1, ry, 0.15); scene.add(g);
-    add(withT(new THREE.TorusGeometry(0.085, 0.009, 6, 18, Math.PI), null, V(1, 0, 0)), MT.dark, g);
-    for (const s of [-1, 1]) add(cylG(0.042, 0.042, 0.03, M4(s * 0.085, -0.01, 0, 0, 0, Math.PI / 2), 16), MT.dark, g); }
-  for (const [x, y, z] of [[-0.47, 1.69, 0.1], [-0.63, 1.62, 0.16]]) { add(cylG(0.05, 0.02, 0.03, M4(x, y, z, 0, -1.1), 16), MT.dark); add(cylG(0.045, 0.045, 0.004, M4(x, y + 0.012, z + 0.012, 0, -1.1), 16), MT.grilleS); }
-  add(boxG(0.06, 0.085, 0.003, M4(-0.6, 1.3, 0.25, 0.2)), MT.red);                         // the tag
-  add(boxG(0.06, 0.06, 0.02, M4(-0.52, 1.74, 0.05, 0.4)), MT.dark);                        // a black clamp at the top
+// the wire crown, top left: a small speaker box with its driver showing, copper wire looping up out of it, three pairs of headphones
+// hanging off the left, two loose drivers caught in the wire, a blank pink card on a string where the Bob Ross card hangs,
+// a black clamp, and a pipe-cleaner ornament at the top
+{ const g = new THREE.Group(); g.position.set(-0.57, 1.34, 0.12); g.rotation.y = 0.25; scene.add(g);
+  add(rbox(0.2, 0.2, 0.18, 0.012), MT.tolex, g);
+  driver(g, 0.062, M4(-0.02, 0.01, 0.091));
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) screw(g, sx * 0.08, sy * 0.08, 0.09);
+  const cr = mulberry(41042); const cp = () => V(-0.8 + cr() * 0.7, 1.22 + cr() * 0.6, -0.08 + cr() * 0.4);
+  for (let i = 0; i < 17; i++) { const pts = []; let p = V(-0.58 + cr() * 0.3, 1.25 + cr() * 0.15, 0.03 + cr() * 0.18); const n = 6 + Math.floor(cr() * 3);
+    for (let k = 0; k < n; k++) { pts.push(p.clone()); p = p.clone().lerp(cp(), 0.42).add(V(Math.sin(k * 1.7 + i) * 0.03, Math.cos(k * 1.3 + i) * 0.025, Math.sin(k * 2.3 + i) * 0.02)); }
+    tube(pts, 0.0013 + cr() * 0.0007, MT.copper, scene, 18 * n);
+    if (i % 4 === 0) { const tw = pts.map((q, k) => q.clone().add(V(0.003 * Math.sin(k * 2.1), 0.003 * Math.cos(k * 2.1), 0))); tube(tw, 0.0011, MT.copper, scene, 14 * n); } }
+  headphones(M4(-0.76, 1.33, 0.14, 1.5, 0.12, 0.15), 0.32); headphones(M4(-0.74, 1.17, 0.08, 1.3, -0.1, 0.1), 0.26); headphones(M4(-0.69, 1.44, 0.02, 1.75, 0.2, 0.2), 0.38);
+  driver(scene, 0.05, M4(-0.47, 1.69, 0.1, 0.3, -0.9)); driver(scene, 0.042, M4(-0.63, 1.62, 0.16, -0.4, -0.6));
+  add(rbox(0.062, 0.088, 0.003, 0.003, M4(-0.6, 1.29, 0.255, 0.2)), MT.red, scene);                    // the card, left blank
+  tube([V(-0.6, 1.334, 0.256), V(-0.598, 1.37, 0.25), V(-0.59, 1.41, 0.23)], 0.0012, MT.white, scene, 8);
+  add(rbox(0.07, 0.06, 0.022, 0.006, M4(-0.52, 1.745, 0.05, 0.4)), MT.dark, scene); add(cylG(0.005, 0.005, 0.07, M4(-0.52, 1.74, 0.05, 0.4, 0, Z90), 8), MT.chrome, scene);   // a black clamp
   const oc = V(-0.3, 1.66, 0.12); const ocr = mulberry(777);
-  for (let i = 0; i < 9; i++) { const a = ocr() * TAU, e = 0.2 + ocr() * 1.1; const tip = oc.clone().add(V(Math.cos(a) * Math.cos(e), Math.sin(e), Math.sin(a) * Math.cos(e) * 0.6).multiplyScalar(0.07 + ocr() * 0.07));
-    tube([oc.clone(), oc.clone().lerp(tip, 0.5).add(V(0, 0.01, 0)), tip], 0.004, [MT.red, MT.gold, MT.grilleS, MT.red][i % 4], scene, 8); }
+  for (let i = 0; i < 11; i++) { const a = ocr() * TAU, el = 0.2 + ocr() * 1.1; const tip = oc.clone().add(V(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el) * 0.6).multiplyScalar(0.07 + ocr() * 0.08));
+    const bend = oc.clone().lerp(tip, 0.5).add(V(ocr() * 0.02 - 0.01, 0.015, ocr() * 0.02 - 0.01)); tube([oc.clone(), bend, tip], 0.0045, [MT.red, MT.gold, MT.grilleS, MT.red, MT.white][i % 5], scene, 10); }
+  for (let i = 0; i < 3; i++) add(cylG(0.003, 0.003, 0.16, M4(-0.29 + i * 0.012, 1.7, 0.12 - i * 0.01, 0.3 * i, 0.25 - i * 0.2, 0.3)), [MT.stripe, MT.gold, MT.white][i], scene);   // straws
+  for (let i = 0; i < 7; i++) add(boxG(0.006, 0.05, 0.001, M4(-0.33 + i * 0.006, 1.73, 0.13, 0.3, 0, -0.9 + i * 0.25)), MT.red, scene);   // a feather
   COMP.push({ name: 'the wire crown', short: 'WIRE CROWN', c: V(-0.55, 1.5, 0.14), face: V(-0.4, 0.2, 1).normalize(), speaker: false, deg: 5, oct: 1, r: 0.3 });
   COMP.push({ name: 'the headphones', short: 'HEADPHONES', c: V(-0.74, 1.3, 0.1), face: V(-1, 0, 0.3).normalize(), speaker: false, deg: 3, oct: 1, r: 0.2 });
   COMP.push({ name: 'the ornament', short: 'ORNAMENT', c: oc, face: V(0, 0.3, 1).normalize(), speaker: false, deg: 1, oct: 2, r: 0.12 }); }
-// the iMac on its white cabinet, behind the stack; its stand and back are inferred
+// the iMac on its white cabinet, behind the stack; its stand, its back and the cabinet are inferred
 const SCR = {};
-{ bx(0.02, 0, -0.9, 0.56, 0.95, -0.42, MT.white);
+{ add(rbox(0.54, 0.95, 0.48, 0.008, M4(0.29, 0.475, -0.66)), MT.white);
+  add(boxG(0.003, 0.86, 0.004, M4(0.29, 0.47, -0.419)), MT.dark); add(boxG(0.5, 0.003, 0.004, M4(0.29, 0.9, -0.419)), MT.dark);
+  for (const x of [0.25, 0.33]) add(rbox(0.01, 0.06, 0.012, 0.004, M4(x, 0.62, -0.414)), MT.silver);
   const g = new THREE.Group(); g.position.set(0.29, 1.44, -0.33); g.rotation.set(-0.04, -0.06, 0); scene.add(g);
-  add(boxG(0.62, 0.5, 0.03, null, V(1, 0, 0)), MT.silver, g); add(boxG(0.6, 0.4, 0.003, M4(0, 0.03, 0.016)), MT.dark, g);
-  SCR.mac = add(withT(new THREE.PlaneGeometry(0.56, 0.35), M4(0, 0.03, 0.019), V(0, 1, 0)), MT.scrMac, g);
-  add(boxG(0.16, 0.3, 0.02, M4(0, -0.33, -0.1, 0, 0.25)), MT.silver, g);
+  add(rbox(0.62, 0.5, 0.026, 0.008), MT.silver, g);
+  add(boxG(0.61, 0.405, 0.002, M4(0, 0.042, 0.0135)), MT.glass, g);
+  SCR.mac = add(withT(new THREE.PlaneGeometry(0.56, 0.35), M4(0, 0.042, 0.0148), V(0, 1, 0)), MT.scrMac, g);
+  add(cylG(0.003, 0.003, 0.002, M4(0, 0.234, 0.0145, 0, Z90), 8), MT.dark, g);   // the camera
+  add(rbox(0.17, 0.31, 0.014, 0.004, M4(0, -0.3, -0.07, 0, 0.32)), MT.silver, g); add(rbox(0.17, 0.012, 0.19, 0.004, M4(0, -0.445, -0.05)), MT.silver, g);
   COMP.push({ name: 'the iMac', short: 'iMAC', c: V(0.29, 1.47, -0.31), face: V(0, 0, 1), speaker: false, deg: 0, oct: 2, r: 0.32 });
   COMP.push({ name: 'the white cabinet', short: 'CABINET', c: V(0.29, 0.5, -0.9), face: V(0, 0, -1), speaker: false, deg: 0, oct: 1, r: 0.3 }); }
 // the ViewSonic panel leaning on the Champ, white bezel, tilted back and turned toward the left
 { const g = new THREE.Group(); g.position.set(0.12, 0.985, 0.17); g.rotation.set(-0.28, -0.3, 0.03, 'YXZ'); scene.add(g);
-  add(boxG(0.3, 0.42, 0.028, M4(0, 0.21, 0)), MT.white, g); SCR.kin = add(withT(new THREE.PlaneGeometry(0.255, 0.33), M4(0, 0.215, 0.0155), V(0, 1, 0)), MT.scrKin, g);
-  add(boxG(0.29, 0.03, 0.07, M4(0, 0.01, -0.04)), MT.white, g);
+  add(rbox(0.3, 0.42, 0.022, 0.007, M4(0, 0.21, 0)), MT.white, g);
+  add(boxG(0.262, 0.338, 0.002, M4(0, 0.215, 0.0112)), MT.dark, g);
+  SCR.kin = add(withT(new THREE.PlaneGeometry(0.255, 0.33), M4(0, 0.215, 0.0124), V(0, 1, 0)), MT.scrKin, g);
+  add(rbox(0.2, 0.26, 0.02, 0.008, M4(0, 0.2, -0.018)), MT.white, g);
+  add(rbox(0.29, 0.026, 0.06, 0.006, M4(0, 0.012, -0.034)), MT.white, g);
   COMP.push({ name: 'the ViewSonic', short: 'VIEWSONIC', c: V(0.1, 1.19, 0.21), face: V(-0.3, 0.25, 1).normalize(), speaker: false, deg: 2, oct: 1, r: 0.22 }); }
-// weathered boards: fence pickets with a row of nails down each edge, rising behind the Champ
+// weathered fence pickets rising behind the Champ: broken tops, nails driven through so their points stand out of both edges
 const BOARDS = [[V(0.50, 0.56, -0.06), V(0.00, 1.82, -0.16), 0.13], [V(0.24, 0.57, -0.12), V(0.21, 1.50, -0.14), 0.10], [V(0.34, 0.57, -0.13), V(0.38, 1.63, -0.17), 0.11], [V(0.47, 0.56, -0.10), V(0.49, 1.47, -0.09), 0.09]];
-for (const [a, b, wdt] of BOARDS) { const L = a.distanceTo(b); const dir = b.clone().sub(a).normalize();
-  const m = add(withT(new THREE.BoxGeometry(wdt, L, 0.024), null, V(0, 1, 0)), woodMat(wdt / 2)); m.position.copy(a).lerp(b, 0.5); m.quaternion.setFromUnitVectors(V(0, 1, 0), dir); }
+for (const [a, b, wdt] of BOARDS) { const Lb = a.distanceTo(b); const dir = b.clone().sub(a).normalize(); const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir);
+  const m = add(withT(new THREE.BoxGeometry(wdt, Lb, 0.024), null, V(0, 1, 0)), woodMat(wdt / 2)); m.position.copy(a).lerp(b, 0.5); m.quaternion.copy(q);
+  const ax = V(1, 0, 0).applyQuaternion(q);
+  const tipW = wdt * brr(0.35, 0.55), side = br() < 0.5 ? 1 : -1, tipL = brr(0.03, 0.08);
+  const tip = add(withT(new THREE.BoxGeometry(tipW, tipL, 0.022), null, V(0, 1, 0)), woodMat(tipW / 2)); tip.quaternion.copy(q); tip.position.copy(b).addScaledVector(dir, tipL / 2).addScaledVector(ax, side * (wdt - tipW) / 2);
+  const n = Math.floor(Lb / 0.1);
+  for (let i = 1; i < n; i++) for (const s of [-1, 1]) { if (br() < 0.3) continue; const len = brr(0.02, 0.04);
+    const mm = add(cylG(0.0013, 0.0019, len, null, 5), MT.dark); const out = ax.clone().multiplyScalar(s).add(V(0, brr(-0.25, 0.1), 0)).normalize();
+    mm.position.copy(a).lerp(b, i / n + brr(-0.02, 0.02)).addScaledVector(out, wdt / 2 + len / 2 - 0.004); mm.quaternion.setFromUnitVectors(V(0, 1, 0), out); } }
 COMP.push({ name: 'the boards', short: 'BOARDS', c: V(0.3, 1.4, -0.12), face: V(0, 0, 1), speaker: false, deg: 5, oct: 0, r: 0.3 });
-// the pallet: top boards run front to back, stringers across, a bottom deck
-{ const PX0 = -0.72, PX1 = 0.32, PZ0 = -0.45, PZ1 = 0.77;
-  for (let i = 0; i < 6; i++) { const x0 = PX0 + i * (PX1 - PX0 - 0.12) / 5; bx(x0, 0.115, PZ0, x0 + 0.12, 0.14, PZ1, MT.pallet, V(0, 0, 1)); }
-  for (const z of [PZ0 + 0.05, (PZ0 + PZ1) / 2, PZ1 - 0.05]) bx(PX0, 0.025, z - 0.045, PX1, 0.115, z + 0.045, MT.pallet, V(1, 0, 0));
-  for (let i = 0; i < 3; i++) { const x0 = PX0 + i * (PX1 - PX0 - 0.12) / 2; bx(x0, 0, PZ0, x0 + 0.12, 0.025, PZ1, MT.pallet, V(0, 0, 1)); }
+// the pallet: five top slats run front to back over three stringers, with wide gaps between them; a nail pair at every crossing; a bottom deck
+{ const PX0 = -0.72, PX1 = 0.32, PZ0 = -0.45, PZ1 = 0.77; const SW = [0.15, 0.13, 0.145, 0.13, 0.15]; const gap = (PX1 - PX0 - SW.reduce((s, v) => s + v, 0)) / 4;
+  const STR = [PZ0 + 0.045, (PZ0 + PZ1) / 2, PZ1 - 0.045];
+  for (const z of STR) bx(PX0, 0.022, z - 0.04, PX1, 0.112, z + 0.04, MT.pallet, V(1, 0, 0));
+  let x = PX0;
+  SW.forEach((sw, i) => { const z0 = PZ0 + (i === 2 ? 0.015 : 0), z1 = PZ1 - (i === 4 ? 0.035 : 0) - br() * 0.01, yt = 0.135 + br() * 0.004;
+    bx(x + 0.002, 0.112, z0, x + sw - 0.002, yt, z1, MT.pallet, V(0, 0, 1));
+    add(boxG(sw - 0.01, 0.003, 0.004, M4(x + sw / 2, yt - 0.004, z1 + 0.001)), MT.dark);   // a darker check across the slat's end grain
+    for (const z of STR) for (const dx of [0.03, sw - 0.03]) add(cylG(0.0042, 0.0042, 0.002, M4(x + dx, yt + 0.0005, z + brr(-0.012, 0.012)), 8), MT.dark);
+    x += sw + gap; });
+  for (let i = 0; i < 3; i++) { const x0 = PX0 + i * (PX1 - PX0 - 0.13) / 2; bx(x0, 0, PZ0, x0 + 0.13, 0.022, PZ1, MT.pallet, V(0, 0, 1)); }
   COMP.push({ name: 'the pallet', short: 'PALLET', c: V(-0.3, 0.08, 0.77), face: V(0, 0, 1), speaker: false, deg: 0, oct: 0, r: 0.4 }); }
 // the cassette receiver on the VCR, front centre on the pallet
-{ bx(-0.19, 0.14, 0.28, 0.29, 0.232, 0.66, MT.silver); bx(-0.12, 0.17, 0.661, 0.12, 0.185, 0.664, MT.dark); bx(0.17, 0.18, 0.661, 0.25, 0.2, 0.664, MT.dark);
-  const g = new THREE.Group(); g.position.set(0.05, 0.299, 0.46); g.rotation.y = 0.04; scene.add(g);
-  add(boxG(0.4, 0.13, 0.32, null, V(1, 0, 0)), MT.tolex, g);
-  add(boxG(0.13, 0.075, 0.004, M4(-0.11, 0.005, 0.161)), MT.silver, g); add(boxG(0.11, 0.055, 0.005, M4(-0.11, 0.005, 0.163)), MT.dark, g);
-  for (let i = 0; i < 6; i++) add(boxG(0.006, 0.05, 0.004, M4(0.0 + i * 0.016, 0.005, 0.162)), MT.silver, g);
-  for (const x of [0.12, 0.165]) add(cylG(0.019, 0.02, 0.02, M4(x, -0.01, 0.168, 0, Math.PI / 2), 16), MT.chrome, g);
+{ const v = new THREE.Group(); v.position.set(0.05, 0.186, 0.47); scene.add(v);   // the VCR / DVD combo: silver, a light blue band, tape door, disc tray
+  add(rbox(0.48, 0.092, 0.38, 0.006), MT.silver, v);
+  add(boxG(0.47, 0.011, 0.003, M4(0, 0.03, 0.1905)), MT.stripe, v);
+  add(rbox(0.2, 0.03, 0.004, 0.002, M4(-0.06, -0.005, 0.1905)), MT.dark, v); add(boxG(0.17, 0.004, 0.003, M4(-0.06, -0.008, 0.193)), MT.silver, v);
+  add(boxG(0.15, 0.006, 0.003, M4(-0.06, -0.033, 0.1905)), MT.dark, v);
+  add(boxG(0.07, 0.016, 0.003, M4(0.15, 0.0, 0.1905)), MT.glass, v);
+  for (let i = 0; i < 6; i++) add(rbox(0.012, 0.008, 0.005, 0.002, M4(0.1 + i * 0.016, -0.026, 0.191)), MT.dark, v);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(cylG(0.012, 0.012, 0.006, M4(sx * 0.2, -0.049, sz * 0.15), 10), MT.dark, v);
+  const g = new THREE.Group(); g.position.set(0.05, 0.299, 0.46); g.rotation.y = 0.04; scene.add(g);   // the cassette receiver
+  add(rbox(0.4, 0.13, 0.32, 0.006), MT.plastic, g);
+  for (let i = 0; i < 11; i++) add(boxG(0.3, 0.0025, 0.005, M4(0.02, 0.0655, -0.13 + i * 0.012)), MT.dark, g);
+  const fz = 0.16;
+  add(rbox(0.142, 0.078, 0.006, 0.003, M4(-0.105, 0.016, fz + 0.002)), MT.silver, g); add(boxG(0.11, 0.042, 0.004, M4(-0.105, 0.022, fz + 0.005)), MT.glass, g);
+  for (const x of [-0.13, -0.08]) add(cylG(0.009, 0.009, 0.002, M4(x, 0.022, fz + 0.006, 0, Z90), 12), MT.dark, g);
+  for (let i = 0; i < 6; i++) add(rbox(0.017, 0.012, 0.009, 0.002, M4(-0.152 + i * 0.019, -0.038, fz + 0.004)), MT.silver, g);
+  for (let i = 0; i < 14; i++) add(boxG(0.0028, 0.042, 0.004, M4(0.0 + i * 0.0048, 0.018, fz + 0.002)), MT.dark, g);
+  add(boxG(0.07, 0.016, 0.004, M4(0.03, 0.048, fz + 0.002)), MT.glass, g); add(boxG(0.02, 0.004, 0.003, M4(0.015, 0.048, fz + 0.005)), MT.jewel, g);
+  for (let i = 0; i < 4; i++) add(boxG(0.006, 0.014, 0.006, M4(0.0 + i * 0.014, -0.03, fz + 0.003)), MT.silver, g);
+  for (const x of [0.12, 0.165]) { add(cylG(0.023, 0.023, 0.003, M4(x, -0.012, fz + 0.0015, 0, Z90), 22), MT.dark, g); knob(g, x, -0.012, fz + 0.002, 0.019, MT.chrome, false); }
+  jack(g, 0.17, 0.045, fz, 0.005);
   COMP.push({ name: 'the cassette receiver', short: 'CASSETTE', c: V(0.05, 0.3, 0.62), face: V(0, 0, 1), speaker: false, deg: 3, oct: 1, r: 0.2 });
   COMP.push({ name: 'the VCR', short: 'VCR', c: V(0.05, 0.19, 0.66), face: V(0, 0, 1), speaker: false, deg: 6, oct: 0, r: 0.2 }); }
-// the clock: a Timex school clock leaning on the amps, sitting on the receiver; stopped at 8:55:15
+// the clock: a Timex school clock leaning on the amps, sitting on the receiver; stopped at 8:55:15. The brand is left off the dial.
 const CLK = {};
 { const g = new THREE.Group(); g.position.set(-0.01, 0.53, 0.33); g.rotation.set(-0.16, 0.06, 0, 'YXZ'); scene.add(g); CLK.g = g;
-  add(cylG(0.166, 0.166, 0.045, M4(0, 0, 0, 0, Math.PI / 2), 40), MT.dark, g);
-  add(withT(new THREE.CircleGeometry(0.15, 40), M4(0, 0, 0.0232), V(0, 1, 0)), MT.face, g);
-  const hand = (len, w, back, z) => { const p = new THREE.Group(); p.position.z = z; g.add(p); add(boxG(w, len + back, 0.003, M4(0, (len - back) / 2, 0)), MT.dark, p); return p; };
-  CLK.h = hand(0.075, 0.011, 0.015, 0.027); CLK.m = hand(0.118, 0.008, 0.018, 0.03); CLK.s = hand(0.128, 0.0025, 0.03, 0.033);
-  add(cylG(0.007, 0.007, 0.012, M4(0, 0, 0.033, 0, Math.PI / 2), 10), MT.dark, g);
+  add(cylG(0.16, 0.152, 0.04, M4(0, 0, -0.004, 0, Z90), 44), MT.dark, g);
+  add(torG(0.158, 0.012, M4(0, 0, 0.018), TAU, 8, 48), MT.dark, g);
+  add(withT(new THREE.CircleGeometry(0.15, 48), M4(0, 0, 0.0172), V(0, 1, 0)), MT.face, g);
+  const hand = (len, w, back, z, tail) => { const p = new THREE.Group(); p.position.z = z; g.add(p); add(boxG(w, len + back, 0.0025, M4(0, (len - back) / 2, 0)), MT.dark, p);
+    if (tail) add(cylG(0.006, 0.006, 0.0025, M4(0, -back, 0, 0, Z90), 10), MT.dark, p); return p; };
+  CLK.h = hand(0.075, 0.011, 0.015, 0.021); CLK.m = hand(0.118, 0.008, 0.018, 0.024); CLK.s = hand(0.128, 0.0022, 0.035, 0.027, true);
+  add(cylG(0.007, 0.007, 0.012, M4(0, 0, 0.026, 0, Z90), 12), MT.dark, g); add(cylG(0.003, 0.003, 0.004, M4(0, 0, 0.033, 0, Z90), 8), MT.chrome, g);
   COMP.push({ name: 'the clock', short: 'CLOCK', c: V(-0.01, 0.53, 0.37), face: V(0, 0.16, 1).normalize(), speaker: false, deg: 0, oct: 1, r: 0.17 }); }
 function setClock(sec) { const s = ((sec % 43200) + 43200) % 43200; CLK.s.rotation.z = -(s % 60) / 60 * TAU; CLK.m.rotation.z = -(s % 3600) / 3600 * TAU; CLK.h.rotation.z = -s / 43200 * TAU; }
 setClock(S.clock);
-// the case, open on the floor front right: base with the circuit board, lid standing up behind it
+// the case, open on the floor front right: a moulded shell with ribs, two latches hanging open, a front handle, a hinge bar;
+// in its base a brown board of black terminal strips with red wire run everywhere; the lid stands up behind it
 { const g = new THREE.Group(); g.position.set(0.57, 0, 0.46); g.rotation.y = -0.12; scene.add(g);
   const w = 0.54, d = 0.42, h = 0.165, t = 0.016;
-  add(boxG(w, 0.012, d, M4(0, 0.006, 0)), MT.case, g);
-  add(boxG(w, h, t, M4(0, h / 2, d / 2 - t / 2)), MT.case, g); add(boxG(w, h, t, M4(0, h / 2, -d / 2 + t / 2)), MT.case, g);
-  add(boxG(t, h, d, M4(w / 2 - t / 2, h / 2, 0)), MT.case, g); add(boxG(t, h, d, M4(-w / 2 + t / 2, h / 2, 0)), MT.case, g);
-  add(boxG(0.15, 0.025, 0.03, M4(0, h * 0.55, d / 2 + 0.02)), MT.case, g);
-  add(withT(new THREE.PlaneGeometry(w - 0.04, d - 0.04), M4(0, 0.11, 0, 0, -Math.PI / 2), V(1, 0, 0)), MT.board, g);
+  add(rbox(w, 0.016, d, 0.007, M4(0, 0.008, 0)), MT.case, g);
+  add(rbox(w, h, t, 0.006, M4(0, h / 2, d / 2 - t / 2)), MT.case, g); add(rbox(w, h, t, 0.006, M4(0, h / 2, -d / 2 + t / 2)), MT.case, g);
+  add(rbox(t, h, d, 0.006, M4(w / 2 - t / 2, h / 2, 0)), MT.case, g); add(rbox(t, h, d, 0.006, M4(-w / 2 + t / 2, h / 2, 0)), MT.case, g);
+  add(boxG(w - 0.01, 0.008, 0.008, M4(0, h - 0.004, d / 2 + 0.002)), MT.dark, g);
+  for (const x of [-0.24, -0.215, 0.215, 0.24]) add(boxG(0.01, h * 0.75, 0.008, M4(x, h * 0.46, d / 2 + 0.003)), MT.case, g);
+  for (const z of [-0.17, -0.145, 0.145, 0.17]) for (const s of [-1, 1]) add(boxG(0.008, h * 0.75, 0.01, M4(s * (w / 2 + 0.003), h * 0.46, z)), MT.case, g);
+  add(rbox(0.16, 0.022, 0.03, 0.009, M4(0, h * 0.5, d / 2 + 0.032)), MT.case, g);
+  for (const s of [-1, 1]) add(rbox(0.03, 0.045, 0.032, 0.006, M4(s * 0.095, h * 0.5, d / 2 + 0.014)), MT.case, g);
+  for (const x of [-0.165, 0.165]) { add(rbox(0.055, 0.05, 0.014, 0.005, M4(x, h * 0.6, d / 2 + 0.014, 0, 0.38)), MT.case, g); add(boxG(0.04, 0.006, 0.004, M4(x, h * 0.68, d / 2 + 0.025, 0, 0.38)), MT.dark, g); }
+  add(cylG(0.009, 0.009, w - 0.04, M4(0, h, -d / 2 - 0.004, 0, 0, Z90), 10), MT.case, g);
+  add(withT(new THREE.PlaneGeometry(w - 0.044, d - 0.044), M4(0, 0.11, 0, 0, -Z90), V(1, 0, 0)), MT.board, g);
+  const pts = [];
+  for (let r = 0; r < 5; r++) { let x = -w / 2 + 0.04 + br() * 0.03; while (x < w / 2 - 0.08) { const len = brr(0.05, 0.11); if (br() < 0.8) { const z = -d / 2 + 0.05 + r * (d - 0.1) / 4;
+      add(boxG(len, 0.009, 0.013, M4(x + len / 2, 0.115, z)), MT.dark, g); for (let k = 0; k < len / 0.012; k++) { pts.push(V(x + 0.006 + k * 0.012, 0.12, z)); if (k % 2 === 0) add(cylG(0.0025, 0.0025, 0.002, M4(x + 0.006 + k * 0.012, 0.1205, z), 8), MT.chrome, g); } }
+      x += len + brr(0.02, 0.05); } }
+  for (let i = 0; i < 110; i++) { const a = pts[Math.floor(br() * pts.length)]; if (!a) continue; let b = null;
+    for (let k = 0; k < 8 && !b; k++) { const c = pts[Math.floor(br() * pts.length)]; if (c !== a && c.distanceTo(a) < (br() < 0.85 ? 0.09 : 0.22)) b = c; } if (!b) continue;
+    const mid = a.clone().lerp(b, 0.5).add(V(brr(-0.012, 0.012), brr(0.002, 0.012), brr(-0.012, 0.012)));
+    tube([a.clone(), mid, b.clone()], 0.0016, br() < 0.82 ? MT.redWire : MT.dark, g, 8); }
   const lid = new THREE.Group(); lid.position.set(0, h, -d / 2); lid.rotation.x = -0.14; g.add(lid);
-  add(boxG(w, 0.44, 0.05, M4(0, 0.22, -0.025)), MT.case, lid); add(boxG(w - 0.05, 0.4, 0.004, M4(0, 0.22, 0.002)), MT.dark, lid);
+  add(rbox(w, 0.44, 0.05, 0.01, M4(0, 0.22, -0.025)), MT.case, lid); add(boxG(w - 0.05, 0.4, 0.004, M4(0, 0.22, 0.002)), MT.dark, lid);
+  for (const [x, y, ww, hh] of [[0, 0.432, w - 0.03, 0.01], [0, 0.008, w - 0.03, 0.01], [-w / 2 + 0.013, 0.22, 0.01, 0.42], [w / 2 - 0.013, 0.22, 0.01, 0.42]]) add(boxG(ww, hh, 0.008, M4(x, y, 0.004)), MT.case, lid);
+  for (const x of [-0.165, 0.165]) add(rbox(0.04, 0.02, 0.02, 0.004, M4(x, 0.44, -0.02)), MT.case, lid);
+  for (const x of [-0.24, -0.215, 0.215, 0.24]) add(boxG(0.01, 0.38, 0.008, M4(x, 0.22, -0.054)), MT.case, lid);
   COMP.push({ name: 'the circuit board in the case', short: 'CIRCUIT BOARD', c: V(0.57, 0.14, 0.5), face: V(0, 1, 0.5).normalize(), speaker: false, deg: 4, oct: 1, r: 0.25 }); }
-// wiring: the red bundle spilling from the case over the pallet, a white cord from the Champ down to the case, black leads
+// wiring: the red bundle spilling from the case over the pallet, each lead with a white tag; a white cord from the Champ down to the case,
+// with its round white puck; black RCA leads from the receiver snaking forward over the pallet; the Kinect's red lead
 { const wr = mulberry(2424);
-  for (let i = 0; i < 16; i++) { const a = V(0.33, 0.06 + wr() * 0.08, 0.32 + wr() * 0.3), b = V(-0.05 + wr() * 0.3, 0.006, 0.66 + wr() * 0.22);
-    const m = a.clone().lerp(b, 0.5).add(V(wr() * 0.06, 0.03 + wr() * 0.05, wr() * 0.05)); tube([a, m, b], 0.0028, MT.redWire, scene, 16);
-    add(new THREE.SphereGeometry(0.006, 6, 4), MT.white).position.copy(b); }
+  for (let i = 0; i < 30; i++) { const a = V(0.32, 0.07 + wr() * 0.08, 0.34 + wr() * 0.28), b = V(-0.08 + wr() * 0.36, 0.005, 0.64 + wr() * 0.26);
+    const m1 = a.clone().lerp(b, 0.3).add(V(-0.02, 0.02 + wr() * 0.03, wr() * 0.04)), m2 = a.clone().lerp(b, 0.7).add(V(wr() * 0.04, 0.01 + wr() * 0.02, wr() * 0.04));
+    tube([a, m1, m2, b], 0.0022 + wr() * 0.001, MT.redWire, scene, 20);
+    const tg = add(rbox(0.012, 0.004, 0.02, 0.0015, null), MT.white); tg.position.copy(b).add(V(0, 0.002, 0)); tg.rotation.y = wr() * TAU; }
   tube([V(0.41, 0.925, 0.245), V(0.5, 0.75, 0.33), V(0.63, 0.42, 0.5), V(0.73, 0.17, 0.63)], 0.0024, MT.cord, scene, 40);
   tube([V(0.37, 0.93, 0.245), V(0.36, 0.86, 0.255), V(0.38, 0.8, 0.252), V(0.4, 0.84, 0.25)], 0.0022, MT.cord, scene, 20);
+  add(cylG(0.014, 0.014, 0.007, M4(0.38, 0.795, 0.256, 0, Z90), 18), MT.white);
   tube([V(-0.3, 0.65, 0.272), V(-0.31, 0.56, 0.28), V(-0.305, 0.46, 0.283)], 0.003, MT.dark, scene, 12);
+  for (const [dx, plug] of [[0, MT.red], [0.014, MT.white]]) { const end = V(-0.36 + dx, 0.142, 0.74 + dx);
+    tube([V(-0.05 + dx, 0.3, 0.3), V(-0.12, 0.18, 0.62 + dx), V(-0.2, 0.15, 0.68), V(-0.3, 0.142, 0.7 + dx), end], 0.0028, MT.dark, scene, 30);
+    add(cylG(0.005, 0.005, 0.03, M4(end.x - 0.012, end.y + 0.002, end.z + 0.012, 0.8, Z90), 10), plug); }
   tube([V(0.0, 0.2, 0.66), V(-0.1, 0.15, 0.72), V(-0.25, 0.145, 0.7), V(-0.4, 0.15, 0.74), V(-0.5, 0.02, 0.85)], 0.003, MT.dark, scene, 30);
   tube([V(-0.24, 1.48, 0.02), V(-0.36, 1.42, 0.27), V(-0.42, 1.0, 0.28), V(-0.5, 0.68, 0.28), V(-0.55, 0.66, 0.2)], 0.0035, MT.red, scene, 40);   // the Kinect's lead (red in the video)
   COMP.push({ name: 'the red wires', short: 'RED WIRES', c: V(0.15, 0.04, 0.72), face: V(0, 1, 0.6).normalize(), speaker: false, deg: 1, oct: 1, r: 0.25 });
   COMP.push({ name: 'the white cord', short: 'WHITE CORD', c: V(0.58, 0.52, 0.42), face: V(0.3, 0, 1).normalize(), speaker: false, deg: 2, oct: 2, r: 0.2 }); }
-// what the drones keep out of (the sculpture's envelope, as a few boxes)
-for (const b of [[-0.8, 0, -0.5, 0.35, 1.5, 0.8], [-0.82, 1.1, -0.1, -0.05, 1.86, 0.32], [-0.1, 0.5, -0.45, 0.62, 1.86, 0.3], [0.0, 0, -0.95, 0.6, 1.75, -0.35], [0.26, 0, 0.2, 0.9, 0.7, 0.72], [-0.45, 1.3, -0.05, 0.05, 1.56, 0.25]])
+// what the drones keep out of: the sculpture's envelope as a few boxes, close enough that a DETAIL lens can get within ~35 cm of a part
+for (const b of [[-0.76, 0, -0.5, 0.35, 0.72, 0.8], [-0.76, 0, -0.12, 0.47, 1.42, 0.33], [-0.86, 1.1, -0.12, -0.1, 1.86, 0.32], [-0.45, 1.3, -0.05, 0.05, 1.58, 0.26], [-0.1, 0.5, -0.45, 0.62, 1.88, 0.36], [0.0, 0, -0.95, 0.6, 1.78, -0.35], [0.26, 0, 0.18, 0.9, 0.7, 0.74]])
   HULL.push({ a: V(b[0], b[1], b[2]), b: V(b[3], b[4], b[5]) });
+// merge everything that never moves into one mesh per material, so the detail costs geometry, not draw calls
+(function mergeStatic() {
+  scene.updateMatrixWorld(true);
+  const dyn = new Set(); [KIN.g, CLK.h, CLK.m, CLK.s].forEach(o => o.traverse(x => dyn.add(x))); dyn.add(SCR.mac); dyn.add(SCR.kin);
+  const byMat = new Map(); const n3 = new THREE.Matrix3();
+  for (const m of MESHES) { const u = m.material.uniforms; if (dyn.has(m) || !u || u.uMover.value > 0.5 || m.material.side === THREE.BackSide || m.material === MT.floor) continue;
+    let gg = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); gg.applyMatrix4(m.matrixWorld);
+    const t = gg.attributes.aT; if (t) { n3.setFromMatrix4(m.matrixWorld); const v = V(); for (let i = 0; i < t.count; i++) { v.fromBufferAttribute(t, i).applyMatrix3(n3); t.setXYZ(i, v.x, v.y, v.z); } }
+    for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv', 'aT'].includes(k)) gg.deleteAttribute(k);
+    if (!byMat.has(m.material)) byMat.set(m.material, []); byMat.get(m.material).push(gg); m.parent.remove(m); m.userData.merged = true; }
+  for (const [mat, list] of byMat) { const merged = mergeGeometries(list, false); if (!merged) { console.warn('[build] merge failed for a material'); continue; } add(merged, mat); }
+  for (let i = MESHES.length - 1; i >= 0; i--) if (MESHES[i].userData.merged) MESHES.splice(i, 1);
+})();
 const CENTRE = V(-0.05, 0.95, 0.1);
 
 /* ---------- the drones: a printed cube with a lens barrel and a tally; they float, there is no air to push */
@@ -848,10 +1034,10 @@ function makeShot(d) {
   if (role === 'ORBIT') { const r = rr(2.3, 3.1), h = rr(1.0, 1.9), w0 = (rnd() < 0.5 ? 1 : -1) * TAU / 240, a0 = rr(0, TAU), t0 = simT; const fov = rr(30, 38);
     return Object.assign(S0, { label: 'ORBIT', pose: (t) => ({ pos: MZCam.V(CENTRE.x + Math.sin(a0 + (t - t0) * w0) * r, h + 0.08 * Math.sin(t / 17), CENTRE.z + Math.cos(a0 + (t - t0) * w0) * r) }),
       aim: () => ({ look: MV(CENTRE.clone().add(V(0, -0.1, 0))), fov }), pan: 1.4, wantK: 1.1, subj: CENTRE }); }
-  if (role === 'DETAIL') { const c = pickComp(k => true, 1.3); const p = markNear(c, 0.5, 0.95); const look = subTarget(c); const fov = rr(22, 32);
+  if (role === 'DETAIL') { const c = pickComp(k => true, 1.3); const p = markNear(c, 0.32, 0.72); const look = subTarget(c); const fov = rr(18, 28);
     return Object.assign(S0, { label: 'DETAIL · ' + c.short, comp: c, mark: { pos: MV(p) }, aim: (t) => ({ look: MV(look.clone().add(V(0.01 * Math.sin(t / 7), 0.008 * Math.sin(t / 9), 0))), fov }), pan: 2.2, wantK: 1.15, subj: c.c }); }
   if (role === 'SIGNAL') { const ele = ['KINECT', 'iMAC', 'VIEWSONIC', 'MG10 CHASSIS', 'CIRCUIT BOARD', 'CASSETTE', 'VCR', 'CLOCK', 'RED WIRES'];
-    const c = live.ev === 'wake' && rnd() < 0.7 ? pick([COMPS.mac, COMPS.view]) : pickComp(k => ele.includes(k.short), 1); const p = markNear(c, 0.8, 1.5, 0.8); const fov = rr(24, 34);
+    const c = live.ev === 'wake' && rnd() < 0.7 ? pick([COMPS.mac, COMPS.view]) : pickComp(k => ele.includes(k.short), 1); const p = markNear(c, 0.55, 1.2, 0.8); const fov = rr(22, 32);
     return Object.assign(S0, { label: 'SIGNAL · ' + c.short, comp: c, mark: { pos: MV(p) }, aim: () => ({ look: MV(c.c), fov }), pan: 1.8, wantK: 1.0, subj: c.c }); }
   if (role === 'DRIFT') { const r0 = rr(1.6, 3.2), a0 = rr(0, TAU), t0 = simT, k1 = rr(0.5, 1.2), k2 = rr(0.3, 0.9); const fov = rr(32, 42); let tgt = pickComp(k => true, 2);
     return Object.assign(S0, { label: 'DRIFT', comp: tgt, pose: (t) => { const u = (t - t0) / 60; const r = r0 + 0.5 * Math.sin(u * k2 * 2.1);
@@ -1050,5 +1236,6 @@ window.MZ = {
   get state() { return { S, live: { ...live, fbAmp: live.fbAmp && live.fbAmp.short }, cam: crew.liveDrone.name, shot: crew.liveDrone.shot && crew.liveDrone.shot.label, lens: LENS.comp && LENS.comp.short,
     drones: crew.drones.map(d => ({ name: d.name, role: d.role, status: d.status, label: d.shot && d.shot.label, pos: [d.pos.x, d.pos.y, d.pos.z] })), kinect: { target: KIN.target, tilt: KIN.tilt / D2R }, beat: { ...BEAT }, watching: watching() }; },
   crew, audio: AUD,
+  stats() { let n = 0, tris = 0; const per = {}; scene.traverse(o => { if (!o.isMesh) return; n++; const g = o.geometry; const t = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += t; const k = o.material.uniforms ? o.material.uniforms.uId.value + ':' + o.material.uniforms.uMode.value : '?'; per[k] = (per[k] || 0) + t; }); return { meshes: n, triangles: Math.round(tris), per }; },
 };
 </script>
