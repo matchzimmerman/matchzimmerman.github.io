@@ -1734,7 +1734,7 @@ async function initExtras(){
   if(M.overlays?.length){ const g=$('preOverlays'); g.hidden=false;
     g.innerHTML='<div class="lab">Archive plans for this site</div>'+M.overlays.map((o,i)=>`<button class="btn" data-o="${i}" style="justify-content:flex-start;text-align:left">＋ ${o.name}<br><small style="color:var(--dim);font:400 10.5px var(--mono)">${o.credit}</small></button>`).join('');
     g.onclick=async e=>{ const b=e.target.closest('button'); if(!b) return; const ov=M.overlays[+b.dataset.o]; b.disabled=true;
-      try{ const bl=await (await fetch(DATA+'/'+ov.url)).blob(); await importFile(new File([bl], ov.file||ov.url, {type:bl.type}), {scale:ov.width/100, opacity:0.62, xray:true, credit:ov.credit}); toast('Loaded unregistered. Use Control points to place it.', 4200); }
+      try{ const bl=await (await fetch(DATA+'/'+ov.url)).blob(); await importFile(new File([bl], ov.file||ov.url, {type:bl.type}), {scale:ov.width/100, opacity:0.62, xray:true, credit:ov.credit, ...(ov.gcps?{gcps:ov.gcps.map(g=>({...g})), geo:true, geoModel:'sim'}:{})}); toast(ov.gcps?'Placed from '+ov.gcps.length+' control points. Add more under Control points to refine it.':'Loaded unregistered. Use Control points to place it.', 4200); }
       catch(err){ toast('Could not load that plan'); } b.disabled=false; }; }
   const now=new Date(); const pad=n=>String(n).padStart(2,'0'); $('sunWhen').value=`${now.getFullYear()}-12-21T09:30`;
   // re-apply saved georeferences after restore
