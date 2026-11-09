@@ -3,6 +3,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>McDonogh Ground Survey</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b1416">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="description" content="McDonogh School's lost buildings on 2024 lidar: Foxleigh Mansion, the water tower and McDonogh Station in 3D, with every source behind them.">
 <meta name="theme-color" content="#061012">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -488,6 +492,16 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
 window.__gsFail=function(msg){var l=document.getElementById('loading'),t=document.getElementById('loadText');if(!l||l.hidden)return;
  t.innerHTML=msg+'<br><button onclick="location.reload()" style="margin-top:10px;font:inherit;padding:6px 14px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer">Retry</button>';};
 setTimeout(function(){if(!window.__gsDone)window.__gsFail(window.__gsStarted?'Still loading the ground model. The connection may be slow.':'The 3D engine did not start.');},30000);
+</script>
+<script>
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  const show = t => { let el = document.getElementById('offlineState'); if (!el) { const host = document.getElementById('brand'); if (!host) return; el = document.createElement('div'); el.id = 'offlineState'; el.style.cssText = 'font:500 10px var(--mono,monospace);letter-spacing:.06em;color:#9fc7b3;margin-top:3px'; host.appendChild(el); } el.textContent = t; };
+  navigator.serviceWorker.addEventListener('message', e => { const d = e.data || {}; if (d.type !== 'gs-cache') return;
+    if (d.complete) { show('✓ READY OFFLINE'); try { localStorage.setItem('gs-offline', '1'); } catch (_) {} }
+    else show('SAVING FOR OFFLINE ' + Math.round(100 * d.done / d.total) + '%'); });
+  try { if (localStorage.getItem('gs-offline')) addEventListener('DOMContentLoaded', () => show(navigator.onLine ? '✓ READY OFFLINE' : 'OFFLINE COPY')); } catch (_) {}
+}
 </script>
 <script type="importmap">
 {"imports":{"three":"./lib/three/three.module.js","three/addons/":"./lib/three/addons/"}}
