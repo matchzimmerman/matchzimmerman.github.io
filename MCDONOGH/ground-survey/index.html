@@ -42,6 +42,10 @@ button{cursor:pointer}
 #siteBar button{font-size:11px}
 .cand{position:absolute;transform:translate(-50%,-50%);font:700 10px var(--mono);color:#081214;padding:1px 4px;border-radius:3px;pointer-events:auto;cursor:pointer;white-space:nowrap}
 .cand.raised{background:var(--amber)} .cand.sunken{background:var(--teal)}
+.refl{position:absolute;transform:translate(-50%,-130%);font:700 9.5px var(--mono);color:#081214;padding:1px 4px;border-radius:3px;pointer-events:auto;cursor:pointer;white-space:nowrap}
+.refl.mh{background:#ff7fdc} .refl.in{background:#7ff2e4}
+.refkey{display:flex;flex-wrap:wrap;gap:4px 12px;font:500 10.5px var(--mono);color:var(--dim);margin:2px 0 4px}
+.refkey i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
 #joy{position:absolute;z-index:7;left:calc(var(--gut) + 8px);bottom:calc(28px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;border:1px solid var(--line2);background:color-mix(in srgb,var(--panel) 70%,transparent);touch-action:none}
 #joy i{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:var(--amber);opacity:.85}
 #walkBar{left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center;background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line2);border-radius:6px;padding:6px 8px;font:500 11px var(--mono);color:var(--dim)}
@@ -332,6 +336,14 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         <label class="toggle" id="liftWrap"><input type="checkbox" id="lift"> Raise buildings &amp; trees in 3D</label>
       </div>
 
+      <div class="grp" id="refGrp" hidden>
+        <div class="lab">Public records</div>
+        <label class="toggle"><input type="checkbox" id="refBoundary"> School property lines</label>
+        <label class="toggle"><input type="checkbox" id="refStorm"> County storm drains</label>
+        <div class="refkey" id="refKey" hidden><span><i style="background:#4ea8ff;height:3px;vertical-align:3px"></i>pipe</span><span><i style="background:#ff7fdc;border-radius:50%"></i>manhole</span><span><i style="background:#7ff2e4"></i>inlet</span><span><i style="background:#f2e8d0;height:3px;vertical-align:3px"></i>property line</span></div>
+        <p class="note" id="refNote"></p>
+      </div>
+
       <p class="note">Smooth, faceted triangles mark where today's buildings stand. Lidar can't see under a roof, so the ground there is filled in.</p>
       <div class="foot">
         Elevation: USGS 3DEP <i>MD_4County_D24</i>, Fugro, flown 17–30 Dec 2024 (leaf-off). 8 pts/m², bare-earth DEM 0.5 m, tested 3.6 cm RMSE on open ground. Public domain. UTM 18N / NAD83(2011), NAVD88 heights.
@@ -549,7 +561,7 @@ const S = {
 };
 let LS_KEY = 'mcd-ground-survey.v1';
 let HAD_SAVED=false;
-function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = (s.objs||[]).map(o=>{ if(o&&typeof o==='object'){ for(const k of RUNTIME_KEYS) delete o[k]; } return o; }).filter(o=>o&&o.id); S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
+function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = (s.objs||[]).map(o=>{ if(o&&typeof o==='object'){ for(const k of RUNTIME_KEYS) delete o[k]; } return o; }).filter(o=>o&&o.id); S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; S.ref = s.ref||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
 let saveT = 0;
 const RUNTIME_KEYS=new Set(['wrap','orient','content','tex','mesh','group','helper','img']);
 function stateJSON(){ return JSON.stringify(S,(k,v)=>{ if(RUNTIME_KEYS.has(k)) return undefined; if(v&&typeof v==='object'&&(v.isObject3D||v.isTexture||v.isMaterial||v.isBufferGeometry)) return undefined; return v; }); }
@@ -998,7 +1010,7 @@ function updateOverlays(){
   align.pts.forEach((p,i)=>dots.push([p, ['1','1′','2','2′'][i], i%2?'':'b']));
   trace.pts.forEach((p,i)=>dots.push([p, String(i+1), 'b']));
   if(gcpPend) dots.push([gcpPend.world, 'plan', '']);
-  candLabels(host); assetLabels(host);
+  candLabels(host); assetLabels(host); refLabels(host);
   for(const [p,label,cls] of dots){ const y=p.y!==undefined?p.y:(renderY(p.x,p.z)??0); const s=project(p.x,y,p.z); if(!s.vis) continue;
     const d=document.createElement('div'); d.className='dot '+cls; d.style.left=s.x+'px'; d.style.top=s.y+'px'; if(label) d.innerHTML=`<em>${label}</em>`; host.appendChild(d); }
   // scale bar & north
@@ -1470,6 +1482,51 @@ function buildSiteBar(){
 }
 addEventListener('hashchange',()=>{ if(SITES && SITE && location.hash.slice(1)!==SITE.slug && SITES.some(s=>s.slug===location.hash.slice(1))) location.reload(); });
 
+/* ---------- reference layers from public records (county GIS) ---------- */
+const REF={data:null, pts:[]};
+function refLineObj(color,opacity){ const l=new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color, depthTest:false, transparent:true, opacity})); l.renderOrder=14; l.frustumCulled=false; l.visible=false; scene.add(l); return l; }
+function refDot(round){ const c=document.createElement('canvas'); c.width=c.height=32; const g=c.getContext('2d'); g.fillStyle='#fff'; g.strokeStyle='rgba(8,18,20,.9)'; g.lineWidth=4;
+  if(round){ g.beginPath(); g.arc(16,16,12,0,Math.PI*2); g.fill(); g.stroke(); } else { g.fillRect(5,5,22,22); g.strokeRect(5,5,22,22); } const t=new THREE.CanvasTexture(c); return t; }
+function refPointObj(color,size,round){ const o=new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({color, size, sizeAttenuation:false, map:refDot(round), alphaTest:0.4, transparent:true, depthTest:false})); o.renderOrder=16; o.frustumCulled=false; o.visible=false; scene.add(o); return o; }
+REF.boundary=refLineObj(0xf2e8d0,0.95); REF.pipes=refLineObj(0x4ea8ff,0.95); REF.manholes=refPointObj(0xff7fdc,9,true); REF.inlets=refPointObj(0x7ff2e4,7,false);
+function refDrape(a,b,arr){ const d=Math.hypot(b.x-a.x,b.z-a.z), n=Math.max(1,Math.ceil(d/4)); let prev=null;
+  for(let i=0;i<=n;i++){ const x=a.x+(b.x-a.x)*i/n, z=a.z+(b.z-a.z)*i/n, y=renderY(x,z); const cur=(y===null||y===undefined)?null:[x,y+0.5,z];
+    if(prev&&cur) arr.push(...prev,...cur); prev=cur; } }
+function refSet(obj,arr,on){ obj.geometry.dispose(); obj.geometry=new THREE.BufferGeometry(); obj.geometry.setAttribute('position', new THREE.Float32BufferAttribute(arr,3)); obj.visible=on&&arr.length>0; }
+function buildRef(){
+  if(!REF.data) return; const L=REF.data.layers, on=S.ref||{}, walk=S.view.mode==='walk';
+  const b=[]; if(on.boundary) for(const ring of L.boundary.rings){ for(let i=0;i<ring.length-1;i++) refDrape(toWorld(ring[i][0],ring[i][1]), toWorld(ring[i+1][0],ring[i+1][1]), b); }
+  refSet(REF.boundary,b,!!on.boundary);
+  const pp=[]; if(on.storm) for(const ln of L.storm_lines){ const q=ln.p; for(let i=0;i<q.length-1;i++) refDrape(toWorld(q[i][0],q[i][1]), toWorld(q[i+1][0],q[i+1][1]), pp); }
+  refSet(REF.pipes,pp,!!on.storm);
+  REF.pts=[]; const mk=(list,kind)=>{ const arr=[]; if(on.storm) for(const f of list){ const w=toWorld(f.E,f.N), y=renderY(w.x,w.z); if(y===null||y===undefined) continue; arr.push(w.x,y+0.7,w.z); REF.pts.push({x:w.x,y:y+0.7,z:w.z,kind,f}); } return arr; };
+  refSet(REF.manholes, mk(L.manholes,'mh'), !!on.storm); refSet(REF.inlets, mk(L.inlets,'in'), !!on.storm);
+  for(const o of [REF.boundary,REF.pipes]) o.material.depthTest = S.view.mode!=='plan';
+  $('refKey').hidden=!(on.storm||on.boundary); req();
+}
+function refDescribe(p){ const f=p.f, nice=v=>String(v||'').toLowerCase();
+  const bits=[p.kind==='mh'?'Storm manhole':'Storm '+nice(f.t||'inlet'), f.id, f.y&&('installed '+f.y), p.kind==='mh'&&f.s&&f.s!=='UNKNOWN'&&(f.s+' in'), p.kind==='in'&&f.s&&nice(f.s), f.m&&f.m!=='UNKNOWN'&&nice(f.m), f.o&&nice(f.o)+'-owned'].filter(Boolean);
+  return bits.join(' · ')+' · Baltimore County GIS'; }
+function refLabels(host){
+  host.querySelectorAll('.refl').forEach(d=>d.remove());
+  if(!REF.pts.length || !(S.ref||{}).storm || S.view.mode==='walk') return;
+  const close = S.view.mode==='plan' ? S.view.mpp<0.42 : persp.position.distanceTo(controls.target)<230; if(!close) return;
+  const r=canvas.getBoundingClientRect(); let n=0;
+  for(const p of REF.pts){ const s=project(p.x,p.y,p.z); if(!s.vis||s.x<0||s.y<0||s.x>r.width||s.y>r.height) continue; if(++n>70) break;
+    const d=document.createElement('div'); d.className='refl '+p.kind; d.textContent=(p.kind==='mh'?'MH':'IN')+(p.f.y?' '+p.f.y:''); d.title=refDescribe(p); d.style.left=s.x+'px'; d.style.top=s.y+'px';
+    d.onclick=e=>{ e.stopPropagation(); toast(refDescribe(p), 6000); }; host.appendChild(d); }
+}
+function initRef(){
+  const L=REF.data.layers; S.ref=S.ref||{}; const q=new URLSearchParams(location.search).get('show'); if(q){ for(const k of q.split(',')) if(k==='storm'||k==='boundary') S.ref[k]=true; }
+  $('refGrp').hidden=false; $('refBoundary').checked=!!S.ref.boundary; $('refStorm').checked=!!S.ref.storm;
+  const km=L.storm_lines.reduce((a,l)=>a+l.p.slice(1).reduce((b,c,i)=>b+Math.hypot(c[0]-l.p[i][0],c[1]-l.p[i][1]),0),0)/1000;
+  $('refNote').textContent=`${L.manholes.length} manholes, ${L.inlets.length} inlets and ${km.toFixed(1)} km of storm pipe in this view, from Baltimore County's public GIS (retrieved 9 Nov 2026). It covers the county-owned system: almost none of it is on school land, because the campus's own drains are private and not in the county's records. Zoom in close to read install years; tap a tag for details. Positions are the county's, not surveyed here.`;
+  $('refBoundary').onchange=()=>{ S.ref.boundary=$('refBoundary').checked; buildRef(); save(); };
+  $('refStorm').onchange=()=>{ S.ref.storm=$('refStorm').checked; buildRef(); save(); };
+  const prev=buildCandLines; buildCandLines=function(){ prev(); buildRef(); };
+  buildRef();
+}
+
 /* ---------- machine finds ---------- */
 let CAND=[], candShowAll=false;
 const candLines=new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({vertexColors:true, depthTest:false, transparent:true}));
@@ -1767,6 +1824,7 @@ function frameHook(){
 async function initExtras(){
   try{ const r=await fetch(DATA+'/candidates.json'); if(r.ok){ const j=await r.json(); CAND=j.candidates||[]; $('candNote').title=j.method||''; } }catch(e){}
   renderCands(); buildCandLines();
+  try{ if(M.reference){ const r=await fetch(DATA+'/'+M.reference); if(r.ok){ REF.data=await r.json(); initRef(); } } }catch(e){ console.warn(e); }
   if(WF){ $('lvl').min=(Math.floor(M.hmin*4)/4-0.25).toFixed(2); $('lvl').max=(WF+3).toFixed(2); }
   if(M.overlays?.length){ const g=$('preOverlays'); g.hidden=false;
     g.innerHTML='<div class="lab">Archive plans for this site</div>'+M.overlays.map((o,i)=>`<button class="btn" data-o="${i}" style="justify-content:flex-start;text-align:left">＋ ${o.name}<br><small style="color:var(--dim);font:400 10.5px var(--mono)">${o.credit}</small></button>`).join('');
