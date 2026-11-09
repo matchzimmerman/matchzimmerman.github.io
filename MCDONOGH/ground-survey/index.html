@@ -549,10 +549,12 @@ const S = {
 };
 let LS_KEY = 'mcd-ground-survey.v1';
 let HAD_SAVED=false;
-function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = s.objs||[]; S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
+function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = (s.objs||[]).map(o=>{ if(o&&typeof o==='object'){ for(const k of RUNTIME_KEYS) delete o[k]; } return o; }).filter(o=>o&&o.id); S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
 let saveT = 0;
+const RUNTIME_KEYS=new Set(['wrap','orient','content','tex','mesh','group','helper','img']);
+function stateJSON(){ return JSON.stringify(S,(k,v)=>{ if(RUNTIME_KEYS.has(k)) return undefined; if(v&&typeof v==='object'&&(v.isObject3D||v.isTexture||v.isMaterial||v.isBufferGeometry)) return undefined; return v; }); }
 let saveFirst = 0;
-function saveNow(){ clearTimeout(saveT); saveFirst=0; try{ syncViewState(); localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
+function saveNow(){ clearTimeout(saveT); saveFirst=0; try{ syncViewState(); localStorage.setItem(LS_KEY, stateJSON()); }catch(e){} }
 function save(){ clearTimeout(saveT); const now=performance.now(); if(!saveFirst) saveFirst=now; saveT = setTimeout(saveNow, now-saveFirst>1000 ? 0 : 300); }
 addEventListener('pagehide', ()=>{ if(saveFirst) saveNow(); }); document.addEventListener('visibilitychange', ()=>{ if(document.hidden && saveFirst) saveNow(); });
 
@@ -1464,7 +1466,7 @@ function minRect(pts){
 function buildSiteBar(){
   const bar=$('siteBar'); if(!SITES||SITES.length<2) return; bar.hidden=false; document.body.classList.add('multi');
   bar.innerHTML=SITES.map(s=>`<button data-s="${s.slug}" aria-pressed="${s.slug===SITE.slug}">${s.name}</button>`).join('');
-  bar.onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.s===SITE.slug) return; syncViewState(); try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(_){} location.hash=b.dataset.s; location.reload(); };
+  bar.onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.s===SITE.slug) return; syncViewState(); try{ localStorage.setItem(LS_KEY, stateJSON()); }catch(_){} location.hash=b.dataset.s; location.reload(); };
 }
 addEventListener('hashchange',()=>{ if(SITES && SITE && location.hash.slice(1)!==SITE.slug && SITES.some(s=>s.slug===location.hash.slice(1))) location.reload(); });
 
