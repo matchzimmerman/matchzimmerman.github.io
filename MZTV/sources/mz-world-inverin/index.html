@@ -96,6 +96,13 @@ function terrainH0(x, z) {
 }
 
 const FINES = [{ x0: -120, x1: 50, z0: -22, z1: 215 }, { x0: 50, x1: 152, z0: -45, z1: 95 }];
+/* ====================================================================== INVERIN: FARM (BIT FIELD 045), Bernard's farm, planted inland east of the wreck
+   The farm runs in its own local frame (+x north, +z east, metres from the SHEEPDOG anchor), inside a group that places it in INVERIN:
+   world x = FARM_O.x + local z, world z = FARM_O.z + local x. North stays north, east stays east, the bay is to the south. */
+const FARM_O = { x: 360, z: 140 };
+const FARM_NEAR = { x0: -125, x1: 235, z0: -205, z1: 95 };   // the farm's fine ground, local
+const inFarmNear = (x, z) => { const fx = z - FARM_O.z, fz = x - FARM_O.x; return fx > FARM_NEAR.x0 + 1.5 && fx < FARM_NEAR.x1 - 1.5 && fz > FARM_NEAR.z0 + 1.5 && fz < FARM_NEAR.z1 - 1.5; };
+const HOOKS = {};
 const inFine = (x, z) => FINES.some(F => x > F.x0 + 1.5 && x < F.x1 - 1.5 && z > F.z0 + 1.5 && z < F.z1 - 1.5);
 /* ====================================================================== INVERIN: one ground for every place in it */
 const CC = { x: -62, z: 150 }; const CC_Y = terrainH0(-62, 150);   // TWISTED TREE's clearing, inland of the west headland
@@ -183,7 +190,7 @@ let S = DEF();
 try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEF(), o); } } catch (e) {}
 // sim seconds restart at 0 each load; carry clocks as offsets
 const T0 = S.runSec || 0; simT = T0;
-function save() { try { S.runSec = simT; localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function save() { try { if (HOOKS.save) HOOKS.save(); S.runSec = simT; localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 function logEv(text) { S.log.unshift({ t: galwayParts(simMs).str, text }); if (S.log.length > 40) S.log.length = 40; }
 if (!S.log.length) logEv('the headland woke for the first time');
 else logEv('the headland resumed (epoch ' + S.epoch + ')');
@@ -226,8 +233,8 @@ const SH = {   // shared uniforms (same objects referenced by every material)
   uBreath: { value: 0 }, uDay: { value: 1 }, uKeyUp: { value: 1 }, uHold: { value: 0 }, uWrInv: { value: new THREE.Matrix4() },
 };
 const OBJ_VERT = /* glsl */`
-uniform float uTime, uBreath, uBreathOn, uCloth, uClothH, uWalk, uMove; uniform vec3 uWindL;
-attribute vec3 aT;
+uniform float uTime, uBreath, uBreathOn, uCloth, uClothH, uWalk, uMove, uSway, uHush; uniform vec3 uWindL; uniform vec4 uPh[8];
+attribute vec3 aT; attribute float aG;
 varying vec3 vW, vN, vL, vT; varying float vC;
 void main(){
   vC=0.;
@@ -250,10 +257,15 @@ void main(){
     lp.x+=sin(t*5.-uTime*2.4)*0.07*t; vC=fl*2.5;
     lp.y+=t*t*(0.15*uMove+0.12*length(uWindL));
   }
+  float bh=0.; if(uSway>0.5&&uSway<1.5){ lp.y*=0.1+0.95*aG; bh=lp.y; }   // FARM: a blade, its height the grazing map
   #ifdef USE_INSTANCING
     lp=instanceMatrix*lp; ln=mat3(instanceMatrix)*ln; lt=mat3(instanceMatrix)*lt;
   #endif
   vec4 w=modelMatrix*lp; vec3 n=normalize(mat3(modelMatrix)*ln);
+  if(uSway>0.5&&uSway<1.5){ float k=bh*bh*2.2; float gust=0.55+0.45*sin(uTime*1.7+w.x*0.21+w.z*0.17)+0.25*sin(uTime*3.1+w.x*0.6-w.z*0.4);
+    w.xz+=uWindL.xz*k*gust*(1.-uHush)*0.55;
+    for(int i=0;i<8;i++){ vec4 p=uPh[i]; if(p.w<=0.) continue; vec2 d=w.xz-p.xy; float r=length(d); float f=p.w*(1.-smoothstep(0.,p.z,r)); w.xz+=normalize(d+1e-4)*f*k*0.7; w.y-=f*bh*0.75; } }
+  if(uSway>1.5) w.xyz+=uWindL*0.012*sin(uTime*5.+w.x*3.+w.z*2.)*(1.-uHush);   // FARM: fleece shivers
   if(uBreathOn>0.5){
     float steep=smoothstep(0.35,0.7,1.-n.y);
     float band=smoothstep(1.,8.,w.y)*(1.-smoothstep(48.,85.,w.y));
@@ -267,7 +279,8 @@ const OBJ_FRAG = /* glsl */`
 ${COMMON}
 uniform float uId, uMode, uEmit, uFace, uStackH, uTime, uHold; uniform mat4 uWrInv;
 uniform float uAmb, uDiff, uFogD, uFogShade;
-uniform vec3 uKeyD, uCamP, uT;
+uniform vec3 uKeyD, uCamP, uT, uWindL;
+uniform float uAcc; uniform sampler2D uGrass; uniform vec4 uGB; uniform vec2 uFarmO;
 varying vec3 vW, vN, vL, vT; varying float vC;
 void rock(inout vec3 T, inout float sh, inout float acc){
   float n1=vn(vW.xz*0.06+vW.y*0.015);
@@ -276,6 +289,10 @@ void rock(inout vec3 T, inout float sh, inout float acc){
   acc=step(vein,0.045)*step(0.58,vn(vW.xz*0.02+vW.y*0.03+7.));
   sh-=0.14*(1.-n1);
 }
+void stoneC(vec3 N, inout vec3 T, inout float sh, inout float acc){   // FARM: each stone carved in its own lie, lichen on the tops
+  vec3 base=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.); float n1=vn(vL.xz*1.7+vL.y*1.3);
+  T=normalize(base+0.4*vec3(n1-0.5,0.,vn(vL.zx*1.3+3.)-0.5)); sh+=0.05-0.13*(1.-n1);
+  acc=step(0.986,hash(floor(vW.xz*9.+vW.y*7.)))*step(0.55,vn(vW.xz*0.4))*step(0.2,N.y); }
 void main(){
   vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
   float sh=uAmb+uDiff*max(dot(N,uKeyD),0.)+vC;
@@ -287,6 +304,23 @@ void main(){
     else { id=4.; rock(T,sh,acc); if(vW.y<1.6) sh*=0.7; }
   }
   else if(uMode>2.5&&uMode<3.5){ T=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.); }
+  else if(uMode>10.5&&uMode<11.5){ stoneC(N,T,sh,acc); }
+  else if(uMode>11.5&&uMode<12.5){   // FARM: the ground reads the field's memory (long grass, grazed, trodden)
+    vec2 fl=vec2(vW.z-uFarmO.y,vW.x-uFarmO.x); vec2 guv=(fl-uGB.xy)/uGB.zw; vec4 g=vec4(0.82,0.,0.,0.);
+    bool inMap=guv.x>0.&&guv.x<1.&&guv.y>0.&&guv.y<1.; if(inMap) g=texture2D(uGrass,guv);
+    float wob=vn(vW.xz*0.35)*0.18-0.09; vec2 wd=uWindL.xz; float wl=length(wd); wd=wl>0.01?wd/wl:vec2(0.6,0.8);
+    if(N.y<0.7){ id=4.; rock(T,sh,acc); }
+    else if(!inMap){ id=5.; T=normalize(vec3(0.6,0.,1.)+vec3(0.5*(vn(vW.xz*0.012)-0.5),0.,0.)); sh+=0.1*(vn(vW.xz*0.09)-0.5); }
+    else if(g.g+wob>0.52){ id=12.; float e=0.7;
+      float gz=texture2D(uGrass,guv+vec2(0.,e/uGB.w)).g-texture2D(uGrass,guv-vec2(0.,e/uGB.w)).g, gx=texture2D(uGrass,guv+vec2(e/uGB.z,0.)).g-texture2D(uGrass,guv-vec2(e/uGB.z,0.)).g;
+      T=normalize(vec3(-gx,0.,gz)+vec3(0.,0.,1e-3)); sh+=0.05*(vn(vW.xz*6.)-0.5); }
+    else if(g.r+wob<0.36){ id=3.; float a=vn(vW.xz*0.9)*6.283; T=vec3(cos(a),0.,sin(a)); sh+=0.1*(vn(vW.xz*7.)-0.5)+0.05; }
+    else { id=5.; T=normalize(vec3(wd.x,0.,wd.y)*0.5+vec3(0.6,0.,1.)*0.5+vec3(0.5*(vn(vW.xz*0.012)-0.5),0.,0.)); sh+=0.1*(vn(vW.xz*0.6)-0.5)+0.07*(g.r-0.6)-0.06; }
+  }
+  else if(uMode>13.5&&uMode<14.5){ vec3 A=normalize(abs(N.y)<0.9?cross(N,vec3(0.,1.,0.)):cross(N,vec3(1.,0.,0.))); vec3 B=cross(N,A);   // FARM: fleece curls
+    float a=vn(vL.xz*15.+vL.y*12.)*9.+vn(vL.xy*31.)*3.; T=normalize(A*cos(a)+B*sin(a)); sh+=0.16*(vn(vL.xz*22.+vL.y*17.)-0.5)+0.05; }
+  else if(uMode>14.5&&uMode<15.5){ T=length(vT)>0.01?normalize(vT):uT; sh+=0.07*sin(dot(vL,normalize(cross(N,T)))*41.); acc=step(0.992,hash(floor(vL.xz*3.+vL.y*11.)))*step(0.6,vn(vL.xz*0.9)); }   // FARM: corrugated iron
+  else if(uMode>15.5&&uMode<16.5){ T=length(vT)>0.01?normalize(vT):uT; sh+=0.07*(vn(vL.xy*2.+vL.zy*2.)-0.5)+0.04; }   // FARM: whitewash
   if(uFace>0.01){
     float a=atan(vL.x,vL.z); float hh=vL.y/uStackH+0.5;
     float ey=(hh-0.66)/(0.05*uFace+0.002);
@@ -294,6 +328,7 @@ void main(){
     if(min(e1,e2)<1.){ id=7.; sh=0.06; acc=0.; }
   }
   if(uHold>0.01){ vec3 q=(uWrInv*vec4(vW,1.)).xyz; float x=clamp(q.x/13.,-1.,1.); float b=x<0.?3.5*(1.-.22*x*x):3.5*pow(max(cos(x*1.5708),0.),.7)+.1; if(abs(q.z)<b+.08&&abs(q.x)<13.1&&q.y<3.62) sh*=mix(1.,.34,uHold); }
+  acc=max(acc,uAcc);
   float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
   if(uEmit>0.){ sh=uEmit; fog*=0.4; }
   sh=mix(sh,uFogShade,fog);
@@ -512,7 +547,7 @@ const TER = { x0: -500, z0: -450, sx: 1000, sz: 1200 };
 {
   const g = new THREE.PlaneGeometry(TER.sx, TER.sz, 400, 480); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i) + TER.z0 + TER.sz / 2; p.setZ(i, z); const fineIn = inFine(x, z); p.setY(i, terrainH(x, z) - (fineIn ? 2.2 : 0)); }
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i) + TER.z0 + TER.sz / 2; p.setZ(i, z); const fineIn = inFine(x, z) || inFarmNear(x, z); p.setY(i, terrainH(x, z) - (fineIn ? 2.2 : 0)); }
   g.computeVertexNormals();
   scene.add(new THREE.Mesh(g, objMat(4, 2, V(0, 1, 0), { uBreathOn: { value: 1 } })));
   // height texture for the sea's shore foam
@@ -854,15 +889,16 @@ function wrFree(x, z) { const L = WR.layer; WR.nl = L;
   if (L === 'deck') { const q = WR.hit(x, z, WR.DECK_Y); if (q.u > WR.gang[0] && q.u < WR.gang[1] && q.v > WR.bAt(q.u, WR.DECK_Y) - 0.2) { WR.nl = 'ramp'; return true; } if (q.u < -12.4 || q.u > 11.2 || Math.abs(q.v) > WR.bAt(q.u, WR.DECK_Y) - 0.22) return false; if (q.u > WR.stair[0] && q.u < WR.stair[1] - 0.1 && Math.abs(q.v) < 0.9) { if (q.u > WR.stair[1] - 0.35) { WR.nl = 'hold'; return true; } return false; } if (Math.abs(q.u - 1.5) < 0.42 && Math.abs(q.v) < 0.42) return false; const inWH = q.u > -10.1 && q.u < -5.3 && Math.abs(q.v) < 2.1, wasWall = q.u > -10.1 && q.u < -9.85 || q.u < -5.3 && q.u > -5.55 && Math.abs(q.v) > 0.6 || (q.u > -10.1 && q.u < -5.3 && Math.abs(Math.abs(q.v) - 2) < 0.14); if (inWH && wasWall) return false; if (Math.hypot(q.u + 6.5, q.v) < 0.45) return false; return true; }
   if (L === 'ramp') { const q = rampS(x, z); if (q.w > 0.6) return false; if (q.s < 0.02) { WR.nl = 'deck'; return true; } if (q.s > 0.96) { WR.nl = 'ground'; return true; } return true; }
   const q = WR.hit(x, z, 1.3); const ramp = rampS(x, z); if (ramp.s > 0.86 && ramp.s < 0.97 && ramp.w < 0.6) { WR.nl = 'ramp'; return true; } if (Math.abs(q.u) < 13.3 && Math.abs(q.v) < WR.beam(q.u) + 0.25) { if (q.v > 0 && q.u > WR.breach[0] && q.u < WR.breach[1]) { if (q.v < WR.bAt(q.u, 1.3) - 0.15) WR.nl = 'hold'; return true; } return false; } return true; }
-const PLACES = { 1: ['THE HOUSE', HOUSE.x - 8, HOUSE.z - 12, 3.4], 2: ['THE PIER', PIER_X, zL - 6, 3.14], 5: ['THE WRECK', 104, WR.O.z + 13, 3.0], 3: ['TWISTED TREE', CC.x + 3, CC.z - 9.5, 3.45], 4: ['SRUTHÁN', -44, 96, 3.3] };
-function walkTo(k) { const p = PLACES[k]; if (!p) return; WALK.x = p[1]; WALK.z = p[2]; WALK.yaw = p[3]; WR.layer = WR.nl = 'ground'; WALK.y = groundAt(WALK.x, WALK.z); WALK.vx = WALK.vz = 0; }
+const PLACES = { 6: ['THE FARM', 0, 0, -1.45], 1: ['THE HOUSE', HOUSE.x - 8, HOUSE.z - 12, 3.4], 2: ['THE PIER', PIER_X, zL - 6, 3.14], 5: ['THE WRECK', 104, WR.O.z + 13, 3.0], 3: ['TWISTED TREE', CC.x + 3, CC.z - 9.5, 3.45], 4: ['SRUTHÁN', -44, 96, 3.3] };
+function walkTo(k) { const p = PLACES[k]; if (!p) return; if (k == 6 && typeof FARM_SPOT !== 'undefined') { p[1] = FARM_SPOT.x; p[2] = FARM_SPOT.z; } WALK.x = p[1]; WALK.z = p[2]; WALK.yaw = p[3]; WR.layer = WR.nl = 'ground'; WALK.y = groundAt(WALK.x, WALK.z); WALK.vx = WALK.vz = 0; }
 walkTo(4);
 function walkFree(x, z, ox, oz) {
   if (inPier(x, z)) return true; const stair = Math.abs(x - PIER_X) < 1.6 && z >= zL && z <= zT + 3; if (stair) return true;
   const nearW = Math.abs(x - 100) < 70; if (WR.layer !== 'ground' || (nearW && Math.hypot(x - WR.O.x, z - WR.O.z) < 26)) { if (!wrFree(x, z)) return false; if (WR.layer !== 'ground' || WR.nl !== 'ground') return true; }
   const h = terrainH(x, z); if (h < (nearW ? -0.75 : 0.3)) return false;
   const h0 = terrainH(ox, oz), dd = Math.hypot(x - ox, z - oz) || 1e-4; if (Math.abs(h - h0) / dd > 1.6 && h < h0 + 8) return false;
-  if (WR.layer === 'ground') for (const o of OBST) if ((x - o[0]) ** 2 + (z - o[1]) ** 2 < o[2] * o[2]) return false; return true;
+  if (WR.layer === 'ground') for (const o of OBST) if ((x - o[0]) ** 2 + (z - o[1]) ** 2 < o[2] * o[2]) return false;
+  if (HOOKS.walkBlock && HOOKS.walkBlock(x, z, ox, oz)) return false; return true;
 }
 function walkStep(dt) { dt = Math.min(dt, 0.1); const W = WALK, k = W.keys;
   let fx = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0) + W.stick[0], fz = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0) + W.stick[1]; const fl = Math.hypot(fx, fz); if (fl > 1) { fx /= fl; fz /= fl; }
@@ -877,14 +913,883 @@ function worldTick(dt) { if (WALK.on) walkStep(dt); else if (DIR.look === WALK.l
   const x = camera.position.x, z = camera.position.z; WALK.place = placeName(); const near = (x > SB.x0 - 30 && x < SB.x1 + 30 && z > SB.z0 - 30 && z < SB.z1 + 30) ? streamNear(x, z).d : 99; STREAMQ = Math.pow(1 - smoothstep(1, 46, near), 2) * (1 + lv); WOODQ = 1 - 0.6 * (1 - smoothstep(30, 78, Math.hypot(x - CC.x, z - CC.z)));
   PU.uPhoto.value = WR.layer !== 'ground' ? 1 : 1 - smoothstep(19, 96, Math.hypot(x - WR.O.x, z - WR.O.z));
   const hv = WR.layer === 'hold' ? 1 : 0; HOLDQ += (hv - HOLDQ) * Math.min(1, dt * 3); SH.uHold.value = HOLDQ; WRECKQ = 1 - smoothstep(4, 42, Math.hypot(x - WR.O.x, z - WR.O.z)); if (WR.layer !== 'ground' && !S.boarded) { S.boarded = true; logEv('someone went aboard the wreck'); } }
-{ const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = ''+(matchMedia('(pointer:coarse)').matches?'DRAG LEFT WALK · DRAG RIGHT LOOK · TAP HIDES INFO':'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–5 PLACES'); hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
-  addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; } if ('12345'.includes(k)) walkTo(k); });
+{ const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = ''+(matchMedia('(pointer:coarse)').matches?'DRAG LEFT WALK · DRAG RIGHT LOOK · TAP HIDES INFO':'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–6 PLACES'); hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
+  addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; } if ('123456'.includes(k)) walkTo(k); });
   addEventListener('keyup', e => { WALK.keys[e.key.toLowerCase()] = false; }); addEventListener('blur', () => { WALK.keys = {}; });
   cv.style.touchAction = 'none'; cv.addEventListener('click', () => { if (WALK.on && cv.requestPointerLock && matchMedia('(pointer:fine)').matches) { try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
   addEventListener('mousemove', e => { if (document.pointerLockElement === cv) { WALK.yaw += e.movementX * 0.0022; WALK.pitch = clamp(WALK.pitch - e.movementY * 0.0022, -1.35, 1.25); } });
   const ptrs = new Map(); cv.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') return; ptrs.set(e.pointerId, { t: performance.now(), moved: 0, left: e.clientX < innerWidth / 2, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY }); });
   addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.ox, e.clientY - p.oy)); if (p.left) { WALK.stick = [clamp((e.clientX - p.ox) / 60, -1, 1), clamp((p.oy - e.clientY) / 60, -1, 1)]; } else { WALK.yaw += (e.clientX - p.x) * 0.006; WALK.pitch = clamp(WALK.pitch - (e.clientY - p.y) * 0.006, -1.35, 1.25); p.x = e.clientX; p.y = e.clientY; } });
   const up = e => { const p = ptrs.get(e.pointerId); if (p && e.type === 'pointerup' && p.moved < 10 && performance.now() - p.t < 320) { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); } if (p && p.left) WALK.stick = [0, 0]; ptrs.delete(e.pointerId); }; addEventListener('pointerup', up); addEventListener('pointercancel', up); }
+
+const HOST_S = S, HOST_LIVE = () => live;
+
+/* ====================================================================== INVERIN: FARM, built in its own frame and placed by one group */
+const HOST_H = terrainH, HOST_SCENE = scene, HOST_OBJMAT = objMat;
+const FARM = (() => {
+  // ---- frame
+  const FG = new THREE.Group(); FG.matrixAutoUpdate = false;
+  FG.matrix.set(0, 0, 1, FARM_O.x, 0, 1, 0, 0, 1, 0, 0, FARM_O.z, 0, 0, 0, 1); FG.matrixWorldNeedsUpdate = true; HOST_SCENE.add(FG);
+  const scene = FG;
+  const toW = (v, out = V()) => out.set(FARM_O.x + v.z, v.y, FARM_O.z + v.x);
+  const fromW = (x, z) => [z - FARM_O.z, x - FARM_O.x];
+  // ---- model and helpers
+  const FM = /*<FARM_MODEL>*/{"dem":{"origin_local_xz":[-260.1,-225.05],"step_m":25,"cols":21,"rows":23,"samples_m":[18.81,17.99,17.29,16.86,16.76,16.45,15.89,15.8,16.14,16.38,16.52,16.42,16.24,16.12,15.83,15.34,14.99,15.12,15.57,16.02,16.48,19.12,18.41,17.79,17.39,17.38,17.17,17.15,16.93,17.05,17.17,17.29,17.17,16.99,16.76,16.3,15.7,15.31,15.42,15.83,16.28,16.8,19.43,18.85,18.32,17.98,17.9,17.82,17.78,17.67,17.83,17.96,17.99,17.94,17.7,17.38,16.8,16.08,15.64,15.76,16.16,16.63,17.18,19.84,19.31,18.84,18.55,18.46,18.39,18.34,18.39,18.47,18.62,18.59,18.46,18.22,17.81,17.25,16.54,16.05,16.14,16.59,17.1,17.67,20.36,19.85,19.42,19.13,19.03,18.9,18.62,18.81,19.11,19.21,19.07,18.84,18.56,18.14,17.6,16.99,16.6,16.69,17.12,17.66,18.23,20.94,20.47,20.07,19.71,19.58,19.25,19.44,19.57,19.79,19.81,19.62,19.34,18.97,18.5,17.99,17.46,17.14,17.24,17.66,18.17,18.74,21.53,21.12,20.7,20.33,20.13,19.92,20.22,20.48,20.49,20.49,20.37,20.1,19.69,19.08,18.52,17.98,17.63,17.73,18.11,18.56,19.1,22.14,21.71,21.23,20.92,20.79,20.71,20.83,21.12,21.26,21.28,21.2,21.03,20.64,19.89,19.13,18.59,18.13,18.16,18.48,18.86,19.35,22.77,22.31,21.77,21.47,21.3,20.93,21.25,21.83,22.11,22.21,22.25,22.12,21.63,20.79,19.9,19.2,18.74,18.62,18.81,19.16,19.65,23.41,22.89,22.32,22.0,21.84,21.63,21.95,22.59,22.87,23.03,23.2,23.08,22.57,21.69,20.7,19.91,19.33,19.1,19.22,19.57,20.06,24.07,23.51,22.97,22.61,22.42,22.45,22.6,23.14,23.39,23.6,23.92,23.91,23.6,22.7,21.71,20.78,19.98,19.71,19.75,20.12,20.58,24.91,24.35,23.73,23.22,22.89,22.79,23.17,23.5,23.76,24.07,24.43,24.62,24.52,23.76,22.72,21.67,20.76,20.44,20.48,20.77,21.16,25.93,25.3,24.5,23.84,23.43,23.44,23.62,23.84,24.09,24.47,24.91,25.26,25.2,24.56,23.56,22.52,21.64,21.26,21.27,21.44,21.8,26.97,26.28,25.46,24.54,23.78,23.95,24.11,24.23,24.45,24.85,25.39,25.86,25.85,25.32,24.41,23.34,22.45,22.01,21.94,22.1,22.47,27.88,27.19,26.44,25.5,24.82,24.57,24.51,24.67,24.85,25.26,25.84,26.44,26.56,25.94,25.22,24.14,23.21,22.75,22.65,22.79,23.13,28.65,28.03,27.34,26.45,25.65,25.18,25.05,25.08,25.3,25.74,26.3,26.91,27.2,26.66,25.91,24.94,23.92,23.4,23.29,23.41,23.75,29.41,28.84,28.15,27.29,26.45,25.46,25.49,25.56,25.79,26.24,26.81,27.46,27.79,27.41,26.64,25.71,24.7,24.14,23.99,24.09,24.34,30.06,29.62,28.92,28.08,27.13,26.91,26.35,26.17,26.38,26.79,27.48,28.15,28.44,28.04,27.41,26.54,25.59,24.97,24.83,24.89,25.03,30.84,30.44,29.72,28.77,27.85,27.06,27.32,27.19,27.2,27.58,28.36,28.99,29.35,28.92,28.28,27.49,26.57,25.94,25.82,25.84,25.89,31.72,31.26,30.52,29.56,28.68,28.37,28.52,28.29,28.22,28.64,29.33,29.89,30.21,29.81,29.15,28.45,27.5,26.9,26.86,26.83,26.72,32.68,32.25,31.44,30.48,29.88,29.76,29.47,29.23,29.34,29.79,30.32,30.83,31.08,30.76,30.05,29.25,28.43,27.95,27.81,27.75,27.57,33.83,33.37,32.53,31.31,30.81,30.48,29.91,30.08,30.38,30.75,31.13,31.62,31.85,31.47,30.77,29.99,29.23,28.74,28.59,28.56,28.47,34.94,34.48,33.51,32.2,31.36,31.04,30.78,30.82,31.06,31.33,31.65,32.1,32.33,31.9,31.3,30.62,29.85,29.31,29.22,29.27,29.36]},"buildings":[{"id":"osm.way.1163118488","role":"house","tag":"house","fp":[[0.6,1.65],[2.6,2.75],[3.8,0.45],[6.5,1.95],[5.2,4.15],[13.2,8.65],[9.2,15.85],[-3.4,8.85],[0.6,1.65]]},{"id":"osm.way.1163118489","role":"neighbour-context","tag":"shed","fp":[[-77.5,-0.95],[-75.7,-19.35],[-70.8,-18.85],[-72.5,-0.45],[-77.5,-0.95]]},{"id":"osm.way.1163118490","role":"neighbour-context","tag":"yes","fp":[[-64.5,-4.35],[-58.2,-4.85],[-57.8,-0.25],[-64.2,0.25],[-64.5,-4.35]]},{"id":"osm.way.1163118491","role":"neighbour-context","tag":"house","fp":[[-54.3,86.15],[-54.3,76.75],[-48.8,76.75],[-48.8,86.15],[-54.3,86.15]]},{"id":"osm.way.1163356660","role":"neighbour-context","tag":"ruins","fp":[[-14.0,-106.65],[-12.0,-120.85],[-6.3,-120.05],[-8.2,-105.85],[-14.0,-106.65]]},{"id":"osm.way.1163356661","role":"byre","tag":"shed","fp":[[1.1,-6.85],[4.7,-6.75],[4.6,-2.85],[1.0,-2.95],[1.1,-6.85]]},{"id":"osm.way.1163356662","role":"byre","tag":"shed","fp":[[4.6,-2.85],[4.7,-7.65],[11.2,-7.45],[11.1,-2.65],[4.6,-2.85]]},{"id":"osm.way.1163356663","role":"hay-barn","tag":"shed","fp":[[-12.0,-7.55],[-13.2,-14.85],[-7.0,-15.85],[-5.7,-8.65],[-12.0,-7.55]]},{"id":"osm.way.1163356664","role":"neighbour-context","tag":"house","fp":[[-12.3,-42.55],[-12.4,-39.05],[-14.7,-39.15],[-14.8,-35.95],[-16.3,-36.05],[-16.3,-31.55],[-20.3,-31.55],[-21.3,-39.65],[-24.3,-39.65],[-24.2,-43.65],[-21.2,-43.55],[-21.2,-47.25],[-14.7,-47.25],[-14.7,-42.65],[-12.3,-42.55]]},{"id":"osm.way.1163356666","role":"neighbour-context","tag":"yes","fp":[[-55.4,-15.25],[-53.4,-23.05],[-49.0,-21.85],[-51.0,-14.15],[-55.4,-15.25]]},{"id":"osm.way.1163356667","role":"neighbour-context","tag":"house","fp":[[-60.2,-28.05],[-57.9,-36.95],[-62.0,-40.35],[-61.2,-43.55],[-50.9,-40.85],[-54.6,-26.55],[-60.2,-28.05]]},{"id":"osm.way.1163356668","role":"neighbour-context","tag":"ruins","fp":[[-62.5,-58.45],[-61.3,-69.95],[-55.9,-69.45],[-57.1,-57.85],[-62.5,-58.45]]},{"id":"osm.way.1163356669","role":"neighbour-context","tag":"house","fp":[[-84.8,-75.65],[-83.1,-86.55],[-76.2,-85.45],[-78.0,-74.55],[-84.8,-75.65]]},{"id":"osm.way.1163356670","role":"neighbour-context","tag":"shed","fp":[[-93.4,-51.45],[-93.6,-55.85],[-84.4,-56.25],[-84.2,-51.85],[-93.4,-51.45]]},{"id":"osm.way.1163356671","role":"neighbour-context","tag":"house","fp":[[-79.3,-39.55],[-79.1,-35.15],[-83.1,-35.05],[-82.9,-31.85],[-93.9,-31.35],[-94.5,-46.25],[-83.6,-46.75],[-83.3,-39.35],[-79.3,-39.55]]},{"id":"osm.way.1163356672","role":"neighbour-context","tag":"house","fp":[[-81.1,-15.45],[-81.1,-6.45],[-88.4,-6.45],[-88.5,-18.75],[-78.1,-18.75],[-78.1,-15.45],[-81.1,-15.45]]},{"id":"osm.way.1163356676","role":"neighbour-context","tag":"yes","fp":[[-128.7,-145.25],[-130.0,-150.05],[-126.4,-151.05],[-125.0,-146.35],[-128.7,-145.25]]},{"id":"osm.way.1163356677","role":"neighbour-context","tag":"house","fp":[[-130.1,-112.25],[-130.1,-137.35],[-127.0,-137.65],[-123.1,-112.95],[-130.1,-112.25]]},{"id":"osm.way.1163361609","role":"neighbour-context","tag":"house","fp":[[35.2,13.95],[39.4,16.05],[37.4,20.05],[40.5,21.75],[36.7,29.25],[22.7,22.15],[26.5,14.55],[33.2,17.95],[35.2,13.95]]},{"id":"osm.way.1163361610","role":"neighbour-context","tag":"house","fp":[[77.9,79.55],[77.8,66.55],[86.7,66.55],[86.8,79.45],[77.9,79.55]]},{"id":"osm.way.1163361611","role":"neighbour-context","tag":"yes","fp":[[171.2,31.85],[171.0,26.05],[180.3,25.65],[180.6,31.45],[171.2,31.85]]},{"id":"osm.way.1163361612","role":"neighbour-context","tag":"house","fp":[[169.0,51.45],[168.6,41.25],[165.2,41.45],[164.9,34.25],[177.1,33.75],[177.9,51.05],[169.0,51.45]]}],"roads":[{"id":"osm.way.190375608","tag":"unclassified","line":[[-98.2,-13.65],[-130.1,-15.75]]},{"id":"osm.way.190467356","tag":"unclassified","line":[[-95.8,23.95],[-58.9,26.85],[-17.5,19.65],[-10.7,21.15],[46.4,50.15],[59.3,53.45],[101.2,58.35],[192.7,60.45],[224.9,53.05]]},{"id":"osm.way.255764870","tag":"secondary","line":[[-106.8,-154.45],[-88.2,129.95]]},{"id":"osm.way.1163356674","tag":"service","line":[[-105.6,-134.45],[-119.3,-133.35],[-121.8,-129.95],[-121.9,-123.55],[-119.9,-118.75],[-104.5,-116.75]]}],"osmWalls":[[[-44.6,-75.05],[-43.4,-76.95],[-41.4,-75.75],[-42.7,-73.75],[-44.6,-75.05]]],"fields":[{"id":"field.home","name":"the home field","poly":[[-2,-150],[70,-150],[70,18],[44,12],[30,12],[30,-30],[-2,-30]]},{"id":"field.hill","name":"the hill field","poly":[[70,-150],[200,-150],[200,22],[70,18]]},{"id":"field.low","name":"the low field","poly":[[-60,-150],[-2,-150],[-2,-70],[-60,-70]]},{"id":"fold","name":"the fold","poly":[[14,-30],[30,-30],[30,-14],[14,-14]]}],"walls":[{"id":"wall.west","line":[[-60,-150],[-2,-150],[70,-150],[110,-150]],"site":false},{"id":"wall.site","line":[[110,-150],[168,-150]],"site":true},{"id":"wall.west2","line":[[168,-150],[200,-150]],"site":false},{"id":"wall.north","line":[[200,-150],[200,22]],"site":false},{"id":"wall.east","line":[[200,22],[70,18],[44,12],[30,12],[30,-14]],"site":false},{"id":"wall.homehill","line":[[70,-150],[70,18]],"site":false},{"id":"wall.homelow","line":[[-2,-150],[-2,-70],[-60,-70],[-60,-150]],"site":false},{"id":"wall.homesouth","line":[[-2,-70],[-2,-30],[14,-30]],"site":false},{"id":"wall.fold","line":[[14,-30],[30,-30],[30,-14],[14,-14],[14,-30]],"site":false}],"gates":[{"id":"gate.foldhome","at":[30,-22],"w":3.6,"axis":"z","joins":["fold","field.home"]},{"id":"gate.foldyard","at":[14,-22],"w":3.0,"axis":"z","joins":["fold","yard"]},{"id":"gate.yardhome","at":[30,2],"w":3.6,"axis":"z","joins":["yard","field.home"]},{"id":"gate.homehill","at":[70,-92],"w":4.0,"axis":"z","joins":["field.home","field.hill"]},{"id":"gate.homelow","at":[-2,-132],"w":4.0,"axis":"z","joins":["field.home","field.low"]}],"props":{"yard":{"kind":"yard","poly_xz":[[-18,-18],[14,-18],[14,-14],[30,-14],[30,12],[22,13],[-18,22]]},"stonepile":{"kind":"stone-pile","at_xz":[139,-144]},"trough":{"kind":"trough","at_xz":[12,-11]},"bowl":{"kind":"dog-bowl","at_xz":[-3,-2]},"bed":{"kind":"dog-bed","at_xz":[8.2,-5.6]},"thorn":{"kind":"hawthorn","at_xz":[152,-62]},"shore":{"kind":"coastline","at_x":-750},"clare":{"kind":"far-hills"}}}/*</FARM_MODEL>*/;
+  const pip = (x, z, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j];
+  if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
+const segD = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1; const t = clamp(((px - ax) * dx + (pz - az) * dz) / L2, 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); };
+  const PADS = [];
+  const wrapA = (a) => ((a + Math.PI) % TAU + TAU) % TAU - Math.PI, wrnd = mulberry(4501), wr = (a, b) => a + (b - a) * wrnd();
+  const baseH = (x, z) => HOST_H(FARM_O.x + z, FARM_O.z + x);   // INVERIN's ground, in the farm's frame
+  function terrainH(x, z) { let h = baseH(x, z); for (const p of PADS) { const d = Math.hypot(x - p[0], z - p[1]); if (d < p[2] + 6) h = lerp(h, p[3], 1 - smoothstep(p[2], p[2] + 6, d)); } return h; }
+  // ---- memory: a sub-state of INVERIN's
+  const GW = 128, GH = 104, GB = { x0: -100, z0: -175, sx: 320, sz: 260 };
+  const DEFF = () => ({ grass: null, tread: null, wallLaid: 96, days: 0, lastDay: null, exp: 0.35, ewe: { breaks: 0, sides: [] }, flockAt: null, flockPos: null, workedToday: 0, moved: {}, lastMs: Date.now() });
+  const S = Object.assign(DEFF(), HOST_S.farm || {}); HOST_S.farm = S;
+  const b64 = { enc(a) { let s = ''; for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s); }, dec(s, n) { const out = new Uint8Array(n); try { const b = atob(s); for (let i = 0; i < Math.min(n, b.length); i++) out[i] = b.charCodeAt(i); } catch (e) {} return out; } };
+  const GRASS = S.grass ? b64.dec(S.grass, GW * GH) : new Uint8Array(GW * GH).fill(0);
+  const TREAD = S.tread ? b64.dec(S.tread, GW * GH) : new Uint8Array(GW * GH);
+  // ---- materials: INVERIN's, with the farm's modes (11 stone, 12 field ground, 14 fleece, 15 iron, 16 whitewash)
+  const FU = { uGrass: { value: null }, uGB: { value: new THREE.Vector4(GB.x0, GB.z0, GB.sx, GB.sz) }, uFarmO: { value: new THREE.Vector2(FARM_O.x, FARM_O.z) },
+    uPh: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uHush: { value: 0 } };
+  const FMATS = [], ID_MAP = { 3: 9, 10: 4, 11: 3 }, MODE_MAP = { 0: 0, 1: 11, 2: 12, 3: 3, 4: 14, 5: 15, 6: 16, 7: 3 };
+  function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) { const m = HOST_OBJMAT(ID_MAP[id] ?? id, MODE_MAP[mode] ?? mode, T, Object.assign({}, FU, { uAcc: { value: 0 }, uSway: { value: 0 } }, extra)); FMATS.push(m); return m; }
+
+  // ---- no farm events in INVERIN yet: the hush still stills the flock
+  const live = { get ev() { return HOST_LIVE().ev === 'hush' ? 'hush' : null; } };
+  const PHANTOM = { x: 0, z: 0, w: 0 }; const gatherPull = () => [0, 0]; const eventDog = () => {};
+  // ---- sound: the farm's voices through INVERIN's mix (the lens is the microphone)
+  const FAUD = {
+    ok() { return AUD.ctx && AUD.ctx.state === 'running' && AUD.master; },
+    lensF(x, y, z) { return AUD.lens(V(FARM_O.x + z, y, FARM_O.z + x)); },
+    v(type, o) { const c = AUD.ctx, t = c.currentTime + 0.02, g = (v) => { const n = c.createGain(); n.gain.value = v; return n; }, bq = (ty, f, q = 0.7) => { const n = c.createBiquadFilter(); n.type = ty; n.frequency.value = f; n.Q.value = q; return n; };
+      const out = (n) => { n.connect(AUD.master); if (AUD.room) n.connect(AUD.room.rIn); };
+      if (type === 'bleat') { const os = c.createOscillator(), lfo = c.createOscillator(), lg = g(o.f * 0.035), f1 = bq('bandpass', 620, 4), f2 = bq('bandpass', 1050, 5), lp = bq('lowpass', 1500), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+        os.type = 'sawtooth'; os.frequency.setValueAtTime(o.f, t); os.frequency.linearRampToValueAtTime(o.f * 1.06, t + 0.12); os.frequency.linearRampToValueAtTime(o.f * 0.86, t + o.d); lfo.frequency.value = rr(5.5, 7.5); lfo.connect(lg).connect(os.frequency);
+        gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.06); gg.gain.setTargetAtTime(o.v * 0.6, t + 0.2, 0.15); gg.gain.setTargetAtTime(0, t + o.d - 0.1, 0.05);
+        os.connect(f1); os.connect(f2); f1.connect(lp); f2.connect(lp); lp.connect(gg).connect(p); out(p); os.start(t); lfo.start(t); os.stop(t + o.d + 0.4); lfo.stop(t + o.d + 0.4); os.onended = () => { p.disconnect(); lg.disconnect(); }; }
+      if (type === 'clank') [[o.f, 0.7], [o.f * 2.71, 0.35], [o.f * 4.2, 0.15]].forEach(([fq, a]) => { const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.frequency.value = fq;
+        gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v * a, t + 0.003); gg.gain.exponentialRampToValueAtTime(0.0004, t + 0.9 / (1 + a)); os.connect(gg).connect(p); out(p); os.start(t); os.stop(t + 1.2); os.onended = () => p.disconnect(); });
+      if (type === 'knock') { const os = c.createOscillator(), gg = g(0), f = bq('bandpass', 320, 4), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'triangle'; os.frequency.value = o.f;
+        gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.004); gg.gain.exponentialRampToValueAtTime(0.0005, t + 0.2); os.connect(f).connect(gg).connect(p); out(p); if (AUD.echo) p.connect(AUD.echo.eIn); os.start(t); os.stop(t + 0.3); os.onended = () => p.disconnect(); }
+      if (type === 'whistle') { const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; const f0 = AUD.hz(AUD.deg(4, 3));
+        os.frequency.setValueAtTime(f0 * 0.94, t); os.frequency.linearRampToValueAtTime(f0, t + 0.12); os.frequency.setValueAtTime(f0, t + 0.45); os.frequency.linearRampToValueAtTime(f0 * 1.335, t + 0.62); os.frequency.linearRampToValueAtTime(f0 * 1.2, t + 1.1);
+        gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.05); gg.gain.setValueAtTime(o.v, t + 0.4); gg.gain.linearRampToValueAtTime(o.v * 0.2, t + 0.48); gg.gain.linearRampToValueAtTime(o.v, t + 0.6); gg.gain.linearRampToValueAtTime(0, t + 1.15);
+        os.connect(gg).connect(p); out(p); if (AUD.echo) p.connect(AUD.echo.eIn); os.start(t); os.stop(t + 1.25); os.onended = () => p.disconnect(); } },
+    bleat(e) { if (!this.ok()) return; const l = this.lensF(e.x, groundAt(e.x, e.z) + 0.8, e.z); if (l.g < 0.006) return; this.v('bleat', { f: rr(175, 250) * (e.rogue ? 1.12 : 1), d: rr(0.6, 1.1), v: clamp(0.45 * l.g, 0, 0.08), pan: l.pan }); },
+    gate(gt) { if (!this.ok()) return; const l = this.lensF(gt.at[0], groundAt(gt.at[0], gt.at[1]) + 0.8, gt.at[1]); if (l.g < 0.006) return; this.v('clank', { f: rr(380, 460), v: clamp(0.35 * l.g, 0, 0.07), pan: l.pan }); },
+    stone(p, s) { if (!this.ok()) return; const l = this.lensF(p.x, p.y, p.z); if (l.g < 0.006) return; this.v('knock', { f: rr(150, 230), v: clamp(0.5 * l.g * s, 0, 0.12), pan: l.pan }); },
+    whistle() { if (!this.ok()) return; const l = this.lensF(farmer.pos.x, farmer.pos.y + 1.6, farmer.pos.z); this.v('whistle', { v: clamp(0.15 * Math.max(l.g, 0.05), 0, 0.03), pan: l.pan }); },
+  };
+const withT = (g, T) => { const n = g.attributes.position.count, t = new Float32Array(n * 3); for (let i = 0; i < n; i++) { t[i * 3] = T.x; t[i * 3 + 1] = T.y; t[i * 3 + 2] = T.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; };
+const clean = (g) => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'aT'].includes(k)) g.deleteAttribute(k); return g; };
+const M4 = (x, y, z, ry = 0, rx = 0, rz = 0, s = V(1, 1, 1)) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), s);
+const mergeG = (arr) => mergeGeometries(arr.map(g => { g = g.index ? g.toNonIndexed() : g; if (!g.attributes.normal) g.computeVertexNormals(); if (!g.attributes.aT) withT(g, V(0, 1, 0)); return clean(g); }));
+const OBST = [];      // circles a walker or a lens must keep out of: [x, z, r]
+const BOXES = [];     // building boxes for the lens: {x0,x1,z0,z1,y1}
+
+/* ---------- FARM: buildings from OpenStreetMap footprints (mapped), with authored heights, roofs and uses */
+function obb(fp) {   // oriented box from the longest edge
+  let best = 0, ang = 0; for (let i = 0; i < fp.length - 1; i++) { const dx = fp[i + 1][0] - fp[i][0], dz = fp[i + 1][1] - fp[i][1], L = Math.hypot(dx, dz); if (L > best) { best = L; ang = Math.atan2(dz, dx); } }
+  const c = Math.cos(ang), s = Math.sin(ang); let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+  for (const [x, z] of fp) { const u = x * c + z * s, v = -x * s + z * c; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+  const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2; return { cx: uc * c - vc * s, cz: uc * s + vc * c, L: u1 - u0, Wd: v1 - v0, ang };
+}
+const BLD = FM.buildings.map(b => { const fp = b.fp; const o = obb(fp); const y = baseH(o.cx, o.cz) + 0.1; PADS.push([o.cx, o.cz, Math.hypot(o.L, o.Wd) / 2 + 1.5, y]);
+  BOXES.push({ x0: Math.min(...fp.map(p => p[0])) - 0.6, x1: Math.max(...fp.map(p => p[0])) + 0.6, z0: Math.min(...fp.map(p => p[1])) - 0.6, z1: Math.max(...fp.map(p => p[1])) + 0.6, y1: y + (b.role === 'house' ? 8.5 : 5.5) });
+  return Object.assign({}, b, { o, y }); });
+PADS.push([4, 4, 18, baseH(4, 4) + 0.1]);   // the yard is levelled
+
+/* ---------- terrain: a fine sheet over the farm, a coarse one to the horizon (sunk beneath the fine one) */
+const NEAR = FARM_NEAR;
+{ const st = 0.9, nx = Math.round((NEAR.x1 - NEAR.x0) / st), nz = Math.round((NEAR.z1 - NEAR.z0) / st);
+  const g = new THREE.PlaneGeometry(NEAR.x1 - NEAR.x0, NEAR.z1 - NEAR.z0, nx, nz); g.rotateX(-Math.PI / 2); g.translate((NEAR.x0 + NEAR.x1) / 2, 0, (NEAR.z0 + NEAR.z1) / 2);
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, terrainH(p.getX(i), p.getZ(i))); g.computeVertexNormals(); clean(g);
+  scene.add(new THREE.Mesh(g, objMat(5, 2, V(1, 0, 0)))); }
+// the field's memory as a texture: R grass length, G tread
+const fieldTex = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
+fieldTex.magFilter = fieldTex.minFilter = THREE.LinearFilter; FU.uGrass.value = fieldTex;
+const cellOf = (x, z) => { const i = Math.floor((x - GB.x0) / GB.sx * GW), j = Math.floor((z - GB.z0) / GB.sz * GH); return (i < 0 || j < 0 || i >= GW || j >= GH) ? -1 : j * GW + i; };
+const cellXZ = (k) => [GB.x0 + ((k % GW) + 0.5) / GW * GB.sx, GB.z0 + (Math.floor(k / GW) + 0.5) / GH * GB.sz];
+function fieldTexUpdate() { const d = fieldTex.image.data; for (let k = 0; k < GW * GH; k++) { d[k * 4] = GRASS[k]; d[k * 4 + 1] = TREAD[k]; d[k * 4 + 2] = 0; d[k * 4 + 3] = 255; } fieldTex.needsUpdate = true; }
+const FIELDS = FM.fields.map(f => Object.assign({}, f, { cx: f.poly.reduce((s, p) => s + p[0], 0) / f.poly.length, cz: f.poly.reduce((s, p) => s + p[1], 0) / f.poly.length }));
+const YARD = FM.props.yard.poly_xz;
+const areaAt = (x, z) => { for (const f of FIELDS) if (pip(x, z, f.poly)) return f.id; if (pip(x, z, YARD)) return 'yard'; return 'out'; };
+if (!S.grass) { for (let k = 0; k < GW * GH; k++) { const [x, z] = cellXZ(k); const a = areaAt(x, z);
+    GRASS[k] = Math.round(255 * clamp(a === 'yard' ? 0.25 : a === 'fold' ? 0.3 : 0.55 + 0.35 * fbm(x * 0.02, z * 0.02 + 5), 0, 1)); } }
+fieldTexUpdate();
+
+/* ---------- the yard (concrete and gravel) and the lanes from OpenStreetMap */
+function ribbon(line, w, lift, id, mode = 0) { const pts = []; for (let i = 0; i < line.length - 1; i++) { const [ax, az] = line[i], [bx, bz] = line[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 1.5));
+    for (let k = 0; k < n; k++) { const t = k / n; pts.push([lerp(ax, bx, t), lerp(az, bz, t)]); } } pts.push(line[line.length - 1]);
+  const pos = [], idx = [], tan = []; pts.forEach((p, i) => { const q = pts[Math.min(i + 1, pts.length - 1)], o = pts[Math.max(i - 1, 0)], dx = q[0] - o[0], dz = q[1] - o[1], l = Math.hypot(dx, dz) || 1;
+    for (const s of [-1, 1]) { const x = p[0] - dz / l * w * s, z = p[1] + dx / l * w * s; pos.push(x, terrainH(x, z) + lift, z); tan.push(dx / l, 0, dz / l); } if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aT', new THREE.Float32BufferAttribute(tan, 3)); g.setIndex(idx); g.computeVertexNormals();
+  const m = objMat(id, mode); m.polygonOffset = true; m.polygonOffsetFactor = -2; scene.add(new THREE.Mesh(g, m)); }
+FM.roads.forEach(r => ribbon(r.line, r.tag === 'secondary' ? 3.2 : r.tag === 'unclassified' ? 2.1 : 1.5, 0.06, 12));
+{ const sh = new THREE.Shape(YARD.map(p => new THREE.Vector2(p[0], p[1]))); const g = new THREE.ShapeGeometry(sh, 4); const p = g.attributes.position;
+  const pos = []; const idx = g.index.array; for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getY(i); pos.push(x, terrainH(x, z) + 0.05, z); }
+  const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g2.setIndex(Array.from(idx)); g2.computeVertexNormals(); withT(g2, V(0.3, 0, 1));
+  const m = objMat(9, 6, V(0.3, 0, 1)); m.polygonOffset = true; m.polygonOffsetFactor = -3; scene.add(new THREE.Mesh(g2, m)); }
+
+/* ---------- buildings */
+const LAMPS = [];
+const wallBox = (a, b, h, t, y0, into) => { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz); if (L < 0.05) return; const g = new THREE.BoxGeometry(L, h, t);
+  g.applyMatrix4(M4((a[0] + b[0]) / 2, y0 + h / 2, (a[1] + b[1]) / 2, -Math.atan2(dz, dx))); into.push(withT(clean(g), V(dx / L, 0, dz / L))); };
+function gableRoof(o, y, pitchH, over, into) {   // a pitched roof over an oriented box
+  const c = Math.cos(o.ang), s = Math.sin(o.ang), hl = o.L / 2 + over, hw = o.Wd / 2 + over;
+  const P = (u, v, h) => [o.cx + u * c - v * s, y + h, o.cz + u * s + v * c];
+  const q = [P(-hl, -hw, 0), P(hl, -hw, 0), P(hl, 0, pitchH), P(-hl, 0, pitchH), P(-hl, hw, 0), P(hl, hw, 0)];
+  const pos = [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3], ...q[4], ...q[3], ...q[2], ...q[4], ...q[2], ...q[5]];
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); into.push(withT(g, V(-s, -0.6, c).normalize()));
+  // gable ends
+  const ge = new THREE.BufferGeometry(); ge.setAttribute('position', new THREE.Float32BufferAttribute([...P(-hl + over, -hw + over, 0), ...P(-hl + over, hw - over, 0), ...P(-hl + over, 0, pitchH - 0.2), ...P(hl - over, -hw + over, 0), ...P(hl - over, 0, pitchH - 0.2), ...P(hl - over, hw - over, 0)], 3)); ge.computeVertexNormals();
+  return withT(ge, V(0, 1, 0));
+}
+const G = { white: [], slate: [], stone: [], iron: [], ironRoof: [], straw: [], dark: [], wood: [] };
+let BYRE = null, HAYBARN = null, HOUSE = null;
+for (const b of BLD) {
+  const fp = b.fp, o = b.o, y = b.y;
+  if (b.role === 'house' || (b.role === 'neighbour-context' && b.tag === 'house')) {
+    const h = b.role === 'house' ? 5.4 : 4.6;
+    for (let i = 0; i < fp.length - 1; i++) wallBox(fp[i], fp[i + 1], h, 0.45, y - 0.3, G.white);
+    { const sh = new THREE.Shape(fp.map(p => new THREE.Vector2(p[0], p[1]))); const g = new THREE.ShapeGeometry(sh); g.rotateX(Math.PI / 2); g.translate(0, y + h - 0.3, 0); G.white.push(withT(clean(g), V(1, 0, 0))); }
+    G.slate.push(gableRoof(o, y + h - 0.3, Math.min(3.2, o.Wd * 0.42), 0.35, G.slate)); G.white.push(G.slate.pop());
+    // chimneys at the gable ends
+    const c = Math.cos(o.ang), s = Math.sin(o.ang); for (const e of [-1, 1]) { const g = new THREE.BoxGeometry(0.7, 1.5, 0.9); g.applyMatrix4(M4(o.cx + e * (o.L / 2 - 0.4) * c, y + h - 0.3 + Math.min(3.2, o.Wd * 0.42) + 0.2, o.cz + e * (o.L / 2 - 0.4) * s, -o.ang)); G.white.push(withT(clean(g), V(0, 1, 0))); }
+    if (b.role === 'house') {
+      HOUSE = { x: o.cx, z: o.cz, y, o, door: [o.cx - Math.sin(o.ang) * (o.Wd / 2 + 0.6), o.cz + Math.cos(o.ang) * (o.Wd / 2 + 0.6)] };
+      // windows (lit at night) on both long sides, a red door facing the yard
+      for (const sd of [-1, 1]) for (const k of [-0.32, 0.05, 0.36]) for (const fl of [1.6, 3.9]) { if (sd > 0 && Math.abs(k - 0.05) < 0.01 && fl < 2) continue;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.05), objMat(7, 0)); const u = k * o.L, v = sd * (o.Wd / 2 + 0.24);
+        m.position.set(o.cx + u * c - v * s, y + fl, o.cz + u * s + v * c); m.rotation.y = -o.ang + (sd > 0 ? 0 : Math.PI); scene.add(m); LAMPS.push(m); }
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.1), objMat(10, 0, V(0, 1, 0), { uAcc: { value: 1 } })); const v = o.Wd / 2 + 0.24, u = 0.05 * o.L;
+      door.position.set(o.cx + u * c - v * s, y + 0.75, o.cz + u * s + v * c); door.rotation.y = -o.ang; scene.add(door);
+    } else { for (const sd of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.0), objMat(7, 0)); const v = sd * (o.Wd / 2 + 0.24), cc = Math.cos(o.ang), ss = Math.sin(o.ang);
+        m.position.set(o.cx - v * ss, y + 1.6, o.cz + v * cc); m.rotation.y = -o.ang + (sd > 0 ? 0 : Math.PI); scene.add(m); if (wrnd() < 0.7) LAMPS.push(m); } }
+  } else if (b.role === 'byre') {
+    const isBed = b.id === 'osm.way.1163356662'; const h = 2.6;
+    for (let i = 0; i < fp.length - 1; i++) { const a = fp[i], q = fp[i + 1];
+      if (isBed && Math.abs(a[1] - q[1]) < 1.5 && (a[1] + q[1]) / 2 > -4.5) { const mid = [(a[0] + q[0]) / 2, (a[1] + q[1]) / 2]; const dx = q[0] - a[0], dz = q[1] - a[1], L = Math.hypot(dx, dz);
+        const g1 = [mid[0] - dx / L * 0.75, mid[1] - dz / L * 0.75], g2 = [mid[0] + dx / L * 0.75, mid[1] + dz / L * 0.75];
+        wallBox(a, g1, h, 0.5, y - 0.3, G.stone); wallBox(g2, q, h, 0.5, y - 0.3, G.stone); wallBox(g1, g2, 0.55, 0.5, y + h - 0.85, G.stone); BYRE = { door: mid, x: o.cx, z: o.cz, y, n: [-(dz / L), dx / L] }; }
+      else wallBox(a, q, h, 0.5, y - 0.3, G.stone); }
+    const r = gableRoof(o, y + h - 0.3, 0.9, 0.3, G.ironRoof); G.stone.push(r);
+  } else if (b.role === 'hay-barn') {
+    const c = Math.cos(o.ang), s = Math.sin(o.ang), hl = o.L / 2, hw = o.Wd / 2, P = (u, v) => [o.cx + u * c - v * s, o.cz + u * s + v * c];
+    for (const u of [-hl, 0, hl]) for (const v of [-hw, hw]) { const [px, pz] = P(u, v); const g = new THREE.BoxGeometry(0.22, 4.6, 0.22); g.applyMatrix4(M4(px, y + 2.0, pz)); G.iron.push(withT(clean(g), V(0, 1, 0))); }
+    const rg = new THREE.CylinderGeometry(hw + 0.4, hw + 0.4, o.L + 0.6, 22, 1, true, -Math.PI / 2, Math.PI); rg.rotateZ(Math.PI / 2); rg.scale(1, 0.55, 1); rg.rotateY(-o.ang); rg.translate(o.cx, y + 4.3, o.cz);
+    G.ironRoof.push(withT(clean(rg), V(0, 1, 0)));
+    for (let i = 0; i < 9; i++) { const u = -hl + 1.0 + (i % 3) * (o.L - 2) / 2, v = -hw + 1.0 + Math.floor(i / 3) * 0 + (i >= 3 ? 0 : 0), lay = Math.floor(i / 3);
+      if (lay > 1) continue; const [px, pz] = P(u, -hw + 1.2 + (i % 2) * 1.5); const g = new THREE.CylinderGeometry(0.62, 0.62, 1.2, 18); g.rotateZ(Math.PI / 2); g.rotateY(-o.ang + 0.1 * (i % 2)); g.translate(px, y + 0.62 + lay * 1.24, pz); G.straw.push(withT(clean(g), V(Math.cos(o.ang), 0, Math.sin(o.ang)))); }
+    HAYBARN = { x: o.cx, z: o.cz, y };
+  } else if (b.tag === 'ruins') {
+    for (let i = 0; i < fp.length - 1; i++) { const a = fp[i], q = fp[i + 1], L = Math.hypot(q[0] - a[0], q[1] - a[1]); const n = Math.max(1, Math.round(L / 1.2));
+      for (let k = 0; k < n; k++) { const t0 = k / n, t1 = (k + 1) / n, hh = 0.6 + 2.2 * Math.pow(vnoise(i * 3.3 + k * 0.7, 4.4), 1.6) + (i % 2 === 0 ? 1.4 * Math.sin(Math.PI * (t0 + t1) / 2) : 0);
+        wallBox([lerp(a[0], q[0], t0), lerp(a[1], q[1], t0)], [lerp(a[0], q[0], t1), lerp(a[1], q[1], t1)], hh, 0.6, y - 0.4, G.stone); } }
+  } else {
+    for (let i = 0; i < fp.length - 1; i++) wallBox(fp[i], fp[i + 1], 3.0, 0.3, y - 0.3, G.white);
+    G.stone.push(gableRoof(o, y + 2.7, 0.7, 0.25, G.ironRoof));
+  }
+}
+const addMerged = (arr, m) => { if (arr.length) scene.add(new THREE.Mesh(mergeG(arr), m)); };
+addMerged(G.white, objMat(9, 6, V(1, 0, 0))); addMerged(G.slate, objMat(7, 0)); addMerged(G.stone, objMat(4, 1, V(0, 1, 0)));
+addMerged(G.iron, objMat(10, 3, V(0, 1, 0))); addMerged(G.ironRoof, objMat(10, 5, V(0, -1, 0))); addMerged(G.straw, objMat(12, 3, V(1, 0, 0)));
+{ const bed = new THREE.Mesh(withT(clean(new THREE.CircleGeometry(0.75, 16).rotateX(-Math.PI / 2)), V(1, 0, 0.4)), objMat(12, 3, V(1, 0, 0))); const bp = FM.props.bed.at_xz; bed.position.set(bp[0], (BYRE ? BYRE.y : 0) - 0.15, bp[1]); scene.add(bed); }
+BLD.forEach(b => { if (b.role !== 'neighbour-context' || b.tag !== 'ruins') OBST.push([b.o.cx, b.o.cz, Math.hypot(b.o.L, b.o.Wd) / 2 + 0.4, 1]); });   // flagged: walkers use the oriented box instead
+
+/* ---------- FARM: lace walls (single-stone Connemara drystone, light through the gaps) */
+const GATES = FM.gates.map(g => Object.assign({}, g, { open: 0, want: 0 }));
+const WSEG = [];      // collision segments for sheep: [ax, az, bx, bz]
+const stoneGeo = (() => { let g = new THREE.IcosahedronGeometry(1, 0); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  const pos = g.attributes.position, map = new Map(), verts = [], idx = []; for (let i = 0; i < pos.count; i++) { const k = [pos.getX(i), pos.getY(i), pos.getZ(i)].map(v => v.toFixed(4)).join(); if (!map.has(k)) { map.set(k, verts.length / 3); verts.push(pos.getX(i), pos.getY(i), pos.getZ(i)); } idx.push(map.get(k)); }
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3)); out.setIndex(idx); out.computeVertexNormals(); return out; })();
+function stoneAt(x, y, z, sx, sy, sz, ry, into, rr2) { const g = stoneGeo.clone(); const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const f = 0.82 + 0.3 * rr2(); p.setXYZ(i, p.getX(i) * f, p.getY(i) * (p.getY(i) < 0 ? 0.7 : f), p.getZ(i) * f); }
+  g.applyMatrix4(M4(x, y, z, ry, (rr2() - 0.5) * 0.3, (rr2() - 0.5) * 0.3, V(sx, sy, sz))); g.computeVertexNormals();
+  const a = rr2() * TAU; withT(g, V(Math.cos(a) * 0.5, 1, Math.sin(a) * 0.5).normalize()); into.push(g); return g; }
+const gateCut = (x, z) => { for (const g of GATES) { const along = g.axis === 'z' ? Math.abs(z - g.at[1]) : Math.abs(x - g.at[0]), across = g.axis === 'z' ? Math.abs(x - g.at[0]) : Math.abs(z - g.at[1]); if (across < 0.8 && along < g.w / 2 + 0.25) return g; } return null; };
+function laceStones(ax, az, bx, bz, into, rr2, list) {   // list: when given, collect slot positions instead of building (the wall site)
+  const L = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L, dz = (bz - az) / L, ry = -Math.atan2(dz, dx); let s = 0;
+  while (s < L) { const sz0 = 0.2 + 0.19 * rr2(); const x = ax + dx * (s + sz0), z = az + dz * (s + sz0);
+    if (gateCut(x, z)) { s += 0.4; continue; }
+    const base = terrainH(x, z); let y = base, w = sz0; const hgt = 1.25 + 0.35 * vnoise(x * 0.1, z * 0.1);
+    while (y < base + hgt) { const sw = w * (0.85 + 0.3 * rr2()), sh = sw * (0.55 + 0.35 * rr2()), sd = 0.14 + 0.09 * rr2();
+      const ox = (rr2() - 0.5) * 0.08; const slot = [x + dx * ox, y + sh * 0.85, z + dz * ox, sw, sh, sd, ry + (rr2() - 0.5) * 0.4];
+      if (list) list.push(slot); else stoneAt(...slot, into, rr2);
+      y += sh * 1.55 + (rr2() < 0.25 ? 0.12 : 0); w = Math.max(0.2, w * (0.8 + 0.2 * rr2())); }
+    s += sz0 * 2 + (rr2() < 0.3 ? 0.12 + 0.18 * rr2() : 0.02); }
+}
+const SITE = { slots: [], tumble: [] };
+{ const into = [], rr2 = mulberry(77017);
+  for (const w of FM.walls) { const pts = w.line; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      WSEG.push([ax, az, bx, bz]);
+      if (w.site) laceStones(ax, az, bx, bz, null, rr2, SITE.slots); else laceStones(ax, az, bx, bz, into, rr2); } }
+  for (const ow of FM.osmWalls) for (let i = 0; i < ow.length - 1; i++) laceStones(ow[i][0], ow[i][1], ow[i + 1][0], ow[i + 1][1], into, rr2);
+  // gate pillars
+  for (const g of GATES) for (const e of [-1, 1]) { const x = g.axis === 'z' ? g.at[0] : g.at[0] + e * (g.w / 2 + 0.3), z = g.axis === 'z' ? g.at[1] + e * (g.w / 2 + 0.3) : g.at[1];
+    for (let k = 0; k < 4; k++) stoneAt(x, terrainH(x, z) + 0.25 + k * 0.38, z, 0.36, 0.24, 0.36, rr2() * TAU, into, rr2); }
+  scene.add(new THREE.Mesh(mergeG(into), objMat(4, 1, V(0, 1, 0))));
+  // the site: slots in laying order (course by course along the stretch), the tumble lying at their feet
+  SITE.slots.sort((a, b) => (a[1] - terrainH(a[0], a[2])) - (b[1] - terrainH(b[0], b[2])) || a[2] - b[2]);
+  SITE.slots.forEach((sl, i) => { const side = rr2() < 0.5 ? -1 : 1; const x = sl[0] + side * (0.6 + 1.6 * rr2()), z = sl[2] + (rr2() - 0.5) * 1.4; SITE.tumble.push([x, terrainH(x, z) + sl[4] * 0.5, z, sl[3], sl[4], sl[5], rr2() * TAU]); });
+  const mkInst = (list, order) => { const g = stoneGeo.clone(); withT(g, V(0.3, 1, 0.2).normalize()); const im = new THREE.InstancedMesh(g, objMat(4, 1, V(0, 1, 0)), list.length);
+    order.forEach((k, j) => { const s = list[k]; im.setMatrixAt(j, M4(s[0], s[1], s[2], s[6], 0.1 * Math.sin(k), 0.1 * Math.cos(k * 1.3), V(s[3], s[4], s[5]))); }); im.frustumCulled = false; scene.add(im); return im; };
+  SITE.laid = mkInst(SITE.slots, SITE.slots.map((_, i) => i));
+  SITE.lying = mkInst(SITE.tumble, SITE.tumble.map((_, i) => SITE.tumble.length - 1 - i));
+  SITE.total = SITE.slots.length;
+  // the farmer's heap of field stones beside the site
+  const pile = [], pp = FM.props.stonepile.at_xz; for (let i = 0; i < 46; i++) { const a = rr2() * TAU, r = Math.sqrt(rr2()) * 1.6, x = pp[0] + Math.cos(a) * r, z = pp[1] + Math.sin(a) * r * 0.7, s = 0.18 + 0.22 * rr2();
+    stoneAt(x, terrainH(x, z) + s * 0.4 + (1.6 - r) * 0.35, z, s * 1.3, s, s, rr2() * TAU, pile, rr2); }
+  scene.add(new THREE.Mesh(mergeG(pile), objMat(4, 1, V(0, 1, 0))));
+}
+S.wallLaid = clamp(S.wallLaid | 0, 0, SITE.total);
+function siteUpdate() { SITE.laid.count = S.wallLaid; SITE.lying.count = SITE.total - S.wallLaid; }
+siteUpdate();
+GATES.forEach(g => { const e = g.axis === 'z' ? [0, 1] : [1, 0]; g.seg = [g.at[0] - e[0] * g.w / 2, g.at[1] - e[1] * g.w / 2, g.at[0] + e[0] * g.w / 2, g.at[1] + e[1] * g.w / 2]; });
+
+/* ---------- FARM: gates (galvanised tube, hinged on one pillar) */
+GATES.forEach(g => { const grp = new THREE.Group(); const hinge = g.axis === 'z' ? V(g.at[0], 0, g.at[1] - g.w / 2) : V(g.at[0] - g.w / 2, 0, g.at[1]); hinge.y = terrainH(hinge.x, hinge.z);
+  grp.position.copy(hinge); grp.rotation.y = g.axis === 'z' ? -Math.PI / 2 : 0; const bars = [];
+  for (let k = 0; k < 5; k++) { const b = new THREE.CylinderGeometry(0.025, 0.025, g.w - 0.1, 6); b.rotateZ(Math.PI / 2); b.translate((g.w - 0.1) / 2, 0.3 + k * 0.22, 0); bars.push(withT(clean(b), V(1, 0, 0))); }
+  for (const u of [0.02, g.w - 0.12, g.w * 0.5]) { const b = new THREE.CylinderGeometry(0.03, 0.03, 1.0, 6); b.translate(u, 0.74, 0); bars.push(withT(clean(b), V(0, 1, 0))); }
+  { const L = Math.hypot(g.w * 0.48, 0.88); const b = new THREE.CylinderGeometry(0.022, 0.022, L, 6); b.rotateZ(-Math.atan2(g.w * 0.48, 0.88)); b.translate(g.w * 0.26, 0.74, 0); bars.push(withT(clean(b), V(1, 1, 0).normalize())); }
+  const mesh = new THREE.Mesh(mergeG(bars), objMat(10, 3, V(1, 0, 0))); grp.add(mesh); scene.add(grp); g.grp = grp; g.base = grp.rotation.y; });
+
+/* ---------- FARM: the hawthorn, field boulders, trough and bowl */
+{ const limbs = [], rr2 = mulberry(3131); const tp = FM.props.thorn.at_xz, by = terrainH(tp[0], tp[1]);
+  const tube = (pts, r0, r1) => { const curve = new THREE.CatmullRomCurve3(pts); const g = new THREE.TubeGeometry(curve, 16, 1, 7, false); const p = g.attributes.position, n = g.attributes.normal, t = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const u = Math.floor(i / 8) / 16; const c = curve.getPointAt(u), tg = curve.getTangentAt(u); const r = lerp(r0, r1, u); p.setXYZ(i, c.x + n.getX(i) * r, c.y + n.getY(i) * r, c.z + n.getZ(i) * r); t[i * 3] = tg.x; t[i * 3 + 1] = tg.y; t[i * 3 + 2] = tg.z; }
+    g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); g.computeVertexNormals(); limbs.push(clean(g)); return curve; };
+  const lean = V(0.55, 0, 0.4);   // bent from the south-west gales
+  const trunk = tube([V(tp[0], by - 0.3, tp[1]), V(tp[0] + 0.3, by + 1.0, tp[1] + 0.2), V(tp[0] + 0.9, by + 2.0, tp[1] + 0.7), V(tp[0] + 1.9, by + 2.8, tp[1] + 1.4)], 0.28, 0.12);
+  for (let k = 0; k < 9; k++) { const u = 0.45 + 0.55 * rr2(); const p0 = trunk.getPointAt(u); const d = V(rr2() - 0.5, 0.5 + rr2() * 0.6, rr2() - 0.5).add(lean).normalize().multiplyScalar(1.6 + 1.6 * rr2());
+    tube([p0, p0.clone().add(d.clone().multiplyScalar(0.5)).add(V(0, 0.2, 0)), p0.clone().add(d)], 0.09, 0.025); }
+  scene.add(new THREE.Mesh(mergeG(limbs), objMat(8, 3)));
+  // the crown: a dense, wind-cut thatch of small clumps, flattened on top and combed to the north-east
+  const crown = []; for (let k = 0; k < 90; k++) { const g = stoneGeo.clone(); const u = rr2(), a = rr2() * TAU, r = Math.sqrt(rr2()) * 2.3; const s = 0.35 + 0.5 * rr2();
+    const x = tp[0] + 1.5 + lean.x * 2.4 * u + Math.cos(a) * r, z = tp[1] + 1.1 + lean.z * 2.4 * u + Math.sin(a) * r * 0.8, y = by + 2.6 + 1.2 * (1 - r / 2.3) * (0.6 + 0.4 * u) + rr2() * 0.3;
+    g.applyMatrix4(M4(x, y, z, rr2() * TAU, 0, 0, V(s * 1.5, s * 0.6, s))); withT(g, V(0.55, 0.15, 0.4).normalize()); crown.push(g); }
+  scene.add(new THREE.Mesh(mergeG(crown), objMat(5, 3, V(0.55, 0.15, 0.4)))); OBST.push([tp[0], tp[1], 0.9]);
+  const rocks = []; for (let i = 0; i < 26; i++) { const f = FIELDS[i % 3]; let x = 0, z = 0; for (let t = 0; t < 40; t++) { x = wr(Math.min(...f.poly.map(p => p[0])), Math.max(...f.poly.map(p => p[0]))); z = wr(Math.min(...f.poly.map(p => p[1])), Math.max(...f.poly.map(p => p[1]))); if (pip(x, z, f.poly) && !WSEG.some(s => segD(x, z, ...s) < 3)) break; }
+    const s = 0.35 + 0.9 * Math.pow(rr2(), 2.2); stoneAt(x, terrainH(x, z) + s * 0.25, z, s * 1.4, s * 0.8, s * 1.1, rr2() * TAU, rocks, rr2); if (s > 0.6) OBST.push([x, z, s * 1.2]); }
+  scene.add(new THREE.Mesh(mergeG(rocks), objMat(4, 1, V(0, 1, 0))));
+  const tr = FM.props.trough.at_xz; { const g = new THREE.BoxGeometry(2.2, 0.55, 0.7); g.translate(tr[0], terrainH(tr[0], tr[1]) + 0.27, tr[1]); scene.add(new THREE.Mesh(withT(clean(g), V(1, 0, 0)), objMat(9, 6, V(1, 0, 0)))); }
+  const bw = FM.props.bowl.at_xz; { const g = new THREE.CylinderGeometry(0.17, 0.13, 0.09, 12); g.translate(bw[0], terrainH(bw[0], bw[1]) + 0.05, bw[1]); scene.add(new THREE.Mesh(withT(clean(g), V(0, 1, 0)), objMat(10, 0))); }
+}
+
+/* ---------- FARM: grass blades; their height is the grazing map */
+const BLADES = { im: null, cells: null };
+{ const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute([-0.014, 0, 0, 0.014, 0, 0, -0.009, 0.5, 0.02, 0.009, 0.5, 0.02, 0, 1, 0.06], 3)); bg.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4]); bg.computeVertexNormals(); withT(bg, V(0, 1, 0));
+  const rr2 = mulberry(9090), ms = [], cells = [];
+  for (let i = 0; i < 160000 && ms.length < 34000; i++) { const x = rr2() * (NEAR.x1 - NEAR.x0 - 10) + NEAR.x0 + 5, z = rr2() * (NEAR.z1 - NEAR.z0 - 10) + NEAR.z0 + 5; const a = areaAt(x, z);
+    if (a === 'yard' || (a === 'out' && rr2() < 0.75)) continue;
+    if (WSEG.some(s => segD(x, z, ...s) < 0.35) || OBST.some(o => Math.hypot(x - o[0], z - o[1]) < o[2])) continue;
+    if (FM.roads.some(r => r.line.some((p, k) => k && segD(x, z, r.line[k - 1][0], r.line[k - 1][1], p[0], p[1]) < 3.5))) continue;
+    const h = 0.22 + 0.2 * rr2(); ms.push(M4(x, terrainH(x, z) - 0.02, z, rr2() * TAU, (rr2() - 0.5) * 0.3, (rr2() - 0.5) * 0.3, V(1 + rr2(), h, 1))); cells.push(cellOf(x, z)); }
+  const aG = new THREE.InstancedBufferAttribute(new Float32Array(ms.length), 1); bg.setAttribute('aG', aG);
+  const im = new THREE.InstancedMesh(bg, objMat(5, 3, V(0, 1, 0), { uSway: { value: 1 } }), ms.length); ms.forEach((m, k) => im.setMatrixAt(k, m)); im.frustumCulled = false; scene.add(im);
+  BLADES.im = im; BLADES.cells = cells; BLADES.aG = aG; }
+function bladesUpdate() { const a = BLADES.aG.array; for (let k = 0; k < a.length; k++) { const c = BLADES.cells[k]; a[k] = c < 0 ? 0.85 : clamp(GRASS[c] / 255 - TREAD[c] / 255 * 0.9, 0.03, 1); } BLADES.aG.needsUpdate = true; }
+bladesUpdate();
+
+/* ====================================================================== FARM: bodies (Bernard, the farmer, the ewes) */
+const UNIT = new THREE.SphereGeometry(0.5, 14, 9); withT(UNIT, V(1, 0, 0));
+const capGeo = (r, l) => withT(new THREE.CapsuleGeometry(r, l, 3, 9), V(0, 1, 0));
+const _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _s = V(1, 1, 1), _Y = V(0, 1, 0);
+function partMesh(geo, mat) { const m = new THREE.Mesh(geo, mat); m.matrixAutoUpdate = false; m.frustumCulled = false; scene.add(m); return m; }
+function seg(m, a, b, len) { const d = b.clone().sub(a); const l = d.length(); if (l < 1e-5) return; _q.setFromUnitVectors(_Y, d.divideScalar(l)); _s.set(1, len ? l / len : 1, 1); m.matrix.compose(a.clone().add(b).multiplyScalar(0.5), _q, _s); m.matrixWorldNeedsUpdate = true; }
+function place(m, basisM, origin, local, size) { const p = local.clone().applyMatrix4(basisM).add(origin); _q.setFromRotationMatrix(basisM); _s.copy(size); m.matrix.compose(p, _q, _s); m.matrixWorldNeedsUpdate = true; }
+function ik(a, target, l1, l2, pole) { const d = target.clone().sub(a); const dist = clamp(d.length(), Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.001); const dir = d.normalize();
+  const x = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist), h = Math.sqrt(Math.max(l1 * l1 - x * x, 0)); const p = pole.clone().sub(dir.clone().multiplyScalar(pole.dot(dir)));
+  if (p.lengthSq() < 1e-8) p.copy(_Y).cross(dir); return a.clone().add(dir.multiplyScalar(x)).add(p.normalize().multiplyScalar(h)); }
+const xzD = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const segX = (ax, az, bx, bz, cx, cz, dx, dz) => { const d1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax), d3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx), d4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx); return d1 * d2 < 0 && d3 * d4 < 0; };
+function pushOut(x, z, r, segs) { for (const s of segs) { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1; const t = clamp(((x - s[0]) * dx + (z - s[1]) * dz) / L2, 0, 1);
+    const cx = s[0] + dx * t, cz = s[1] + dz * t, ex = x - cx, ez = z - cz, l = Math.hypot(ex, ez); if (l < r && l > 1e-5) { x = cx + ex / l * r; z = cz + ez / l * r; } } return [x, z]; }
+function pushBox(x, z, r, skip) { for (const b of BLD) { if (b.tag === 'ruins' || b === skip) continue; const o = b.o, c = Math.cos(o.ang), s = Math.sin(o.ang), dx = x - o.cx, dz = z - o.cz;
+    const u = dx * c + dz * s, v = -dx * s + dz * c, hu = o.L / 2 + r, hv = o.Wd / 2 + r; if (Math.abs(u) >= hu || Math.abs(v) >= hv) continue;
+    let nu = u, nv = v; if (hu - Math.abs(u) < hv - Math.abs(v)) nu = Math.sign(u || 1) * hu; else nv = Math.sign(v || 1) * hv; x = o.cx + nu * c - nv * s; z = o.cz + nu * s + nv * c; } return [x, z]; }
+function pushCirc(x, z, r, skip) { [x, z] = pushBox(x, z, r, skip); for (const o of OBST) { if (o[3]) continue; const dx = x - o[0], dz = z - o[1], l = Math.hypot(dx, dz), m = o[2] + r; if (l < m && l > 1e-5) { x = o[0] + dx / l * m; z = o[1] + dz / l * m; } } return [x, z]; }
+const groundAt = (x, z) => terrainH(x, z);
+
+/* ---------- Bernard: a procedural border collie (ported from the SHEEPDOG Godot test, with its head and tail fixes) */
+const DOGM = { black: objMat(7, 3, V(1, 0, 0)), white: objMat(9, 3, V(1, 0, 0)), dark: objMat(7, 0), eye: objMat(7, 0) };
+const C_ = { F_UP: 0.19, F_LO: 0.20, F_PAS: 0.075, H_UP: 0.21, H_LO: 0.23, H_MET: 0.13, BODY_HALF: 0.23, SHO_H: 0.47, HIP_H: 0.525, SHO_W: 0.068, HIP_W: 0.078, TAIL_SEG: 0.062 };
+const GAITS = {
+  stand: { off: [0.25, 0.75, 0.0, 0.5], duty: 0.86, f0: 1.8, fk: 0, arc: 0.05 }, walk: { off: [0.25, 0.75, 0.0, 0.5], duty: 0.63, f0: 0.85, fk: 0.55, arc: 0.055 },
+  trot: { off: [0.0, 0.5, 0.5, 0.0], duty: 0.46, f0: 1.45, fk: 0.28, arc: 0.075 }, canter: { off: [0.6, 0.3, 0.3, 0.0], duty: 0.40, f0: 1.9, fk: 0.12, arc: 0.09 },
+  gallop: { off: [0.52, 0.42, 0.0, 0.1], duty: 0.30, f0: 2.3, fk: 0.09, arc: 0.11 } };
+const dog = { pos: V(), heading: 0, speed: 0, yawRate: 0, vel: V(), gait: 'stand', phase: 0, duty: 0.86, crouch: 0, down: 0, wag: 0, gallop: 0, t: 0,
+  want: V(), look: V(), hasLook: false, crouchT: 0, downT: 0, wagT: 0, hop: 0, hopY: 0, steps: 0, legs: [], tail: [], tailL: [], headL: null, headQ: new THREE.Quaternion(), headP: V(), body: new THREE.Matrix4(), bodyO: V(), hl: 0.23 };
+const fwdOf = (h) => V(Math.cos(h), 0, Math.sin(h)), sideOf = (h) => V(-Math.sin(h), 0, Math.cos(h));
+{ const P = {}; for (const k of ['chest', 'brisket', 'under', 'loin', 'hips', 'back', 'flank']) P[k] = partMesh(UNIT, ['brisket', 'under'].includes(k) ? DOGM.white : DOGM.black);
+  P.neck = partMesh(capGeo(0.06, 0.2), DOGM.black); P.collar = partMesh(capGeo(0.064, 0.06), DOGM.white);
+  for (const k of ['skull', 'blaze', 'cheek', 'nose', 'eyeL', 'eyeR']) P[k] = partMesh(UNIT, ['blaze', 'cheek'].includes(k) ? DOGM.white : k === 'nose' ? DOGM.dark : k.startsWith('eye') ? DOGM.eye : DOGM.black);
+  P.muzzle = partMesh(capGeo(0.03, 0.1), DOGM.white); for (const k of ['earL', 'earR']) { P[k] = partMesh(capGeo(0.021, 0.06), DOGM.black); P[k + 't'] = partMesh(capGeo(0.016, 0.03), DOGM.black); }
+  dog.P = P;
+  for (let i = 0; i < 4; i++) { const front = i < 2; dog.legs.push({ front, s: i % 2 === 0 ? 1 : -1, off: 0, stance: true, foot: V(), lift: V(), land: V(),
+      up: partMesh(capGeo(front ? 0.042 : 0.047, front ? C_.F_UP : C_.H_UP), DOGM.black), lo: partMesh(capGeo(front ? 0.027 : 0.034, front ? C_.F_LO : C_.H_LO), front ? DOGM.white : DOGM.black),
+      pas: partMesh(capGeo(front ? 0.023 : 0.024, front ? C_.F_PAS : C_.H_MET), DOGM.white), paw: partMesh(UNIT, DOGM.white), j1: partMesh(UNIT, DOGM.black), j2: partMesh(UNIT, front ? DOGM.white : DOGM.black) }); }
+  [0.034, 0.039, 0.041, 0.039, 0.034, 0.028, 0.021].forEach((r, i) => { dog.tail.push(partMesh(capGeo(r, C_.TAIL_SEG), i >= 5 ? DOGM.white : DOGM.black)); dog.tailL.push(null); }); }
+function anchor(i, half) { const L = dog.legs[i], f = fwdOf(dog.heading), sd = sideOf(dog.heading);
+  const a = dog.pos.clone().addScaledVector(f, L.front ? half + 0.015 : -half).addScaledVector(sd, L.s * (L.front ? C_.SHO_W : C_.HIP_W) * (1 + dog.crouch * 0.25)); a.y = groundAt(a.x, a.z); return a; }
+function dogPlace(x, z, yaw) { dog.pos.set(x, groundAt(x, z), z); dog.heading = yaw; dog.speed = 0; dog.want.set(0, 0, 0); for (let i = 0; i < 4; i++) { const a = anchor(i, C_.BODY_HALF); const L = dog.legs[i]; L.foot.copy(a); L.lift.copy(a); L.land.copy(a); L.stance = true; L.off = GAITS.stand.off[i]; }
+  dog.headL = null; dog.tailL.fill(null); }
+function dogLocomote(dt) {
+  dog.crouch = moveT(dog.crouch, dog.crouchT, dt * 2.4); dog.down = moveT(dog.down, dog.downT, dt * (dog.downT > dog.down ? 5.5 : 2.0)); dog.wag = moveT(dog.wag, dog.wagT, dt * 2.0);
+  let want = Math.hypot(dog.want.x, dog.want.z); if (dog.down > 0.25 || dog.downT > 0.5) want = 0; want = Math.min(want, lerp(9.0, 1.2, dog.crouch));
+  dog.speed = moveT(dog.speed, want, (want > dog.speed ? 13 : 18) * dt);
+  let ty = dog.heading; if (want > 0.05) ty = Math.atan2(dog.want.z, dog.want.x); else if (dog.hasLook) { const lx = dog.look.x - dog.pos.x, lz = dog.look.z - dog.pos.z; if (Math.hypot(lx, lz) > 0.6) ty = Math.atan2(lz, lx); }
+  const dy = wrapA(ty - dog.heading); let maxY = clamp(11 / Math.max(dog.speed, 0.1), 0.7, 5.0); if (dog.down > 0.5) maxY = 0.4;
+  if (Math.abs(dy) > 1.9 && dog.speed > 3) dog.speed = moveT(dog.speed, 2.2, 22 * dt);
+  const st = clamp(dy, -maxY * dt, maxY * dt); dog.yawRate = lerp(dog.yawRate, st / Math.max(dt, 1e-4), 1 - Math.exp(-dt * 10)); dog.heading = wrapA(dog.heading + st);
+  dog.vel.copy(fwdOf(dog.heading)).multiplyScalar(dog.speed);
+  let nx = dog.pos.x + dog.vel.x * dt, nz = dog.pos.z + dog.vel.z * dt;
+  if (dog.hop <= 0 && dog.speed > 0.4) for (const s of WSEG) if (segX(dog.pos.x, dog.pos.z, nx + dog.vel.x * 0.12, nz + dog.vel.z * 0.12, ...s) && !gateCut((dog.pos.x + nx) / 2, (dog.pos.z + nz) / 2)) { dog.hop = 0.5; break; }
+  if (dog.hop > 0) { dog.hop -= dt; dog.hopY = Math.max(0, Math.sin(Math.PI * (1 - dog.hop / 0.5))) * 1.05; if (dog.hop <= 0) dog.hopY = 0; }
+  else if (dog.speed < 0.4) [nx, nz] = pushOut(nx, nz, 0.3, WSEG);
+  if (!dog.ghost) [nx, nz] = pushCirc(nx, nz, 0.3);
+  if (!isFinite(nx) || !isFinite(nz)) { nx = 8; nz = -6; }
+  dog.pos.set(nx, groundAt(nx, nz), nz);
+}
+const moveT = (a, b, d) => a < b ? Math.min(b, a + d) : Math.max(b, a - d);
+function dogGait(dt) {
+  const v = dog.speed; let g = dog.gait;
+  if (g === 'stand') { if (v > 0.12) g = 'walk'; } else if (g === 'walk') { if (v < 0.06) g = 'stand'; else if (v > 1.75) g = 'trot'; }
+  else if (g === 'trot') { if (v < 1.45) g = 'walk'; else if (v > 3.9) g = 'canter'; } else if (g === 'canter') { if (v < 3.5) g = 'trot'; else if (v > 5.8) g = 'gallop'; } else if (v < 5.3) g = 'canter';
+  if (dog.down > 0.4) g = 'stand'; dog.gait = g; const G = GAITS[g];
+  dog.duty = lerp(dog.duty, G.duty, 1 - Math.exp(-dt * 6));
+  for (let i = 0; i < 4; i++) { const d = wrapA((G.off[i] - dog.legs[i].off) * TAU) / TAU; dog.legs[i].off = ((dog.legs[i].off + d * Math.min(1, dt * 7)) % 1 + 1) % 1; }
+  let f = G.f0 + G.fk * v; if (v > 0.01) f = Math.max(f, v * dog.duty / 0.62);
+  const half = C_.BODY_HALF + dog.gallop * 0.045 * Math.sin(TAU * dog.phase + 0.6); const A = [0, 1, 2, 3].map(i => anchor(i, half));
+  if (g === 'stand') { let need = false, all = true; for (let i = 0; i < 4; i++) { if (!dog.legs[i].stance) all = false; else if (xzD(dog.legs[i].foot, A[i]) > 0.055) need = true; } f = (need || !all) ? 1.9 : 0; }
+  dog.phase = ((dog.phase + f * dt) % 1 + 1) % 1; const invF = 1 / Math.max(f, 0.001);
+  for (let i = 0; i < 4; i++) { const L = dog.legs[i]; const p = ((dog.phase + L.off) % 1 + 1) % 1; const inSt = p < dog.duty;
+    if (dog.hop > 0) { L.foot.copy(A[i]).add(V(0, dog.hopY * 0.8, 0)); L.stance = false; L.lift.copy(L.foot); continue; }
+    if (inSt && !L.stance) { L.stance = true; L.foot.copy(L.land); dog.steps++; } else if (!inSt && L.stance) { L.stance = false; L.lift.copy(L.foot); }
+    if (L.stance) { if (xzD(L.foot, A[i]) > 0.62) L.foot.lerp(A[i], 0.3); L.foot.y = groundAt(L.foot.x, L.foot.z); }
+    else { const s = (p - dog.duty) / (1 - dog.duty); const land = A[i].clone(); if (g !== 'stand') land.addScaledVector(dog.vel, (1 - s) * (1 - dog.duty) * invF + 0.5 * dog.duty * invF);
+      land.y = groundAt(land.x, land.z); L.land.copy(land); const e = smoothstep(0, 1, s); L.foot.copy(L.lift).lerp(land, e); L.foot.y = lerp(L.lift.y, land.y, e) + G.arc * (1 - dog.crouch * 0.35) * Math.sin(Math.PI * s); } }
+}
+function dogPose(dt) {
+  const f = fwdOf(dog.heading), sd0 = sideOf(dog.heading), root = dog.pos;
+  dog.gallop = moveT(dog.gallop, dog.gait === 'canter' || dog.gait === 'gallop' ? 1 : 0, dt * 2.5);
+  const w = TAU * dog.phase, half = C_.BODY_HALF + dog.gallop * 0.045 * Math.sin(w + 0.6);
+  const bob = dog.gait === 'walk' ? 0.006 * Math.cos(2 * w) : dog.gait === 'trot' ? 0.014 * Math.cos(2 * w) : dog.gait === 'stand' ? 0 : 0.03 * Math.sin(w);
+  const dn = smoothstep(0, 1, dog.down); const shoH = C_.SHO_H * (1 - 0.30 * dog.crouch) * (1 - 0.60 * dn), hipH = C_.HIP_H * (1 - 0.17 * dog.crouch) * (1 - 0.68 * dn);
+  const Sp = root.clone().addScaledVector(f, half); Sp.y = groundAt(Sp.x, Sp.z) + shoH + bob + dog.gallop * 0.035 * Math.sin(w + 1.2) + dog.hopY;
+  const Hp = root.clone().addScaledVector(f, -half); Hp.y = groundAt(Hp.x, Hp.z) + hipH + bob - dog.gallop * 0.035 * Math.sin(w + 1.2) + dog.hopY * 0.9;
+  const roll = clamp(dog.yawRate * dog.speed * 0.035, -0.32, 0.32); const fb = Sp.clone().sub(Hp).normalize();
+  const up = _Y.clone().sub(fb.clone().multiplyScalar(fb.y)).normalize().applyAxisAngle(fb, roll); const sd = fb.clone().cross(up);
+  const B = new THREE.Matrix4().makeBasis(fb, up, sd); const O = Sp.clone().add(Hp).multiplyScalar(0.5); dog.body.copy(B); dog.bodyO.copy(O);
+  const hl = Sp.distanceTo(Hp) * 0.5; dog.hl = hl; const arch = dog.gallop * 0.02 * Math.sin(w + 2); const P = dog.P; const L3 = (x, y, z) => V(x, y, z);
+  const BW = (v) => v.clone().applyMatrix4(B).add(O);
+  place(P.chest, B, O, L3(hl * 0.6, -0.035, 0), L3(0.35, 0.27, 0.22)); place(P.brisket, B, O, L3(hl * 1.06, -0.065, 0), L3(0.14, 0.21, 0.17)); place(P.under, B, O, L3(hl * 0.45, -0.125, 0), L3(0.2, 0.07, 0.14));
+  place(P.loin, B, O, L3(-hl * 0.15, 0.012 + arch, 0), L3(0.4, 0.18, 0.17)); place(P.hips, B, O, L3(-hl * 0.74, 0.04, 0), L3(0.27, 0.155, 0.15)); place(P.back, B, O, L3(0, 0.075 + arch, 0), L3(0.62, 0.11, 0.15));
+  place(P.flank, B, O, L3(hl * 0.25, -0.02, 0), L3(0.32, 0.18, 0.18));
+  for (let i = 0; i < 4; i++) { const L = dog.legs[i], A = anchor(i, half); let foot = L.foot.clone();
+    if (dn > 0.001) { const tg = A.clone().addScaledVector(f, L.front ? 0.3 : 0.15).addScaledVector(sd0, L.s * (L.front ? 0 : 0.07)); tg.y = groundAt(tg.x, tg.z); foot.lerp(tg, dn); }
+    const paw = foot.clone().add(V(0, 0.022, 0)); let rj, mj, lt;
+    if (L.front) { rj = BW(L3(hl, -0.035, L.s * C_.SHO_W)); lt = paw.clone().add(V(0, C_.F_PAS * (1 - 0.65 * dn), 0)).addScaledVector(f, 0.012 + 0.05 * dn);
+      mj = ik(rj, lt, C_.F_UP, C_.F_LO, fb.clone().negate().addScaledVector(sd, L.s * 0.15)); seg(L.up, rj, mj); seg(L.lo, mj, mj.clone().add(lt.clone().sub(mj).normalize().multiplyScalar(C_.F_LO))); }
+    else { rj = BW(L3(-hl, 0, L.s * C_.HIP_W)); lt = paw.clone().add(V(0, C_.H_MET * (0.95 - 0.55 * dn), 0)).addScaledVector(f, -(0.045 - 0.02 * dn));
+      mj = ik(rj, lt, C_.H_UP, C_.H_LO, fb.clone().addScaledVector(sd, L.s * 0.2)); seg(L.up, rj, mj); seg(L.lo, mj, mj.clone().add(lt.clone().sub(mj).normalize().multiplyScalar(C_.H_LO))); }
+    seg(L.pas, lt, paw); const I = new THREE.Matrix4(); const jr = L.front ? 0.04 : 0.036;
+    place(L.j1, I, mj, V(), V(jr * 2, jr * 2, jr * 2)); place(L.j2, I, lt, V(), L.front ? V(0.05, 0.05, 0.05) : V(0.055, 0.055, 0.055));
+    place(L.paw, new THREE.Matrix4().makeBasis(f, _Y, sd0), paw.clone().addScaledVector(f, 0.018), V(), V(0.075, 0.042, 0.055)); }
+  // neck and head, smoothed in the body's frame (no lag at speed)
+  const N = BW(L3(hl + 0.07, 0.06 - 0.03 * dog.crouch, 0)); const headLow = clamp(dog.crouch * 0.95 + dog.gallop * 0.3 + dn * 0.15, 0, 1);
+  const want = N.clone().addScaledVector(f, 0.12 + 0.09 * headLow).add(V(0, 0.21 - 0.26 * headLow, 0)); const Binv = B.clone().invert(); const wl = want.clone().sub(O).applyMatrix4(Binv);
+  if (!dog.headL) dog.headL = wl.clone(); dog.headL.lerp(wl, 1 - Math.exp(-dt * 12)); let hp = dog.headL.clone().applyMatrix4(B).add(O); const nv = hp.clone().sub(N); if (nv.length() > 0.3) hp = N.clone().add(nv.setLength(0.3)); dog.headP.copy(hp);
+  let look = f.clone().add(V(0, -(0.12 + 0.3 * headLow), 0));
+  if (dog.hasLook) { const lv = V(dog.look.x, groundAt(dog.look.x, dog.look.z) + dog.look.y + 0.35, dog.look.z).sub(hp); const yaw = dog.heading + clamp(wrapA(Math.atan2(lv.z, lv.x) - dog.heading), -1.15, 1.15); const pitch = clamp(Math.atan2(lv.y, Math.hypot(lv.x, lv.z)), -0.75, 0.35);
+    look = V(Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch)).lerp(look.normalize(), dog.gallop * 0.6); }
+  const hx = look.normalize(), hup = _Y.clone().sub(hx.clone().multiplyScalar(hx.y)).normalize(); const HB = new THREE.Matrix4().makeBasis(hx, hup, hx.clone().cross(hup));
+  dog.headQ.slerp(new THREE.Quaternion().setFromRotationMatrix(HB), 1 - Math.exp(-dt * 11)); const HM = new THREE.Matrix4().makeRotationFromQuaternion(dog.headQ); dog.headM = HM;
+  const HW = (v) => v.clone().applyMatrix4(HM).add(hp);
+  seg(P.neck, N, HW(L3(-0.05, -0.02, 0))); seg(P.collar, N.clone().lerp(hp, 0.18), N.clone().lerp(hp, 0.42));
+  const alert = clamp(1 - dn * 0.4 + dog.crouch * 0.3, 0, 1.2);
+  place(P.skull, HM, hp, V(), L3(0.145, 0.12, 0.125)); place(P.blaze, HM, hp, L3(0.035, 0.05, 0), L3(0.11, 0.028, 0.032)); place(P.cheek, HM, hp, L3(0.07, -0.045, 0), L3(0.09, 0.05, 0.075));
+  seg(P.muzzle, HW(L3(0.06, -0.025, 0)), HW(L3(0.155, -0.04, 0))); place(P.nose, HM, hp, L3(0.188, -0.033, 0), L3(0.034, 0.028, 0.034));
+  place(P.eyeL, HM, hp, L3(0.062, 0.022, 0.041), L3(0.022, 0.022, 0.022)); place(P.eyeR, HM, hp, L3(0.062, 0.022, -0.041), L3(0.022, 0.022, 0.022));
+  for (const [k, s] of [['earL', 1], ['earR', -1]]) { const base = L3(-0.025, 0.05, s * 0.042), tip = L3(-0.005 + 0.025 * dog.crouch, 0.05 + 0.065 * alert, s * (0.062 + 0.015 * (1 - alert)));
+    seg(P[k], HW(base), HW(tip)); seg(P[k + 't'], HW(tip), HW(tip.clone().add(L3(0.03, -0.02, s * 0.006)))); }
+  // tail: a chain in the body's frame; low with an upward sweep, swinging with the stride, steering on turns
+  const low = clamp(dog.crouch + dn * 0.3, 0, 1), ang = lerp(lerp(1.2, 1.42, low), 0.88, dog.gallop), curl = lerp(0.16, 0.06, low) * (1 - dog.gallop * 0.25);
+  const wagA = Math.sin(dog.t * 10.5) * dog.wag * 0.6 + Math.sin(dog.t * 1.3 + 0.7) * 0.07, rud = clamp(-dog.yawRate * 0.3, -0.55, 0.55) * Math.min(dog.speed / 3, 1), trot = clamp(dog.speed / 3, 0, 1) * (1 - dog.gallop);
+  let prev = L3(-hl - 0.09, 0.07, 0); const n = dog.tail.length;
+  for (let i = 0; i < n; i++) { const u = i / n, swing = Math.sin(TAU * dog.phase - i * 0.55) * (0.24 * dog.gallop + 0.08 * trot);
+    const a = ang - curl * i + swing * (0.3 + 0.7 * u), yaw = wagA * (0.35 + 0.65 * u) + rud * u + Math.sin(TAU * dog.phase * 0.5 - i * 0.4) * 0.12 * trot;
+    const dir = V(-Math.cos(a), -Math.sin(a), 0).applyAxisAngle(_Y, yaw); const des = prev.clone().addScaledVector(dir, C_.TAIL_SEG);
+    if (!dog.tailL[i]) dog.tailL[i] = des.clone(); dog.tailL[i].lerp(des, 1 - Math.exp(-dt * (16 - i * 1.4))); dog.tailL[i] = prev.clone().add(dog.tailL[i].clone().sub(prev).setLength(C_.TAIL_SEG));
+    seg(dog.tail[i], BW(prev), BW(dog.tailL[i])); prev = dog.tailL[i]; }
+}
+function dogEye() { const HM = dog.headM || new THREE.Matrix4(); const x = V(1, 0, 0).applyMatrix4(HM), y = V(0, 1, 0).applyMatrix4(HM); return { p: V(0.13, 0.07, 0).applyMatrix4(HM).add(dog.headP), d: x.add(y.multiplyScalar(0.12)).normalize() }; }
+function dogTick(dt) { dog.t += dt; const px = dog.pos.x, pz = dog.pos.z; dogLocomote(dt); dogGait(dt);
+  // stuck against something: give up on that goal
+  const moved = Math.hypot(dog.pos.x - px, dog.pos.z - pz), w = Math.hypot(dog.want.x, dog.want.z); dog.stuckT = (w > 0.5 && moved < w * dt * 0.25) ? (dog.stuckT || 0) + dt : 0; }
+
+/* ---------- the farmer: waxed coat, flat cap, hooked crook; walks, stoops, carries */
+const FMAT = { coat: objMat(8, 7, V(0, 1, 0)), trousers: objMat(7, 3, V(0, 1, 0)), boots: objMat(7, 0), skin: objMat(9, 0), cap: objMat(8, 3, V(1, 0, 0)), wood: objMat(6, 3, V(0, 1, 0)), stone: objMat(4, 1, V(0, 1, 0)) };
+const farmer = { pos: V(), heading: 0, speed: 0, sp: 0, ph: 0, t: 0, stoop: 0, stoopT: 0, carry: 0, carryT: 0, arm: 0, armT: 0, look: V(), hasLook: false, headYaw: 0, visible: true, M: {} };
+{ const M = farmer.M; for (const s of ['L', 'R']) { M['thigh' + s] = partMesh(capGeo(0.078, 0.44), FMAT.trousers); M['shin' + s] = partMesh(capGeo(0.066, 0.44), FMAT.trousers); M['boot' + s] = partMesh(UNIT, FMAT.boots);
+    M['upper' + s] = partMesh(capGeo(0.062, 0.29), FMAT.coat); M['fore' + s] = partMesh(capGeo(0.056, 0.27), FMAT.coat); M['hand' + s] = partMesh(UNIT, FMAT.skin); }
+  M.coat = partMesh(capGeo(0.21, 0.62), FMAT.coat); M.skirt = partMesh(capGeo(0.225, 0.22), FMAT.coat); M.shoulders = partMesh(capGeo(0.1, 0.36), FMAT.coat); M.neck = partMesh(capGeo(0.05, 0.06), FMAT.skin);
+  M.head = partMesh(UNIT, FMAT.skin); M.cap = partMesh(UNIT, FMAT.cap); M.peak = partMesh(UNIT, FMAT.cap); M.staff = partMesh(capGeo(0.018, 1.0), FMAT.wood); M.held = partMesh(stoneGeo, FMAT.stone);
+  M.hook = Array.from({ length: 6 }, () => partMesh(capGeo(0.017, 0.045), FMAT.wood)); }
+function segS(m, a, b, len, r, sx = 1, sz = 1, fwd) { const d = b.clone().sub(a), l = d.length(); if (l < 1e-5) return; const y = d.divideScalar(l); let z = y.clone().cross(fwd); if (z.lengthSq() < 0.0025) z = y.clone().cross(V(0, 0, 1)); z.normalize(); const x = y.clone().cross(z);
+  const R = new THREE.Matrix4().makeBasis(x, y, z); _q.setFromRotationMatrix(R); _s.set(sx, (l + 2 * r) / (len + 2 * r), sz); m.matrix.compose(a.clone().add(b).multiplyScalar(0.5), _q, _s); m.matrixWorldNeedsUpdate = true; }
+function farmerPose(dt) {
+  const F = farmer, M = F.M; F.t += dt; F.sp = lerp(F.sp, F.speed, 1 - Math.exp(-dt * 6)); const walk = clamp(F.sp / 1.1, 0, 1); F.ph = ((F.ph + dt * (0.9 + F.sp * 0.85) * walk) % 1 + 1) % 1;
+  F.stoop = moveT(F.stoop, F.stoopT, dt * 1.3); F.carry = moveT(F.carry, F.carryT, dt * 2.5); F.arm = moveT(F.arm, F.armT, dt * 4);
+  for (const k in M) { const v = M[k]; (Array.isArray(v) ? v : [v]).forEach(m => m.visible = F.visible); } if (!F.visible) return;
+  const f = fwdOf(F.heading), zr = sideOf(F.heading), up = _Y, O = F.pos;
+  const P = (x, y, z) => O.clone().addScaledVector(f, x).add(V(0, y, 0)).addScaledVector(zr, z);
+  const s = Math.sin(TAU * F.ph), c = Math.cos(TAU * F.ph), st = smoothstep(0, 1, F.stoop);
+  const breathe = Math.sin(F.t * 1.6) * 0.006 * (1 - walk), hipY = 0.95 - 0.02 * walk + Math.abs(c) * 0.025 * walk - 0.16 * st, sway = s * 0.02 * walk, lean = 0.04 * walk;
+  for (const [sd, side] of [['L', 1], ['R', -1]]) { const sw = s * side; const hip = P(-0.06 * st, hipY, side * 0.105 + sway);
+    const lift = Math.max(0, Math.cos(TAU * F.ph + (side > 0 ? 0 : Math.PI))) * 0.09 * walk; const foot = P(0.28 * sw * walk + 0.12 * st * side, 0, side * 0.12); foot.y = groundAt(foot.x, foot.z) + 0.07 + lift;
+    const knee = ik(hip, foot, 0.47, 0.46, f); segS(M['thigh' + sd], hip, knee, 0.44, 0.078, 1, 1, f); segS(M['shin' + sd], knee, foot, 0.44, 0.066, 1, 1, f);
+    place(M['boot' + sd], new THREE.Matrix4().makeBasis(f, up, zr), foot.clone().addScaledVector(f, 0.05).add(V(0, -0.035, 0)), V(), V(0.28, 0.1, 0.12)); }
+  const pelvis = P(lean * 0.3 - 0.05 * st, hipY + 0.06, sway); const chest = P(lean + 0.5 * st, 1.44 - 0.42 * st + breathe, sway * 0.5);
+  segS(M.coat, pelvis, chest, 0.62, 0.21, 0.74, 1, f); segS(M.skirt, P(-0.04 * st, hipY - 0.12, sway), P(0.06 * st, hipY + 0.08, sway), 0.22, 0.225, 0.8, 1, f);
+  const tilt = chest.clone().sub(pelvis).normalize(); const shL = chest.clone().addScaledVector(zr, 0.21).addScaledVector(tilt, 0.03), shR = chest.clone().addScaledVector(zr, -0.21).addScaledVector(tilt, 0.03);
+  segS(M.shoulders, shL, shR, 0.36, 0.1, 0.8, 0.8, f); const neckB = chest.clone().addScaledVector(tilt, 0.08), headC = chest.clone().addScaledVector(tilt, 0.25).addScaledVector(f, 0.03 + 0.12 * st);
+  segS(M.neck, neckB, headC.clone().addScaledVector(tilt, -0.08), 0.06, 0.05, 1, 1, f);
+  let yawT = 0; if (F.hasLook) { const lv = F.look.clone().sub(headC); yawT = clamp(Math.atan2(lv.dot(zr), lv.dot(f)), -0.8, 0.8); } F.headYaw = lerp(F.headYaw, yawT, 1 - Math.exp(-dt * 2));
+  const hf = f.clone().applyAxisAngle(up, -F.headYaw), hz = zr.clone().applyAxisAngle(up, -F.headYaw), HB = new THREE.Matrix4().makeBasis(hf, up, hz);
+  place(M.head, HB, headC, V(), V(0.2, 0.24, 0.18)); place(M.cap, HB, headC, V(-0.005, 0.095, 0), V(0.25, 0.075, 0.22)); place(M.peak, HB, headC, V(0.115, 0.075, 0), V(0.13, 0.03, 0.18));
+  // arms: the right hand holds the crook (or a stone with both hands); the left swings, or rises to the mouth to whistle
+  const ground = P(0.55, 0, 0); ground.y = groundAt(ground.x, ground.z) + 0.18;
+  const stoneAtHands = P(0.32 + 0.25 * st, 1.0 - 0.55 * st, 0).lerp(ground, st * (1 - F.carry) * 0.8);
+  let hR = P(0.24 + 0.05 * s * walk, 1.02 - 0.3 * st, -0.29).lerp(stoneAtHands.clone().addScaledVector(zr, -0.14), Math.max(F.carry, st * 0.7));
+  const swL = P(-0.2 * s * walk + 0.02, 0.86, 0.27); const mouth = headC.clone().addScaledVector(f, 0.12).add(V(0, -0.06, 0));
+  let hL = swL.lerp(mouth, smoothstep(0, 1, F.arm)).lerp(stoneAtHands.clone().addScaledVector(zr, 0.14), Math.max(F.carry, st * 0.7) * (1 - F.arm));
+  for (const [sd, sh, hd] of [['R', shR, hR], ['L', shL, hL]]) { const el = ik(sh, hd, 0.31, 0.29, f.clone().negate().add(V(0, -0.3, 0))); segS(M['upper' + sd], sh, el, 0.29, 0.062, 1, 1, f); segS(M['fore' + sd], el, hd, 0.27, 0.056, 1, 1, f); place(M['hand' + sd], new THREE.Matrix4(), hd, V(), V(0.085, 0.085, 0.085)); }
+  M.held.visible = F.carry > 0.05; if (M.held.visible) place(M.held, new THREE.Matrix4().makeRotationY(F.heading), stoneAtHands, V(), V(0.26, 0.18, 0.2));
+  // the crook: planted when he works (leaning on the wall), carried when he walks
+  const base = st > 0.3 || F.carry > 0.3 ? P(0.1, 0, -0.75) : P(0.34 + 0.12 * s * walk, 0, -0.33); base.y = groundAt(base.x, base.z);
+  const hold = st > 0.3 || F.carry > 0.3 ? base.clone().add(V(0.05, 1.2, -0.08)) : hR; const upv = hold.clone().sub(base).normalize(); const top = base.clone().addScaledVector(upv, 1.42);
+  segS(M.staff, base, top, 1.0, 0.018, 1, 1, f); let pv = top; for (let i = 0; i < M.hook.length; i++) { const a = Math.PI * (i + 1) / M.hook.length * 1.15; const q = top.clone().addScaledVector(upv, Math.sin(a) * 0.075).addScaledVector(f, (1 - Math.cos(a)) * 0.075); segS(M.hook[i], pv, q, 0.045, 0.017, 1, 1, zr); pv = q; }
+}
+
+/* ---------- the ewes: blackface, horned, one with a raddle mark */
+const SHM = { fleece: objMat(3, 4, V(1, 0, 0), { uSway: { value: 2 } }), face: objMat(7, 3, V(1, 0, 0)), mott: objMat(9, 0), horn: objMat(6, 3, V(1, 0, 0)), mark: objMat(3, 4, V(1, 0, 0), { uAcc: { value: 1 } }) };
+const hornGeo = (() => { const g = new THREE.TorusGeometry(0.07, 0.022, 6, 10, Math.PI * 1.3); withT(g, V(1, 0, 0)); return g; })();
+const legGeo = (() => { const g = new THREE.CylinderGeometry(0.035, 0.028, 0.46, 6); g.translate(0, -0.23, 0); withT(g, V(0, 1, 0)); return g; })();
+const flock = [];
+function ewe(i) {
+  const g = new THREE.Group(); const body = new THREE.Group(); g.add(body); const blob = (mat, p, s, parent = body) => { const m = new THREE.Mesh(UNIT, mat); m.position.copy(p); m.scale.copy(s); parent.add(m); return m; };
+  blob(SHM.fleece, V(0, 0.62, 0), V(0.98, 0.56, 0.6)); blob(SHM.fleece, V(0.24, 0.76, 0), V(0.5, 0.36, 0.48)); blob(SHM.fleece, V(-0.24, 0.73, 0), V(0.52, 0.38, 0.52)); blob(SHM.fleece, V(-0.47, 0.6, 0), V(0.13, 0.2, 0.13)); blob(SHM.fleece, V(0.02, 0.44, 0), V(0.78, 0.3, 0.5));   // the fleece hangs below the belly
+  const neck = blob(SHM.fleece, V(0.42, 0.72, 0), V(0.26, 0.3, 0.26));
+  const head = new THREE.Group(); head.position.set(0.48, 0.76, 0); body.add(head);
+  blob(SHM.face, V(0.14, 0, 0), V(0.26, 0.16, 0.14), head); blob(SHM.mott, V(0.24, -0.015, 0), V(0.1, 0.07, 0.1), head); blob(SHM.face, V(0.3, -0.03, 0), V(0.085, 0.075, 0.085), head);
+  for (const s of [-1, 1]) { blob(SHM.face, V(0.06, 0.02, s * 0.1), V(0.12, 0.04, 0.07), head); const h = new THREE.Mesh(hornGeo, SHM.horn); h.position.set(0.04, 0.05, s * 0.07); h.rotation.set(0, s > 0 ? 0.3 : -0.3, 0.6); h.scale.z = s; head.add(h); }
+  const legs = []; for (let k = 0; k < 4; k++) { const L = new THREE.Group(); L.position.set(k < 2 ? 0.3 : -0.28, 0.44, k % 2 === 0 ? 0.15 : -0.15); const m = new THREE.Mesh(legGeo, SHM.face); L.add(m); body.add(L); legs.push(L); }
+  scene.add(g);
+  return { i, g, body, head, legs, neck, x: 0, z: 0, vx: 0, vz: 0, heading: 0, speed: 0, graze: 1, lie: 0, lieT: 0, calmFor: 0, gph: rnd() * 5, fear: 0, temper: rr(0.8, 1.25), rogue: false, bolt: 0, boltDir: [0, 0], bolting: false, inArea: 'fold', freeze: 0, faceTo: null, bleatAt: rr(10, 200), mark: null };
+}
+for (let i = 0; i < 20; i++) flock.push(ewe(i));
+{ let r = flock[0]; for (const e of flock) if (e.temper > r.temper) r = e; r.rogue = true; r.temper = Math.max(r.temper, 1.3);
+  const m = new THREE.Mesh(UNIT, SHM.mark); m.position.set(-0.08, 0.92, 0); m.scale.set(0.34, 0.1, 0.3); r.body.add(m); r.mark = m; }
+function ewePose(e, dt) {
+  e.g.position.set(e.x, groundAt(e.x, e.z), e.z); e.g.rotation.y = -e.heading;
+  e.gph += dt * (0.4 + e.speed * 1.9); const amp = Math.min(e.speed * 0.22, 0.55) * (1 - e.lie);
+  e.legs.forEach((L, k) => { const diag = (k === 0 || k === 3) ? 0 : Math.PI; L.rotation.z = Math.sin(e.gph * TAU + diag) * amp + e.lie * (k < 2 ? -1.35 : 1.35); L.scale.y = 1 - 0.45 * e.lie; });
+  e.body.position.y = Math.abs(Math.sin(e.gph * TAU)) * 0.035 * Math.min(e.speed, 1.5) - 0.36 * e.lie;
+  const chew = e.lie > 0.5 ? Math.sin(simT * 7 + e.i) * 0.03 : 0;
+  e.head.rotation.z = (e.faceTo ? 0.25 : lerp(0.15, -1.05, e.graze * (1 - e.lie))) + Math.sin(simT * 3 + e.i) * 0.04 * e.graze + chew;
+  e.head.rotation.y = e.faceTo ? 0 : Math.sin(simT * 0.6 + e.i * 2) * 0.25 * (1 - e.fear);
+}
+
+/* ====================================================================== FARM: the land's own life (grass, tread, gates, routes) */
+const GF = new Float32Array(GW * GH), TF = new Float32Array(GW * GH); for (let k = 0; k < GW * GH; k++) { GF[k] = GRASS[k]; TF[k] = TREAD[k]; }
+const CAREA = new Array(GW * GH); for (let k = 0; k < GW * GH; k++) CAREA[k] = areaAt(...cellXZ(k));
+const FCELLS = {}; for (let k = 0; k < GW * GH; k++) (FCELLS[CAREA[k]] = FCELLS[CAREA[k]] || []).push(k);
+const GRAZE_FIELDS = ['field.home', 'field.hill', 'field.low'];
+const FNAME = Object.fromEntries(FIELDS.map(f => [f.id, f.name])); FNAME.yard = 'the yard'; FNAME.out = 'the lane';
+const fieldMean = (id) => { const c = FCELLS[id]; if (!c) return 0; let s = 0; for (const k of c) s += GF[k]; return s / c.length / 255; };
+function landSync() { for (let k = 0; k < GW * GH; k++) { GRASS[k] = clamp(Math.round(GF[k]), 0, 255); TREAD[k] = clamp(Math.round(TF[k]), 0, 255); } fieldTexUpdate(); bladesUpdate(); }
+function regrow(sec) { // grass grows back over ~4 days; paths fade over ~5 days
+  const g = 255 / (6 * 86400) * sec, d = 255 / (5 * 86400) * sec;
+  for (let k = 0; k < GW * GH; k++) { const a = CAREA[k]; const cap = a === 'yard' ? 70 : a === 'out' ? 200 : a === 'fold' ? 110 : 245; if (GF[k] < cap) GF[k] = Math.min(cap, GF[k] + g * (a === 'fold' ? 0.5 : 1)); TF[k] = Math.max(0, TF[k] - d); }
+}
+function treadAt(x, z, amt) { const k = cellOf(x, z); if (k >= 0) TF[k] = Math.min(255, TF[k] + amt); }
+{ const away = (Date.now() - (S.lastMs || Date.now())) / 1000; if (away > 120) { regrow(Math.min(away, 3 * 86400)); landSync(); logEv(`the grass grew while nobody watched (${(away / 3600).toFixed(1)} h)`); } }
+
+// gates: which side belongs to which area, and the routes between areas
+GATES.forEach(g => { const n = g.axis === 'z' ? [1, 0] : [0, 1]; const A = [g.at[0] + n[0] * 5, g.at[1] + n[1] * 5], B = [g.at[0] - n[0] * 5, g.at[1] - n[1] * 5];
+  const aA = areaAt(...A); const first = (aA === g.joins[0]) || (areaAt(...B) !== g.joins[0] && aA !== g.joins[1]);
+  g.side = { [g.joins[0]]: first ? A : B, [g.joins[1]]: first ? B : A };
+  g.nrm = { [g.joins[0]]: first ? n : [-n[0], -n[1]], [g.joins[1]]: first ? [-n[0], -n[1]] : n };    // normal pointing into each area
+  g.stand = {}; for (const a of g.joins) { const e = g.axis === 'z' ? [0, 1] : [1, 0], s = g.side[a]; g.stand[a] = [g.at[0] + (s[0] - g.at[0]) * 0.45 + e[0] * (g.w / 2 + 1.4), g.at[1] + (s[1] - g.at[1]) * 0.45 + e[1] * (g.w / 2 + 1.4)]; } });
+function route(from, to) { if (from === to) return []; const prev = { [from]: null }, q = [from];
+  while (q.length) { const a = q.shift(); if (a === to) break; for (const g of GATES) { const i = g.joins.indexOf(a); if (i < 0) continue; const b = g.joins[1 - i]; if (b in prev) continue; prev[b] = { g, a }; q.push(b); } }
+  if (!(to in prev)) return null; const out = []; let c = to; while (prev[c]) { out.unshift({ g: prev[c].g, from: prev[c].a, to: c }); c = prev[c].a; } return out; }
+const gateOf = (id) => GATES.find(g => g.id === id);
+function wallHit(x, z, r, segs) { for (const s of segs) { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1; const t = clamp(((x - s[0]) * dx + (z - s[1]) * dz) / L2, 0, 1);
+    const cx = s[0] + dx * t, cz = s[1] + dz * t, ex = x - cx, ez = z - cz, l = Math.hypot(ex, ez); if (l < r && l > 1e-5) { const gt = gateCut(cx, cz); if (gt && gt.open > 0.55) continue; x = cx + ex / l * r; z = cz + ez / l * r; } } return [x, z]; }
+function sweptBlock(x0, z0, x1, z1) { for (const s of WSEG) if (segX(x0, z0, x1, z1, ...s)) { const g = gateCut((x0 + x1) / 2, (z0 + z1) / 2); if (g && g.open > 0.55) continue; return true; } return false; }
+function gateTick(dt) { for (const g of GATES) { g.open = moveT(g.open, g.want, dt * 0.7); const a = g.base + (g.axis === 'z' ? -1 : 1) * smoothstep(0, 1, g.open) * 1.75; if (g.grp.rotation.y !== a) g.grp.rotation.y = a; } }
+const LANE_END = (() => { let best = [6, 70]; for (const r of FM.roads) if (r.tag !== 'secondary') for (const p of r.line) if (p[1] > best[1] && Math.abs(p[0]) < 80) best = p; return best; })();
+const SITE_STAND = (() => { const s = FM.walls.find(w => w.site).line; return [(s[0][0] + s[1][0]) / 2, s[0][1] + 1.4]; })();
+const BYRE_OUT = (() => { if (!BYRE) return [8, -2]; const a = [BYRE.door[0] + BYRE.n[0] * 2.2, BYRE.door[1] + BYRE.n[1] * 2.2], b = [BYRE.door[0] - BYRE.n[0] * 2.2, BYRE.door[1] - BYRE.n[1] * 2.2];
+  return Math.hypot(a[0] - BYRE.x, a[1] - BYRE.z) > Math.hypot(b[0] - BYRE.x, b[1] - BYRE.z) ? a : b; })();
+const BED = FM.props.bed.at_xz, BOWL = FM.props.bowl.at_xz, TROUGH = FM.props.trough.at_xz, THORN = FM.props.thorn.at_xz, PILE = FM.props.stonepile.at_xz;
+const HOUSE_DOOR = HOUSE ? HOUSE.door : [0, 6];
+function randIn(id, margin = 2.5, near, rad) { const f = FIELDS.find(q => q.id === id); const poly = f ? f.poly : YARD; const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+  for (let t = 0; t < 200; t++) { let x, z; if (near && t < 120) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * rad; x = near[0] + Math.cos(a) * r; z = near[1] + Math.sin(a) * r; } else { x = rr(Math.min(...xs), Math.max(...xs)); z = rr(Math.min(...zs), Math.max(...zs)); }
+    if (areaAt(x, z) === id && !WSEG.some(s => segD(x, z, ...s) < margin) && !OBST.some(o => Math.hypot(x - o[0], z - o[1]) < o[2] + 0.6)) return [x, z]; }
+  return f ? [f.cx, f.cz] : [4, 4]; }
+const flockArea = () => { const c = {}; for (const e of flock) { const a = areaAt(e.x, e.z); c[a] = (c[a] || 0) + 1; } let best = 'fold', n = -1; for (const a in c) if (c[a] > n) { n = c[a]; best = a; } return best; };
+const flockC = () => { let x = 0, z = 0; for (const e of flock) { x += e.x; z += e.z; } return [x / flock.length, z / flock.length]; };
+function bestField(exclude) { let b = null, bv = -1; for (const id of GRAZE_FIELDS) { if (id === exclude) continue; const v = fieldMean(id) - 0.0004 * Math.hypot(FIELDS.find(f => f.id === id).cx - 20, FIELDS.find(f => f.id === id).cz + 22); if (v > bv) { bv = v; b = id; } } return b; }
+
+/* ---------- FARM: the ewes think */
+let flockPace = 0.2;
+function placeFlock(area, near) { const c = near || (() => { const f = FIELDS.find(q => q.id === area); return f ? [f.cx, f.cz] : [22, -22]; })();
+  flock.forEach(e => { const p = randIn(area, area === 'fold' ? 1.2 : 2.5, c, area === 'fold' ? 7 : 16); e.x = p[0]; e.z = p[1]; e.vx = e.vz = 0; e.heading = rnd() * TAU; }); }
+function eweTick(e, dt, night, herding) {
+  let ax = 0, az = 0, cx = 0, cz = 0, vx = 0, vz = 0, n = 0;
+  for (const o of flock) { if (o === e) continue; const dx = o.x - e.x, dz = o.z - e.z, l = Math.hypot(dx, dz);
+    if (l < 16) { cx += dx; cz += dz; vx += o.vx; vz += o.vz; n++; }
+    if (l < 1.45 && l > 1e-4) { const k = (1.45 - l) / 1.45 * 9 / l; ax -= dx * k; az -= dz * k; } }
+  const ddx = e.x - dog.pos.x, ddz = e.z - dog.pos.z, dd = Math.hypot(ddx, ddz);
+  const press = lerp(1, 0.35, dog.down) * lerp(1, 1.25, dog.crouch) * (dog.mode === 'work' ? 1 : 0.55);
+  e.fear = clamp((12.5 - dd) / 10.5, 0, 1) * e.temper * press * (e.inArea === 'fold' && !herding ? 0.35 : 1) * (live.ev === 'gather' ? 0.2 : 1);
+  if (n) { ax += cx / n * (0.22 + e.fear * 0.85); az += cz / n * (0.22 + e.fear * 0.85); ax += (vx / n - e.vx) * 0.45 * e.fear; az += (vz / n - e.vz) * 0.45 * e.fear; }
+  if (dd > 0.01) { const k = e.fear * e.fear * 9.5 / dd; ax += ddx * k; az += ddz * k; }
+  if (farmer.visible) { const fx = e.x - farmer.pos.x, fz = e.z - farmer.pos.z, df = Math.hypot(fx, fz); if (df < 4.5 && df > 0.01) { const k = (4.5 - df) * 2.2 / df; ax += fx * k; az += fz * k; } }
+  // the marked ewe makes her break, and remembers the side she broke to
+  if (e.rogue && herding) { if (e.bolt <= 0 && e.fear > 0.2 && e.fear < 0.85 && rnd() < dt * 0.06 * (1.3 - 0.5 * S.exp)) {
+      e.bolt = rr(1.8, 3.2); const ux = ddx / (dd || 1), uz = ddz / (dd || 1); const side = (S.ewe.sides.length && rnd() < 0.7) ? S.ewe.sides[S.ewe.sides.length - 1] : (rnd() < 0.5 ? 1 : -1);
+      e.boltDir = [ux - uz * side * 1.4, uz + ux * side * 1.4]; const l = Math.hypot(...e.boltDir); e.boltDir = [e.boltDir[0] / l, e.boltDir[1] / l];
+      S.ewe.breaks++; S.ewe.sides.push(side); if (S.ewe.sides.length > 9) S.ewe.sides.shift(); if (rnd() < 0.5) logEv(`the marked ewe broke ${side > 0 ? 'left' : 'right'}`); }
+    if (e.bolt > 0) { e.bolt -= dt; ax += e.boltDir[0] * 14; az += e.boltDir[1] * 14; e.fear = Math.max(e.fear, 0.9); } }
+  e.bolting = e.bolt > 0;
+  const calm = 1 - clamp(e.fear * 3, 0, 1);
+  // calm: drift toward better grass, a little each minute
+  if (calm > 0.8 && !herding) { e.gph2 = (e.gph2 || 0) - dt; if (e.gph2 <= 0) { e.gph2 = rr(20, 60); let best = null, bv = -1;
+      for (let t = 0; t < 5; t++) { const a = rnd() * TAU, r = rr(2, 9); const x = e.x + Math.cos(a) * r, z = e.z + Math.sin(a) * r; const k = cellOf(x, z); if (k < 0 || CAREA[k] !== e.inArea) continue; const v = GF[k] + rnd() * 30; if (v > bv) { bv = v; best = [x, z]; } } e.goal = best; }
+    if (e.goal) { const gx = e.goal[0] - e.x, gz = e.goal[1] - e.z, gl = Math.hypot(gx, gz); if (gl > 0.8) { ax += gx / gl * 0.35; az += gz / gl * 0.35; } else e.goal = null; } }
+  ax += Math.sin(simT * 0.21 + e.i * 3.1) * 0.22 * calm; az += Math.cos(simT * 0.17 + e.i * 5.3) * 0.22 * calm;
+  if (HERD.active) { const f = herdFunnel(e); ax += f[0]; az += f[1]; }
+  if (live.ev === 'gather') { const g = gatherPull(e); ax += g[0]; az += g[1]; }
+  if (live.ev === 'lie') { const p = PHANTOM; const px = e.x - p.x, pz = e.z - p.z, pl = Math.hypot(px, pz); if (pl < 9 && pl > 0.01) { const k = (9 - pl) * 0.9 / pl; ax += px * k; az += pz * k; e.fear = Math.max(e.fear, 0.4); } }
+  ax -= e.vx * 1.6; az -= e.vz * 1.6; e.vx += ax * dt; e.vz += az * dt;
+  if (e.lie > 0.5) { e.vx *= 0.5; e.vz *= 0.5; }
+  const vmax = lerp(0.32, e.bolting ? 4.2 : 2.4, clamp(e.fear * 1.3, 0, 1)) * (night && !herding ? 0.6 : 1), vl = Math.hypot(e.vx, e.vz); if (vl > vmax) { e.vx *= vmax / vl; e.vz *= vmax / vl; }
+  let nx = e.x + e.vx * dt, nz = e.z + e.vz * dt; if (sweptBlock(e.x, e.z, nx, nz)) { nx = e.x; nz = e.z; e.vx *= -0.3; e.vz *= -0.3; } [nx, nz] = wallHit(nx, nz, 0.5, WSEG); [nx, nz] = pushCirc(nx, nz, 0.45);
+  if (!isFinite(nx) || !isFinite(nz)) { const p = randIn(S.flockAt || 'fold'); nx = p[0]; nz = p[1]; }
+  e.vx = (nx - e.x) / dt; e.vz = (nz - e.z) / dt; e.x = nx; e.z = nz; e.speed = Math.hypot(e.vx, e.vz);
+  if (e.speed > 0.07) e.heading = e.heading + wrapA(Math.atan2(e.vz, e.vx) - e.heading) * (1 - Math.exp(-dt * (2 + e.speed * 2)));
+  else if (e.faceTo) e.heading = e.heading + wrapA(Math.atan2(e.faceTo[1] - e.z, e.faceTo[0] - e.x) - e.heading) * (1 - Math.exp(-dt * 0.8));
+  e.graze = moveT(e.graze, calm > 0.9 && e.speed < 0.35 && e.lie < 0.2 && !e.faceTo ? 1 : 0, dt * 1.1);
+  e.lieT = (night && calm > 0.9 && !herding) || (e.calmFor > 1500 && !herding && SUNM.sun.el > 0 && e.i % 3 === 0) ? 1 : 0; e.calmFor = calm > 0.9 ? e.calmFor + dt : 0;
+  e.lie = moveT(e.lie, e.lieT, dt * 0.25);
+  e.inArea = areaAt(e.x, e.z);
+  // eating the field, wearing the path
+  if (e.graze > 0.6) { const hx = e.x + Math.cos(e.heading) * 0.6, hz = e.z + Math.sin(e.heading) * 0.6, k = cellOf(hx, hz); if (k >= 0) GF[k] = Math.max(8, GF[k] - 0.2 * dt); }
+  if (e.speed > 0.3) treadAt(e.x, e.z, e.speed * dt * 0.35);
+  e.bleatAt -= dt; if (e.bleatAt <= 0) { e.bleatAt = rr(40, 260) * (herding ? 0.25 : 1) * (night ? 3 : 1); FAUD.bleat(e); }
+}
+function flockTick(dt, night) { const herding = HERD.active; let sp = 0; for (const e of flock) { eweTick(e, dt, night, herding); sp += e.speed; } flockPace = lerp(flockPace, sp / flock.length, 1 - Math.exp(-dt / 20)); }
+
+/* ---------- FARM: moving the flock from one field to another (Bernard works, the farmer holds the gate) */
+const HERD = { active: false, path: [], i: 0, to: null, t: 0, legT: 0, stage: 'gather', why: '' };
+function herdStart(to, why) { const from = flockArea(); const p = route(from, to); if (!p || !p.length) return false;
+  Object.assign(HERD, { active: true, path: p, i: 0, to, t: 0, legT: 0, stage: 'gather', why, from }); dog.mode = 'work'; logEv(`${why}: ${FNAME[from]} → ${FNAME[to]}`); return true; }
+function herdLeg() { return HERD.path[HERD.i]; }
+function crossed(e, L) { const a = areaAt(e.x, e.z); if (a === L.to) return true; const g = L.g, n = g.nrm[L.to]; const s = (e.x - g.at[0]) * n[0] + (e.z - g.at[1]) * n[1]; return s > 0.8 && Math.hypot(e.x - g.at[0], e.z - g.at[1]) < 4; }
+function herdFunnel(e) { const L = herdLeg(); if (!L || HERD.stage !== 'through' || L.g.open < 0.55) return [0, 0];
+  const g = L.g, n = g.nrm[L.to]; if (crossed(e, L)) { return [n[0] * 0.8, n[1] * 0.8]; }   // through: keep walking on, into the field
+  const nf = g.nrm[L.from], lat = g.axis === 'z' ? Math.abs(e.z - g.at[1]) : Math.abs(e.x - g.at[0]), front = (e.x - g.at[0]) * nf[0] + (e.z - g.at[1]) * nf[1];
+  const l0 = Math.hypot(g.at[0] - e.x, g.at[1] - e.z); if (l0 > 16) return [0, 0]; const k = (16 - l0) / 16 * (HERD.legT > 600 ? 3.2 : 1.7);
+  // round the corner first: to a point square in front of the gate, then through it
+  const tx = lat > g.w / 2 - 0.4 && front < 4 ? g.at[0] + nf[0] * 3.5 : g.at[0] - nf[0] * 2, tz = lat > g.w / 2 - 0.4 && front < 4 ? g.at[1] + nf[1] * 3.5 : g.at[1] - nf[1] * 2;
+  const dx = tx - e.x, dz = tz - e.z, l = Math.hypot(dx, dz) || 1; return [dx / l * k, dz / l * k]; }
+function herdTick(dt) {
+  if (!HERD.active) return; HERD.t += dt; HERD.legT += dt; const L = herdLeg();
+  if (!L) { HERD.active = false; S.flockAt = HERD.to; dog.mode = 'free'; logEv(`the flock is in ${FNAME[HERD.to]}`); S.exp = clamp(S.exp + 0.012, 0, 1); S.workedToday++; return; }
+  const g = L.g; const n = flock.filter(e => crossed(e, L)).length; const C = flockC();
+  const farmerThere = !farmer.visible || Math.hypot(farmer.pos.x - g.stand[L.from][0], farmer.pos.z - g.stand[L.from][1]) < 2.5;
+  if (farmerThere) g.want = 1;
+  if (HERD.stage === 'gather' && g.open > 0.6 && Math.hypot(C[0] - g.side[L.from][0], C[1] - g.side[L.from][1]) < 10) HERD.stage = 'through';
+  if (HERD.stage === 'gather' && HERD.legT > 420 && g.open > 0.6) HERD.stage = 'through';
+  if (n >= flock.length || (HERD.legT > 1500 && n >= flock.length - 1)) {
+    if (n < flock.length) { const e = flock.find(q => !crossed(q, L)); const p = g.side[L.to]; e.x = p[0] + rr(-1, 1); e.z = p[1] + rr(-1, 1); }   // the farmer walked the last one through
+    HERD.i++; HERD.legT = 0; HERD.stage = 'gather'; HERD.closeG = g; }
+  if (HERD.t > 3600) { placeFlock(HERD.to); HERD.i = HERD.path.length; logEv('the farmer and the dog took the long way round'); }
+}
+
+/* ---------- FARM: Bernard's own day */
+Object.assign(dog, { mode: 'free', task: 'sleep', taskT: 0, taskDur: 0, note: 'asleep in the byre', goal: null, lastDir: 1, flankR: -1, ateDay: -1, drank: 0, ghost: false, zone: 'yard' });
+function dogGo(x, z, sp, arrive = 0.5) { const dx = x - dog.pos.x, dz = z - dog.pos.z, d = Math.hypot(dx, dz); if (d < arrive) { dog.want.set(0, 0, 0); return true; }
+  const s = clamp(d * 1.1, 0.4, sp); dog.want.set(dx / d * s, 0, dz / d * s); return false; }
+function flankVel(C, dir, r, sp) { const rx = dog.pos.x - C[0], rz = dog.pos.z - C[1], d = Math.hypot(rx, rz) || 0.01; const hx = rx / d, hz = rz / d;
+  let vx = -hz * dir * sp + hx * clamp((r - d) * 1.4, -3, 5), vz = hx * dir * sp + hz * clamp((r - d) * 1.4, -3, 5); const l = Math.hypot(vx, vz); if (l > sp) { vx *= sp / l; vz *= sp / l; } return V(vx, 0, vz); }
+function dogWork(dt) {   // the balance point: the far side of the flock from where they're going; collect a stray first
+  const L = herdLeg(); if (!L) return; const g = L.g; const thr = HERD.stage === 'through';
+  const loose = flock.filter(e => !crossed(e, L)); const nf = g.nrm[L.from];
+  const lateral = loose.filter(e => (g.axis === 'z' ? Math.abs(e.z - g.at[1]) : Math.abs(e.x - g.at[0])) > g.w / 2 + 1.5).length;
+  const A = [g.at[0] + nf[0] * 3.5, g.at[1] + nf[1] * 3.5];   // square in front of the gate
+  const goal = thr && lateral * 2 < loose.length ? [g.side[L.to][0] + g.nrm[L.to][0] * 12, g.side[L.to][1] + g.nrm[L.to][1] * 12] : thr ? A : g.side[L.from]; if (!loose.length) { dogGo(g.side[L.from][0], g.side[L.from][1], 3); dog.crouchT = 0.2; return; }
+  let cx = 0, cz = 0; for (const e of loose) { cx += e.x; cz += e.z; } cx /= loose.length; cz /= loose.length;
+  let r2 = 0, far = 0, out = loose[0]; for (const e of loose) { const d = Math.hypot(e.x - cx, e.z - cz); r2 += d * d; if (d > far) { far = d; out = e; } }
+  const R = Math.sqrt(r2 / loose.length), exp = S.exp;
+  if (!thr && g.open < 0.55 && Math.hypot(cx - goal[0], cz - goal[1]) < 9) { dog.want.set(0, 0, 0); dog.downT = 1; dog.look.set(cx, 0, cz); dog.hasLook = true; dog.note = 'holding them at the gate'; return; } const rw = clamp(R * 1.5 + 6, 7, 20) * lerp(0.75, 1.1, exp);
+  const collect = far > 2.2 * Math.sqrt(loose.length) + 4;
+  let P; if (collect) { const ox = out.x - cx, oz = out.z - cz, l = Math.hypot(ox, oz) || 1; P = [out.x + ox / l * 5, out.z + oz / l * 5]; }
+  else { const gx = cx - goal[0], gz = cz - goal[1], l = Math.hypot(gx, gz) || 1; let r = rw; P = [cx + gx / l * r, cz + gz / l * r];
+    while (r > 2.5 && areaAt(P[0], P[1]) !== L.from) { r *= 0.8; P = [cx + gx / l * r, cz + gz / l * r]; } }   // a corner: get in behind them, tight
+  const angP = Math.atan2(P[1] - cz, P[0] - cx), angD = Math.atan2(dog.pos.z - cz, dog.pos.x - cx); const diff = wrapA(angP - angD), rP = Math.hypot(P[0] - cx, P[1] - cz);
+  dog.look.set(cx, 0, cz); dog.hasLook = true; dog.downT = 0; dog.wagT = 0;
+  if (Math.abs(diff) > 0.42 && Math.hypot(dog.pos.x - P[0], dog.pos.z - P[1]) > 4) {
+    let dir = Math.sign(diff); if (Math.abs(diff) > 2.6) dir = dog.lastDir; dog.lastDir = dir;
+    const sp = (Math.abs(diff) > 1.2 ? 7.6 : 4.6) * lerp(1.12, 1, exp); dog.want.copy(flankVel([cx, cz], dir, Math.max(rP, rw) + 2, sp)); dog.crouchT = 0.08; dog.note = dir > 0 ? 'flanking, come-bye side' : 'flanking, away side'; return; }
+  const tx = P[0] - dog.pos.x, tz = P[1] - dog.pos.z, tl = Math.hypot(tx, tz);
+  if (tl > 3 && Math.hypot(dog.pos.x - cx, dog.pos.z - cz) > rP - 1) { const s = clamp(tl * 0.9, 1, 4); dog.want.set(tx / tl * s, 0, tz / tl * s); dog.crouchT = 0.3; dog.note = 'steady, to the balance'; return; }
+  let near = 1e9; for (const e of loose) near = Math.min(near, Math.hypot(e.x - dog.pos.x, e.z - dog.pos.z));
+  let sp2 = (near > 5 ? 1.6 : 0.6) * lerp(1.45, 1, exp); if (near < 3.2) sp2 = HERD.legT > 100 ? 0.35 : 0;
+  const ux = cx - dog.pos.x, uz = cz - dog.pos.z, ul = Math.hypot(ux, uz) || 1; dog.want.set(ux / ul * sp2, 0, uz / ul * sp2); dog.crouchT = 0.68; dog.note = sp2 > 0 ? 'walking up on them' : 'holding them with his eye';
+}
+function dogSet(task, dur, note) { dog.task = task; dog.taskT = 0; dog.taskDur = dur; if (note) dog.note = note; dog.goal = null; }
+function dogTickBrain(dt, night) {
+  dog.taskT += dt; dog.ghost = false; const F = farmer; const fp = F.pos;
+  if (dog.stuckT > 6 && !HERD.active) { dog.stuckT = 0; if (dog.task === 'wander' || dog.task === 'watch') dog.goal = null; else if (dog.task !== 'bed' && dog.task !== 'rise') dogSet('free', 0); }
+  if (HERD.active) { if (dog.task !== 'work') dogSet('work', 0, 'gone out round them'); dogWork(dt); return; }
+  if (dog.task === 'work') dogSet('heel', 30, 'coming in to the farmer');
+  if (dog.task === 'come') { dog.downT = 0; dog.crouchT = 0; dog.wagT = 1; dog.hasLook = true; dog.look.set(fp.x, 1.2, fp.z);
+    if (!F.visible || dogGo(fp.x - Math.cos(F.heading) * 1.2 + Math.sin(F.heading) * 0.8, fp.z - Math.sin(F.heading) * 1.2 - Math.cos(F.heading) * 0.8, 7.5, 1.0)) dogSet('heel', rr(20, 60), 'at heel'); return; }
+  // where he wants to be
+  const wantSleep = night && !F.visible;
+  if (wantSleep && dog.task !== 'sleep' && dog.task !== 'bed') dogSet('bed', 0, 'going in to the byre for the night');
+  if (dog.task === 'bed') { dog.ghost = true; const d0 = Math.hypot(dog.pos.x - BYRE_OUT[0], dog.pos.z - BYRE_OUT[1]);
+    if (!dog.goal) dog.goal = d0 < 1.2 ? 'in' : 'door';
+    if (dog.goal === 'door' && dogGo(BYRE_OUT[0], BYRE_OUT[1], 3.2, 0.7)) dog.goal = 'in';
+    if (dog.goal === 'in' && dogGo(BED[0], BED[1], 1.2, 0.35)) { dogSet('sleep', 0, 'asleep in the byre'); logEv('Bernard went in to his bed'); } dog.crouchT = 0; dog.downT = 0; dog.hasLook = false; return; }
+  if (dog.task === 'sleep') { dog.ghost = true; dog.want.set(0, 0, 0); dog.downT = 1; dog.crouchT = 0.2; dog.wagT = 0; dog.hasLook = false;
+    if (!night || F.visible) { if (dog.taskT > 30 && (F.visible || SUNM.sun.el > 0.02)) { dogSet('rise', 0, 'up and out of the byre'); } } return; }
+  if (dog.task === 'rise') { dog.ghost = true; dog.downT = 0; if (dogGo(BYRE_OUT[0], BYRE_OUT[1], 2, 0.6)) dogSet('free', 0); return; }
+  // the farmer is away down the lane: he waits at the yard's edge facing the lane
+  if (F.away) { const w = [LANE_END[0] * 0.2 + 4, Math.min(LANE_END[1], 18)];
+    if (dog.task !== 'wait') dogSet('wait', 0, 'waiting for the farmer at the lane'); dog.downT = 0; dog.crouchT = 0; if (dogGo(w[0], w[1], 3.4, 0.8)) { dog.downT = dog.taskT > 40 ? 1 : 0.6; dog.look.set(LANE_END[0], 0, LANE_END[1]); dog.hasLook = true; } return; }
+  if (dog.task === 'wait') dogSet('free', 0);
+  const fd = F.visible ? Math.hypot(dog.pos.x - fp.x, dog.pos.z - fp.z) : 0;
+  if (F.visible && fd > 28 && (dog.task === 'watch' || dog.task === 'wander') && !live.ev) dogSet('heel', rr(40, 120), 'going after the farmer');
+  if (dog.task === 'free' || dog.taskT > dog.taskDur) {   // choose what next
+    const h = galwayParts(simMs).hour, hungry = dog.ateDay !== S.days && h > 11.5 && h < 19, thirsty = simT - dog.drank > rr(5400, 9000);
+    const fWalking = F.visible && F.speed > 0.3, fWorking = F.visible && (F.task === 'lay' || F.task === 'lean' || F.task === 'stand');
+    if (!F.visible) { if (hungry) dogSet('eat', 600, 'eating at the bowl'); else if (night) dogSet('bed', 0); else if (rnd() < 0.55) dogSet('doorstep', rr(600, 2400), 'lying at the farmhouse door'); else dogSet('wander', rr(120, 400), 'nosing round the yard'); }
+    else if (fWalking || fd > 30) dogSet('heel', rr(40, 120), 'with the farmer');
+    else if (hungry && Math.hypot(fp.x - BOWL[0], fp.z - BOWL[1]) < 60) dogSet('eat', 600, 'eating at the bowl');
+    else if (thirsty) dogSet('drink', 600, 'drinking at the trough');
+    else if (fWorking) dogSet(rnd() < 0.7 ? 'watch' : 'wander', rr(240, 900), rnd() < 0.5 ? 'lying down, watching the flock' : 'lying near the farmer');
+    else dogSet('heel', rr(30, 90), 'with the farmer');
+  }
+  dog.crouchT = 0; dog.wagT = 0.15; dog.downT = 0;
+  switch (dog.task) {
+    case 'heel': { if (!F.visible) { dogSet('free', 0); break; } dog.downT = 0; dog.hasLook = F.speed < 0.2; dog.look.set(fp.x, 1.2, fp.z);
+      const side = (dog.i0 = dog.i0 || (rnd() < 0.5 ? 1 : -1)); const hx = fp.x - Math.cos(F.heading) * 1.6 + Math.sin(F.heading) * 1.1 * side, hz = fp.z - Math.sin(F.heading) * 1.6 - Math.cos(F.heading) * 1.1 * side;
+      const d = Math.hypot(hx - dog.pos.x, hz - dog.pos.z); if (d > 2.5 || F.speed > 0.2) dogGo(hx, hz, d > 12 ? 6.5 : 2.6, 0.6); else { dog.want.set(0, 0, 0); if (dog.taskT > 25 && F.speed < 0.1) dog.downT = 0.6; } dog.wagT = d < 4 ? 0.5 : 0.2; break; }
+    case 'watch': { if (!F.visible) { dogSet('free', 0); break; } if (!dog.goal) { const C = flockC(); const a = Math.atan2(C[1] - fp.z, C[0] - fp.x) + rr(-0.6, 0.6), r = rr(5, 11); dog.goal = [fp.x + Math.cos(a) * r, fp.z + Math.sin(a) * r];
+        [dog.goal[0], dog.goal[1]] = wallHit(dog.goal[0], dog.goal[1], 1.2, WSEG); }
+      const C = flockC(); if (dogGo(dog.goal[0], dog.goal[1], 2.2, 0.6)) { dog.downT = 1; dog.look.set(C[0], 0, C[1]); dog.hasLook = true; } break; }
+    case 'wander': { if (!dog.goal || dogGo(dog.goal[0], dog.goal[1], 1.3, 0.8)) { const base = F.visible ? [fp.x, fp.z] : [4, 4]; dog.goal = [base[0] + rr(-14, 14), base[1] + rr(-14, 14)]; [dog.goal[0], dog.goal[1]] = pushCirc(...wallHit(dog.goal[0], dog.goal[1], 1, WSEG), 0.8); }
+      dog.downT = 0; dog.hasLook = false; dog.crouchT = 0.25; break; }   // nose down
+    case 'doorstep': { const d = [HOUSE_DOOR[0], HOUSE_DOOR[1]]; if (dogGo(d[0], d[1], 2.4, 1.2)) { dog.downT = 1; dog.hasLook = true; dog.look.set(d[0] + 6, 0, d[1] + 3); } if (F.visible) dogSet('free', 0); break; }
+    case 'eat': { if (dogGo(BOWL[0] + 0.5, BOWL[1], 2.6, 0.9) || (dog.taskT > 90 && Math.hypot(dog.pos.x - BOWL[0], dog.pos.z - BOWL[1]) < 2.5)) { dog.crouchT = 0.9; dog.hasLook = true; dog.look.set(BOWL[0], -0.4, BOWL[1]); if (dog.goal == null) dog.goal = dog.taskT; if (dog.taskT > dog.goal + 70) { dog.ateDay = S.days; if (rnd() < 0.4) logEv('Bernard ate'); dogSet('free', 0); } } else if (dog.taskT > 240) dogSet('free', 0); break; }
+    case 'drink': { if (dogGo(TROUGH[0] + 0.9, TROUGH[1], 2.6, 0.9)) { dog.crouchT = 0.6; dog.hasLook = true; dog.look.set(TROUGH[0], 0.3, TROUGH[1]); if (dog.taskT > 40) { dog.drank = simT; dogSet('free', 0); } } else if (dog.taskT > 240) { dog.drank = simT; dogSet('free', 0); } break; }
+    default: dogSet('free', 0);
+  }
+  if (live.ev === 'gather' || live.ev === 'lie' || live.ev === 'stone') eventDog();
+}
+function dogZone() { if (dog.task === 'sleep' || dog.task === 'bed') return 'byre'; return areaAt(dog.pos.x, dog.pos.z); }
+
+/* ---------- FARM: the farmer's day (a queue of plain tasks) */
+Object.assign(farmer, { task: 'in', taskT: 0, q: [], away: false, inside: true, path: [], note: 'indoors', walkTo: null, lay: null, whistleT: 0 });
+function fWalkPlan(x, z, note) { // to a point, through the gates in order
+  const from = areaAt(farmer.pos.x, farmer.pos.z), to = areaAt(x, z); const r = (from === 'out' || to === 'out') ? [] : (route(from, to) || []); const steps = [];
+  for (const L of r) { steps.push({ t: 'walk', to: L.g.stand[L.from], note }); steps.push({ t: 'gate', g: L.g, open: 1 }); steps.push({ t: 'walk', to: L.g.side[L.from], note, thru: true }); steps.push({ t: 'walk', to: L.g.side[L.to], note, thru: true }); steps.push({ t: 'gate', g: L.g, open: 0, from: L.to }); }
+  steps.push({ t: 'walk', to: [x, z], note }); return steps; }
+function fPush(...steps) { farmer.q.push(...steps.flat()); }
+function farmerTick(dt, night) {
+  const F = farmer; F.taskT += dt;
+  if (!F.cur) { if (!F.q.length) farmerPlan(night); F.cur = F.q.shift(); F.taskT = 0; if (F.cur && F.cur.note) F.note = F.cur.note; }
+  const c = F.cur; if (!c) return; F.stoopT = 0; F.carryT = 0; F.armT = 0; let done = false; F.task = c.t;
+  if (c.t === 'walk') { F.visible = true; F.inside = false; const dx = c.to[0] - F.pos.x, dz = c.to[1] - F.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.35 || F.taskT > 900) { F.speed = 0; done = true; if (F.taskT > 900) { F.pos.set(c.to[0], 0, c.to[1]); } }
+    else { const sp = (c.fast ? 1.45 : 1.1) * (WX.precip > 1 ? 1.25 : 1) * clamp(d * 1.5, 0.3, 1); F.speed = sp; const want = Math.atan2(dz, dx); F.heading += wrapA(want - F.heading) * (1 - Math.exp(-dt * 3));
+      let nx = F.pos.x + Math.cos(F.heading) * sp * dt, nz = F.pos.z + Math.sin(F.heading) * sp * dt; if (!c.thru) { if (sweptBlock(F.pos.x, F.pos.z, nx, nz)) { nx = F.pos.x; nz = F.pos.z; } [nx, nz] = wallHit(nx, nz, 0.35, WSEG); [nx, nz] = pushCirc(nx, nz, 0.3); }
+      F.pos.x = nx; F.pos.z = nz; treadAt(nx, nz, sp * dt * 0.5); } }
+  else { F.speed = 0; }
+  if (c.t === 'gate') { const g = c.g; F.hasLook = true; F.look.set(g.at[0], 1, g.at[1]); g.want = c.open; if (Math.abs(g.open - c.open) < 0.05) { done = true; FAUD.gate(g); }
+    if (c.open === 0 && flock.some(e => Math.hypot(e.x - g.at[0], e.z - g.at[1]) < 2.2)) { g.want = 1; if (F.taskT > 120) done = true; } }
+  if (c.t === 'stand') { F.hasLook = !!c.look; if (c.look) F.look.set(c.look[0], 1, c.look[1]); if (c.face != null) F.heading += wrapA(c.face - F.heading) * (1 - Math.exp(-dt)); done = F.taskT > c.dur; }
+  if (c.t === 'lean') { F.stoopT = 0.25; F.hasLook = true; const C = flockC(); F.look.set(C[0], 1, C[1]); done = F.taskT > c.dur; }
+  if (c.t === 'herd') { F.hasLook = true; const C = flockC(); F.look.set(C[0], 1, C[1]); const L = herdLeg();
+    if (!HERD.active) { done = true; if (HERD.closeG) { fPush({ t: 'gate', g: HERD.closeG, open: 0 }); HERD.closeG = null; } }
+    else if (L) { if (HERD.closeG && HERD.closeG !== L.g) { const g = HERD.closeG; HERD.closeG = null; F.q.unshift({ t: 'herd' }); F.q.unshift({ t: 'gate', g, open: 0 }); F.cur = null; return; }
+      const s = L.g.stand[L.from]; if (Math.hypot(F.pos.x - s[0], F.pos.z - s[1]) > 2) { F.q.unshift({ t: 'herd' }); F.q.unshift(...fWalkPlan(s[0], s[1], 'going to hold the gate')); F.cur = null; return; }
+      if (F.taskT > 4 && L.g.open < 0.5) L.g.want = 1; } }
+  if (c.t === 'lay') { // stoop for a stone from the tumble, carry it, set it, step back to look
+    if (S.wallLaid >= SITE.total) { done = true; } else {
+      const k = S.wallLaid, slot = SITE.slots[k], tum = SITE.tumble[SITE.total - 1 - k];
+      if (!c.ph) { c.ph = 'fetch'; c.t0 = F.taskT; }
+      if (c.ph === 'fetch') { const d = Math.hypot(tum[0] - F.pos.x, tum[2] - F.pos.z); if (d > 0.9) { const a = Math.atan2(tum[2] - F.pos.z, tum[0] - F.pos.x); F.heading += wrapA(a - F.heading) * (1 - Math.exp(-dt * 3)); F.speed = 0.7; F.pos.x += Math.cos(F.heading) * 0.7 * dt; F.pos.z += Math.sin(F.heading) * 0.7 * dt; }
+        else { F.stoopT = 1; if (F.taskT - c.t0 > rr(6, 9)) { c.ph = 'carry'; SITE.lying.count = Math.max(0, SITE.total - S.wallLaid - 1); c.t0 = F.taskT; FAUD.stone(V(tum[0], tum[1], tum[2]), 0.5); } } }
+      if (c.ph === 'carry') { F.carryT = 1; const d = Math.hypot(slot[0] - F.pos.x, slot[2] + 0.9 - F.pos.z); const a = Math.atan2(slot[2] + 0.9 - F.pos.z, slot[0] - F.pos.x);
+        if (d > 0.5) { F.heading += wrapA(a - F.heading) * (1 - Math.exp(-dt * 3)); F.speed = 0.6; F.pos.x += Math.cos(F.heading) * 0.6 * dt; F.pos.z += Math.sin(F.heading) * 0.6 * dt; } else { F.heading += wrapA(-Math.PI / 2 - F.heading) * (1 - Math.exp(-dt * 2)); if (F.taskT - c.t0 > 10) { c.ph = 'set'; c.t0 = F.taskT; } } }
+      if (c.ph === 'set') { F.stoopT = 0.6; F.carryT = 0.6; if (F.taskT - c.t0 > rr(5, 12)) { S.wallLaid++; siteUpdate(); FAUD.stone(V(slot[0], slot[1], slot[2]), 1); c.ph = 'look'; c.t0 = F.taskT; if (S.wallLaid % 10 === 0) logEv(`the new wall reached ${S.wallLaid} stones`); } }
+      if (c.ph === 'look') { F.hasLook = true; F.look.set(slot[0], slot[1], slot[2]); if (F.taskT - c.t0 > rr(20, 60)) done = true; } } }
+  if (c.t === 'in') { F.visible = false; F.inside = true; F.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]); done = F.taskT > c.dur || (c.until && c.until()); }
+  if (c.t === 'away') { F.visible = false; F.away = true; F.pos.set(LANE_END[0], 0, LANE_END[1]); done = F.taskT > c.dur || night; if (done) { F.away = false; logEv('the farmer came back up the lane'); } }
+  if (c.t === 'whistle') { F.armT = 1; F.hasLook = true; F.look.copy(dog.pos); if (F.taskT > 0.6 && !c.blown) { c.blown = true; FAUD.whistle(); if (dog.task !== 'sleep' && dog.task !== 'work') dogSet('come', 0, 'called over'); } done = F.taskT > 2.2; }
+  if (c.t === 'herdStart') { if (!herdStart(c.to, c.why)) {} done = true; }
+  if (c.t === 'log') { logEv(c.text); done = true; }
+  if (c.t === 'out') { F.visible = true; F.inside = false; F.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]); F.heading = Math.atan2(4 - HOUSE_DOOR[1], 4 - HOUSE_DOOR[0]); done = true; }
+  if (done) { F.cur = null; }
+  F.pos.y = groundAt(F.pos.x, F.pos.z); if (!isFinite(F.pos.x)) F.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]);
+}
+function farmerPlan(night) {
+  const F = farmer, h = galwayParts(simMs).hour, sEl = SUNM.sun.el / D2R, wet = WX.precip > 2.2, fa = flockArea(), M = S.moved || (S.moved = {});
+  const goIn = (dur, note, until) => { if (F.visible) fPush(fWalkPlan(HOUSE_DOOR[0], HOUSE_DOOR[1], note || 'going in')); fPush({ t: 'log', text: note === 'going in for the night' ? 'the farmer went in for the night' : 'the farmer went in' }, { t: 'in', dur, until }); };
+  const comeOut = () => { if (!F.visible) fPush({ t: 'out' }, { t: 'log', text: 'the farmer came out' }); };
+  const herd = (to, why) => { if (fa === to) return false; const r = route(fa, to); if (!r || !r.length) return false; comeOut(); const s = r[0].g.stand[r[0].from]; fPush(fWalkPlan(s[0], s[1], why)); fPush({ t: 'herdStart', to, why }, { t: 'herd', note: why }); return true; };
+  if (sEl < -4 || (sEl < 4 && h > 14)) { // evening and night: the flock in, the farmer in
+    if (!M.dusk && fa !== 'fold' && sEl > -9) { M.dusk = true; if (herd('fold', 'bringing them in to the fold for the night')) return; }
+    if (F.visible) { goIn(1800, 'going in for the night'); return; }
+    fPush({ t: 'in', dur: 1800, until: () => SUNM.sun.el > -0.03 && galwayParts(simMs).hour < 13 }); return; }
+  if (wet) { if (F.visible) { goIn(rr(900, 2400), 'going in out of the rain'); return; } fPush({ t: 'in', dur: rr(600, 1500) }); return; }
+  if (!M.am && h < 14) { M.am = true; const to = bestField(); if (herd(to, 'moving the flock to fresh grass')) return; }
+  if (!M.mid && h > 11 && h < 16 && GRAZE_FIELDS.includes(fa) && fieldMean(fa) < 0.36) { const to = bestField(fa); if (to && fieldMean(to) > fieldMean(fa) + 0.15) { M.mid = true; if (herd(to, 'the grass is short, moving them on')) return; } }
+  const wasIn = !F.visible;
+  comeOut();
+  const opts = [['wall', S.wallLaid < SITE.total ? 3.2 : 0], ['look', 1.4], ['yard', 1], ['tea', wasIn ? 0 : h > 10 && h < 16 ? 0.6 : 0.15], ['away', h > 9.5 && h < 17 && !M.away ? 0.55 : 0]];
+  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot, pick = 'yard'; for (const o of opts) { r -= o[1]; if (r <= 0) { pick = o[0]; break; } }
+  if (pick === 'wall') { const s = SITE.slots[Math.min(S.wallLaid, SITE.total - 1)]; fPush(fWalkPlan(s[0] + rr(-1, 1), s[2] + 1.4, 'out to the new wall')); const n = Math.floor(rr(2, 6));
+    for (let i = 0; i < n; i++) { fPush({ t: 'lay', note: 'laying stone on the new wall' }); if (rnd() < 0.5) fPush({ t: 'lean', dur: rr(60, 240), note: 'leaning on the wall, looking at the flock' }); fPush({ t: 'stand', dur: rr(120, 400), note: 'working at the wall' }); } }
+  if (pick === 'look') { const f = FIELDS.find(q => q.id === fa) || FIELDS[0]; const p = randIn(fa === 'out' ? 'field.home' : fa, 3, flockC(), 14); fPush(fWalkPlan(p[0], p[1], 'walking out among the ewes')); fPush({ t: 'stand', dur: rr(90, 300), look: flockC(), note: 'looking over the flock' }); }
+  if (pick === 'yard') { const p = randIn('yard', 1.5); fPush(fWalkPlan(p[0], p[1], 'about the yard')); fPush({ t: 'stand', dur: rr(120, 480), note: 'about the yard' }); }
+  if (pick === 'tea') goIn(rr(900, 2700), 'in for his tea');
+  if (pick === 'away') { M.away = true; fPush(fWalkPlan(LANE_END[0] * 0.3 + 3, 14, 'heading off down the lane')); fPush({ t: 'walk', to: LANE_END, note: 'heading off down the lane', thru: true }, { t: 'log', text: 'the farmer went off down the lane' }, { t: 'away', dur: rr(1800, 5400) }, { t: 'walk', to: [LANE_END[0] * 0.3 + 3, 14], note: 'back up the lane', thru: true }); }
+  // now and then, when the dog has strayed, a low whistle brings him over
+  if (rnd() < 0.3 && F.visible) fPush({ t: 'whistle', note: 'whistling Bernard over' });
+}
+function dayTick() { const d = new Date(simMs).toLocaleDateString('en-GB', { timeZone: 'Europe/Dublin' }); if (S.lastDay !== d) { if (S.lastDay) S.days++; S.lastDay = d; S.moved = {}; S.workedToday = 0; } }
+
+/* ---------- FARM: the world as it is when you arrive (it was running before you came) */
+function settle() {
+  const h = galwayParts(simMs).hour, sEl = SUNM.sun.el / D2R, night = sEl < -3; dayTick();
+  if (S.flockPos && S.flockPos.length === flock.length) { flock.forEach((e, i) => { e.x = S.flockPos[i][0]; e.z = S.flockPos[i][1]; e.heading = rnd() * TAU; }); }
+  else { const area = night ? 'fold' : (S.flockAt || (h > 8 && h < 18 ? bestField() : 'fold')); placeFlock(area); S.flockAt = area; if (!night && area !== 'fold') S.moved.am = true; }
+  flock.forEach(e => { e.inArea = areaAt(e.x, e.z); if (night) { e.lie = 1; e.lieT = 1; } });
+  const fa = flockArea(); S.flockAt = fa;
+  if (night || WX.precip > 2.2) { farmer.visible = false; farmer.inside = true; farmer.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]); farmer.cur = { t: 'in', dur: rr(300, 1500) };
+    if (night) { dogPlace(BED[0], BED[1], rnd() * TAU); dog.down = 1; dogSet('sleep', 0, 'asleep in the byre'); } else { dogPlace(HOUSE_DOOR[0] + 1.5, HOUSE_DOOR[1] + 1, 0.5); dogSet('doorstep', 600, 'lying at the farmhouse door'); } }
+  else { const atWall = S.wallLaid < SITE.total && rnd() < 0.6; let p;
+    if (atWall) { const s = SITE.slots[S.wallLaid]; p = [s[0], s[2] + 1.4]; farmer.cur = { t: 'stand', dur: rr(30, 200) }; farmer.note = 'working at the wall'; }
+    else { p = randIn(fa === 'out' || fa === 'fold' ? 'yard' : fa, 3); farmer.cur = { t: 'stand', dur: rr(30, 200), look: flockC() }; farmer.note = 'looking over the flock'; }
+    farmer.pos.set(p[0], 0, p[1]); farmer.visible = true; farmer.inside = false; farmer.heading = rnd() * TAU;
+    const a = rnd() * TAU; dogPlace(p[0] + Math.cos(a) * 6, p[1] + Math.sin(a) * 6, a + Math.PI); dog.down = 1; dogSet('watch', rr(200, 600), 'lying down, watching the flock'); dog.goal = [dog.pos.x, dog.pos.z]; }
+  farmer.pos.y = groundAt(farmer.pos.x, farmer.pos.z);
+}
+
+const losClear = (ax, az, bx, bz) => { if (WSEG.some(s => segX(ax, az, bx, bz, ...s))) return false; for (let i = 0; i <= 10; i++) { const x = lerp(ax, bx, i / 10), z = lerp(az, bz, i / 10), q = pushBox(x, z, 0.3); if (Math.hypot(q[0] - x, q[1] - z) > 1e-3) return false; } return true; };
+const crewP = (x, z, up) => V(x, terrainH(x, z) + up, z);
+const kf = (dt, r) => 1 - Math.exp(-dt * r);
+const G3 = (x, up, z) => V(x, terrainH(x, z) + up, z);
+function clearance(p, minUp = 0.25, skipByre) {   // a lens never sits inside a wall, a building, an animal or the farmer
+  const gy = terrainH(p.x, p.z) + minUp; if (p.y < gy) p.y = gy;
+  let [x, z] = pushBox(p.x, p.z, 0.6, skipByre ? BLD.find(b => b.role === 'byre' && Math.hypot(b.o.cx - BYRE.x, b.o.cz - BYRE.z) < 0.5) : null);
+  if (p.y < terrainH(x, z) + 1.7) [x, z] = pushOut(x, z, 0.55, WSEG);
+  const bodies = flock.map(e => [e.x, e.z, 1.0]); bodies.push([dog.pos.x, dog.pos.z, 0.75]); if (farmer.visible) bodies.push([farmer.pos.x, farmer.pos.z, 0.9]);
+  for (const b of bodies) { const dx = x - b[0], dz = z - b[1], l = Math.hypot(dx, dz); if (l < b[2] && p.y < terrainH(b[0], b[1]) + 1.9) { const k = b[2] / Math.max(l, 1e-3); x = b[0] + dx * k; z = b[1] + dz * k; } }
+  p.x = x; p.z = z; const g2 = terrainH(x, z) + minUp; if (p.y < g2) p.y = g2; return p; }
+const dogHead = () => dog.headP.clone().lengthSq() > 0 ? dog.headP.clone() : dog.pos.clone().add(V(0, 0.55, 0));
+const foldG = gateOf('gate.foldhome'), byreIn = BYRE ? (() => { const d = [BYRE.door[0] - (BYRE_OUT[0] - BYRE.door[0]) * 0.6, BYRE.door[1] - (BYRE_OUT[1] - BYRE.door[1]) * 0.6]; return d; })() : [8, -4];
+const FCREW = [
+  { name: 'YARD', fov: 46, p: crewP(-10, 16, 1.6), upd(c, t, dt) { c.p.y = terrainH(c.p.x, c.p.z) + 1.6 + 0.03 * Math.sin(t * 0.6); const want = dog.task === 'doorstep' || dog.task === 'eat' ? dogHead() : G3(BYRE_OUT[0], 1.2, BYRE_OUT[1]).lerp(G3(4, 1, 4), 0.5 + 0.5 * Math.sin(t / 61)); c.tgt.lerp(want, kf(dt, 0.4)); } },
+  { name: 'BYRE', fov: 58, p: V(), upd(c, t, dt) { const bp = V(byreIn[0], (BYRE ? BYRE.y : 0) + 1.25, byreIn[1]); c.p.copy(bp); const tg = dog.task === 'sleep' || dog.task === 'bed' || dog.task === 'rise' ? dogHead().add(V(0, -0.15, 0)) : V(BED[0], (BYRE ? BYRE.y : 0) + 0.2, BED[1]);
+      c.tgt.lerp(tg, kf(dt, 0.5)); }, skipByre: true },
+  { name: 'FOLD GATE', fov: 44, p: crewP(42, -28.5, 1.4), upd(c, t, dt) { const C = flockC(); const want = Math.hypot(C[0] - foldG.at[0], C[1] - foldG.at[1]) < 30 ? G3(C[0], 0.6, C[1]) : G3(foldG.at[0], 0.8, foldG.at[1]); c.tgt.lerp(want, kf(dt, 0.3)); } },
+  { name: 'WALL', fov: 40, p: crewP(SITE_STAND[0] - 9, SITE_STAND[1] + 3.5, 1.5), upd(c, t, dt) { const s = SITE.slots[Math.min(S.wallLaid, SITE.total - 1)];
+      const want = farmer.visible && Math.hypot(farmer.pos.x - s[0], farmer.pos.z - s[2]) < 14 ? farmer.pos.clone().add(V(0, 1.1, 0)) : V(s[0], s[1], s[2]); c.tgt.lerp(want, kf(dt, 0.35)); } },
+  { name: 'LONG LENS', fov: 10, p: crewP(232, -104, 3.2), upd(c, t, dt) { const C = flockC(); const want = HERD.active ? G3((C[0] + dog.pos.x) / 2, 0.8, (C[1] + dog.pos.z) / 2) : G3(C[0], 0.7, C[1]); c.tgt.lerp(want, kf(dt, 0.25));
+      const d = c.p.distanceTo(c.tgt); c.fov = clamp(1000 / Math.max(d, 1) * 0.9, 6, 16); } },
+  { name: 'HILL', fov: 52, p: crewP(194, 10, 6.5), upd(c, t, dt) { c.tgt.lerp(G3(-60 + 40 * Math.sin(t / 89), 0, -60 + 30 * Math.sin(t / 71)), kf(dt, 0.2)); } },
+  { name: 'GRASS', fov: 36, p: V(), cutTo(c) { const C = flockC(), fa = areaAt(C[0], C[1]), small = fa === 'fold'; let best = null;
+      for (let k = 0; k < 24; k++) { const a = rnd() * TAU, r = small ? rr(4, 7) : rr(9, 18), x = C[0] + Math.cos(a) * r, z = C[1] + Math.sin(a) * r;
+        if (areaAt(x, z) === fa && !WSEG.some(s => segX(x, z, C[0], C[1], ...s) || segD(x, z, ...s) < 1.2)) { best = [x, z]; break; } if (!best) best = [x, z]; }
+      c.p.set(best[0], 0, best[1]); c.p.y = terrainH(c.p.x, c.p.z) + 0.32; c.tgt.copy(G3(C[0], 0.5, C[1])); },
+    upd(c, t, dt) { const C = flockC(); c.tgt.lerp(V(C[0], terrainH(C[0], C[1]) + 0.45, C[1]), kf(dt, 0.25)); c.p.y = terrainH(c.p.x, c.p.z) + 0.32; if (c.p.distanceTo(c.tgt) > 40) this.cutTo(c); } },
+  { name: 'BERNARD SIDE', fov: 34, p: V(), cutTo(c) { let s = sideOf(dog.heading).multiplyScalar(rnd() < 0.5 ? 8 : -8); for (let k = 0; k < 8; k++) { const q = s.clone().applyAxisAngle(_Y, k * 0.785); if (losClear(dog.pos.x + q.x, dog.pos.z + q.z, dog.pos.x, dog.pos.z)) { s = q; break; } } c.p.copy(dog.pos).add(s).setY(dog.pos.y + 1.2); c.tgt.copy(dogHead()); },
+    upd(c, t, dt) { const h = dogHead(); const off = c.p.clone().sub(dog.pos).setY(0); const d = off.length(); if (d > 13 || d < 5) { off.setLength(8.5); const want = dog.pos.clone().add(off); want.y = dog.pos.y + 1.2; c.p.lerp(want, kf(dt, d > 25 ? 3 : 0.5)); }
+      c.p.y = lerp(c.p.y, terrainH(c.p.x, c.p.z) + 1.25, kf(dt, 1)); c.tgt.lerp(h, kf(dt, 1.4)); } },
+  { name: 'BERNARD LOW', fov: 42, p: V(), cutTo(c) { let best = null; for (let k = 0; k < 10; k++) { const a = dog.heading + rr(0.4, 1.4) * (rnd() < 0.5 ? 1 : -1) + (k > 5 ? Math.PI : 0), x = dog.pos.x + Math.cos(a) * 4.2, z = dog.pos.z + Math.sin(a) * 4.2;
+      const blocked = WSEG.some(s => segX(x, z, dog.pos.x, dog.pos.z, ...s) || segD(x, z, ...s) < 1.0) || BLD.some(b => Math.hypot(b.o.cx - x, b.o.cz - z) < Math.hypot(b.o.L, b.o.Wd) / 2 + 1); if (!blocked) { best = [x, z]; break; } if (!best) best = [x, z]; }
+    c.p.set(best[0], 0, best[1]); c.p.y = terrainH(c.p.x, c.p.z) + 0.5; c.tgt.copy(dogHead()); },
+    upd(c, t, dt) { if (c.p.distanceTo(dog.pos) > 11) this.cutTo(c); c.p.y = terrainH(c.p.x, c.p.z) + 0.5; c.tgt.lerp(dogHead(), kf(dt, 1.0)); } },
+  { name: 'ROAD', fov: 30, p: crewP(-104, -100, 2.6), upd(c, t, dt) { const want = farmer.visible ? farmer.pos.clone().add(V(0, 1, 0)).lerp(G3(4, 3, 4), 0.4) : G3(10, 3, 0); c.tgt.lerp(want, kf(dt, 0.15)); } },
+  { name: 'THORN', fov: 46, p: crewP(THORN[0] - 9, THORN[1] - 12, 1.1), upd(c, t, dt) { c.tgt.lerp(V(THORN[0] + 1, terrainH(THORN[0], THORN[1]) + 2.0, THORN[1] + 1), kf(dt, 0.3)); } },
+];
+FCREW.forEach(c => { c.tgt = V(0, 0, -20); });
+  // ---- the farm's operators, handed to INVERIN's crew in world coordinates
+  function unblock(fc) {   // the farmer never fills the lens: if he stands in the first few metres of the view, the operator steps aside
+    if (!farmer.visible || fc.skipByre) return; const d = fc.tgt.clone().sub(fc.p); const L = d.length(); if (L < 0.5) return; d.divideScalar(L);
+    const f = farmer.pos.clone().add(V(0, 1.1, 0)).sub(fc.p); const along = f.dot(d); if (along < 0 || along > Math.min(6, L - 0.5)) return;
+    const off = f.clone().sub(d.clone().multiplyScalar(along)); const r = off.length(); if (r > 1.1) return;
+    const side = V(-d.z, 0, d.x).normalize().multiplyScalar(off.dot(V(-d.z, 0, d.x)) > 0 ? -2.4 : 2.4); fc.p.add(side); fc.p.y = Math.max(fc.p.y, terrainH(fc.p.x, fc.p.z) + 0.3); }
+  const OPS = FCREW.filter(c => !['ROAD', 'THORN'].includes(c.name));
+  const crew = OPS.map(fc => ({ name: 'FARM · ' + fc.name, fov: fc.fov, p: V(), tgt: V(), farm: fc, last: null,
+    onCut() { if (fc.cutTo) fc.cutTo(fc); fc.upd(fc, simT, 100); clearance(fc.p, fc.name === 'GRASS' ? 0.25 : 0.3, fc.skipByre); toW(fc.p, this.p); toW(fc.tgt, this.tgt); },
+    upd(c, t) { const dt = c.last == null ? 100 : clamp(t - c.last, 0, 100); c.last = t; fc.upd(fc, t, dt); clearance(fc.p, fc.name === 'GRASS' ? 0.25 : 0.3, fc.skipByre); unblock(fc); toW(fc.p, c.p); toW(fc.tgt, c.tgt); c.fov = fc.fov; } }));
+  function weight(c) {   // how much the mixer wants the farm right now: a move, the wall, Bernard asleep at night
+    const n = c.farm.name, night = SUNM.sun.el < -0.05, asleep = dog.task === 'sleep', L = HERD.active ? herdLeg() : null, laying = farmer.visible && (farmer.task === 'lay' || farmer.task === 'lean');
+    let x = 0.22;
+    if (night) x *= { BYRE: asleep ? 3 : 0.4, YARD: 1.5, HILL: 1 }[n] ?? (asleep ? 0 : 0.2);
+    else if (HERD.active) x *= { 'LONG LENS': 4, 'BERNARD SIDE': 4, GRASS: 3, HILL: 2, 'FOLD GATE': L && L.g === foldG ? 4 : 0.5, 'BERNARD LOW': 2, YARD: 0.5, BYRE: 0.05, WALL: 0.3 }[n] ?? 1;
+    else { if (n === 'WALL') x *= laying ? 3.5 : 0.5; if (n === 'BERNARD LOW') x *= dog.down > 0.5 ? 2 : 1; if (n === 'BERNARD SIDE') x *= dog.speed > 1 ? 2.5 : 0.9; if (n === 'BYRE') x *= asleep ? 2 : 0.15; if (n === 'GRASS') x *= flockPace > 0.15 ? 1.8 : 1.2; }
+    return x; }
+  // ---- sim
+  let landAcc = 0, dayAcc = 0, landDirty = true, landT = 0, saveN = 0;
+  function step(sdt) {
+    const night = SUNM.sun.el < -0.05; dayAcc += sdt; if (dayAcc > 10) { dayAcc = 0; dayTick(); }
+    const n = Math.ceil(sdt / 0.25), h = sdt / n;
+    for (let i = 0; i < n; i++) { farmerTick(h, night); herdTick(h); dogTickBrain(h, night); dogTick(h); flockTick(h, night); gateTick(h); }
+    landAcc += sdt; if (landAcc > 30) { regrow(landAcc); landAcc = 0; landDirty = true; }
+    if ((WX.wind > 16 || (WX.gust || 0) > 24) && S.wallLaid > 4 && rnd() < sdt / 900) { S.wallLaid--; siteUpdate(); logEv(`the gale took a stone off the farmer's new wall (${WX.wind.toFixed(0)} m/s)`); }
+  }
+  function look(dt) {
+    const wd = fromBearingTravel(WX.windDir), wl = V(wd.x, 0, wd.y).multiplyScalar(clamp(WX.wind / 9, 0.1, 2.2)), hush = HOST_LIVE().ev === 'hush' ? 1 : 0;
+    FU.uHush.value = lerp(FU.uHush.value, hush, 1 - Math.exp(-dt * 0.5)); for (const m of FMATS) m.uniforms.uWindL.value.copy(wl);
+    const ph = FU.uPh.value, w = V(); toW(dog.pos, w); ph[0].set(w.x, w.z, 0.8, 0.9); toW(farmer.pos, w); ph[1].set(w.x, w.z, 0.9, farmer.visible ? 1 : 0); ph[2].set(0, 0, 1, 0);
+    const cam = fromW(camera.position.x, camera.position.z); const nearE = flock.map(e => [e, (e.x - cam[0]) ** 2 + (e.z - cam[1]) ** 2]).sort((a, b) => a[1] - b[1]);
+    for (let i = 0; i < 5; i++) { const e = nearE[i][0]; ph[3 + i].set(FARM_O.x + e.z, FARM_O.z + e.x, 1.1, 0.8); }
+    const sEl = SUNM.sun.el, dim = sEl < 0.05 || (WX.cloud > 0.85 && sEl < 0.2), hr = galwayParts(simMs).hour;
+    LAMPS.forEach((l, i) => { const own = HOUSE && Math.hypot(l.position.x - HOUSE.x, l.position.z - HOUSE.z) < 12; const on = own ? (dim && farmer.inside) : (sEl < -0.04 && hr > 5 && hr < 23.5 && (i * 7919 + S.days) % 5 !== 0);
+      l.material.uniforms.uId.value = on ? 15 : 7; l.material.uniforms.uEmit.value = on ? 1 : 0; });
+    const camF = fromW(camera.position.x, camera.position.z), far = camF[0] < FARM_NEAR.x0 - 250 || camF[0] > FARM_NEAR.x1 + 250 || camF[1] < FARM_NEAR.z0 - 250 || camF[1] > FARM_NEAR.z1 + 250;
+    if (!far) { const pdt = Math.min(dt, 0.1); dogPose(pdt); farmerPose(pdt); flock.forEach(e => ewePose(e, pdt)); }
+    landT += dt; if (landDirty && landT > 2) { landT = 0; landDirty = false; landSync(); }
+  }
+  function persist() { S.grass = b64.enc(GRASS); S.tread = b64.enc(TREAD); S.flockPos = flock.map(e => [+e.x.toFixed(2), +e.z.toFixed(2)]); S.lastMs = Date.now(); }
+  function init() { settle(); for (let i = 0; i < 360; i++) step(0.25); landSync(); landDirty = false; look(0.1); }
+  // walking: the farm's walls and buildings are solid to a visitor; gateways and open gates let you through
+  function walkBlock(x, z, ox, oz) { const [fx, fz] = fromW(x, z); if (fx < FARM_NEAR.x0 || fx > FARM_NEAR.x1 || fz < FARM_NEAR.z0 || fz > FARM_NEAR.z1) return false; const [px, pz] = fromW(ox, oz);
+    for (const s of WSEG) if (segX(px, pz, fx, fz, ...s) && !gateCut((px + fx) / 2, (pz + fz) / 2)) return true;
+    const [bx, bz] = pushBox(fx, fz, 0.35); return Math.hypot(bx - fx, bz - fz) > 1e-3; }
+  function groundW(x, z) { const fx = z - FARM_O.z, fz = x - FARM_O.x; if (fx < FARM_NEAR.x0 - 6 || fx > FARM_NEAR.x1 + 6 || fz < FARM_NEAR.z0 - 6 || fz > FARM_NEAR.z1 + 6) return null; return terrainH(fx, fz); }
+  function hud() { const fl = farmer.away ? 'away down the lane' : farmer.visible ? farmer.note : 'indoors';
+    return `<div class="r"><span>FARM ${flock.length} ewes in ${FNAME[flockArea()]} · BERNARD ${dog.note}</span><span>FARMER ${fl} · WALL ${S.wallLaid}/${SITE.total}</span></div>`; }
+  const spot = toW(V(20, 0, 46)); spot.y = 0;
+  return { crew, weight, step, look, init, persist, walkBlock, groundW, hud, spot, G: FG,
+    herd: (to) => herdStart(to || bestField(flockArea()), 'moving the flock (by hand)'), whistle() { farmer.q.unshift({ t: 'whistle', note: 'whistling Bernard over' }); farmer.cur = null; },
+    get state() { return { flock: flockArea(), pace: flockPace, dog: dog.task + ' · ' + dog.note, farmer: farmer.task + ' · ' + farmer.note, visible: farmer.visible, herd: HERD.active, wall: S.wallLaid, grass: Object.fromEntries(['fold', ...GRAZE_FIELDS].map(f => [f, +fieldMean(f).toFixed(3)])) }; },
+    _dbg: { dog, farmer, flock, HERD, placeFlock, toW } };
+})();
+{ const h0 = HOST_H; terrainH = (x, z) => { const h = FARM.groundW(x, z); return h == null ? h0(x, z) : h; }; }
 
 /* ====================================================================== weather */
 const WX = { wind: 7, windDir: 245, cloud: 0.55, precip: 0, temp: 12, hum: 84, swellH: 1.5, swellT: 10, swellDir: 265, live: false, at: 0 };
@@ -1195,7 +2100,10 @@ const CREW = [
   { name: 'CLIFF FACE', fov: 46, p: V(-15, 9, -175), upd(c, t) { c.p.y = 9 + 0.6 * Math.sin(t * 0.3); c.tgt.set(-100, 14 + 4 * Math.sin(t / 47), -95); } },
 ];
 const PIER_END = V(PIER_X, DECK, PIER_END_Z);
+const FARM_SPOT = FARM.spot;
+HOOKS.save = () => FARM.persist(); HOOKS.walkBlock = (x, z, ox, oz) => FARM.walkBlock(x, z, ox, oz);
 CREW.forEach(c => { c.tgt = V(0, 0, -200); c.upd(c, 0); if (c.name === 'LONG LENS') c.tgt.copy(STACKS[0].p).setY(16); });
+CREW.push(...FARM.crew);
 const DIR = { cur: 0, prev: -1, until: 6, pendingCut: -1 };
 function camSees(c, p) { const f = c.tgt.clone().sub(c.p).normalize(); const d = p.clone().sub(c.p).normalize(); return f.dot(d) > Math.cos((c.fov * 0.55) * D2R * 1.3); }
 function chooseShot() {
@@ -1206,12 +2114,13 @@ function chooseShot() {
     if (c.name === 'PIER') x *= keeper.cur === 'pier' ? 1.8 : 1;
     if (c.name === 'LONG LENS') x *= boat.out ? 2.2 : 1;
     if (c.name === 'CLIFF FACE') x *= WX.swellH > 1.6 ? 1.6 : 0.8;
+    if (c.farm) x *= FARM.weight(c);
     if (live.ev) { const subj = live.ev === 'eye' ? c.p.clone().add((live.subject === 'sun' ? SUND : MOOND).clone().multiplyScalar(1000)) : live.ev === 'stack' ? STACKS[0].p.clone().setY(20) : live.ev === 'breath' ? V(-100, 20, -100) : live.ev === 'wreath' ? WREATH_C : null;
       if (subj && camSees(c, subj)) x *= 2.2; }
     return x; });
   let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; } return 0;
 }
-function cut(i) { DIR.prev = DIR.cur; DIR.cur = i; DIR.until = simT + rr(8, 19) * (CREW[i].name === 'LONG LENS' ? 1.3 : 1); }
+function cut(i) { DIR.prev = DIR.cur; DIR.cur = i; if (CREW[i].onCut) CREW[i].onCut(); DIR.until = simT + rr(8, 19) * (CREW[i].name === 'LONG LENS' ? 1.3 : 1); }
 
 /* ====================================================================== sim */
 let SUNM = sunMoon(simMs), SUND = V(), MOOND = V(), WREATH_C = V();
@@ -1334,7 +2243,7 @@ function step(dt) {
   if (simT - lastWxRebuild > 2) { rebuildWaves(); lastWxRebuild = simT; }
   SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
   WREATH_C.copy(PIER_END).add(V(SUND.x, Math.max(SUND.y, 0.08), SUND.z).normalize().multiplyScalar(420));
-  keeperTick(sdt); boatTick(sdt, simT); gullTick(sdt, simT); sealTick(sdt, simT); shoreTick(sdt, simT); pierTick(sdt);
+  keeperTick(sdt); boatTick(sdt, simT); gullTick(sdt, simT); sealTick(sdt, simT); shoreTick(sdt, simT); pierTick(sdt); FARM.step(sdt);
   // tension: stability builds it, slowly
   S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1);
   uncannyTick(sdt);
@@ -1384,6 +2293,7 @@ function applyLook(dt) {
   // lamps at night
   const night = sEl < 0.02; LAMPS.forEach((l, i) => { const on = night && (i === 0 ? !keeper.visible : (i === LAMPS.length - 1 ? boat.out || true : true));
     l.material.uniforms.uId.value = on ? 15 : 7; l.material.uniforms.uEmit.value = on ? 1 : 0; });
+  FARM.look(dt);
   // inks
   if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
   const target = COLORWAYS[S.colorway].c.map(hexV);
@@ -1417,6 +2327,7 @@ function hudUpdate() {
   <div class="r"><span>HERE ${WALK.place}${WALK.kneeling ? " · kneeling" : ""}</span><span>STREAM +${(streamU.uLevel.value * 16).toFixed(0)} cm → water, foam</span></div>
   <div class="r"><span>KEEPER ${kd}</span><span>→ bass on ${NOTE[AUD.deg(deg) % 12]}</span></div>
   <div class="r"><span>BOAT ${boat.out ? 'out' : boat.state === 'home' ? 'coming home' : 'moored'} · PIER +${(Math.floor(S.pierExt) * 4)} m</span><span>${CREW[DIR.cur].name} · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
+  ${FARM.hud()}
   ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
   <div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
 }
@@ -1426,7 +2337,8 @@ addEventListener('resize', resize); resize();
 renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
 renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); seaU.uHt.value.needsUpdate = true; console.warn('[gl] context restored'); });
 rebuildWaves(); SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
-cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : Math.floor(rnd() * CREW.length));
+FARM.init();
+cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : Math.floor(rnd() * 7));
 if (Q.has('cam')) DIR.until = 1e12;
 // a keeper who is already out, if the day is up
 if (SUNM.sun.el > 0 && WX.precip < 1.5 && rnd() < 0.8) { const k = ['CLIFF', 'LANDING', 'PIER_END', 'STAIR_TOP'][Math.floor(rnd() * 4)]; keeper.s = STOPS[k].s; keeper.target = k; keeper.stopName = STOPS[k].name; keeper.visible = true; keeper.dwell = rr(30, 200); }
@@ -1466,6 +2378,7 @@ window.MZ = {
   setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
   analyser() { return AUD.an; },
   audio: AUD,
+  farm: FARM,
   walk: { get s() { return { x: WALK.x, y: WALK.y, z: WALK.z, yaw: WALK.yaw, place: WALK.place }; }, go: (k) => walkTo(k), get layer() { return WR.layer; }, sim(n, dt = 0.05) { for (let i = 0; i < n; i++) walkStep(dt); }, wr: (u, y, v) => WR.toW(u, y, v).toArray(), get ramp() { return { A: WR.ramp.A.toArray(), B: WR.ramp.B.toArray() }; }, hit: (x, z, y) => WR.hit(x, z, y), set(x, z, yaw, pitch = -0.06) { WALK.x = x; WALK.z = z; WALK.yaw = yaw; WALK.pitch = pitch; WALK.y = groundAt(x, z); }, kneel(v) { WALK.kneeling = v; }, press(k, v) { WALK.keys[k] = v; }, stream: STREAM.pts.filter((_, i) => i % 40 === 0).map(p => [p.x, p.z]), cc: CC },
 };
 </script>
