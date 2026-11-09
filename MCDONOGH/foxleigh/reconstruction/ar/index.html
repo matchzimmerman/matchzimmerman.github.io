@@ -24,7 +24,8 @@ button.on{background:#d9e8de;color:#08191b;border-color:#d9e8de}
 label{font-size:11px;color:var(--muted);flex:0 0 74px}
 input[type=range]{flex:1;accent-color:var(--mint)}
 output{font-size:11px;color:var(--gold);flex:0 0 46px;text-align:right}
-#start{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);padding:24px;z-index:5}
+#start{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);z-index:20;overflow-y:auto;-webkit-overflow-scrolling:touch}
+@media (max-height:760px){#start{place-items:start center}}
 #start .card{max-width:420px}
 #start h1{font:400 30px Georgia,serif;margin:6px 0 10px}
 #start p{color:#cfdad6;font-size:14px}
