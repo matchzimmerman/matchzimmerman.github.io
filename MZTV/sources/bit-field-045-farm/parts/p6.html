@@ -1,0 +1,452 @@
+
+/* ====================================================================== the uncanny (rare events where the farm itself is alive) */
+const EVT = {
+  gather: { label: 'the ewes stood in a ring around the thorn', min: 100, max: 210, cool: 45 * 60 },
+  turn: { label: 'every ewe turned to face the bay', min: 50, max: 120, cool: 30 * 60 },
+  lie: { label: 'the grass lay down in a line from the sea', min: 70, max: 150, cool: 35 * 60 },
+  stone: { label: 'a stone set itself in the new wall', min: 24, max: 40, cool: 70 * 60 },
+  hush: { label: 'the farm held its breath', min: 22, max: 34, cool: 0 },
+};
+const live = { ev: null, evT: 0, evDur: 0, why: '', calm: 1, flat2: 0, fifth: 0, breath: 0 };
+const PHANTOM = { x: 0, z: 0, dx: 1, dz: 0, w: 0 };
+const THORN_AREA = areaAt(THORN[0], THORN[1]);
+function conditions() {
+  const sEl = SUNM.sun.el / D2R, mEl = SUNM.moon.el / D2R, fa = flockArea(), lit = sEl > -2 || (mEl > 6 && WX.cloud < 0.8);
+  return {
+    gather: fa === THORN_AREA && !HERD.active && lit && (!farmer.visible || Math.hypot(farmer.pos.x - THORN[0], farmer.pos.z - THORN[1]) > 45),
+    turn: !HERD.active && flockPace < 0.3 && GRAZE_FIELDS.includes(fa) && ((sEl > -1 && sEl < 14) || WX.swellH > 1.6),
+    lie: !HERD.active && WX.wind > 6 && ((WX.windDir - 170 + 360) % 360) < 120 && GRAZE_FIELDS.includes(fa) && dog.task !== 'sleep' && sEl > -4,
+    stone: !farmer.visible && sEl > 0 && S.wallLaid < SITE.total,
+  };
+}
+const why = {
+  gather: () => `the flock was out by the thorn and the farmer was ${farmer.away ? 'away down the lane' : farmer.visible ? 'far off' : 'indoors'}`,
+  turn: () => WX.swellH > 1.6 ? `swell ${WX.swellH.toFixed(1)} m in the bay` : `the sun was low, ${(SUNM.sun.el / D2R).toFixed(0)}°`,
+  lie: () => `wind ${WX.wind.toFixed(1)} m/s off the bay from the ${compass(WX.windDir)}`,
+  stone: () => 'nobody was at the wall',
+};
+function similarity(name) { const mem = S.uncanny.mem[name]; if (!mem || !mem.length) return 1; const h = galwayParts(simMs).hour, fa = flockArea(); let s = 0;
+  for (const m of mem) { const dh = Math.min(Math.abs(m.h - h), 24 - Math.abs(m.h - h)) / 3, dw = (m.wi - WX.wind) / 4, df = m.fa === fa ? 0 : 1; s += Math.exp(-(dh * dh + dw * dw + df)); }
+  return 1 + 1.2 * s / mem.length; }
+function startEvent(name, forced) {
+  const e = EVT[name]; live.ev = name; live.evT = 0; live.evDur = rr(e.min, e.max); live.why = forced ? 'forced by hand' : (why[name] ? why[name]() : '');
+  S.uncanny.counts[name] = (S.uncanny.counts[name] || 0) + 1; S.uncanny.last[name] = simT;
+  const mem = S.uncanny.mem[name] = S.uncanny.mem[name] || []; mem.push({ h: galwayParts(simMs).hour, wi: WX.wind, fa: flockArea() }); if (mem.length > 12) mem.shift();
+  if (name !== 'hush') S.tension += 0.08;
+  if (name === 'lie') { const C = flockC(); const td = fromBearingTravel(WX.windDir); const l = Math.hypot(td.x, td.y) || 1; PHANTOM.dx = td.x / l; PHANTOM.dz = td.y / l; PHANTOM.x = C[0] - PHANTOM.dx * 60; PHANTOM.z = C[1] - PHANTOM.dz * 60; PHANTOM.w = 0; }
+  if (name === 'stone' && S.wallLaid < SITE.total) { S.wallLaid++; siteUpdate(); const sl = SITE.slots[S.wallLaid - 1]; AUD.stone(V(sl[0], sl[1], sl[2]), 1); }
+  logEv(e.label + (live.why ? ' · ' + live.why : '')); AUD.event(name, true);
+}
+function endEvent() { const n = live.ev; live.ev = null; AUD.event(n, false); flock.forEach(e => e.faceTo = null); if (['gather', 'lie', 'stone'].includes(n) && dog.task !== 'sleep' && dog.task !== 'work') dogSet('free', 0);
+  if (n === 'hush') rupture('the hush broke'); else S.uncanny.next = simT + rr(14, 34) * 60 * (1 - 0.05 * Math.min(S.epoch - 1, 6)); }
+function uncannyTick(dt) {
+  if (live.ev) { live.evT += dt; eventTick(dt); if (live.evT >= live.evDur) endEvent(); return; }
+  if (S.tension >= 1 && !HERD.active) { startEvent('hush'); return; }
+  if (simT < S.uncanny.next) return;
+  const c = conditions(); const opts = [];
+  for (const n of ['gather', 'turn', 'lie', 'stone']) { if (!c[n]) continue; const last = S.uncanny.last[n]; if (last != null && simT - last < EVT[n].cool && last <= simT) continue;
+    opts.push([n, similarity(n) / (1 + 0.4 * (S.uncanny.counts[n] || 0)) * (n === 'gather' ? 1.8 : n === 'lie' ? 0.55 : 1)]); }
+  if (!opts.length) { S.uncanny.next = simT + 60; return; }
+  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot; for (const [n, w] of opts) { r -= w; if (r <= 0) { startEvent(n); return; } }
+}
+function gatherPull(e) { const a = e.i / flock.length * TAU + 0.3, R = 4.6; const tx = THORN[0] + Math.cos(a) * R, tz = THORN[1] + Math.sin(a) * R; const dx = tx - e.x, dz = tz - e.z, l = Math.hypot(dx, dz);
+  if (live.evT < 6) return [0, 0]; e.faceTo = l < 1.2 ? [THORN[0], THORN[1]] : null; e.graze = 0; if (l < 0.5) { e.vx *= 0.9; e.vz *= 0.9; return [0, 0]; } const k = Math.min(1.3, 0.3 + l * 0.04); return [dx / l * k, dz / l * k]; }
+function eventTick(dt) {
+  const end = live.evDur - live.evT, env = smoothstep(0, 12, live.evT) * smoothstep(0, 12, end);
+  if (live.ev === 'turn') flock.forEach(e => { if (live.evT > 4 + e.i * 0.35 && end > 6) { e.faceTo = [e.x - 1000, e.z - 300]; e.vx *= 0.92; e.vz *= 0.92; e.graze = 0; } else if (end <= 6) e.faceTo = null; });
+  if (live.ev === 'lie') { PHANTOM.x += PHANTOM.dx * 1.3 * dt; PHANTOM.z += PHANTOM.dz * 1.3 * dt; PHANTOM.w = env; for (const o of [-1.6, 0, 1.6]) { const k = cellOf(PHANTOM.x - PHANTOM.dz * o, PHANTOM.z + PHANTOM.dx * o); if (k >= 0) TF[k] = Math.min(255, TF[k] + 150 * dt * env); } landDirty = true; }
+  if (live.ev === 'hush') flock.forEach(e => { e.vx *= 0.8; e.vz *= 0.8; });
+}
+function eventDog() {
+  if (live.ev === 'gather') { dog.want.set(0, 0, 0); dog.downT = 1; dog.hasLook = true; dog.look.set(THORN[0], 0, THORN[1]); dog.note = 'lying flat, watching the ring'; }
+  if (live.ev === 'lie' && PHANTOM.w > 0.2) { dog.want.set(0, 0, 0); dog.downT = 0; dog.crouchT = 0.45; dog.hasLook = true; dog.look.set(PHANTOM.x, 0, PHANTOM.z); dog.note = 'standing, watching the grass'; }
+  if (live.ev === 'stone') { const sl = SITE.slots[Math.max(0, S.wallLaid - 1)]; dog.hasLook = true; dog.look.set(sl[0], sl[1] - terrainH(sl[0], sl[2]), sl[2]); }
+}
+function rupture(reason) {
+  S.epoch++; const prev = S.colorway;
+  const w = COLORWAYS.map((_, i) => i === prev ? 0 : 1 / (1 + S.cwVisits[i] * 0.8)); let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot, pick = 0;
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) { pick = i; break; } }
+  S.colorway = pick; S.cwVisits[pick] = (S.cwVisits[pick] || 0) + 1;
+  S.grammar = { period: rr(5.5, 10), dith: rr(0.05, 0.22), wob: rr(2, 12), outline: rnd() < 0.8 ? 1 : 0, hatch: rr(0.75, 1.25), angBias: 0 };
+  const centers = [38, 33, 36, 31, 41, 35]; S.center = centers[(centers.indexOf(S.center) + 1 + Math.floor(rnd() * 3)) % centers.length];
+  S.tension = 0; S.epochStart = simT; S.epochLen = rr(50, 95) * 60; S.uncanny.next = simT + rr(5, 12) * 60;
+  cwFrom = cwNow.map(v => v.clone()); cwMix = 0;
+  logEv(`RUPTURE → epoch ${S.epoch} · inks ${COLORWAYS[pick].name} · centre ${NOTE[S.center % 12]}` + (reason ? ' · ' + reason : ''));
+  AUD.rupture(); save();
+}
+const NOTE = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+
+/* ====================================================================== audio: the live lens is the microphone */
+const ZDEG = { byre: 0, yard: 3, fold: 4, 'field.home': 2, 'field.hill': 5, 'field.low': 1, out: 6 };
+const AUD = {
+  ctx: null, ok: false, muted: false, step: 0, nextT: 0, bar: 0, chordI: 0, barSec: 5.6,
+  async init() {
+    if (this.ctx || this.booting || !AUDIO_WANTED) return; this.booting = true;
+    let ctx; try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { this.booting = false; return; }
+    this.wl = false;
+    try { await ctx.audioWorklet.addModule('data:text/javascript;charset=utf-8,' + encodeURIComponent(NOISE_WORKLET)); this.wl = true; }
+    catch (e) { try { const u = URL.createObjectURL(new Blob([NOISE_WORKLET], { type: 'text/javascript' })); await ctx.audioWorklet.addModule(u); this.wl = true; } catch (e2) {} }
+    this.ctx = ctx; this.build(); this.ok = true; this.booting = false; this.born = performance.now(); this.lastCT = ctx.currentTime; this.lastCTwall = performance.now(); this.silentFor = 0; this.nextT = 0;
+    if (ctx.state !== 'running') { tapBtn.hidden = false; ctx.resume().catch(() => {}); }
+    if (!this.timers) { this.timers = true; setInterval(() => this.sched(), 40); setInterval(() => this.watch(), 1000); }
+  },
+  rebuild(why) { const old = this.ctx, oldOut = this.out; this.ctx = null; this.ok = false;
+    if (old) { try { oldOut.gain.setTargetAtTime(0, old.currentTime, 0.6); } catch (e) {} setTimeout(() => { try { if (old.state !== 'closed') old.close().catch(() => {}); } catch (e) {} }, 4000); }
+    if (why) console.warn('[audio] rebuild:', why);
+    this.init().then(() => { if (this.ctx) { const g = this.out.gain; g.value = 0; g.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 1.2); } }); },
+  build() {
+    const c = this.ctx; const g = (v = 1) => { const n = c.createGain(); n.gain.value = v; return n; };
+    const bq = (type, f, q = 0.7, gain = 0) => { const n = c.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; n.gain.value = gain; return n; };
+    const curve = (fn) => { const a = new Float32Array(2048); for (let i = 0; i < 2048; i++) a[i] = fn(i / 1023.5 - 1); return a; };
+    this.g = g; this.bq = bq;
+    const out = g(OUT_GAIN), master = g(1);
+    const hp = bq('highpass', 26), sat = c.createWaveShaper(); sat.curve = curve(x => Math.tanh(1.6 * x) / Math.tanh(1.6)); sat.oversample = '2x';
+    const shelf = bq('highshelf', 2000, 0.7, -10), lp = bq('lowpass', 6800, 0.5);
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 2.4; comp.knee.value = 10; comp.attack.value = 0.03; comp.release.value = 0.35;
+    master.connect(hp).connect(sat).connect(shelf).connect(lp).connect(comp).connect(out).connect(c.destination);
+    this.an = c.createAnalyser(); this.an.fftSize = 2048; out.connect(this.an); this.master = master; this.out = out;
+    const eIn = g(1), dL = c.createDelay(4), dR = c.createDelay(4), fbL = g(0.42), fbR = g(0.42), lpE = bq('lowpass', 1600), hpE = bq('highpass', 150);
+    const ush = c.createWaveShaper(); ush.curve = curve(Math.tanh);
+    const pL = c.createStereoPanner(), pR = c.createStereoPanner(); pL.pan.value = -0.6; pR.pan.value = 0.6; const eOut = g(0.6);
+    eIn.connect(dL); dL.connect(lpE).connect(hpE).connect(ush); ush.connect(fbL).connect(dR); dR.connect(fbR).connect(dL);
+    dL.connect(pL).connect(eOut); dR.connect(pR).connect(eOut); eOut.connect(master); this.echo = { eIn, dL, dR, fbL, fbR, lpE };
+    const len = c.sampleRate * 3.6, ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let lpv = 0; for (let i = 0; i < len; i++) { lpv += (Math.random() * 2 - 1 - lpv) * 0.22; d[i] = lpv * Math.pow(1 - i / len, 2.8); } }
+    const conv = c.createConvolver(); conv.buffer = ir; const rIn = g(1), rOut = g(0.5); rIn.connect(conv).connect(rOut).connect(master); this.room = { rIn, rOut };
+    const nb = (brown) => { const b = c.createBuffer(2, c.sampleRate * 9, c.sampleRate); for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let l = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + 0.02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } } return b; };
+    this.white = nb(false); this.brown = nb(true);
+    const loop = (buf) => { if (this.wl) { try { return new AudioWorkletNode(c, 'mz-noise', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { brown: buf === this.brown } }); } catch (e) {} }
+      const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(c.currentTime + rr(0, 0.1), rr(0, 8)); return s; };
+    // the bay far below: one low wash; wind in the grass and the walls; rain
+    this.sea = [-0.4, 0.4].map(pan => { const s = loop(this.brown), f = bq('lowpass', 240, 0.6), gg = g(0), p = c.createStereoPanner(); p.pan.value = pan; s.connect(f).connect(gg).connect(p); p.connect(master); gg.connect(this.room.rIn); return { f, g: gg }; });
+    { const s = loop(this.white), f = bq('bandpass', 300, 0.55), f2 = bq('lowpass', 850), gg = g(0), p = c.createStereoPanner(); s.connect(f).connect(f2).connect(gg).connect(p).connect(master); this.wind = { f, g: gg, p }; }
+    { const s = loop(this.white), f = bq('bandpass', 900, 0.5), f2 = bq('lowpass', 1400), gg = g(0); s.connect(f).connect(f2).connect(gg).connect(master); gg.connect(this.room.rIn); this.rain = { g: gg }; }
+    this.drone = [1, 1.5, 2.0].map((m, i) => { const o = c.createOscillator(); o.type = i === 2 ? 'sawtooth' : 'sine'; const f = bq('lowpass', 160); const gg = g([0.11, 0.045, 0.02][i]);
+      o.frequency.value = this.hz(S.center - 12) * m; o.connect(f).connect(gg).connect(master); o.start(); return { o, m }; });
+    this.padBus = g(0); this.padLP = bq('lowpass', 700, 0.6); this.padBus.connect(this.padLP); this.padLP.connect(master); this.padLP.connect(this.room.rIn);
+    this.pad = [0, 1, 2].map(() => { const a = c.createOscillator(), b = c.createOscillator(); a.type = b.type = 'sawtooth'; b.detune.value = 9; a.detune.value = -7; const gg = g(0.045); a.connect(gg); b.connect(gg); gg.connect(this.padBus); a.start(); b.start(); return { a, b }; });
+    // shared signatures: the ♭II chord (gather), a high fifth in the room (turn), a sub that breathes (lie)
+    this.flatG = g(0); this.flatG.connect(master); this.flatG.connect(this.room.rIn); this.flatO = [0, 1, 2].map(() => { const o = c.createOscillator(); o.type = 'triangle'; const gg = g(0.06); o.connect(gg).connect(this.flatG); o.start(); return o; });
+    this.fifthG = g(0); this.fifthG.connect(this.room.rIn); this.fifthG.connect(master); this.fifthO = [0, 1].map(() => { const o = c.createOscillator(); o.type = 'sine'; o.connect(this.fifthG); o.start(); return o; });
+    { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 33; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
+    this.retune(true);
+  },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  deg(d, oct = 0) { const sc = [0, 1, 3, 5, 7, 8, 10]; const o = Math.floor(d / 7); return S.center + oct * 12 + sc[((d % 7) + 7) % 7] + 12 * o; },
+  retune(now) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    this.drone.forEach(d => d.o.frequency.setTargetAtTime(this.hz(S.center - 12) * d.m, t, now ? 0.01 : 3));
+    this.flatO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([1, 4, 8][i], 1)), t, 0.5));
+    this.fifthO.forEach((o, i) => o.frequency.setTargetAtTime(this.hz(this.deg([0, 4][i], 2)), t, 0.5));
+    this.sub.o.frequency.setTargetAtTime(this.hz(S.center - 24), t, 0.5); },
+  start() { if (!this.ctx) { this.init(); return; } this.ctx.resume().then(() => { tapBtn.hidden = true; }).catch(() => {}); },
+  watch() {
+    const c = this.ctx; if (!c) return;
+    if (c.state === 'closed') { this.rebuild('closed'); return; }
+    if (c.state === 'suspended') { c.resume().catch(() => {}); return; }
+    const now = performance.now();
+    if (c.currentTime !== this.lastCT) { this.lastCT = c.currentTime; this.lastCTwall = now; } else if (now - this.lastCTwall > 6000) { this.rebuild('clock stalled'); return; }
+    const td = this.td || (this.td = new Float32Array(this.an.fftSize)); this.an.getFloatTimeDomainData(td);
+    let pk = 0, bad = false; for (let i = 0; i < td.length; i += 4) { const v = td[i]; if (!isFinite(v)) { bad = true; break; } pk = Math.max(pk, Math.abs(v)); }
+    if (bad) { this.rebuild('NaN in the mix'); return; }
+    this.silentFor = (pk < 1e-5 && !this.muted) ? this.silentFor + 1 : 0; if (this.silentFor > 20) { this.rebuild('20 s of silence'); return; }
+    if (now - this.born > 3 * 3600e3) this.rebuild('3 h refresh');
+  },
+  mute() { this.muted = !this.muted; if (this.ctx) this.out.gain.setTargetAtTime(this.muted ? 0 : OUT_GAIN, this.ctx.currentTime, 0.1); },
+  lens(p) { const v = p.clone().project(camera); const behind = v.z > 1; const d = p.distanceTo(camera.position);
+    return { pan: clamp(v.x, -1, 1) * (behind ? -0.4 : 0.85), g: (behind ? 0.35 : (Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 ? 1 : 0.6)) / (1 + d / 40) }; },
+  live() { return this.ctx && this.ctx.state === 'running' && !CAPTURE_SILENT; },
+  voice(type, t, o) {
+    const c = this.ctx, g = this.g, bq = this.bq;
+    if (type === 'kick') { const os = c.createOscillator(), gg = g(0); os.type = 'sine'; os.frequency.setValueAtTime(110, t); os.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.006); gg.gain.exponentialRampToValueAtTime(0.0008, t + 0.9);
+      os.connect(gg).connect(this.master); os.start(t); os.stop(t + 1); os.onended = () => gg.disconnect(); return; }
+    if (type === 'bass') { const a = c.createOscillator(), b = c.createOscillator(), f = bq('lowpass', 240, 6), gg = g(0); a.type = 'sawtooth'; b.type = 'sine';
+      const hz = this.hz(o.m); a.frequency.value = hz; b.frequency.value = hz;
+      f.frequency.setValueAtTime(140, t); f.frequency.linearRampToValueAtTime(140 + 260 * o.open, t + o.d * 0.5); f.frequency.linearRampToValueAtTime(120, t + o.d);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.02); gg.gain.setTargetAtTime(0, t + o.d * 0.8, 0.08);
+      a.connect(f); b.connect(gg); f.connect(gg); gg.connect(this.master); a.start(t); b.start(t); a.stop(t + o.d + 0.6); b.stop(t + o.d + 0.6); a.onended = () => gg.disconnect(); return; }
+    if (type === 'thump') { const s = c.createBufferSource(); s.buffer = this.brown; const f = bq('lowpass', 210 + 160 * o.s, 0.8), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      const os = c.createOscillator(); os.type = 'sine'; os.frequency.setValueAtTime(62, t); os.frequency.exponentialRampToValueAtTime(38, t + 0.4); const og = g(0);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v * 1.4, t + 0.03); gg.gain.setTargetAtTime(0, t + 0.1, 0.5 + o.s * 0.5);
+      og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(o.v * 0.6, t + 0.01); og.gain.exponentialRampToValueAtTime(0.0005, t + 0.8);
+      s.connect(f).connect(gg).connect(p); os.connect(og).connect(p); p.connect(this.master); p.connect(this.room.rIn); if (o.throw) p.connect(this.echo.eIn);
+      s.start(t, rr(0, 7)); s.stop(t + 3.5); os.start(t); os.stop(t + 1); s.onended = () => p.disconnect(); return; }
+    if (type === 'swell') { const s = c.createBufferSource(); s.buffer = this.white; const f = bq('lowpass', 300, 0.7), gg = g(0); f.frequency.setValueAtTime(200, t); f.frequency.exponentialRampToValueAtTime(1400, t + o.d);
+      gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(o.v, t + o.d); gg.gain.linearRampToValueAtTime(0, t + o.d + 0.04);
+      s.connect(f).connect(gg); gg.connect(this.master); gg.connect(this.room.rIn); s.start(t, rr(0, 4)); s.stop(t + o.d + 0.1); s.onended = () => gg.disconnect(); return; }
+    if (type === 'knock') { const os = c.createOscillator(), gg = g(0), f = bq('bandpass', o.f || 320, 4), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'triangle'; os.frequency.value = (o.f || 220) * rr(0.85, 1.15);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.004); gg.gain.exponentialRampToValueAtTime(0.0005, t + (o.d || 0.25));
+      os.connect(f).connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); os.start(t); os.stop(t + (o.d || 0.25) + 0.05); os.onended = () => p.disconnect(); return; }
+    if (type === 'bleat') {   // a blackface ewe: a buzzy voice through two formants, falling, with a shake
+      const os = c.createOscillator(), lfo = c.createOscillator(), lg = g(o.f * 0.035), f1 = bq('bandpass', 620, 4), f2 = bq('bandpass', 1050, 5), lpb = bq('lowpass', 1500, 0.7), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan;
+      os.type = 'sawtooth'; os.frequency.setValueAtTime(o.f, t); os.frequency.linearRampToValueAtTime(o.f * 1.06, t + 0.12); os.frequency.linearRampToValueAtTime(o.f * 0.86, t + o.d); lfo.frequency.value = rr(5.5, 7.5); lfo.connect(lg).connect(os.frequency);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.06); gg.gain.setTargetAtTime(o.v * 0.6, t + 0.2, 0.15); gg.gain.setTargetAtTime(0, t + o.d - 0.1, 0.05);
+      os.connect(f1); os.connect(f2); f1.connect(lpb); f2.connect(lpb); lpb.connect(gg).connect(p); p.connect(this.master); p.connect(this.room.rIn);
+      os.start(t); lfo.start(t); os.stop(t + o.d + 0.4); lfo.stop(t + o.d + 0.4); os.onended = () => { p.disconnect(); lg.disconnect(); }; return; }
+    if (type === 'clank') {   // a galvanised gate meeting its post
+      [[o.f, 0.7], [o.f * 2.71, 0.35], [o.f * 4.2, 0.15]].forEach(([fq, a]) => { const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'sine'; os.frequency.value = fq;
+        gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v * a, t + 0.003); gg.gain.exponentialRampToValueAtTime(0.0004, t + 0.9 / (1 + a));
+        os.connect(gg).connect(p); p.connect(this.master); p.connect(this.room.rIn); os.start(t); os.stop(t + 1.2); os.onended = () => p.disconnect(); }); return; }
+    if (type === 'whistle') {   // low and soft: two notes, rising then falling
+      const os = c.createOscillator(), gg = g(0), p = c.createStereoPanner(); p.pan.value = o.pan; os.type = 'sine'; const f0 = this.hz(this.deg(4, 3));
+      os.frequency.setValueAtTime(f0 * 0.94, t); os.frequency.linearRampToValueAtTime(f0, t + 0.12); os.frequency.setValueAtTime(f0, t + 0.45); os.frequency.linearRampToValueAtTime(f0 * 1.335, t + 0.62); os.frequency.linearRampToValueAtTime(f0 * 1.2, t + 1.1);
+      gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(o.v, t + 0.05); gg.gain.setValueAtTime(o.v, t + 0.4); gg.gain.linearRampToValueAtTime(o.v * 0.2, t + 0.48); gg.gain.linearRampToValueAtTime(o.v, t + 0.6); gg.gain.linearRampToValueAtTime(0, t + 1.15);
+      os.connect(gg).connect(p); p.connect(this.master); p.connect(this.echo.eIn); os.start(t); os.stop(t + 1.25); os.onended = () => p.disconnect(); }
+  },
+  bleat(e) { if (!this.live()) return; const L = this.lens(V(e.x, 0.8, e.z)); if (L.g < 0.03) return; this.voice('bleat', this.ctx.currentTime + 0.02, { f: rr(175, 250) * (e.rogue ? 1.12 : 1), d: rr(0.6, 1.1), v: clamp(0.09 * L.g, 0, 0.08), pan: L.pan }); },
+  gate(gt) { if (!this.live()) return; const L = this.lens(V(gt.at[0], 0.8, gt.at[1])); if (L.g < 0.02) return; const t = this.ctx.currentTime + 0.02; this.voice('clank', t, { f: rr(380, 460), v: clamp(0.07 * L.g, 0, 0.07), pan: L.pan }); this.voice('thump', t, { s: 0.2, v: clamp(0.12 * L.g, 0, 0.15), pan: L.pan }); },
+  stone(p, s) { if (!this.live()) return; const L = this.lens(p); if (L.g < 0.02) return; const t = this.ctx.currentTime + 0.02; this.voice('knock', t, { f: rr(150, 230), v: clamp(0.11 * L.g * s, 0, 0.12), pan: L.pan, d: 0.18 }); this.voice('thump', t, { s: 0.4 * s, v: clamp(0.25 * L.g * s, 0, 0.3), pan: L.pan, throw: s > 0.8 && rnd() < 0.5 }); },
+  whistle() { if (!this.live()) return; const L = this.lens(farmer.pos.clone().add(V(0, 1.6, 0))); this.voice('whistle', this.ctx.currentTime + 0.02, { v: clamp(0.028 * Math.max(L.g, 0.25), 0, 0.03), pan: L.pan }); },
+  euclid(k, n, rot) { const out = []; for (let i = 0; i < n; i++) out.push(((i + rot) * k) % n < k); return out; },
+  sched() {
+    const c = this.ctx; if (!c || c.state !== 'running') return; const ahead = c.currentTime + 0.6;
+    if (this.nextT < c.currentTime - 0.3) this.nextT = c.currentTime + 0.05;
+    while (this.nextT < ahead) {
+      const t = this.nextT, st = this.step % 16; const sixteenth = this.barSec / 16; const hush = live.ev === 'hush';
+      if (st === 0) { this.bar++; this.barSec = lerp(this.barSec, clamp(6.6 - flockPace * 2.4, 4.0, 6.6), 0.5); if (this.bar % 4 === 0) this.chord(t); }
+      const kp = this.euclid(S.epoch % 3 === 0 ? 3 : 2, 16, 0), bp = this.euclid(S.epoch % 2 ? 5 : 4, 16, 3);
+      if (!hush && kp[st]) this.voice('kick', t, { v: st === 0 ? 0.5 : 0.36 });
+      const asleep = dog.task === 'sleep', zd = ZDEG[dogZone()] ?? 0;
+      if (!hush && !asleep && bp[st]) { const d = dog.task === 'work' && dog.speed > 2 ? (st % 2 ? 4 : zd) : zd; this.voice('bass', t, { m: this.deg(d, 1) - 12, d: sixteenth * rr(2, 4), v: 0.3, open: clamp(WX.wind / 14 + dog.speed / 12, 0.12, 1) }); }
+      if (!hush && asleep && st === 8) this.voice('bass', t, { m: this.deg(0, 0), d: sixteenth * 6, v: 0.2, open: 0.1 });
+      this.step++; this.nextT += sixteenth; this.cur16 = st;
+    }
+    const tq = this.barSec / 16 * 3; this.echo.dL.delayTime.setTargetAtTime(tq, c.currentTime, 0.5); this.echo.dR.delayTime.setTargetAtTime(tq + this.barSec / 16, c.currentTime, 0.5);
+  },
+  chord(t) { const prog = [[0, 2, 4], [1, 3, 5], [6, 1, 3], [3, 5, 0]]; const ch = prog[this.chordI++ % prog.length];
+    this.pad.forEach((v, i) => { const hz = this.hz(this.deg(ch[i], 1)); v.a.frequency.setTargetAtTime(hz, t, 0.6); v.b.frequency.setTargetAtTime(hz, t, 0.6); }); },
+  event(name, on) { if (!this.ctx) return; const t = this.ctx.currentTime;
+    if (name === 'gather') { this.flatG.gain.setTargetAtTime(on ? 0.45 : 0, t, on ? 4 : 3); if (on) this.voice('swell', t, { d: this.barSec * 2, v: 0.16 }); }
+    if (name === 'turn') this.fifthG.gain.setTargetAtTime(on ? 0.035 : 0, t, 3);
+    if (name === 'hush' && on) this.voice('swell', t, { d: 6, v: 0.12 }); },
+  rupture() { if (!this.ctx) return; const t = this.ctx.currentTime + 0.05; this.voice('swell', t, { d: this.barSec, v: 0.2 }); this.voice('kick', t + this.barSec, { v: 0.55 });
+    this.voice('thump', t + this.barSec, { s: 1, v: 0.45, pan: 0, throw: true }); this.retune(false); },
+  frame() {
+    const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime; const hushK = live.ev === 'hush' ? 0.15 : 1;
+    const shore = clamp(1 - (camera.position.x - SHORE_X) / 1400, 0.05, 1) * (0.6 + 0.4 * clamp(camera.position.y / 20, 0, 1));
+    this.sea.forEach(s => { s.g.gain.setTargetAtTime((0.02 + 0.07 * shore + 0.02 * WX.swellH) * live.calm, t, 0.4); s.f.frequency.setTargetAtTime(140 + 160 * shore + 30 * WX.swellH, t, 0.5); });
+    const low = clamp(1 - (camera.position.y - terrainH(camera.position.x, camera.position.z)) / 3, 0, 1);   // a lens in the grass hears the grass
+    this.wind.g.gain.setTargetAtTime(Math.pow(WX.wind, 1.3) * 0.003 * (1 + 0.6 * low) * hushK, t, 0.8); this.wind.f.frequency.setTargetAtTime(200 + WX.wind * 20 + 200 * low, t, 1);
+    this.wind.p.pan.setTargetAtTime(0.5 * Math.sin(simT * 0.07), t, 1);
+    this.rain.g.gain.setTargetAtTime(clamp(WX.precip, 0, 4) * 0.02 * (CREW[DIR.cur].name === 'BYRE' ? 1.6 : 1), t, 1);
+    this.padBus.gain.setTargetAtTime((0.25 + 0.35 * (1 - SH.uDay.value)) * (live.ev === 'hush' ? 0.1 : 1), t, 2);
+    this.padLP.frequency.setTargetAtTime(420 + clamp(WX.temp, 0, 25) * 22, t, 2);
+    this.sub.g.gain.setTargetAtTime(live.ev === 'lie' ? PHANTOM.w * 0.2 * (0.55 + 0.45 * Math.sin(simT * TAU / 7)) : 0, t, 0.3);
+    const fb = clamp(0.32 + (WX.hum - 70) / 100 + (live.ev ? 0.12 : 0), 0.2, 0.68); this.echo.fbL.gain.setTargetAtTime(fb, t, 1); this.echo.fbR.gain.setTargetAtTime(fb, t, 1);
+    this.room.rOut.gain.setTargetAtTime(0.35 + 0.3 * clamp(WX.precip, 0, 1) + 0.2 * (1 - SH.uDay.value) + (CREW[DIR.cur].name === 'BYRE' ? 0.25 : 0), t, 2);
+    this.fifthO.forEach((o, i) => o.detune.setTargetAtTime(6 * Math.sin(simT * 0.3 + i), t, 0.5));
+  },
+};
+const CAPTURE_SILENT = false;
+const NOISE_WORKLET = `class N extends AudioWorkletProcessor{constructor(o){super();this.b=!!(o.processorOptions&&o.processorOptions.brown);this.l=[0,0];}
+process(_,outs){const o=outs[0];for(let c=0;c<o.length;c++){const d=o[c];let l=this.l[c]||0;for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(this.b){l=(l+0.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}this.l[c]=l;}return true;}}
+registerProcessor('mz-noise',N);`;
+const OUT_GAIN = 0.32;
+
+/* ====================================================================== camera crew (observational: operators hold, the mixer cuts) */
+const crewP = (x, z, up) => V(x, terrainH(x, z) + up, z);
+const kf = (dt, r) => 1 - Math.exp(-dt * r);
+const G3 = (x, up, z) => V(x, terrainH(x, z) + up, z);
+function clearance(p, minUp = 0.25, skipByre) {   // a lens never sits inside a wall, a building, an animal or the farmer
+  const gy = terrainH(p.x, p.z) + minUp; if (p.y < gy) p.y = gy;
+  let [x, z] = pushBox(p.x, p.z, 0.6, skipByre ? BLD.find(b => b.role === 'byre' && Math.hypot(b.o.cx - BYRE.x, b.o.cz - BYRE.z) < 0.5) : null);
+  if (p.y < terrainH(x, z) + 1.7) [x, z] = pushOut(x, z, 0.55, WSEG);
+  const bodies = flock.map(e => [e.x, e.z, 1.0]); bodies.push([dog.pos.x, dog.pos.z, 0.75]); if (farmer.visible) bodies.push([farmer.pos.x, farmer.pos.z, 0.9]);
+  for (const b of bodies) { const dx = x - b[0], dz = z - b[1], l = Math.hypot(dx, dz); if (l < b[2] && p.y < terrainH(b[0], b[1]) + 1.9) { const k = b[2] / Math.max(l, 1e-3); x = b[0] + dx * k; z = b[1] + dz * k; } }
+  p.x = x; p.z = z; const g2 = terrainH(x, z) + minUp; if (p.y < g2) p.y = g2; return p; }
+const dogHead = () => dog.headP.clone().lengthSq() > 0 ? dog.headP.clone() : dog.pos.clone().add(V(0, 0.55, 0));
+const foldG = gateOf('gate.foldhome'), byreIn = BYRE ? (() => { const d = [BYRE.door[0] - (BYRE_OUT[0] - BYRE.door[0]) * 0.6, BYRE.door[1] - (BYRE_OUT[1] - BYRE.door[1]) * 0.6]; return d; })() : [8, -4];
+const CREW = [
+  { name: 'YARD', fov: 46, p: crewP(-10, 16, 1.6), upd(c, t, dt) { c.p.y = terrainH(c.p.x, c.p.z) + 1.6 + 0.03 * Math.sin(t * 0.6); const want = dog.task === 'doorstep' || dog.task === 'eat' ? dogHead() : G3(BYRE_OUT[0], 1.2, BYRE_OUT[1]).lerp(G3(4, 1, 4), 0.5 + 0.5 * Math.sin(t / 61)); c.tgt.lerp(want, kf(dt, 0.4)); } },
+  { name: 'BYRE', fov: 58, p: V(), upd(c, t, dt) { const bp = V(byreIn[0], (BYRE ? BYRE.y : 0) + 1.25, byreIn[1]); c.p.copy(bp); const tg = dog.task === 'sleep' || dog.task === 'bed' || dog.task === 'rise' ? dogHead().add(V(0, -0.15, 0)) : V(BED[0], (BYRE ? BYRE.y : 0) + 0.2, BED[1]);
+      c.tgt.lerp(tg, kf(dt, 0.5)); }, skipByre: true },
+  { name: 'FOLD GATE', fov: 44, p: crewP(42, -28.5, 1.4), upd(c, t, dt) { const C = flockC(); const want = Math.hypot(C[0] - foldG.at[0], C[1] - foldG.at[1]) < 30 ? G3(C[0], 0.6, C[1]) : G3(foldG.at[0], 0.8, foldG.at[1]); c.tgt.lerp(want, kf(dt, 0.3)); } },
+  { name: 'WALL', fov: 40, p: crewP(SITE_STAND[0] - 9, SITE_STAND[1] + 3.5, 1.5), upd(c, t, dt) { const s = SITE.slots[Math.min(S.wallLaid, SITE.total - 1)];
+      const want = farmer.visible && Math.hypot(farmer.pos.x - s[0], farmer.pos.z - s[2]) < 14 ? farmer.pos.clone().add(V(0, 1.1, 0)) : V(s[0], s[1], s[2]); c.tgt.lerp(want, kf(dt, 0.35)); } },
+  { name: 'LONG LENS', fov: 10, p: crewP(232, -104, 3.2), upd(c, t, dt) { const C = flockC(); const want = HERD.active ? G3((C[0] + dog.pos.x) / 2, 0.8, (C[1] + dog.pos.z) / 2) : G3(C[0], 0.7, C[1]); c.tgt.lerp(want, kf(dt, 0.25));
+      const d = c.p.distanceTo(c.tgt); c.fov = clamp(1000 / Math.max(d, 1) * 0.9, 6, 16); } },
+  { name: 'HILL', fov: 52, p: crewP(194, 10, 6.5), upd(c, t, dt) { c.tgt.lerp(G3(-60 + 40 * Math.sin(t / 89), 0, -60 + 30 * Math.sin(t / 71)), kf(dt, 0.2)); } },
+  { name: 'GRASS', fov: 36, p: V(), cutTo(c) { const C = flockC(), fa = areaAt(C[0], C[1]), small = fa === 'fold'; let best = null;
+      for (let k = 0; k < 24; k++) { const a = rnd() * TAU, r = small ? rr(4, 7) : rr(9, 18), x = C[0] + Math.cos(a) * r, z = C[1] + Math.sin(a) * r;
+        if (areaAt(x, z) === fa && !WSEG.some(s => segX(x, z, C[0], C[1], ...s) || segD(x, z, ...s) < 1.2)) { best = [x, z]; break; } if (!best) best = [x, z]; }
+      c.p.set(best[0], 0, best[1]); c.p.y = terrainH(c.p.x, c.p.z) + 0.32; c.tgt.copy(G3(C[0], 0.5, C[1])); },
+    upd(c, t, dt) { const C = flockC(); c.tgt.lerp(V(C[0], terrainH(C[0], C[1]) + 0.45, C[1]), kf(dt, 0.25)); c.p.y = terrainH(c.p.x, c.p.z) + 0.32; if (c.p.distanceTo(c.tgt) > 40) this.cutTo(c); } },
+  { name: 'BERNARD SIDE', fov: 34, p: V(), cutTo(c) { const s = sideOf(dog.heading).multiplyScalar(rnd() < 0.5 ? 8 : -8); c.p.copy(dog.pos).add(s).setY(dog.pos.y + 1.2); c.tgt.copy(dogHead()); },
+    upd(c, t, dt) { const h = dogHead(); const off = c.p.clone().sub(dog.pos).setY(0); const d = off.length(); if (d > 13 || d < 5) { off.setLength(8.5); const want = dog.pos.clone().add(off); want.y = dog.pos.y + 1.2; c.p.lerp(want, kf(dt, d > 25 ? 3 : 0.5)); }
+      c.p.y = lerp(c.p.y, terrainH(c.p.x, c.p.z) + 1.25, kf(dt, 1)); c.tgt.lerp(h, kf(dt, 1.4)); } },
+  { name: 'BERNARD LOW', fov: 42, p: V(), cutTo(c) { let best = null; for (let k = 0; k < 10; k++) { const a = dog.heading + rr(0.4, 1.4) * (rnd() < 0.5 ? 1 : -1) + (k > 5 ? Math.PI : 0), x = dog.pos.x + Math.cos(a) * 4.2, z = dog.pos.z + Math.sin(a) * 4.2;
+      const blocked = WSEG.some(s => segX(x, z, dog.pos.x, dog.pos.z, ...s) || segD(x, z, ...s) < 1.0) || BLD.some(b => Math.hypot(b.o.cx - x, b.o.cz - z) < Math.hypot(b.o.L, b.o.Wd) / 2 + 1); if (!blocked) { best = [x, z]; break; } if (!best) best = [x, z]; }
+    c.p.set(best[0], 0, best[1]); c.p.y = terrainH(c.p.x, c.p.z) + 0.5; c.tgt.copy(dogHead()); },
+    upd(c, t, dt) { if (c.p.distanceTo(dog.pos) > 11) this.cutTo(c); c.p.y = terrainH(c.p.x, c.p.z) + 0.5; c.tgt.lerp(dogHead(), kf(dt, 1.0)); } },
+  { name: 'ROAD', fov: 30, p: crewP(-104, -100, 2.6), upd(c, t, dt) { const want = farmer.visible ? farmer.pos.clone().add(V(0, 1, 0)).lerp(G3(4, 3, 4), 0.4) : G3(10, 3, 0); c.tgt.lerp(want, kf(dt, 0.15)); } },
+  { name: 'THORN', fov: 46, p: crewP(THORN[0] - 9, THORN[1] - 12, 1.1), upd(c, t, dt) { c.tgt.lerp(V(THORN[0] + 1, terrainH(THORN[0], THORN[1]) + 2.0, THORN[1] + 1), kf(dt, 0.3)); } },
+];
+CREW.forEach(c => { c.tgt = V(0, 0, -20); });
+const DIR = { cur: 0, prev: -1, until: 6, pendingCut: -1 };
+function camSees(c, p) { const f = c.tgt.clone().sub(c.p).normalize(); const d = p.clone().sub(c.p).normalize(); return f.dot(d) > Math.cos((c.fov * 0.55) * D2R * 1.3); }
+function evSubject() { if (!live.ev) return null; if (live.ev === 'gather') return G3(THORN[0], 1, THORN[1]); if (live.ev === 'turn') { const C = flockC(); return G3(C[0], 0.6, C[1]); }
+  if (live.ev === 'lie') return G3(PHANTOM.x, 0.3, PHANTOM.z); if (live.ev === 'stone') { const s = SITE.slots[Math.max(0, S.wallLaid - 1)]; return V(s[0], s[1], s[2]); } return null; }
+function chooseShot() {
+  const night = SUNM.sun.el < -0.05, asleep = dog.task === 'sleep', L = HERD.active ? herdLeg() : null, laying = farmer.visible && (farmer.task === 'lay' || farmer.task === 'lean');
+  const w = CREW.map((c, i) => {
+    if (i === DIR.cur) return 0; let x = 1; if (i === DIR.prev) x *= 0.35; const n = c.name;
+    if (night) x *= { BYRE: asleep ? 4 : 0.6, YARD: 2, HILL: 1.4, 'LONG LENS': 0.5, 'FOLD GATE': 0.8, GRASS: 0.6, ROAD: 0.4, THORN: 0.3, WALL: 0.2 }[n] ?? (asleep ? 0 : 0.25);
+    else if (HERD.active) x *= { 'LONG LENS': 2.5, 'BERNARD SIDE': 2.6, GRASS: 2, HILL: 1.4, 'FOLD GATE': L && L.g === foldG ? 3 : 0.4, 'BERNARD LOW': 1.1, ROAD: 1, YARD: 0.3, BYRE: 0.05, WALL: 0.2 }[n] ?? 1;
+    else { if (n === 'BYRE') x *= asleep ? 3 : 0.15; if (n === 'WALL') x *= laying ? 2.6 : 0.4; if (n === 'BERNARD LOW') x *= dog.down > 0.5 ? 1.8 : 1; if (n === 'BERNARD SIDE') x *= dog.speed > 1 ? 1.8 : 0.8;
+      if (n === 'GRASS') x *= flockPace > 0.15 ? 1.5 : 1.1; if (n === 'THORN') x *= flockArea() === THORN_AREA ? 1.3 : 0.5; if (n === 'YARD') x *= farmer.visible && areaAt(farmer.pos.x, farmer.pos.z) === 'yard' ? 1.8 : 0.7;
+      if (n === 'FOLD GATE') x *= flockArea() === 'fold' ? 1.5 : 0.4; }
+    const subj = evSubject(); if (subj && (camSees(c, subj) || (c.cutTo && n === 'GRASS'))) x *= 2.2;
+    return x; });
+  let tot = w.reduce((a, b) => a + b, 0), r = rnd() * tot; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; } return 0;
+}
+function cut(i) { DIR.prev = DIR.cur; DIR.cur = i; const c = CREW[i]; if (c.cutTo) c.cutTo(c); c.upd(c, simT, 100); clearance(c.p, c.name === 'GRASS' ? 0.25 : 0.3, c.skipByre); DIR.until = simT + rr(8, 19) * (c.name === 'LONG LENS' ? 1.3 : 1); }
+
+/* ====================================================================== sim */
+let SUNM = sunMoon(simMs), SUND = V(), MOOND = V();
+let lastWxRebuild = -999, cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1, landAcc = 0, dayAcc = 0, landDirty = true;
+function step(dt) {
+  dt = Math.min(dt, 0.25); const sdt = dt * RATE; simT += sdt; simMs += sdt * 1000;
+  if (!WX.live) Object.assign(WXT, synthWx(simMs));
+  for (const k of ['wind', 'cloud', 'precip', 'temp', 'hum', 'swellH', 'swellT']) WX[k] = lerp(WX[k], WXT[k], 1 - Math.exp(-sdt / 90));
+  for (const k of ['windDir', 'swellDir']) { const d = ((WXT[k] - WX[k] + 540) % 360) - 180; WX[k] += d * (1 - Math.exp(-sdt / 120)); }
+  if (simT - lastWxRebuild > 2) { rebuildWaves(); lastWxRebuild = simT; }
+  SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
+  const night = SUNM.sun.el < -0.05;
+  dayAcc += sdt; if (dayAcc > 10) { dayAcc = 0; dayTick(); }
+  // the farm's own day; a long step is taken in short strides so nobody walks through a wall
+  const n = Math.ceil(sdt / 0.25), h = sdt / n;
+  for (let i = 0; i < n; i++) { farmerTick(h, night); herdTick(h); dogTickBrain(h, night); dogTick(h); flockTick(h, night); gateTick(h); }
+  landAcc += sdt; if (landAcc > 30) { regrow(landAcc); landAcc = 0; landDirty = true; }
+  // a gale can take the top stone off the new wall
+  if ((WX.wind > 16 || (WX.gust || 0) > 24) && S.wallLaid > 4 && rnd() < sdt / 900) { S.wallLaid--; siteUpdate(); logEv(`the gale took a stone off the new wall (${WX.wind.toFixed(0)} m/s)`); }
+  S.tension += sdt / S.epochLen * (live.ev ? 0.3 : 1);
+  uncannyTick(sdt);
+  live.calm = lerp(live.calm, live.ev === 'hush' ? 0.04 : 1, 1 - Math.exp(-sdt / (live.ev === 'hush' ? 4 : 2.5)));
+  if (simT >= DIR.until && DIR.pendingCut < 0) DIR.pendingCut = chooseShot();
+  if (DIR.pendingCut >= 0 && (!AUD.ctx || AUD.ctx.state !== 'running' || AUD.cur16 !== DIR.last16)) { cut(DIR.pendingCut); DIR.pendingCut = -1; }
+  DIR.last16 = AUD.cur16;
+  { const c = CREW[DIR.cur]; c.upd(c, simT, sdt); clearance(c.p, c.name === 'GRASS' ? 0.25 : 0.3, c.skipByre); }
+  if (simT - (S._saved || 0) > 60) { S._saved = simT; S.flockPos = flock.map(e => [+e.x.toFixed(2), +e.z.toFixed(2)]); save(); }
+}
+
+/* ====================================================================== render */
+const camQ = new THREE.Quaternion(); let camInit = false;
+function applyLook(dt) {
+  const c = DIR.look || CREW[DIR.cur]; camera.position.copy(c.p);
+  const m = new THREE.Matrix4().lookAt(c.p, c.tgt, V(0, 1, 0)); const q = new THREE.Quaternion().setFromRotationMatrix(m);
+  if (!camInit || DIR.look || DIR.cutFlag !== DIR.cur) { camQ.copy(q); camInit = true; DIR.cutFlag = DIR.cur; } else camQ.slerp(q, kf(dt, 6));   // an operator's hand: no snapping inside a shot
+  camera.quaternion.copy(camQ); camera.fov = c.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  if (!isFinite(camera.position.x)) { camera.position.set(-40, 30, 20); camera.lookAt(20, 0, -40); }
+  SH.uVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); SH.uAspect.value = camera.aspect; SH.uCamP.value.copy(camera.position); SH.uTime.value = simT;
+  SH.uPxK.value = 2 * Math.tan(camera.fov * D2R / 2) / IH;
+  const sEl = SUNM.sun.el, mEl = SUNM.moon.el; const day = smoothstep(-0.2, 0.18, sEl); SH.uDay.value = day; SH.uSunD.value.copy(SUND);
+  const cloudDim = 1 - 0.55 * WX.cloud;
+  if (sEl > -0.06) { SH.uKeyD.value.copy(SUND); SH.uDiff.value = (0.18 + 0.62 * smoothstep(-0.06, 0.35, sEl)) * cloudDim; SH.uKeyUp.value = smoothstep(-0.03, 0.05, sEl) * (1 - 0.7 * WX.cloud); }
+  else { SH.uKeyD.value.copy(mEl > 0 ? MOOND : V(0, 1, 0)); SH.uDiff.value = mEl > 0 ? 0.2 * SUNM.illum * cloudDim : 0.04; SH.uKeyUp.value = mEl > 0 ? 0.6 * SUNM.illum * (1 - WX.cloud) : 0; }
+  SH.uAmb.value = 0.13 + 0.3 * day + 0.08 * WX.cloud * day;
+  SH.uFogD.value = clamp(2400 - 1500 * smoothstep(72, 100, WX.hum) - 500 * clamp(WX.precip, 0, 2), 500, 2600); SH.uFogShade.value = 0.12 + 0.55 * day;
+  const wd = fromBearingTravel(WX.windDir); SH.uWindL.value.set(wd.x, 0, wd.y).multiplyScalar(clamp(WX.wind / 9, 0.1, 2.2));
+  SH.uHush.value = lerp(SH.uHush.value, live.ev === 'hush' ? 1 : 0, kf(dt, 0.5));
+  // things pressing the grass: Bernard, the farmer, what lay the grass down, the ewes nearest the lens
+  const ph = SH.uPh.value; ph[0].set(dog.pos.x, dog.pos.z, 0.8, 0.9); ph[1].set(farmer.pos.x, farmer.pos.z, 0.9, farmer.visible ? 1 : 0); ph[2].set(PHANTOM.x, PHANTOM.z, 2.6, live.ev === 'lie' ? PHANTOM.w * 1.4 : 0);
+  const near = flock.map(e => [e, (e.x - camera.position.x) ** 2 + (e.z - camera.position.z) ** 2]).sort((a, b) => a[1] - b[1]); for (let i = 0; i < 5; i++) { const e = near[i][0]; ph[3 + i].set(e.x, e.z, 1.1, 0.8); }
+  seaU.uCalm.value = live.calm; seaU.uSkyB.value = 0.2 + 0.6 * day;
+  skyU.uCloud.value = WX.cloud; skyU.uWind.value.set(wd.x, wd.y).multiplyScalar(WX.wind); sky.position.copy(camera.position);
+  const place = (mm, dir, deg, up) => { mm.position.copy(camera.position).addScaledVector(dir, 15000); mm.quaternion.copy(camera.quaternion); const s = 2 * 15000 * Math.tan(deg * D2R); mm.scale.set(s, s, 1); mm.visible = up; };
+  place(sunM, SUND, 3.3, sEl > -0.08); place(moonM, MOOND, 1.6, mEl > -0.05 && sEl < 0.1);
+  sunM.material.uniforms.uDim.value = 1 - 0.35 * WX.cloud; moonM.material.uniforms.uIllum.value = SUNM.illum;
+  // lamps: the farmhouse windows when someone's in and it's dim; the neighbours at night
+  const dim = sEl < 0.05 || (WX.cloud > 0.85 && sEl < 0.2); LAMPS.forEach((l, i) => { const own = HOUSE && Math.hypot(l.position.x - HOUSE.x, l.position.z - HOUSE.z) < 12;
+    const on = own ? (dim && farmer.inside) : (sEl < -0.04 && galwayParts(simMs).hour > 5 && galwayParts(simMs).hour < 23.5 && (i * 7919 + S.days) % 5 !== 0);
+    l.material.uniforms.uId.value = on ? 15 : 7; l.material.uniforms.uEmit.value = on ? 1 : 0; });
+  // bodies
+  const pdt = Math.min(dt, 0.1); dogPose(pdt); farmerPose(pdt); flock.forEach(e => ewePose(e, pdt));
+  if (cwMix < 1) cwMix = Math.min(1, cwMix + dt / 45);
+  const target = COLORWAYS[S.colorway].c.map(hexV);
+  for (let i = 0; i < 6; i++) { cwNow[i].copy(cwFrom[i]).lerp(target[i], smoothstep(0, 1, cwMix)); PU.uPal.value[i].copy(cwNow[i]); }
+  const gm = S.grammar; SH.uPerPx.value = gm.period * IH / 720; SH.uWobPx.value = gm.wob * IH / 720; PU.uDith.value = gm.dith; PU.uOutline.value = gm.outline; PU.uHatch.value = gm.hatch;
+  PU.uRain.value = clamp(WX.precip / 2, 0, 1); PU.uRainDir.value.set(wd.x * 0.35, -1).normalize(); PU.uTime.value = simT;
+  const css = (v) => '#' + v.toArray().map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
+  const rs = document.documentElement.style; rs.setProperty('--ink', css(cwNow[0])); rs.setProperty('--paper', css(cwNow[5])); rs.setProperty('--hot', css(cwNow[3])); rs.setProperty('--deep', css(cwNow[1]));
+}
+function render() {
+  renderer.setRenderTarget(rtData); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, camera);
+  quad.material = printMat; renderer.setRenderTarget(rtPrint); renderer.render(postScene, postCam);
+  quad.material = blitMat; renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+}
+
+/* ====================================================================== info box */
+const hud = document.getElementById('hud'); hud.hidden = !INFO;
+const tapBtn = document.getElementById('tap');
+const pct = (v) => (v * 100).toFixed(0) + '%';
+function hudUpdate() {
+  if (!INFO) return; const g = galwayParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360; const bpm = (240 / AUD.barSec).toFixed(0);
+  const fa = flockArea(), zone = dogZone(), deg = ZDEG[zone] ?? 0;
+  const ev = live.ev ? `<div class="ev">NOW · ${EVT[live.ev].label}</div>` : '';
+  const fl = farmer.away ? 'away down the lane' : farmer.visible ? farmer.note : (farmer.inside ? 'indoors' : farmer.note);
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · FARM</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  <div class="r"><span>53.244 N 9.404 W · ${g.str} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
+  <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · CLOUD ${pct(WX.cloud)}</span><span>→ grass, fleece, the new wall</span></div>
+  <div class="r"><span>RAIN ${WX.precip.toFixed(1)} mm · HUMIDITY ${WX.hum.toFixed(0)}%</span><span>→ haze ${(SH.uFogD.value | 0)} m, echo, farmer in</span></div>
+  <div class="r"><span>SWELL ${WX.swellH.toFixed(1)} m · ${WX.swellT.toFixed(1)} s in the bay</span><span>→ the sea below</span></div>
+  <div class="r"><span>FLOCK ${flock.length} in ${FNAME[fa]} · pace ${flockPace.toFixed(2)} m/s</span><span>→ bar ${AUD.barSec.toFixed(1)} s (${bpm} bpm)</span></div>
+  <div class="r"><span>GRASS home ${pct(fieldMean('field.home'))} · hill ${pct(fieldMean('field.hill'))} · low ${pct(fieldMean('field.low'))}</span><span>→ where they go next</span></div>
+  <div class="r"><span>BERNARD ${dog.note}</span><span>→ bass on ${NOTE[AUD.deg(deg) % 12]}</span></div>
+  <div class="r"><span>FARMER ${fl} · WALL ${S.wallLaid}/${SITE.total}</span><span>${CREW[DIR.cur].name} · tension ${Math.min(99, S.tension * 100) | 0}%</span></div>
+  ${ev}<div class="log">${S.log.slice(0, 4).map(l => `<div>${l.t} — ${l.text}</div>`).join('')}</div>
+  <div class="cr">MATCH ZIMMERMAN CREATIVE MEDIA GROUP · MZTV</div>`;
+}
+
+/* ====================================================================== loop, keys, API */
+addEventListener('resize', resize); resize();
+renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('[gl] context lost'); });
+renderer.domElement.addEventListener('webglcontextrestored', () => { resize(); fieldTex.needsUpdate = true; console.warn('[gl] context restored'); });
+rebuildWaves(); SUNM = sunMoon(simMs); SUND.copy(azElToVec(SUNM.sun.az, SUNM.sun.el)); MOOND.copy(azElToVec(SUNM.moon.az, SUNM.moon.el));
+settle();
+for (let i = 0; i < 360; i++) step(0.25);   // pre-warm: it was running before you arrived
+landSync(); landDirty = false;
+cut(Q.has('cam') ? clamp(+Q.get('cam'), 0, CREW.length - 1) : chooseShot());
+if (Q.has('cam')) DIR.until = 1e12;
+let audT = 0, landT = 0;
+function frame(dt) {
+  try { step(dt); applyLook(dt); render(); audT += dt; if (audT > 0.1) { audT = 0; AUD.frame(); } landT += dt; if (landDirty && landT > 2) { landT = 0; landDirty = false; landSync(); } }
+  catch (e) { console.error(e); }
+}
+let lastT = performance.now(), hudT = 0;
+function raf(now) { const dt = (now - lastT) / 1000; lastT = now; frame(dt); hudT += dt; if (hudT > 0.5) { hudT = 0; hudUpdate(); } requestAnimationFrame(raf); }
+if (!CAPTURE) requestAnimationFrame(raf);
+addEventListener('beforeunload', () => { S.flockPos = flock.map(e => [+e.x.toFixed(2), +e.z.toFixed(2)]); save(); });
+addEventListener('keydown', (e) => { const k = e.key.toLowerCase();
+  if (k === 'i') { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); }
+  if (k === 'm') AUD.mute();
+  if (k === 'r' && !live.ev) { logEv('a hand on the farm (human intervention)'); S.tension = 1; }
+  AUD.start(); });
+addEventListener('pointerdown', () => AUD.start());
+tapBtn.addEventListener('click', () => AUD.start());
+AUD.init(); hudUpdate();
+window.MZ = {
+  tick(dt = 1 / 30) { frame(dt); hudUpdate(); },
+  advance(sec, dt = 0.25) { for (let t = 0; t < sec; t += dt) step(dt); landSync(); landDirty = false; applyLook(0.1); render(); hudUpdate(); },
+  force(name) { if (live.ev) endEvent(); if (name === 'rupture') { rupture('forced by hand'); return; } if (name === 'herd') { herdStart(bestField(flockArea()), 'moving the flock (by hand)'); return; } startEvent(name, true); },
+  cam(i) { cut(i); DIR.until = 1e12; },
+  look(p, t, fov = 30) { DIR.look = p ? { p: V(...p), tgt: V(...t), fov } : null; },
+  ink(i) { S.colorway = i; cwMix = 1; cwFrom = COLORWAYS[i].c.map(hexV); },
+  grammar(g) { Object.assign(S.grammar, g); },
+  seekHour(h) { const cur = galwayParts(simMs).hour; simMs += (((h - cur) % 24 + 24) % 24) * 3600e3; },
+  h: (x, z) => terrainH(x, z),
+  get state() { return { S, live: { ...live }, WX: { ...WX }, cam: CREW[DIR.cur].name, herd: { active: HERD.active, i: HERD.i, n: HERD.path.length, to: HERD.to, stage: HERD.stage },
+      dog: { task: dog.task, note: dog.note, pos: dog.pos.toArray(), zone: dogZone() }, farmer: { task: farmer.task, note: farmer.note, visible: farmer.visible, pos: farmer.pos.toArray(), q: farmer.q.length },
+      flock: { area: flockArea(), pace: flockPace, c: flockC() }, grass: Object.fromEntries(['fold', ...GRAZE_FIELDS].map(f => [f, +fieldMean(f).toFixed(3)])), wall: [S.wallLaid, SITE.total], gates: GATES.map(g => [g.id, +g.open.toFixed(2)]) }; },
+  setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
+  analyser() { return AUD.an; },
+  audio: AUD,
+  // farm helpers (for the INVERIN port and for tests)
+  herd(to) { return herdStart(to || bestField(flockArea()), 'moving the flock (by hand)'); },
+  whistle() { farmer.q.unshift({ t: 'whistle', note: 'whistling Bernard over' }); farmer.cur = null; },
+  get dogPos() { return dog.pos.toArray(); }, get farmerPos() { return farmer.pos.toArray(); }, get flockPos() { return flock.map(e => [e.x, e.z]); },
+  _step: (dt) => step(dt),
+  _dbg: { farmer, dog, flock, CREW, HERD, GATES, placeFlock, PHANTOM, live },
+  model: FM, areaAt, route: (a, b) => (route(a, b) || []).map(L => L.g.id),
+};
+</script>

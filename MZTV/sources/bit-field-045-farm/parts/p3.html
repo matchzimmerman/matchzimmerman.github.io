@@ -1,0 +1,237 @@
+
+/* ====================================================================== world build */
+const withT = (g, T) => { const n = g.attributes.position.count, t = new Float32Array(n * 3); for (let i = 0; i < n; i++) { t[i * 3] = T.x; t[i * 3 + 1] = T.y; t[i * 3 + 2] = T.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; };
+const clean = (g) => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'aT'].includes(k)) g.deleteAttribute(k); return g; };
+const M4 = (x, y, z, ry = 0, rx = 0, rz = 0, s = V(1, 1, 1)) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), s);
+const mergeG = (arr) => mergeGeometries(arr.map(g => { g = g.index ? g.toNonIndexed() : g; if (!g.attributes.normal) g.computeVertexNormals(); if (!g.attributes.aT) withT(g, V(0, 1, 0)); return clean(g); }));
+const OBST = [];      // circles a walker or a lens must keep out of: [x, z, r]
+const BOXES = [];     // building boxes for the lens: {x0,x1,z0,z1,y1}
+
+/* ---------- FARM: buildings from OpenStreetMap footprints (mapped), with authored heights, roofs and uses */
+function obb(fp) {   // oriented box from the longest edge
+  let best = 0, ang = 0; for (let i = 0; i < fp.length - 1; i++) { const dx = fp[i + 1][0] - fp[i][0], dz = fp[i + 1][1] - fp[i][1], L = Math.hypot(dx, dz); if (L > best) { best = L; ang = Math.atan2(dz, dx); } }
+  const c = Math.cos(ang), s = Math.sin(ang); let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+  for (const [x, z] of fp) { const u = x * c + z * s, v = -x * s + z * c; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+  const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2; return { cx: uc * c - vc * s, cz: uc * s + vc * c, L: u1 - u0, Wd: v1 - v0, ang };
+}
+const BLD = FM.buildings.map(b => { const fp = b.fp; const o = obb(fp); const y = demH(o.cx, o.cz) + 0.1; PADS.push([o.cx, o.cz, Math.hypot(o.L, o.Wd) / 2 + 1.5, y]);
+  BOXES.push({ x0: Math.min(...fp.map(p => p[0])) - 0.6, x1: Math.max(...fp.map(p => p[0])) + 0.6, z0: Math.min(...fp.map(p => p[1])) - 0.6, z1: Math.max(...fp.map(p => p[1])) + 0.6, y1: y + (b.role === 'house' ? 8.5 : 5.5) });
+  return Object.assign({}, b, { o, y }); });
+PADS.push([4, 4, 18, demH(4, 4) + 0.1]);   // the yard is levelled
+
+/* ---------- terrain: a fine sheet over the farm, a coarse one to the horizon (sunk beneath the fine one) */
+const NEAR = { x0: -125, x1: 235, z0: -205, z1: 95 };
+{ const mk = (x0, x1, z0, z1, st, sink) => { const nx = Math.round((x1 - x0) / st), nz = Math.round((z1 - z0) / st);
+    const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0, nx, nz); g.rotateX(-Math.PI / 2); g.translate((x0 + x1) / 2, 0, (z0 + z1) / 2);
+    const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i); let y = terrainH(x, z);
+      if (sink && x > NEAR.x0 + 2 && x < NEAR.x1 - 2 && z > NEAR.z0 + 2 && z < NEAR.z1 - 2) y -= 2.5; p.setY(i, y); }
+    g.computeVertexNormals(); return clean(g); };
+  scene.add(new THREE.Mesh(mk(NEAR.x0, NEAR.x1, NEAR.z0, NEAR.z1, 0.9, false), objMat(5, 2, V(1, 0, 0))));
+  scene.add(new THREE.Mesh(mk(-1700, 1500, -1600, 1600, 16, true), objMat(5, 2, V(1, 0, 0)))); }
+// the field's memory as a texture: R grass length, G tread
+const fieldTex = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
+fieldTex.magFilter = fieldTex.minFilter = THREE.LinearFilter; SH.uGrass.value = fieldTex;
+const cellOf = (x, z) => { const i = Math.floor((x - GB.x0) / GB.sx * GW), j = Math.floor((z - GB.z0) / GB.sz * GH); return (i < 0 || j < 0 || i >= GW || j >= GH) ? -1 : j * GW + i; };
+const cellXZ = (k) => [GB.x0 + ((k % GW) + 0.5) / GW * GB.sx, GB.z0 + (Math.floor(k / GW) + 0.5) / GH * GB.sz];
+function fieldTexUpdate() { const d = fieldTex.image.data; for (let k = 0; k < GW * GH; k++) { d[k * 4] = GRASS[k]; d[k * 4 + 1] = TREAD[k]; d[k * 4 + 2] = 0; d[k * 4 + 3] = 255; } fieldTex.needsUpdate = true; }
+const FIELDS = FM.fields.map(f => Object.assign({}, f, { cx: f.poly.reduce((s, p) => s + p[0], 0) / f.poly.length, cz: f.poly.reduce((s, p) => s + p[1], 0) / f.poly.length }));
+const YARD = FM.props.yard.poly_xz;
+const areaAt = (x, z) => { for (const f of FIELDS) if (pip(x, z, f.poly)) return f.id; if (pip(x, z, YARD)) return 'yard'; return 'out'; };
+if (!S.grass) { for (let k = 0; k < GW * GH; k++) { const [x, z] = cellXZ(k); const a = areaAt(x, z);
+    GRASS[k] = Math.round(255 * clamp(a === 'yard' ? 0.25 : a === 'fold' ? 0.3 : 0.55 + 0.35 * fbm(x * 0.02, z * 0.02 + 5), 0, 1)); } }
+fieldTexUpdate();
+
+/* ---------- the yard (concrete and gravel) and the lanes from OpenStreetMap */
+function ribbon(line, w, lift, id, mode = 0) { const pts = []; for (let i = 0; i < line.length - 1; i++) { const [ax, az] = line[i], [bx, bz] = line[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 1.5));
+    for (let k = 0; k < n; k++) { const t = k / n; pts.push([lerp(ax, bx, t), lerp(az, bz, t)]); } } pts.push(line[line.length - 1]);
+  const pos = [], idx = [], tan = []; pts.forEach((p, i) => { const q = pts[Math.min(i + 1, pts.length - 1)], o = pts[Math.max(i - 1, 0)], dx = q[0] - o[0], dz = q[1] - o[1], l = Math.hypot(dx, dz) || 1;
+    for (const s of [-1, 1]) { const x = p[0] - dz / l * w * s, z = p[1] + dx / l * w * s; pos.push(x, terrainH(x, z) + lift, z); tan.push(dx / l, 0, dz / l); } if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aT', new THREE.Float32BufferAttribute(tan, 3)); g.setIndex(idx); g.computeVertexNormals();
+  const m = objMat(id, mode); m.polygonOffset = true; m.polygonOffsetFactor = -2; scene.add(new THREE.Mesh(g, m)); }
+FM.roads.forEach(r => ribbon(r.line, r.tag === 'secondary' ? 3.2 : r.tag === 'unclassified' ? 2.1 : 1.5, 0.06, 12));
+{ const sh = new THREE.Shape(YARD.map(p => new THREE.Vector2(p[0], p[1]))); const g = new THREE.ShapeGeometry(sh, 4); const p = g.attributes.position;
+  const pos = []; const idx = g.index.array; for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getY(i); pos.push(x, terrainH(x, z) + 0.05, z); }
+  const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g2.setIndex(Array.from(idx)); g2.computeVertexNormals(); withT(g2, V(0.3, 0, 1));
+  const m = objMat(9, 6, V(0.3, 0, 1)); m.polygonOffset = true; m.polygonOffsetFactor = -3; scene.add(new THREE.Mesh(g2, m)); }
+
+/* ---------- buildings */
+const LAMPS = [];
+const wallBox = (a, b, h, t, y0, into) => { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz); if (L < 0.05) return; const g = new THREE.BoxGeometry(L, h, t);
+  g.applyMatrix4(M4((a[0] + b[0]) / 2, y0 + h / 2, (a[1] + b[1]) / 2, -Math.atan2(dz, dx))); into.push(withT(clean(g), V(dx / L, 0, dz / L))); };
+function gableRoof(o, y, pitchH, over, into) {   // a pitched roof over an oriented box
+  const c = Math.cos(o.ang), s = Math.sin(o.ang), hl = o.L / 2 + over, hw = o.Wd / 2 + over;
+  const P = (u, v, h) => [o.cx + u * c - v * s, y + h, o.cz + u * s + v * c];
+  const q = [P(-hl, -hw, 0), P(hl, -hw, 0), P(hl, 0, pitchH), P(-hl, 0, pitchH), P(-hl, hw, 0), P(hl, hw, 0)];
+  const pos = [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3], ...q[4], ...q[3], ...q[2], ...q[4], ...q[2], ...q[5]];
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); into.push(withT(g, V(-s, -0.6, c).normalize()));
+  // gable ends
+  const ge = new THREE.BufferGeometry(); ge.setAttribute('position', new THREE.Float32BufferAttribute([...P(-hl + over, -hw + over, 0), ...P(-hl + over, hw - over, 0), ...P(-hl + over, 0, pitchH - 0.2), ...P(hl - over, -hw + over, 0), ...P(hl - over, 0, pitchH - 0.2), ...P(hl - over, hw - over, 0)], 3)); ge.computeVertexNormals();
+  return withT(ge, V(0, 1, 0));
+}
+const G = { white: [], slate: [], stone: [], iron: [], ironRoof: [], straw: [], dark: [], wood: [] };
+let BYRE = null, HAYBARN = null, HOUSE = null;
+for (const b of BLD) {
+  const fp = b.fp, o = b.o, y = b.y;
+  if (b.role === 'house' || (b.role === 'neighbour-context' && b.tag === 'house')) {
+    const h = b.role === 'house' ? 5.4 : 4.6;
+    for (let i = 0; i < fp.length - 1; i++) wallBox(fp[i], fp[i + 1], h, 0.45, y - 0.3, G.white);
+    { const sh = new THREE.Shape(fp.map(p => new THREE.Vector2(p[0], p[1]))); const g = new THREE.ShapeGeometry(sh); g.rotateX(Math.PI / 2); g.translate(0, y + h - 0.3, 0); G.white.push(withT(clean(g), V(1, 0, 0))); }
+    G.slate.push(gableRoof(o, y + h - 0.3, Math.min(3.2, o.Wd * 0.42), 0.35, G.slate)); G.white.push(G.slate.pop());
+    // chimneys at the gable ends
+    const c = Math.cos(o.ang), s = Math.sin(o.ang); for (const e of [-1, 1]) { const g = new THREE.BoxGeometry(0.7, 1.5, 0.9); g.applyMatrix4(M4(o.cx + e * (o.L / 2 - 0.4) * c, y + h - 0.3 + Math.min(3.2, o.Wd * 0.42) + 0.2, o.cz + e * (o.L / 2 - 0.4) * s, -o.ang)); G.white.push(withT(clean(g), V(0, 1, 0))); }
+    if (b.role === 'house') {
+      HOUSE = { x: o.cx, z: o.cz, y, o, door: [o.cx - Math.sin(o.ang) * (o.Wd / 2 + 0.6), o.cz + Math.cos(o.ang) * (o.Wd / 2 + 0.6)] };
+      // windows (lit at night) on both long sides, a red door facing the yard
+      for (const sd of [-1, 1]) for (const k of [-0.32, 0.05, 0.36]) for (const fl of [1.6, 3.9]) { if (sd > 0 && Math.abs(k - 0.05) < 0.01 && fl < 2) continue;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.05), objMat(7, 0)); const u = k * o.L, v = sd * (o.Wd / 2 + 0.24);
+        m.position.set(o.cx + u * c - v * s, y + fl, o.cz + u * s + v * c); m.rotation.y = -o.ang + (sd > 0 ? 0 : Math.PI); scene.add(m); LAMPS.push(m); }
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.1), objMat(10, 0, V(0, 1, 0), { uAcc: { value: 1 } })); const v = o.Wd / 2 + 0.24, u = 0.05 * o.L;
+      door.position.set(o.cx + u * c - v * s, y + 0.75, o.cz + u * s + v * c); door.rotation.y = -o.ang; scene.add(door);
+    } else { for (const sd of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.0), objMat(7, 0)); const v = sd * (o.Wd / 2 + 0.24), cc = Math.cos(o.ang), ss = Math.sin(o.ang);
+        m.position.set(o.cx - v * ss, y + 1.6, o.cz + v * cc); m.rotation.y = -o.ang + (sd > 0 ? 0 : Math.PI); scene.add(m); if (wrnd() < 0.7) LAMPS.push(m); } }
+  } else if (b.role === 'byre') {
+    const isBed = b.id === 'osm.way.1163356662'; const h = 2.6;
+    for (let i = 0; i < fp.length - 1; i++) { const a = fp[i], q = fp[i + 1];
+      if (isBed && Math.abs(a[1] - q[1]) < 1.5 && (a[1] + q[1]) / 2 > -4.5) { const mid = [(a[0] + q[0]) / 2, (a[1] + q[1]) / 2]; const dx = q[0] - a[0], dz = q[1] - a[1], L = Math.hypot(dx, dz);
+        const g1 = [mid[0] - dx / L * 0.75, mid[1] - dz / L * 0.75], g2 = [mid[0] + dx / L * 0.75, mid[1] + dz / L * 0.75];
+        wallBox(a, g1, h, 0.5, y - 0.3, G.stone); wallBox(g2, q, h, 0.5, y - 0.3, G.stone); wallBox(g1, g2, 0.55, 0.5, y + h - 0.85, G.stone); BYRE = { door: mid, x: o.cx, z: o.cz, y, n: [-(dz / L), dx / L] }; }
+      else wallBox(a, q, h, 0.5, y - 0.3, G.stone); }
+    const r = gableRoof(o, y + h - 0.3, 0.9, 0.3, G.ironRoof); G.stone.push(r);
+  } else if (b.role === 'hay-barn') {
+    const c = Math.cos(o.ang), s = Math.sin(o.ang), hl = o.L / 2, hw = o.Wd / 2, P = (u, v) => [o.cx + u * c - v * s, o.cz + u * s + v * c];
+    for (const u of [-hl, 0, hl]) for (const v of [-hw, hw]) { const [px, pz] = P(u, v); const g = new THREE.BoxGeometry(0.22, 4.6, 0.22); g.applyMatrix4(M4(px, y + 2.0, pz)); G.iron.push(withT(clean(g), V(0, 1, 0))); }
+    const rg = new THREE.CylinderGeometry(hw + 0.4, hw + 0.4, o.L + 0.6, 22, 1, true, -Math.PI / 2, Math.PI); rg.rotateZ(Math.PI / 2); rg.scale(1, 0.55, 1); rg.rotateY(-o.ang); rg.translate(o.cx, y + 4.3, o.cz);
+    G.ironRoof.push(withT(clean(rg), V(0, 1, 0)));
+    for (let i = 0; i < 9; i++) { const u = -hl + 1.0 + (i % 3) * (o.L - 2) / 2, v = -hw + 1.0 + Math.floor(i / 3) * 0 + (i >= 3 ? 0 : 0), lay = Math.floor(i / 3);
+      if (lay > 1) continue; const [px, pz] = P(u, -hw + 1.2 + (i % 2) * 1.5); const g = new THREE.CylinderGeometry(0.62, 0.62, 1.2, 18); g.rotateZ(Math.PI / 2); g.rotateY(-o.ang + 0.1 * (i % 2)); g.translate(px, y + 0.62 + lay * 1.24, pz); G.straw.push(withT(clean(g), V(Math.cos(o.ang), 0, Math.sin(o.ang)))); }
+    HAYBARN = { x: o.cx, z: o.cz, y };
+  } else if (b.tag === 'ruins') {
+    for (let i = 0; i < fp.length - 1; i++) { const a = fp[i], q = fp[i + 1], L = Math.hypot(q[0] - a[0], q[1] - a[1]); const n = Math.max(1, Math.round(L / 1.2));
+      for (let k = 0; k < n; k++) { const t0 = k / n, t1 = (k + 1) / n, hh = 0.6 + 2.2 * Math.pow(vnoise(i * 3.3 + k * 0.7, 4.4), 1.6) + (i % 2 === 0 ? 1.4 * Math.sin(Math.PI * (t0 + t1) / 2) : 0);
+        wallBox([lerp(a[0], q[0], t0), lerp(a[1], q[1], t0)], [lerp(a[0], q[0], t1), lerp(a[1], q[1], t1)], hh, 0.6, y - 0.4, G.stone); } }
+  } else {
+    for (let i = 0; i < fp.length - 1; i++) wallBox(fp[i], fp[i + 1], 3.0, 0.3, y - 0.3, G.white);
+    G.stone.push(gableRoof(o, y + 2.7, 0.7, 0.25, G.ironRoof));
+  }
+}
+const addMerged = (arr, m) => { if (arr.length) scene.add(new THREE.Mesh(mergeG(arr), m)); };
+addMerged(G.white, objMat(9, 6, V(1, 0, 0))); addMerged(G.slate, objMat(7, 0)); addMerged(G.stone, objMat(4, 1, V(0, 1, 0)));
+addMerged(G.iron, objMat(10, 3, V(0, 1, 0))); addMerged(G.ironRoof, objMat(10, 5, V(0, -1, 0))); addMerged(G.straw, objMat(12, 3, V(1, 0, 0)));
+{ const bed = new THREE.Mesh(withT(clean(new THREE.CircleGeometry(0.75, 16).rotateX(-Math.PI / 2)), V(1, 0, 0.4)), objMat(12, 3, V(1, 0, 0))); const bp = FM.props.bed.at_xz; bed.position.set(bp[0], (BYRE ? BYRE.y : 0) - 0.15, bp[1]); scene.add(bed); }
+BLD.forEach(b => { if (b.role !== 'neighbour-context' || b.tag !== 'ruins') OBST.push([b.o.cx, b.o.cz, Math.hypot(b.o.L, b.o.Wd) / 2 + 0.4, 1]); });   // flagged: walkers use the oriented box instead
+
+/* ---------- FARM: lace walls (single-stone Connemara drystone, light through the gaps) */
+const GATES = FM.gates.map(g => Object.assign({}, g, { open: 0, want: 0 }));
+const WSEG = [];      // collision segments for sheep: [ax, az, bx, bz]
+const stoneGeo = (() => { let g = new THREE.IcosahedronGeometry(1, 0); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  const pos = g.attributes.position, map = new Map(), verts = [], idx = []; for (let i = 0; i < pos.count; i++) { const k = [pos.getX(i), pos.getY(i), pos.getZ(i)].map(v => v.toFixed(4)).join(); if (!map.has(k)) { map.set(k, verts.length / 3); verts.push(pos.getX(i), pos.getY(i), pos.getZ(i)); } idx.push(map.get(k)); }
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3)); out.setIndex(idx); out.computeVertexNormals(); return out; })();
+function stoneAt(x, y, z, sx, sy, sz, ry, into, rr2) { const g = stoneGeo.clone(); const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const f = 0.82 + 0.3 * rr2(); p.setXYZ(i, p.getX(i) * f, p.getY(i) * (p.getY(i) < 0 ? 0.7 : f), p.getZ(i) * f); }
+  g.applyMatrix4(M4(x, y, z, ry, (rr2() - 0.5) * 0.3, (rr2() - 0.5) * 0.3, V(sx, sy, sz))); g.computeVertexNormals();
+  const a = rr2() * TAU; withT(g, V(Math.cos(a) * 0.5, 1, Math.sin(a) * 0.5).normalize()); into.push(g); return g; }
+const gateCut = (x, z) => { for (const g of GATES) { const along = g.axis === 'z' ? Math.abs(z - g.at[1]) : Math.abs(x - g.at[0]), across = g.axis === 'z' ? Math.abs(x - g.at[0]) : Math.abs(z - g.at[1]); if (across < 0.8 && along < g.w / 2 + 0.25) return g; } return null; };
+function laceStones(ax, az, bx, bz, into, rr2, list) {   // list: when given, collect slot positions instead of building (the wall site)
+  const L = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L, dz = (bz - az) / L, ry = -Math.atan2(dz, dx); let s = 0;
+  while (s < L) { const sz0 = 0.2 + 0.19 * rr2(); const x = ax + dx * (s + sz0), z = az + dz * (s + sz0);
+    if (gateCut(x, z)) { s += 0.4; continue; }
+    const base = terrainH(x, z); let y = base, w = sz0; const hgt = 1.25 + 0.35 * vnoise(x * 0.1, z * 0.1);
+    while (y < base + hgt) { const sw = w * (0.85 + 0.3 * rr2()), sh = sw * (0.55 + 0.35 * rr2()), sd = 0.14 + 0.09 * rr2();
+      const ox = (rr2() - 0.5) * 0.08; const slot = [x + dx * ox, y + sh * 0.85, z + dz * ox, sw, sh, sd, ry + (rr2() - 0.5) * 0.4];
+      if (list) list.push(slot); else stoneAt(...slot, into, rr2);
+      y += sh * 1.55 + (rr2() < 0.25 ? 0.12 : 0); w = Math.max(0.2, w * (0.8 + 0.2 * rr2())); }
+    s += sz0 * 2 + (rr2() < 0.3 ? 0.12 + 0.18 * rr2() : 0.02); }
+}
+const SITE = { slots: [], tumble: [] };
+{ const into = [], rr2 = mulberry(77017);
+  for (const w of FM.walls) { const pts = w.line; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      WSEG.push([ax, az, bx, bz]);
+      if (w.site) laceStones(ax, az, bx, bz, null, rr2, SITE.slots); else laceStones(ax, az, bx, bz, into, rr2); } }
+  for (const ow of FM.osmWalls) for (let i = 0; i < ow.length - 1; i++) laceStones(ow[i][0], ow[i][1], ow[i + 1][0], ow[i + 1][1], into, rr2);
+  // gate pillars
+  for (const g of GATES) for (const e of [-1, 1]) { const x = g.axis === 'z' ? g.at[0] : g.at[0] + e * (g.w / 2 + 0.3), z = g.axis === 'z' ? g.at[1] + e * (g.w / 2 + 0.3) : g.at[1];
+    for (let k = 0; k < 4; k++) stoneAt(x, terrainH(x, z) + 0.25 + k * 0.38, z, 0.36, 0.24, 0.36, rr2() * TAU, into, rr2); }
+  scene.add(new THREE.Mesh(mergeG(into), objMat(4, 1, V(0, 1, 0))));
+  // the site: slots in laying order (course by course along the stretch), the tumble lying at their feet
+  SITE.slots.sort((a, b) => (a[1] - terrainH(a[0], a[2])) - (b[1] - terrainH(b[0], b[2])) || a[2] - b[2]);
+  SITE.slots.forEach((sl, i) => { const side = rr2() < 0.5 ? -1 : 1; const x = sl[0] + side * (0.6 + 1.6 * rr2()), z = sl[2] + (rr2() - 0.5) * 1.4; SITE.tumble.push([x, terrainH(x, z) + sl[4] * 0.5, z, sl[3], sl[4], sl[5], rr2() * TAU]); });
+  const mkInst = (list, order) => { const g = stoneGeo.clone(); withT(g, V(0.3, 1, 0.2).normalize()); const im = new THREE.InstancedMesh(g, objMat(4, 1, V(0, 1, 0)), list.length);
+    order.forEach((k, j) => { const s = list[k]; im.setMatrixAt(j, M4(s[0], s[1], s[2], s[6], 0.1 * Math.sin(k), 0.1 * Math.cos(k * 1.3), V(s[3], s[4], s[5]))); }); im.frustumCulled = false; scene.add(im); return im; };
+  SITE.laid = mkInst(SITE.slots, SITE.slots.map((_, i) => i));
+  SITE.lying = mkInst(SITE.tumble, SITE.tumble.map((_, i) => SITE.tumble.length - 1 - i));
+  SITE.total = SITE.slots.length;
+  // the farmer's heap of field stones beside the site
+  const pile = [], pp = FM.props.stonepile.at_xz; for (let i = 0; i < 46; i++) { const a = rr2() * TAU, r = Math.sqrt(rr2()) * 1.6, x = pp[0] + Math.cos(a) * r, z = pp[1] + Math.sin(a) * r * 0.7, s = 0.18 + 0.22 * rr2();
+    stoneAt(x, terrainH(x, z) + s * 0.4 + (1.6 - r) * 0.35, z, s * 1.3, s, s, rr2() * TAU, pile, rr2); }
+  scene.add(new THREE.Mesh(mergeG(pile), objMat(4, 1, V(0, 1, 0))));
+}
+S.wallLaid = clamp(S.wallLaid | 0, 0, SITE.total);
+function siteUpdate() { SITE.laid.count = S.wallLaid; SITE.lying.count = SITE.total - S.wallLaid; }
+siteUpdate();
+GATES.forEach(g => { const e = g.axis === 'z' ? [0, 1] : [1, 0]; g.seg = [g.at[0] - e[0] * g.w / 2, g.at[1] - e[1] * g.w / 2, g.at[0] + e[0] * g.w / 2, g.at[1] + e[1] * g.w / 2]; });
+
+/* ---------- FARM: gates (galvanised tube, hinged on one pillar) */
+GATES.forEach(g => { const grp = new THREE.Group(); const hinge = g.axis === 'z' ? V(g.at[0], 0, g.at[1] - g.w / 2) : V(g.at[0] - g.w / 2, 0, g.at[1]); hinge.y = terrainH(hinge.x, hinge.z);
+  grp.position.copy(hinge); grp.rotation.y = g.axis === 'z' ? -Math.PI / 2 : 0; const bars = [];
+  for (let k = 0; k < 5; k++) { const b = new THREE.CylinderGeometry(0.025, 0.025, g.w - 0.1, 6); b.rotateZ(Math.PI / 2); b.translate((g.w - 0.1) / 2, 0.3 + k * 0.22, 0); bars.push(withT(clean(b), V(1, 0, 0))); }
+  for (const u of [0.02, g.w - 0.12, g.w * 0.5]) { const b = new THREE.CylinderGeometry(0.03, 0.03, 1.0, 6); b.translate(u, 0.74, 0); bars.push(withT(clean(b), V(0, 1, 0))); }
+  { const L = Math.hypot(g.w * 0.48, 0.88); const b = new THREE.CylinderGeometry(0.022, 0.022, L, 6); b.rotateZ(-Math.atan2(g.w * 0.48, 0.88)); b.translate(g.w * 0.26, 0.74, 0); bars.push(withT(clean(b), V(1, 1, 0).normalize())); }
+  const mesh = new THREE.Mesh(mergeG(bars), objMat(10, 3, V(1, 0, 0))); grp.add(mesh); scene.add(grp); g.grp = grp; g.base = grp.rotation.y; });
+
+/* ---------- FARM: the hawthorn, field boulders, trough and bowl */
+{ const limbs = [], rr2 = mulberry(3131); const tp = FM.props.thorn.at_xz, by = terrainH(tp[0], tp[1]);
+  const tube = (pts, r0, r1) => { const curve = new THREE.CatmullRomCurve3(pts); const g = new THREE.TubeGeometry(curve, 16, 1, 7, false); const p = g.attributes.position, n = g.attributes.normal, t = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const u = Math.floor(i / 8) / 16; const c = curve.getPointAt(u), tg = curve.getTangentAt(u); const r = lerp(r0, r1, u); p.setXYZ(i, c.x + n.getX(i) * r, c.y + n.getY(i) * r, c.z + n.getZ(i) * r); t[i * 3] = tg.x; t[i * 3 + 1] = tg.y; t[i * 3 + 2] = tg.z; }
+    g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); g.computeVertexNormals(); limbs.push(clean(g)); return curve; };
+  const lean = V(0.55, 0, 0.4);   // bent from the south-west gales
+  const trunk = tube([V(tp[0], by - 0.3, tp[1]), V(tp[0] + 0.3, by + 1.0, tp[1] + 0.2), V(tp[0] + 0.9, by + 2.0, tp[1] + 0.7), V(tp[0] + 1.9, by + 2.8, tp[1] + 1.4)], 0.28, 0.12);
+  for (let k = 0; k < 9; k++) { const u = 0.45 + 0.55 * rr2(); const p0 = trunk.getPointAt(u); const d = V(rr2() - 0.5, 0.5 + rr2() * 0.6, rr2() - 0.5).add(lean).normalize().multiplyScalar(1.6 + 1.6 * rr2());
+    tube([p0, p0.clone().add(d.clone().multiplyScalar(0.5)).add(V(0, 0.2, 0)), p0.clone().add(d)], 0.09, 0.025); }
+  scene.add(new THREE.Mesh(mergeG(limbs), objMat(8, 3)));
+  // the crown: a dense, wind-cut thatch of small clumps, flattened on top and combed to the north-east
+  const crown = []; for (let k = 0; k < 90; k++) { const g = stoneGeo.clone(); const u = rr2(), a = rr2() * TAU, r = Math.sqrt(rr2()) * 2.3; const s = 0.35 + 0.5 * rr2();
+    const x = tp[0] + 1.5 + lean.x * 2.4 * u + Math.cos(a) * r, z = tp[1] + 1.1 + lean.z * 2.4 * u + Math.sin(a) * r * 0.8, y = by + 2.6 + 1.2 * (1 - r / 2.3) * (0.6 + 0.4 * u) + rr2() * 0.3;
+    g.applyMatrix4(M4(x, y, z, rr2() * TAU, 0, 0, V(s * 1.5, s * 0.6, s))); withT(g, V(0.55, 0.15, 0.4).normalize()); crown.push(g); }
+  scene.add(new THREE.Mesh(mergeG(crown), objMat(5, 3, V(0.55, 0.15, 0.4)))); OBST.push([tp[0], tp[1], 0.9]);
+  const rocks = []; for (let i = 0; i < 26; i++) { const f = FIELDS[i % 3]; let x = 0, z = 0; for (let t = 0; t < 40; t++) { x = wr(Math.min(...f.poly.map(p => p[0])), Math.max(...f.poly.map(p => p[0]))); z = wr(Math.min(...f.poly.map(p => p[1])), Math.max(...f.poly.map(p => p[1]))); if (pip(x, z, f.poly) && !WSEG.some(s => segD(x, z, ...s) < 3)) break; }
+    const s = 0.35 + 0.9 * Math.pow(rr2(), 2.2); stoneAt(x, terrainH(x, z) + s * 0.25, z, s * 1.4, s * 0.8, s * 1.1, rr2() * TAU, rocks, rr2); if (s > 0.6) OBST.push([x, z, s * 1.2]); }
+  scene.add(new THREE.Mesh(mergeG(rocks), objMat(4, 1, V(0, 1, 0))));
+  const tr = FM.props.trough.at_xz; { const g = new THREE.BoxGeometry(2.2, 0.55, 0.7); g.translate(tr[0], terrainH(tr[0], tr[1]) + 0.27, tr[1]); scene.add(new THREE.Mesh(withT(clean(g), V(1, 0, 0)), objMat(9, 6, V(1, 0, 0)))); }
+  const bw = FM.props.bowl.at_xz; { const g = new THREE.CylinderGeometry(0.17, 0.13, 0.09, 12); g.translate(bw[0], terrainH(bw[0], bw[1]) + 0.05, bw[1]); scene.add(new THREE.Mesh(withT(clean(g), V(0, 1, 0)), objMat(10, 0))); }
+}
+
+/* ---------- FARM: grass blades; their height is the grazing map */
+const BLADES = { im: null, cells: null };
+{ const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute([-0.014, 0, 0, 0.014, 0, 0, -0.009, 0.5, 0.02, 0.009, 0.5, 0.02, 0, 1, 0.06], 3)); bg.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4]); bg.computeVertexNormals(); withT(bg, V(0, 1, 0));
+  const rr2 = mulberry(9090), ms = [], cells = [];
+  for (let i = 0; i < 160000 && ms.length < 34000; i++) { const x = rr2() * (NEAR.x1 - NEAR.x0 - 10) + NEAR.x0 + 5, z = rr2() * (NEAR.z1 - NEAR.z0 - 10) + NEAR.z0 + 5; const a = areaAt(x, z);
+    if (a === 'yard' || (a === 'out' && rr2() < 0.75)) continue;
+    if (WSEG.some(s => segD(x, z, ...s) < 0.35) || OBST.some(o => Math.hypot(x - o[0], z - o[1]) < o[2])) continue;
+    if (FM.roads.some(r => r.line.some((p, k) => k && segD(x, z, r.line[k - 1][0], r.line[k - 1][1], p[0], p[1]) < 3.5))) continue;
+    const h = 0.22 + 0.2 * rr2(); ms.push(M4(x, terrainH(x, z) - 0.02, z, rr2() * TAU, (rr2() - 0.5) * 0.3, (rr2() - 0.5) * 0.3, V(1 + rr2(), h, 1))); cells.push(cellOf(x, z)); }
+  const aG = new THREE.InstancedBufferAttribute(new Float32Array(ms.length), 1); bg.setAttribute('aG', aG);
+  const im = new THREE.InstancedMesh(bg, objMat(5, 3, V(0, 1, 0), { uSway: { value: 1 } }), ms.length); ms.forEach((m, k) => im.setMatrixAt(k, m)); im.frustumCulled = false; scene.add(im);
+  BLADES.im = im; BLADES.cells = cells; BLADES.aG = aG; }
+function bladesUpdate() { const a = BLADES.aG.array; for (let k = 0; k < a.length; k++) { const c = BLADES.cells[k]; a[k] = c < 0 ? 0.85 : clamp(GRASS[c] / 255 - TREAD[c] / 255 * 0.9, 0.03, 1); } BLADES.aG.needsUpdate = true; }
+bladesUpdate();
+
+/* ---------- the bay, far hills, sky, sun and moon */
+{ const RINGS = 160, SEG = 160, K = 0.04, RMAX = 16000, den = Math.exp(RINGS * K) - 1, C = V(SHORE_X - 500, 0, 0); const pos = [C.x, 0, C.z], idx = [];
+  for (let i = 1; i <= RINGS; i++) { const r = RMAX * (Math.exp(i * K) - 1) / den; for (let j = 0; j < SEG; j++) { const a = j / SEG * TAU; pos.push(C.x + Math.cos(a) * r, 0, C.z + Math.sin(a) * r); } }
+  for (let j = 0; j < SEG; j++) idx.push(0, 1 + (j + 1) % SEG, 1 + j);
+  for (let i = 1; i < RINGS; i++) for (let j = 0; j < SEG; j++) { const a = 1 + (i - 1) * SEG + j, b = 1 + (i - 1) * SEG + (j + 1) % SEG, c = 1 + i * SEG + j, d = 1 + i * SEG + (j + 1) % SEG; idx.push(a, b, c, b, d, c); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  const sea = new THREE.Mesh(g, new THREE.ShaderMaterial({ vertexShader: SEA_VERT, fragmentShader: SEA_FRAG, uniforms: Object.assign({}, SH, seaU), side: THREE.DoubleSide })); sea.frustumCulled = false; scene.add(sea); }
+{ const ridge = (pts) => { const pos = [], idx = []; pts.forEach((q, i) => { pos.push(q[0], q[1], q[2], q[0], -40, q[2]); if (i) { const a = (i - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return withT(g, V(0, 1, 0)); };
+  const clare = []; for (let z = -26000; z <= 14000; z += 160) clare.push([-14500 - 900 * Math.sin(z * 0.00021), 90 + 260 * fbm(z * 0.0007, 2.7) + 120 * Math.exp(-Math.pow((z + 6000) / 5000, 2)), z]);
+  scene.add(new THREE.Mesh(ridge(clare), objMat(4, 0, V(0, 1, 0))));
+  const north = []; for (let z = -14000; z <= 14000; z += 160) north.push([7000 + 1200 * Math.sin(z * 0.0003), 110 + 180 * fbm(z * 0.0009, 8.1), z]);
+  scene.add(new THREE.Mesh(ridge(north), objMat(5, 0, V(0, 1, 0)))); }
+const skyU = Object.assign({}, SH, { uCloud: { value: 0.5 }, uWind: { value: new THREE.Vector2(1, 0) } });
+const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 48, 24), new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthWrite: false }));
+sky.renderOrder = -3; sky.frustumCulled = false; scene.add(sky);
+const discMat = (isMoon) => new THREE.ShaderMaterial({ vertexShader: DISC_VERT, fragmentShader: DISC_FRAG, depthWrite: false,
+  uniforms: Object.assign({}, SH, { uIsMoon: { value: isMoon ? 1 : 0 }, uIllum: { value: 1 }, uDim: { value: 1 }, uPhaseS: { value: 1 } }) });
+const sunM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(false)); sunM.renderOrder = -2; sunM.frustumCulled = false; scene.add(sunM);
+const moonM = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), discMat(true)); moonM.renderOrder = -2; moonM.frustumCulled = false; scene.add(moonM);

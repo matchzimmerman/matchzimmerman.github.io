@@ -1,0 +1,2031 @@
+{
+ "schema": "mz-world-model-0.1",
+ "id": "mz-world-farm",
+ "name": "MZ WORLD · FARM (working title)",
+ "built": "2026-11-08",
+ "author": "MZ.Claude",
+ "approval": "NOT VISUALLY APPROVED (awaiting MZ.Human)",
+ "parent_world": "INVERIN",
+ "standard": "MZ WORLD HEADLAND build standard v1.2 (haril-studio/docs/standards/mz-world-headland.md)",
+ "architecture": "MZ WORLDS Canonical Source-to-World Architecture (MZ.Human lock 2026-11-02)",
+ "evidence_scale": {
+  "documented": "measured or mapped by a cited source (EU-DEM, OpenStreetMap, Open-Meteo, solar/lunar ephemeris)",
+  "estimated": "derived from documented data by stated reasoning (shore position)",
+  "authored": "designed for the world (fields, walls, gates, fold, props); not claims about the real property",
+  "fictional": "inhabitants and their lives",
+  "speculative": "suggested far scenery"
+ },
+ "space": {
+  "crs": "EPSG:2157 (Irish Transverse Mercator)",
+  "anchor_itm_e_n": [
+   506275.05,
+   722460.1
+  ],
+  "anchor_wgs84_lat_lon": [
+   53.24423154,
+   -9.40424852
+  ],
+  "local_axes": "metres; +x north, +z east, y elevation (same convention as HEADLAND and INVERIN)",
+  "shared_world_origin_itm_e_n": [
+   506420,
+   724295
+  ],
+  "anchor_xz_in_shared_world_east_north": [
+   -144.95,
+   -1834.9
+  ],
+  "site_status": "USER-SELECTED PREFERRED SITE ANCHOR — approved from red markup; exact physical enclosures unverified",
+  "not_claimed": [
+   "property or field boundaries",
+   "gates or livestock routes",
+   "ownership",
+   "geology",
+   "LiDAR heights"
+  ]
+ },
+ "time": {
+  "clock": "real Galway time (Europe/Dublin)",
+  "sun_moon": "computed for the anchor",
+  "weather": "Open-Meteo, polled every 15 min, slewed; simulated fallback labelled on screen"
+ },
+ "entities": {
+  "terrain": {
+   "id": "terrain.eudem25",
+   "epistemic": "documented",
+   "kind": "elevation-grid",
+   "source": "EU-DEM v1.1, eudem25m via Open Topo Data",
+   "source_url": "https://api.opentopodata.org/v1/eudem25m",
+   "retrieved_on": "2026-10-11",
+   "note": "25 m digital surface model samples, NOT LiDAR; source-reported vertical RMSE about 7 m. No farmyard-scale height claims. Bilinear between samples; fine ground texture is artistic.",
+   "origin_local_xz": [
+    -260.1,
+    -225.05
+   ],
+   "step_m": 25,
+   "cols": 21,
+   "rows": 23,
+   "row_axis": "+x (north)",
+   "col_axis": "+z (east)",
+   "samples_m": [
+    18.81,
+    17.99,
+    17.29,
+    16.86,
+    16.76,
+    16.45,
+    15.89,
+    15.8,
+    16.14,
+    16.38,
+    16.52,
+    16.42,
+    16.24,
+    16.12,
+    15.83,
+    15.34,
+    14.99,
+    15.12,
+    15.57,
+    16.02,
+    16.48,
+    19.12,
+    18.41,
+    17.79,
+    17.39,
+    17.38,
+    17.17,
+    17.15,
+    16.93,
+    17.05,
+    17.17,
+    17.29,
+    17.17,
+    16.99,
+    16.76,
+    16.3,
+    15.7,
+    15.31,
+    15.42,
+    15.83,
+    16.28,
+    16.8,
+    19.43,
+    18.85,
+    18.32,
+    17.98,
+    17.9,
+    17.82,
+    17.78,
+    17.67,
+    17.83,
+    17.96,
+    17.99,
+    17.94,
+    17.7,
+    17.38,
+    16.8,
+    16.08,
+    15.64,
+    15.76,
+    16.16,
+    16.63,
+    17.18,
+    19.84,
+    19.31,
+    18.84,
+    18.55,
+    18.46,
+    18.39,
+    18.34,
+    18.39,
+    18.47,
+    18.62,
+    18.59,
+    18.46,
+    18.22,
+    17.81,
+    17.25,
+    16.54,
+    16.05,
+    16.14,
+    16.59,
+    17.1,
+    17.67,
+    20.36,
+    19.85,
+    19.42,
+    19.13,
+    19.03,
+    18.9,
+    18.62,
+    18.81,
+    19.11,
+    19.21,
+    19.07,
+    18.84,
+    18.56,
+    18.14,
+    17.6,
+    16.99,
+    16.6,
+    16.69,
+    17.12,
+    17.66,
+    18.23,
+    20.94,
+    20.47,
+    20.07,
+    19.71,
+    19.58,
+    19.25,
+    19.44,
+    19.57,
+    19.79,
+    19.81,
+    19.62,
+    19.34,
+    18.97,
+    18.5,
+    17.99,
+    17.46,
+    17.14,
+    17.24,
+    17.66,
+    18.17,
+    18.74,
+    21.53,
+    21.12,
+    20.7,
+    20.33,
+    20.13,
+    19.92,
+    20.22,
+    20.48,
+    20.49,
+    20.49,
+    20.37,
+    20.1,
+    19.69,
+    19.08,
+    18.52,
+    17.98,
+    17.63,
+    17.73,
+    18.11,
+    18.56,
+    19.1,
+    22.14,
+    21.71,
+    21.23,
+    20.92,
+    20.79,
+    20.71,
+    20.83,
+    21.12,
+    21.26,
+    21.28,
+    21.2,
+    21.03,
+    20.64,
+    19.89,
+    19.13,
+    18.59,
+    18.13,
+    18.16,
+    18.48,
+    18.86,
+    19.35,
+    22.77,
+    22.31,
+    21.77,
+    21.47,
+    21.3,
+    20.93,
+    21.25,
+    21.83,
+    22.11,
+    22.21,
+    22.25,
+    22.12,
+    21.63,
+    20.79,
+    19.9,
+    19.2,
+    18.74,
+    18.62,
+    18.81,
+    19.16,
+    19.65,
+    23.41,
+    22.89,
+    22.32,
+    22.0,
+    21.84,
+    21.63,
+    21.95,
+    22.59,
+    22.87,
+    23.03,
+    23.2,
+    23.08,
+    22.57,
+    21.69,
+    20.7,
+    19.91,
+    19.33,
+    19.1,
+    19.22,
+    19.57,
+    20.06,
+    24.07,
+    23.51,
+    22.97,
+    22.61,
+    22.42,
+    22.45,
+    22.6,
+    23.14,
+    23.39,
+    23.6,
+    23.92,
+    23.91,
+    23.6,
+    22.7,
+    21.71,
+    20.78,
+    19.98,
+    19.71,
+    19.75,
+    20.12,
+    20.58,
+    24.91,
+    24.35,
+    23.73,
+    23.22,
+    22.89,
+    22.79,
+    23.17,
+    23.5,
+    23.76,
+    24.07,
+    24.43,
+    24.62,
+    24.52,
+    23.76,
+    22.72,
+    21.67,
+    20.76,
+    20.44,
+    20.48,
+    20.77,
+    21.16,
+    25.93,
+    25.3,
+    24.5,
+    23.84,
+    23.43,
+    23.44,
+    23.62,
+    23.84,
+    24.09,
+    24.47,
+    24.91,
+    25.26,
+    25.2,
+    24.56,
+    23.56,
+    22.52,
+    21.64,
+    21.26,
+    21.27,
+    21.44,
+    21.8,
+    26.97,
+    26.28,
+    25.46,
+    24.54,
+    23.78,
+    23.95,
+    24.11,
+    24.23,
+    24.45,
+    24.85,
+    25.39,
+    25.86,
+    25.85,
+    25.32,
+    24.41,
+    23.34,
+    22.45,
+    22.01,
+    21.94,
+    22.1,
+    22.47,
+    27.88,
+    27.19,
+    26.44,
+    25.5,
+    24.82,
+    24.57,
+    24.51,
+    24.67,
+    24.85,
+    25.26,
+    25.84,
+    26.44,
+    26.56,
+    25.94,
+    25.22,
+    24.14,
+    23.21,
+    22.75,
+    22.65,
+    22.79,
+    23.13,
+    28.65,
+    28.03,
+    27.34,
+    26.45,
+    25.65,
+    25.18,
+    25.05,
+    25.08,
+    25.3,
+    25.74,
+    26.3,
+    26.91,
+    27.2,
+    26.66,
+    25.91,
+    24.94,
+    23.92,
+    23.4,
+    23.29,
+    23.41,
+    23.75,
+    29.41,
+    28.84,
+    28.15,
+    27.29,
+    26.45,
+    25.46,
+    25.49,
+    25.56,
+    25.79,
+    26.24,
+    26.81,
+    27.46,
+    27.79,
+    27.41,
+    26.64,
+    25.71,
+    24.7,
+    24.14,
+    23.99,
+    24.09,
+    24.34,
+    30.06,
+    29.62,
+    28.92,
+    28.08,
+    27.13,
+    26.91,
+    26.35,
+    26.17,
+    26.38,
+    26.79,
+    27.48,
+    28.15,
+    28.44,
+    28.04,
+    27.41,
+    26.54,
+    25.59,
+    24.97,
+    24.83,
+    24.89,
+    25.03,
+    30.84,
+    30.44,
+    29.72,
+    28.77,
+    27.85,
+    27.06,
+    27.32,
+    27.19,
+    27.2,
+    27.58,
+    28.36,
+    28.99,
+    29.35,
+    28.92,
+    28.28,
+    27.49,
+    26.57,
+    25.94,
+    25.82,
+    25.84,
+    25.89,
+    31.72,
+    31.26,
+    30.52,
+    29.56,
+    28.68,
+    28.37,
+    28.52,
+    28.29,
+    28.22,
+    28.64,
+    29.33,
+    29.89,
+    30.21,
+    29.81,
+    29.15,
+    28.45,
+    27.5,
+    26.9,
+    26.86,
+    26.83,
+    26.72,
+    32.68,
+    32.25,
+    31.44,
+    30.48,
+    29.88,
+    29.76,
+    29.47,
+    29.23,
+    29.34,
+    29.79,
+    30.32,
+    30.83,
+    31.08,
+    30.76,
+    30.05,
+    29.25,
+    28.43,
+    27.95,
+    27.81,
+    27.75,
+    27.57,
+    33.83,
+    33.37,
+    32.53,
+    31.31,
+    30.81,
+    30.48,
+    29.91,
+    30.08,
+    30.38,
+    30.75,
+    31.13,
+    31.62,
+    31.85,
+    31.47,
+    30.77,
+    29.99,
+    29.23,
+    28.74,
+    28.59,
+    28.56,
+    28.47,
+    34.94,
+    34.48,
+    33.51,
+    32.2,
+    31.36,
+    31.04,
+    30.78,
+    30.82,
+    31.06,
+    31.33,
+    31.65,
+    32.1,
+    32.33,
+    31.9,
+    31.3,
+    30.62,
+    29.85,
+    29.31,
+    29.22,
+    29.27,
+    29.36
+   ],
+   "attribution": "EU-DEM v1.1 via Open Topo Data; see source documentation for original EU-DEM attribution and terms."
+  },
+  "buildings": [
+   {
+    "id": "osm.way.1163118488",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      0.6,
+      1.65
+     ],
+     [
+      2.6,
+      2.75
+     ],
+     [
+      3.8,
+      0.45
+     ],
+     [
+      6.5,
+      1.95
+     ],
+     [
+      5.2,
+      4.15
+     ],
+     [
+      13.2,
+      8.65
+     ],
+     [
+      9.2,
+      15.85
+     ],
+     [
+      -3.4,
+      8.85
+     ],
+     [
+      0.6,
+      1.65
+     ]
+    ],
+    "role": "house",
+    "interpretation": "Footprint is mapped; the use shown (house), wall height, roof form and materials are authored. OSM tags are not ground-verified."
+   },
+   {
+    "id": "osm.way.1163118489",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "shed",
+    "footprint_local_xz": [
+     [
+      -77.5,
+      -0.95
+     ],
+     [
+      -75.7,
+      -19.35
+     ],
+     [
+      -70.8,
+      -18.85
+     ],
+     [
+      -72.5,
+      -0.45
+     ],
+     [
+      -77.5,
+      -0.95
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163118490",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "yes",
+    "footprint_local_xz": [
+     [
+      -64.5,
+      -4.35
+     ],
+     [
+      -58.2,
+      -4.85
+     ],
+     [
+      -57.8,
+      -0.25
+     ],
+     [
+      -64.2,
+      0.25
+     ],
+     [
+      -64.5,
+      -4.35
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163118491",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -54.3,
+      86.15
+     ],
+     [
+      -54.3,
+      76.75
+     ],
+     [
+      -48.8,
+      76.75
+     ],
+     [
+      -48.8,
+      86.15
+     ],
+     [
+      -54.3,
+      86.15
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356660",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "ruins",
+    "footprint_local_xz": [
+     [
+      -14.0,
+      -106.65
+     ],
+     [
+      -12.0,
+      -120.85
+     ],
+     [
+      -6.3,
+      -120.05
+     ],
+     [
+      -8.2,
+      -105.85
+     ],
+     [
+      -14.0,
+      -106.65
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356661",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "shed",
+    "footprint_local_xz": [
+     [
+      1.1,
+      -6.85
+     ],
+     [
+      4.7,
+      -6.75
+     ],
+     [
+      4.6,
+      -2.85
+     ],
+     [
+      1.0,
+      -2.95
+     ],
+     [
+      1.1,
+      -6.85
+     ]
+    ],
+    "role": "byre",
+    "interpretation": "Footprint is mapped; the use shown (byre), wall height, roof form and materials are authored. OSM tags are not ground-verified."
+   },
+   {
+    "id": "osm.way.1163356662",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "shed",
+    "footprint_local_xz": [
+     [
+      4.6,
+      -2.85
+     ],
+     [
+      4.7,
+      -7.65
+     ],
+     [
+      11.2,
+      -7.45
+     ],
+     [
+      11.1,
+      -2.65
+     ],
+     [
+      4.6,
+      -2.85
+     ]
+    ],
+    "role": "byre",
+    "interpretation": "Footprint is mapped; the use shown (byre), wall height, roof form and materials are authored. OSM tags are not ground-verified."
+   },
+   {
+    "id": "osm.way.1163356663",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "shed",
+    "footprint_local_xz": [
+     [
+      -12.0,
+      -7.55
+     ],
+     [
+      -13.2,
+      -14.85
+     ],
+     [
+      -7.0,
+      -15.85
+     ],
+     [
+      -5.7,
+      -8.65
+     ],
+     [
+      -12.0,
+      -7.55
+     ]
+    ],
+    "role": "hay-barn",
+    "interpretation": "Footprint is mapped; the use shown (hay-barn), wall height, roof form and materials are authored. OSM tags are not ground-verified."
+   },
+   {
+    "id": "osm.way.1163356664",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -12.3,
+      -42.55
+     ],
+     [
+      -12.4,
+      -39.05
+     ],
+     [
+      -14.7,
+      -39.15
+     ],
+     [
+      -14.8,
+      -35.95
+     ],
+     [
+      -16.3,
+      -36.05
+     ],
+     [
+      -16.3,
+      -31.55
+     ],
+     [
+      -20.3,
+      -31.55
+     ],
+     [
+      -21.3,
+      -39.65
+     ],
+     [
+      -24.3,
+      -39.65
+     ],
+     [
+      -24.2,
+      -43.65
+     ],
+     [
+      -21.2,
+      -43.55
+     ],
+     [
+      -21.2,
+      -47.25
+     ],
+     [
+      -14.7,
+      -47.25
+     ],
+     [
+      -14.7,
+      -42.65
+     ],
+     [
+      -12.3,
+      -42.55
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356666",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "yes",
+    "footprint_local_xz": [
+     [
+      -55.4,
+      -15.25
+     ],
+     [
+      -53.4,
+      -23.05
+     ],
+     [
+      -49.0,
+      -21.85
+     ],
+     [
+      -51.0,
+      -14.15
+     ],
+     [
+      -55.4,
+      -15.25
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356667",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -60.2,
+      -28.05
+     ],
+     [
+      -57.9,
+      -36.95
+     ],
+     [
+      -62.0,
+      -40.35
+     ],
+     [
+      -61.2,
+      -43.55
+     ],
+     [
+      -50.9,
+      -40.85
+     ],
+     [
+      -54.6,
+      -26.55
+     ],
+     [
+      -60.2,
+      -28.05
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356668",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "ruins",
+    "footprint_local_xz": [
+     [
+      -62.5,
+      -58.45
+     ],
+     [
+      -61.3,
+      -69.95
+     ],
+     [
+      -55.9,
+      -69.45
+     ],
+     [
+      -57.1,
+      -57.85
+     ],
+     [
+      -62.5,
+      -58.45
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356669",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -84.8,
+      -75.65
+     ],
+     [
+      -83.1,
+      -86.55
+     ],
+     [
+      -76.2,
+      -85.45
+     ],
+     [
+      -78.0,
+      -74.55
+     ],
+     [
+      -84.8,
+      -75.65
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356670",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "shed",
+    "footprint_local_xz": [
+     [
+      -93.4,
+      -51.45
+     ],
+     [
+      -93.6,
+      -55.85
+     ],
+     [
+      -84.4,
+      -56.25
+     ],
+     [
+      -84.2,
+      -51.85
+     ],
+     [
+      -93.4,
+      -51.45
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356671",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -79.3,
+      -39.55
+     ],
+     [
+      -79.1,
+      -35.15
+     ],
+     [
+      -83.1,
+      -35.05
+     ],
+     [
+      -82.9,
+      -31.85
+     ],
+     [
+      -93.9,
+      -31.35
+     ],
+     [
+      -94.5,
+      -46.25
+     ],
+     [
+      -83.6,
+      -46.75
+     ],
+     [
+      -83.3,
+      -39.35
+     ],
+     [
+      -79.3,
+      -39.55
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356672",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -81.1,
+      -15.45
+     ],
+     [
+      -81.1,
+      -6.45
+     ],
+     [
+      -88.4,
+      -6.45
+     ],
+     [
+      -88.5,
+      -18.75
+     ],
+     [
+      -78.1,
+      -18.75
+     ],
+     [
+      -78.1,
+      -15.45
+     ],
+     [
+      -81.1,
+      -15.45
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356676",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "yes",
+    "footprint_local_xz": [
+     [
+      -128.7,
+      -145.25
+     ],
+     [
+      -130.0,
+      -150.05
+     ],
+     [
+      -126.4,
+      -151.05
+     ],
+     [
+      -125.0,
+      -146.35
+     ],
+     [
+      -128.7,
+      -145.25
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163356677",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      -130.1,
+      -112.25
+     ],
+     [
+      -130.1,
+      -137.35
+     ],
+     [
+      -127.0,
+      -137.65
+     ],
+     [
+      -123.1,
+      -112.95
+     ],
+     [
+      -130.1,
+      -112.25
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163361609",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      35.2,
+      13.95
+     ],
+     [
+      39.4,
+      16.05
+     ],
+     [
+      37.4,
+      20.05
+     ],
+     [
+      40.5,
+      21.75
+     ],
+     [
+      36.7,
+      29.25
+     ],
+     [
+      22.7,
+      22.15
+     ],
+     [
+      26.5,
+      14.55
+     ],
+     [
+      33.2,
+      17.95
+     ],
+     [
+      35.2,
+      13.95
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163361610",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      77.9,
+      79.55
+     ],
+     [
+      77.8,
+      66.55
+     ],
+     [
+      86.7,
+      66.55
+     ],
+     [
+      86.8,
+      79.45
+     ],
+     [
+      77.9,
+      79.55
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163361611",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "yes",
+    "footprint_local_xz": [
+     [
+      171.2,
+      31.85
+     ],
+     [
+      171.0,
+      26.05
+     ],
+     [
+      180.3,
+      25.65
+     ],
+     [
+      180.6,
+      31.45
+     ],
+     [
+      171.2,
+      31.85
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   },
+   {
+    "id": "osm.way.1163361612",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "house",
+    "footprint_local_xz": [
+     [
+      169.0,
+      51.45
+     ],
+     [
+      168.6,
+      41.25
+     ],
+     [
+      165.2,
+      41.45
+     ],
+     [
+      164.9,
+      34.25
+     ],
+     [
+      177.1,
+      33.75
+     ],
+     [
+      177.9,
+      51.05
+     ],
+     [
+      169.0,
+      51.45
+     ]
+    ],
+    "role": "neighbour-context",
+    "interpretation": "Footprint is mapped; drawn as simple massing (heights and roofs authored)."
+   }
+  ],
+  "roads": [
+   {
+    "id": "osm.way.190375608",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "unclassified",
+    "line_local_xz": [
+     [
+      -98.2,
+      -13.65
+     ],
+     [
+      -130.1,
+      -15.75
+     ]
+    ]
+   },
+   {
+    "id": "osm.way.190467356",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "unclassified",
+    "line_local_xz": [
+     [
+      -95.8,
+      23.95
+     ],
+     [
+      -58.9,
+      26.85
+     ],
+     [
+      -17.5,
+      19.65
+     ],
+     [
+      -10.7,
+      21.15
+     ],
+     [
+      46.4,
+      50.15
+     ],
+     [
+      59.3,
+      53.45
+     ],
+     [
+      101.2,
+      58.35
+     ],
+     [
+      192.7,
+      60.45
+     ],
+     [
+      224.9,
+      53.05
+     ]
+    ]
+   },
+   {
+    "id": "osm.way.255764870",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "secondary",
+    "line_local_xz": [
+     [
+      -106.8,
+      -154.45
+     ],
+     [
+      -88.2,
+      129.95
+     ]
+    ]
+   },
+   {
+    "id": "osm.way.1163356674",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "service",
+    "line_local_xz": [
+     [
+      -105.6,
+      -134.45
+     ],
+     [
+      -119.3,
+      -133.35
+     ],
+     [
+      -121.8,
+      -129.95
+     ],
+     [
+      -121.9,
+      -123.55
+     ],
+     [
+      -119.9,
+      -118.75
+     ],
+     [
+      -104.5,
+      -116.75
+     ]
+    ]
+   }
+  ],
+  "osm_walls": [
+   {
+    "id": "osm.way.1163356665",
+    "epistemic": "documented",
+    "source": "OpenStreetMap",
+    "osm_tag": "wall",
+    "line_local_xz": [
+     [
+      -44.6,
+      -75.05
+     ],
+     [
+      -43.4,
+      -76.95
+     ],
+     [
+      -41.4,
+      -75.75
+     ],
+     [
+      -42.7,
+      -73.75
+     ],
+     [
+      -44.6,
+      -75.05
+     ]
+    ]
+   }
+  ],
+  "fields": [
+   {
+    "id": "field.home",
+    "name": "the home field",
+    "epistemic": "authored",
+    "poly_xz": [
+     [
+      -2,
+      -150
+     ],
+     [
+      70,
+      -150
+     ],
+     [
+      70,
+      18
+     ],
+     [
+      44,
+      12
+     ],
+     [
+      30,
+      12
+     ],
+     [
+      30,
+      -30
+     ],
+     [
+      -2,
+      -30
+     ]
+    ]
+   },
+   {
+    "id": "field.hill",
+    "name": "the hill field",
+    "epistemic": "authored",
+    "poly_xz": [
+     [
+      70,
+      -150
+     ],
+     [
+      200,
+      -150
+     ],
+     [
+      200,
+      22
+     ],
+     [
+      70,
+      18
+     ]
+    ]
+   },
+   {
+    "id": "field.low",
+    "name": "the low field",
+    "epistemic": "authored",
+    "poly_xz": [
+     [
+      -60,
+      -150
+     ],
+     [
+      -2,
+      -150
+     ],
+     [
+      -2,
+      -70
+     ],
+     [
+      -60,
+      -70
+     ]
+    ],
+    "contains": [
+     "osm.way.1163356660"
+    ]
+   },
+   {
+    "id": "fold",
+    "name": "the fold",
+    "epistemic": "authored",
+    "poly_xz": [
+     [
+      14,
+      -30
+     ],
+     [
+      30,
+      -30
+     ],
+     [
+      30,
+      -14
+     ],
+     [
+      14,
+      -14
+     ]
+    ]
+   }
+  ],
+  "walls": [
+   {
+    "id": "wall.west",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      -60,
+      -150
+     ],
+     [
+      -2,
+      -150
+     ],
+     [
+      70,
+      -150
+     ],
+     [
+      110,
+      -150
+     ]
+    ]
+   },
+   {
+    "id": "wall.site",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      110,
+      -150
+     ],
+     [
+      168,
+      -150
+     ]
+    ],
+    "site": true,
+    "note": "a tumbled stretch the farmer is rebuilding, stone by stone; its height is world memory"
+   },
+   {
+    "id": "wall.west2",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      168,
+      -150
+     ],
+     [
+      200,
+      -150
+     ]
+    ]
+   },
+   {
+    "id": "wall.north",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      200,
+      -150
+     ],
+     [
+      200,
+      22
+     ]
+    ]
+   },
+   {
+    "id": "wall.east",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      200,
+      22
+     ],
+     [
+      70,
+      18
+     ],
+     [
+      44,
+      12
+     ],
+     [
+      30,
+      12
+     ],
+     [
+      30,
+      -14
+     ]
+    ]
+   },
+   {
+    "id": "wall.homehill",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      70,
+      -150
+     ],
+     [
+      70,
+      18
+     ]
+    ]
+   },
+   {
+    "id": "wall.homelow",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      -2,
+      -150
+     ],
+     [
+      -2,
+      -70
+     ],
+     [
+      -60,
+      -70
+     ],
+     [
+      -60,
+      -150
+     ]
+    ]
+   },
+   {
+    "id": "wall.homesouth",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      -2,
+      -70
+     ],
+     [
+      -2,
+      -30
+     ],
+     [
+      14,
+      -30
+     ]
+    ]
+   },
+   {
+    "id": "wall.fold",
+    "epistemic": "authored",
+    "line_xz": [
+     [
+      14,
+      -30
+     ],
+     [
+      30,
+      -30
+     ],
+     [
+      30,
+      -14
+     ],
+     [
+      14,
+      -14
+     ],
+     [
+      14,
+      -30
+     ]
+    ]
+   }
+  ],
+  "gates": [
+   {
+    "id": "gate.foldhome",
+    "epistemic": "authored",
+    "at_xz": [
+     30,
+     -22
+    ],
+    "width": 3.6,
+    "axis": "z",
+    "joins": [
+     "fold",
+     "field.home"
+    ]
+   },
+   {
+    "id": "gate.foldyard",
+    "epistemic": "authored",
+    "at_xz": [
+     14,
+     -22
+    ],
+    "width": 3.0,
+    "axis": "z",
+    "joins": [
+     "fold",
+     "yard"
+    ]
+   },
+   {
+    "id": "gate.yardhome",
+    "epistemic": "authored",
+    "at_xz": [
+     30,
+     2
+    ],
+    "width": 3.6,
+    "axis": "z",
+    "joins": [
+     "yard",
+     "field.home"
+    ]
+   },
+   {
+    "id": "gate.homehill",
+    "epistemic": "authored",
+    "at_xz": [
+     70,
+     -92
+    ],
+    "width": 4.0,
+    "axis": "z",
+    "joins": [
+     "field.home",
+     "field.hill"
+    ]
+   },
+   {
+    "id": "gate.homelow",
+    "epistemic": "authored",
+    "at_xz": [
+     -2,
+     -132
+    ],
+    "width": 4.0,
+    "axis": "z",
+    "joins": [
+     "field.home",
+     "field.low"
+    ]
+   }
+  ],
+  "props": [
+   {
+    "id": "yard",
+    "kind": "yard",
+    "epistemic": "authored",
+    "poly_xz": [
+     [
+      -18,
+      -18
+     ],
+     [
+      14,
+      -18
+     ],
+     [
+      14,
+      -14
+     ],
+     [
+      30,
+      -14
+     ],
+     [
+      30,
+      12
+     ],
+     [
+      22,
+      13
+     ],
+     [
+      -18,
+      22
+     ]
+    ]
+   },
+   {
+    "id": "stonepile",
+    "kind": "stone-pile",
+    "epistemic": "authored",
+    "at_xz": [
+     139,
+     -144
+    ]
+   },
+   {
+    "id": "trough",
+    "kind": "trough",
+    "epistemic": "authored",
+    "at_xz": [
+     12,
+     -11
+    ]
+   },
+   {
+    "id": "bowl",
+    "kind": "dog-bowl",
+    "epistemic": "authored",
+    "at_xz": [
+     -3,
+     -2
+    ]
+   },
+   {
+    "id": "bed",
+    "kind": "dog-bed",
+    "epistemic": "authored",
+    "at_xz": [
+     8.2,
+     -5.6
+    ],
+    "in": "osm.way.1163356662"
+   },
+   {
+    "id": "thorn",
+    "kind": "hawthorn",
+    "epistemic": "authored",
+    "at_xz": [
+     152,
+     -62
+    ]
+   },
+   {
+    "id": "shore",
+    "kind": "coastline",
+    "epistemic": "estimated",
+    "at_x": -750,
+    "note": "Galway Bay to the south. Position extrapolated from the regional DEM slope and HEADLAND's Inverin coast (53.236 N); not surveyed. No shore geometry is claimed."
+   },
+   {
+    "id": "clare",
+    "kind": "far-hills",
+    "epistemic": "speculative",
+    "note": "hills across the bay on the southern horizon (the Burren side), sculpted to suggest; not surveyed"
+   }
+  ],
+  "inhabitants": [
+   {
+    "id": "bernard",
+    "name": "Bernard",
+    "kind": "border collie",
+    "epistemic": "fictional",
+    "central": true,
+    "routine": [
+     "dawn: gathers the flock from the fold to the field with the most grass",
+     "day: watches the sheep from a wall, naps in the sun, drinks at the trough, trails the farmer",
+     "answers the whistle: comes running to the farmer from wherever he is",
+     "dusk: brings the flock back into the fold",
+     "night: sleeps in the byre"
+    ],
+    "body": "procedural IK gaits (walk, trot, canter, rotary gallop), stalk/eye, clap, wag; ported from the SHEEPDOG Godot test",
+    "memory": "experience 0-1 grows with each day worked (wider, steadier, fewer breaks)"
+   },
+   {
+    "id": "farmer",
+    "name": "the farmer",
+    "kind": "person",
+    "epistemic": "fictional",
+    "routine": [
+     "indoors at night and in heavy rain",
+     "opens and closes gates for each move",
+     "rebuilds the tumbled stretch of the hill field's west wall, a stone every few minutes",
+     "walks the walls to check gates; sometimes goes off down the lane and is away a while",
+     "whistles Bernard over"
+    ],
+    "body": "waxed coat, flat cap, hooked crook; procedural walk, stoop, carry"
+   },
+   {
+    "id": "flock",
+    "name": "the flock",
+    "kind": "20 blackface ewes",
+    "epistemic": "fictional",
+    "behaviour": "graze, bunch and flow from the dog; give a standing person a wide berth; walls hold them; lie down to ruminate",
+    "marked_ewe": "the flightiest ewe carries a coral raddle mark; under moderate pressure she breaks for it, and her breaks and favourite direction are remembered"
+   }
+  ]
+ },
+ "rules": {
+  "events": [
+   {
+    "id": "gather",
+    "label": "Bernard gathered a flock that was not there",
+    "main": true,
+    "condition": "Bernard idle, the flock penned or far off, low light, damp air",
+    "sound": "flat-II chord + reverse swell"
+   },
+   {
+    "id": "turn",
+    "label": "the whole flock turned to face the bay",
+    "condition": "flock grazing calm, no dog near, light wind",
+    "sound": "a high fifth in the room"
+   },
+   {
+    "id": "lie",
+    "label": "every ewe lay down at once, facing the same way",
+    "condition": "humidity high and rising, heavy cloud",
+    "sound": "a sub that swells with a breath"
+   },
+   {
+    "id": "stone",
+    "label": "the wall took a stone by itself",
+    "condition": "dusk or night, the farmer indoors, the wall worked that day",
+    "sound": "a single stone, then the wall settling"
+   },
+   {
+    "id": "hush",
+    "label": "the field held still",
+    "condition": "tension reaches 1 (rupture)",
+    "sound": "the band drops out"
+   }
+  ],
+  "memory": {
+   "grass": "grazing map over the fields; ewes eat it down where they stand, it regrows over days; the farmer moves the flock to the field with the most grass",
+   "tread": "worn paths where feet pass; they fade over days and print as bare ground; sheep follow them a little",
+   "wall": "stones laid in the tumbled stretch (grows over weeks)",
+   "bernard": "experience",
+   "marked_ewe": "breaks and the side she breaks to",
+   "events": "conditions each event happened in (hour, humidity, flock calm); they recur more readily under similar ones and habituate",
+   "store": "localStorage mzworld-farm-v1, saved every 60 s and on unload; ?fresh=1 clears it"
+  },
+  "rupture": "tension builds with stability (50-95 min epochs) and each event; at 1 the field holds still, then the print re-inks (colourway, line grammar, harmonic centre)"
+ },
+ "ecosystems": {
+  "weather_inputs": {
+   "wind": "grass and fleece motion, wind bed, cloud drift",
+   "cloud": "light, sky",
+   "humidity": "haze distance, dub-echo feedback, the lie event",
+   "rain": "rain streaks; the farmer and Bernard go in; ewes shelter in the lee of a wall",
+   "swell (marine)": "the far bay"
+  },
+  "tempo": "bar length 4.0-6.6 s from the flock's pace (grazing slow, driven fast)",
+  "bass": "degree from where Bernard is"
+ },
+ "interpretation": {
+  "aesthetic": "HEADLAND linocut-through-OBAS print, SRUTHÁN v3 surface-carved hatching, six inks",
+  "new_rendering_idea": "the field's memory printed into the grass: long grass carved by the wind, grazed and trodden ground as stipple and bare earth"
+ },
+ "outputs": {
+  "mztv": "index.html (broadcast; observational crew, 10 operators)",
+  "inverin_port": "PORT.md (FARM sections + this model, planted at an INVERIN anchor)"
+ },
+ "attribution": [
+  "© OpenStreetMap contributors (ODbL 1.0)",
+  "Copernicus / EEA EU-DEM v1.1 via Open Topo Data",
+  "Weather: Open-Meteo"
+ ]
+}

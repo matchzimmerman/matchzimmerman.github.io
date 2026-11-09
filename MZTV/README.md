@@ -393,6 +393,12 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-042-breakwater/`
 
+### BIT FIELD 045 — MZ WORLD · FARM (working title, not published)
+Bernard's farm above Galway Bay, printed in six inks on HEADLAND's engine with SRUTHÁN's surface-carved hatching, at the SHEEPDOG farmstead anchor (53.24423 N, 9.40425 W). Real OSM buildings and lanes on the 25 m EU-DEM; fields, walls, gates and the fold are authored. Twenty blackface ewes (one raddle-marked) graze the fields down and wear paths; the farmer moves them to fresh grass at first light and into the fold at dusk, lays stone on a new lace wall, goes off down the lane and in at night; Bernard (the collie rig from the SHEEPDOG tests) works when there's work and otherwise lies down and watches. Observe, don't direct. Memory: grazing and tread maps, the wall's height, Bernard's experience, the marked ewe's breaks, regrowth while closed. Rarely the ewes stand in a ring around the hawthorn (♭II), all turn to face the bay, the grass lies down in a line from the sea, or a stone sets itself in the wall. Bar length from the flock's pace; bass from where Bernard is. Portable world model `farm.world.json` and `PORT.md` for INVERIN. **Not visually approved; not deployed.** Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=MIN ?hour=H ?cam=N ?live=0 ?capture=1
+
+Path:
+`sources/bit-field-045-farm/index.html`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 

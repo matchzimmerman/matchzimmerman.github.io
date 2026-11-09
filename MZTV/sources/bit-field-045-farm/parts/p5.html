@@ -1,0 +1,329 @@
+
+/* ====================================================================== weather */
+const WX = { wind: 7, windDir: 245, cloud: 0.6, precip: 0, temp: 11, hum: 85, swellH: 1.2, swellT: 9, swellDir: 250, live: false, at: 0 };
+const WXT = Object.assign({}, WX);
+function synthWx(ms) { const h = ms / 3600e3;
+  return { wind: 6.5 + 4 * Math.sin(h * 0.7) + 2 * Math.sin(h * 2.3 + 1), windDir: 235 + 45 * Math.sin(h * 0.31), cloud: clamp(0.6 + 0.35 * Math.sin(h * 0.9 + 1), 0, 1),
+    precip: Math.max(0, Math.sin(h * 1.7) * 1.6 - 0.95), temp: 11 + 3 * Math.sin(h * 0.26), hum: 84 + 9 * Math.sin(h * 0.5),
+    swellH: 1.1 + 0.7 * Math.sin(h * 0.21), swellT: 9 + 2.4 * Math.sin(h * 0.17), swellDir: 250 + 18 * Math.sin(h * 0.12) }; }
+Object.assign(WXT, synthWx(simMs)); Object.assign(WX, WXT);
+async function fetchWx() {
+  if (!LIVE_WX) return;
+  try {
+    const [a, b] = await Promise.all([
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms`).then(r => r.json()),
+      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=53.21&longitude=-9.42&current=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`).then(r => r.json()).catch(() => null),
+    ]);
+    const c = a.current; const m = b && b.current; const prev = { ...WXT };
+    Object.assign(WXT, { wind: c.wind_speed_10m, windDir: c.wind_direction_10m, cloud: c.cloud_cover / 100, precip: c.precipitation, temp: c.temperature_2m, hum: c.relative_humidity_2m, gust: c.wind_gusts_10m });
+    if (m) { const sh = m.swell_wave_height ?? m.wave_height, sp = m.swell_wave_period ?? m.wave_period, sd = m.swell_wave_direction ?? m.wave_direction;
+      if (sh != null) WXT.swellH = clamp(sh, 0.1, 7); if (sp != null) WXT.swellT = clamp(sp, 4, 18); if (sd != null) WXT.swellDir = sd; }
+    if (!WX.live) logEv('live weather from the farm arrived');
+    else if (Math.abs(prev.wind - WXT.wind) > 3) logEv(`wind ${prev.wind.toFixed(0)} → ${WXT.wind.toFixed(0)} m/s`);
+    WX.live = true; WXT.live = true;
+  } catch (e) { WX.live = false; }
+}
+fetchWx(); setInterval(fetchWx, 15 * 60e3);
+const WAVES = [];
+function rebuildWaves() {
+  WAVES.length = 0; const sd = fromBearingTravel(WX.swellDir), wd = fromBearingTravel(WX.windDir); const sA = Math.atan2(sd.y, sd.x), wA = Math.atan2(wd.y, wd.x); const amp = WX.swellH * 0.5;
+  [[0, 1, 0.48], [0.2, 0.86, 0.24], [-0.27, 1.13, 0.17], [0.42, 0.74, 0.11]].forEach(([da, pm, af], i) => { const T = WX.swellT * pm, w = TAU / T, k = w * w / 9.81, a = sA + da; WAVES.push({ dx: Math.cos(a), dz: Math.sin(a), k, A: amp * af, w, Q: 0, ph: i * 1.31 }); });
+  const wT = clamp(0.55 * Math.sqrt(WX.wind) + 1.2, 1.5, 5), ww = TAU / wT, wk = ww * ww / 9.81, wa = 0.012 * Math.pow(WX.wind, 1.35);
+  [[0, 0.6], [0.5, 0.4]].forEach(([da, af], i) => WAVES.push({ dx: Math.cos(wA + da), dz: Math.sin(wA + da), k: wk * (1 + i * 0.4), A: wa * af, w: ww * Math.sqrt(1 + i * 0.4), Q: 0, ph: 2.1 + i }));
+  const sumKA = WAVES.reduce((s, q) => s + q.k * q.A, 0) || 1;
+  WAVES.forEach((q, i) => { q.Q = clamp(0.62 / sumKA, 0, 1.4); seaU.uW.value[i].set(q.dx, q.dz, q.k, q.A); seaU.uW2.value[i].set(q.w, q.Q, q.ph, 0); });
+  for (let i = 0; i < NC; i++) { const a = wA + (i - 2.5) * 0.35, L = 2.5 + i * 1.3, k = TAU / L; seaU.uC.value[i].set(Math.cos(a), Math.sin(a), k, clamp(WX.wind / 14, 0.05, 1.2) * 0.05 / (1 + i * 0.25)); }
+}
+
+/* ====================================================================== FARM: the land's own life (grass, tread, gates, routes) */
+const GF = new Float32Array(GW * GH), TF = new Float32Array(GW * GH); for (let k = 0; k < GW * GH; k++) { GF[k] = GRASS[k]; TF[k] = TREAD[k]; }
+const CAREA = new Array(GW * GH); for (let k = 0; k < GW * GH; k++) CAREA[k] = areaAt(...cellXZ(k));
+const FCELLS = {}; for (let k = 0; k < GW * GH; k++) (FCELLS[CAREA[k]] = FCELLS[CAREA[k]] || []).push(k);
+const GRAZE_FIELDS = ['field.home', 'field.hill', 'field.low'];
+const FNAME = Object.fromEntries(FIELDS.map(f => [f.id, f.name])); FNAME.yard = 'the yard'; FNAME.out = 'the lane';
+const fieldMean = (id) => { const c = FCELLS[id]; if (!c) return 0; let s = 0; for (const k of c) s += GF[k]; return s / c.length / 255; };
+function landSync() { for (let k = 0; k < GW * GH; k++) { GRASS[k] = clamp(Math.round(GF[k]), 0, 255); TREAD[k] = clamp(Math.round(TF[k]), 0, 255); } fieldTexUpdate(); bladesUpdate(); }
+function regrow(sec) { // grass grows back over ~4 days; paths fade over ~5 days
+  const g = 255 / (6 * 86400) * sec, d = 255 / (5 * 86400) * sec;
+  for (let k = 0; k < GW * GH; k++) { const a = CAREA[k]; const cap = a === 'yard' ? 70 : a === 'out' ? 200 : a === 'fold' ? 110 : 245; if (GF[k] < cap) GF[k] = Math.min(cap, GF[k] + g * (a === 'fold' ? 0.5 : 1)); TF[k] = Math.max(0, TF[k] - d); }
+}
+function treadAt(x, z, amt) { const k = cellOf(x, z); if (k >= 0) TF[k] = Math.min(255, TF[k] + amt); }
+{ const away = (Date.now() - (S.lastMs || Date.now())) / 1000; if (away > 120) { regrow(Math.min(away, 3 * 86400)); landSync(); logEv(`the grass grew while nobody watched (${(away / 3600).toFixed(1)} h)`); } }
+
+// gates: which side belongs to which area, and the routes between areas
+GATES.forEach(g => { const n = g.axis === 'z' ? [1, 0] : [0, 1]; const A = [g.at[0] + n[0] * 5, g.at[1] + n[1] * 5], B = [g.at[0] - n[0] * 5, g.at[1] - n[1] * 5];
+  const aA = areaAt(...A); const first = (aA === g.joins[0]) || (areaAt(...B) !== g.joins[0] && aA !== g.joins[1]);
+  g.side = { [g.joins[0]]: first ? A : B, [g.joins[1]]: first ? B : A };
+  g.nrm = { [g.joins[0]]: first ? n : [-n[0], -n[1]], [g.joins[1]]: first ? [-n[0], -n[1]] : n };    // normal pointing into each area
+  g.stand = {}; for (const a of g.joins) { const e = g.axis === 'z' ? [0, 1] : [1, 0], s = g.side[a]; g.stand[a] = [g.at[0] + (s[0] - g.at[0]) * 0.45 + e[0] * (g.w / 2 + 1.4), g.at[1] + (s[1] - g.at[1]) * 0.45 + e[1] * (g.w / 2 + 1.4)]; } });
+function route(from, to) { if (from === to) return []; const prev = { [from]: null }, q = [from];
+  while (q.length) { const a = q.shift(); if (a === to) break; for (const g of GATES) { const i = g.joins.indexOf(a); if (i < 0) continue; const b = g.joins[1 - i]; if (b in prev) continue; prev[b] = { g, a }; q.push(b); } }
+  if (!(to in prev)) return null; const out = []; let c = to; while (prev[c]) { out.unshift({ g: prev[c].g, from: prev[c].a, to: c }); c = prev[c].a; } return out; }
+const gateOf = (id) => GATES.find(g => g.id === id);
+function wallHit(x, z, r, segs) { for (const s of segs) { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1; const t = clamp(((x - s[0]) * dx + (z - s[1]) * dz) / L2, 0, 1);
+    const cx = s[0] + dx * t, cz = s[1] + dz * t, ex = x - cx, ez = z - cz, l = Math.hypot(ex, ez); if (l < r && l > 1e-5) { const gt = gateCut(cx, cz); if (gt && gt.open > 0.55) continue; x = cx + ex / l * r; z = cz + ez / l * r; } } return [x, z]; }
+function sweptBlock(x0, z0, x1, z1) { for (const s of WSEG) if (segX(x0, z0, x1, z1, ...s)) { const g = gateCut((x0 + x1) / 2, (z0 + z1) / 2); if (g && g.open > 0.55) continue; return true; } return false; }
+function gateTick(dt) { for (const g of GATES) { g.open = moveT(g.open, g.want, dt * 0.7); const a = g.base + (g.axis === 'z' ? -1 : 1) * smoothstep(0, 1, g.open) * 1.75; if (g.grp.rotation.y !== a) g.grp.rotation.y = a; } }
+const LANE_END = (() => { let best = [6, 70]; for (const r of FM.roads) if (r.tag !== 'secondary') for (const p of r.line) if (p[1] > best[1] && Math.abs(p[0]) < 80) best = p; return best; })();
+const SITE_STAND = (() => { const s = FM.walls.find(w => w.site).line; return [(s[0][0] + s[1][0]) / 2, s[0][1] + 1.4]; })();
+const BYRE_OUT = (() => { if (!BYRE) return [8, -2]; const a = [BYRE.door[0] + BYRE.n[0] * 2.2, BYRE.door[1] + BYRE.n[1] * 2.2], b = [BYRE.door[0] - BYRE.n[0] * 2.2, BYRE.door[1] - BYRE.n[1] * 2.2];
+  return Math.hypot(a[0] - BYRE.x, a[1] - BYRE.z) > Math.hypot(b[0] - BYRE.x, b[1] - BYRE.z) ? a : b; })();
+const BED = FM.props.bed.at_xz, BOWL = FM.props.bowl.at_xz, TROUGH = FM.props.trough.at_xz, THORN = FM.props.thorn.at_xz, PILE = FM.props.stonepile.at_xz;
+const HOUSE_DOOR = HOUSE ? HOUSE.door : [0, 6];
+function randIn(id, margin = 2.5, near, rad) { const f = FIELDS.find(q => q.id === id); const poly = f ? f.poly : YARD; const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+  for (let t = 0; t < 200; t++) { let x, z; if (near && t < 120) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * rad; x = near[0] + Math.cos(a) * r; z = near[1] + Math.sin(a) * r; } else { x = rr(Math.min(...xs), Math.max(...xs)); z = rr(Math.min(...zs), Math.max(...zs)); }
+    if (areaAt(x, z) === id && !WSEG.some(s => segD(x, z, ...s) < margin) && !OBST.some(o => Math.hypot(x - o[0], z - o[1]) < o[2] + 0.6)) return [x, z]; }
+  return f ? [f.cx, f.cz] : [4, 4]; }
+const flockArea = () => { const c = {}; for (const e of flock) { const a = areaAt(e.x, e.z); c[a] = (c[a] || 0) + 1; } let best = 'fold', n = -1; for (const a in c) if (c[a] > n) { n = c[a]; best = a; } return best; };
+const flockC = () => { let x = 0, z = 0; for (const e of flock) { x += e.x; z += e.z; } return [x / flock.length, z / flock.length]; };
+function bestField(exclude) { let b = null, bv = -1; for (const id of GRAZE_FIELDS) { if (id === exclude) continue; const v = fieldMean(id) - 0.0004 * Math.hypot(FIELDS.find(f => f.id === id).cx - 20, FIELDS.find(f => f.id === id).cz + 22); if (v > bv) { bv = v; b = id; } } return b; }
+
+/* ---------- FARM: the ewes think */
+let flockPace = 0.2;
+function placeFlock(area, near) { const c = near || (() => { const f = FIELDS.find(q => q.id === area); return f ? [f.cx, f.cz] : [22, -22]; })();
+  flock.forEach(e => { const p = randIn(area, area === 'fold' ? 1.2 : 2.5, c, area === 'fold' ? 7 : 16); e.x = p[0]; e.z = p[1]; e.vx = e.vz = 0; e.heading = rnd() * TAU; }); }
+function eweTick(e, dt, night, herding) {
+  let ax = 0, az = 0, cx = 0, cz = 0, vx = 0, vz = 0, n = 0;
+  for (const o of flock) { if (o === e) continue; const dx = o.x - e.x, dz = o.z - e.z, l = Math.hypot(dx, dz);
+    if (l < 16) { cx += dx; cz += dz; vx += o.vx; vz += o.vz; n++; }
+    if (l < 1.45 && l > 1e-4) { const k = (1.45 - l) / 1.45 * 9 / l; ax -= dx * k; az -= dz * k; } }
+  const ddx = e.x - dog.pos.x, ddz = e.z - dog.pos.z, dd = Math.hypot(ddx, ddz);
+  const press = lerp(1, 0.35, dog.down) * lerp(1, 1.25, dog.crouch) * (dog.mode === 'work' ? 1 : 0.55);
+  e.fear = clamp((12.5 - dd) / 10.5, 0, 1) * e.temper * press * (e.inArea === 'fold' && !herding ? 0.35 : 1) * (live.ev === 'gather' ? 0.2 : 1);
+  if (n) { ax += cx / n * (0.22 + e.fear * 0.85); az += cz / n * (0.22 + e.fear * 0.85); ax += (vx / n - e.vx) * 0.45 * e.fear; az += (vz / n - e.vz) * 0.45 * e.fear; }
+  if (dd > 0.01) { const k = e.fear * e.fear * 9.5 / dd; ax += ddx * k; az += ddz * k; }
+  if (farmer.visible) { const fx = e.x - farmer.pos.x, fz = e.z - farmer.pos.z, df = Math.hypot(fx, fz); if (df < 4.5 && df > 0.01) { const k = (4.5 - df) * 2.2 / df; ax += fx * k; az += fz * k; } }
+  // the marked ewe makes her break, and remembers the side she broke to
+  if (e.rogue && herding) { if (e.bolt <= 0 && e.fear > 0.2 && e.fear < 0.85 && rnd() < dt * 0.06 * (1.3 - 0.5 * S.exp)) {
+      e.bolt = rr(1.8, 3.2); const ux = ddx / (dd || 1), uz = ddz / (dd || 1); const side = (S.ewe.sides.length && rnd() < 0.7) ? S.ewe.sides[S.ewe.sides.length - 1] : (rnd() < 0.5 ? 1 : -1);
+      e.boltDir = [ux - uz * side * 1.4, uz + ux * side * 1.4]; const l = Math.hypot(...e.boltDir); e.boltDir = [e.boltDir[0] / l, e.boltDir[1] / l];
+      S.ewe.breaks++; S.ewe.sides.push(side); if (S.ewe.sides.length > 9) S.ewe.sides.shift(); if (rnd() < 0.5) logEv(`the marked ewe broke ${side > 0 ? 'left' : 'right'}`); }
+    if (e.bolt > 0) { e.bolt -= dt; ax += e.boltDir[0] * 14; az += e.boltDir[1] * 14; e.fear = Math.max(e.fear, 0.9); } }
+  e.bolting = e.bolt > 0;
+  const calm = 1 - clamp(e.fear * 3, 0, 1);
+  // calm: drift toward better grass, a little each minute
+  if (calm > 0.8 && !herding) { e.gph2 = (e.gph2 || 0) - dt; if (e.gph2 <= 0) { e.gph2 = rr(20, 60); let best = null, bv = -1;
+      for (let t = 0; t < 5; t++) { const a = rnd() * TAU, r = rr(2, 9); const x = e.x + Math.cos(a) * r, z = e.z + Math.sin(a) * r; const k = cellOf(x, z); if (k < 0 || CAREA[k] !== e.inArea) continue; const v = GF[k] + rnd() * 30; if (v > bv) { bv = v; best = [x, z]; } } e.goal = best; }
+    if (e.goal) { const gx = e.goal[0] - e.x, gz = e.goal[1] - e.z, gl = Math.hypot(gx, gz); if (gl > 0.8) { ax += gx / gl * 0.35; az += gz / gl * 0.35; } else e.goal = null; } }
+  ax += Math.sin(simT * 0.21 + e.i * 3.1) * 0.22 * calm; az += Math.cos(simT * 0.17 + e.i * 5.3) * 0.22 * calm;
+  if (HERD.active) { const f = herdFunnel(e); ax += f[0]; az += f[1]; }
+  if (live.ev === 'gather') { const g = gatherPull(e); ax += g[0]; az += g[1]; }
+  if (live.ev === 'lie') { const p = PHANTOM; const px = e.x - p.x, pz = e.z - p.z, pl = Math.hypot(px, pz); if (pl < 9 && pl > 0.01) { const k = (9 - pl) * 0.9 / pl; ax += px * k; az += pz * k; e.fear = Math.max(e.fear, 0.4); } }
+  ax -= e.vx * 1.6; az -= e.vz * 1.6; e.vx += ax * dt; e.vz += az * dt;
+  if (e.lie > 0.5) { e.vx *= 0.5; e.vz *= 0.5; }
+  const vmax = lerp(0.32, e.bolting ? 4.2 : 2.4, clamp(e.fear * 1.3, 0, 1)) * (night && !herding ? 0.6 : 1), vl = Math.hypot(e.vx, e.vz); if (vl > vmax) { e.vx *= vmax / vl; e.vz *= vmax / vl; }
+  let nx = e.x + e.vx * dt, nz = e.z + e.vz * dt; if (sweptBlock(e.x, e.z, nx, nz)) { nx = e.x; nz = e.z; e.vx *= -0.3; e.vz *= -0.3; } [nx, nz] = wallHit(nx, nz, 0.5, WSEG); [nx, nz] = pushCirc(nx, nz, 0.45);
+  if (!isFinite(nx) || !isFinite(nz)) { const p = randIn(S.flockAt || 'fold'); nx = p[0]; nz = p[1]; }
+  e.vx = (nx - e.x) / dt; e.vz = (nz - e.z) / dt; e.x = nx; e.z = nz; e.speed = Math.hypot(e.vx, e.vz);
+  if (e.speed > 0.07) e.heading = e.heading + wrapA(Math.atan2(e.vz, e.vx) - e.heading) * (1 - Math.exp(-dt * (2 + e.speed * 2)));
+  else if (e.faceTo) e.heading = e.heading + wrapA(Math.atan2(e.faceTo[1] - e.z, e.faceTo[0] - e.x) - e.heading) * (1 - Math.exp(-dt * 0.8));
+  e.graze = moveT(e.graze, calm > 0.9 && e.speed < 0.35 && e.lie < 0.2 && !e.faceTo ? 1 : 0, dt * 1.1);
+  e.lieT = (night && calm > 0.9 && !herding) || (e.calmFor > 1500 && !herding && SUNM.sun.el > 0 && e.i % 3 === 0) ? 1 : 0; e.calmFor = calm > 0.9 ? e.calmFor + dt : 0;
+  e.lie = moveT(e.lie, e.lieT, dt * 0.25);
+  e.inArea = areaAt(e.x, e.z);
+  // eating the field, wearing the path
+  if (e.graze > 0.6) { const hx = e.x + Math.cos(e.heading) * 0.6, hz = e.z + Math.sin(e.heading) * 0.6, k = cellOf(hx, hz); if (k >= 0) GF[k] = Math.max(8, GF[k] - 0.2 * dt); }
+  if (e.speed > 0.3) treadAt(e.x, e.z, e.speed * dt * 0.35);
+  e.bleatAt -= dt; if (e.bleatAt <= 0) { e.bleatAt = rr(40, 260) * (herding ? 0.25 : 1) * (night ? 3 : 1); AUD.bleat(e); }
+}
+function flockTick(dt, night) { const herding = HERD.active; let sp = 0; for (const e of flock) { eweTick(e, dt, night, herding); sp += e.speed; } flockPace = lerp(flockPace, sp / flock.length, 1 - Math.exp(-dt / 20)); }
+
+/* ---------- FARM: moving the flock from one field to another (Bernard works, the farmer holds the gate) */
+const HERD = { active: false, path: [], i: 0, to: null, t: 0, legT: 0, stage: 'gather', why: '' };
+function herdStart(to, why) { const from = flockArea(); const p = route(from, to); if (!p || !p.length) return false;
+  Object.assign(HERD, { active: true, path: p, i: 0, to, t: 0, legT: 0, stage: 'gather', why, from }); dog.mode = 'work'; logEv(`${why}: ${FNAME[from]} → ${FNAME[to]}`); return true; }
+function herdLeg() { return HERD.path[HERD.i]; }
+function crossed(e, L) { const a = areaAt(e.x, e.z); if (a === L.to) return true; const g = L.g, n = g.nrm[L.to]; const s = (e.x - g.at[0]) * n[0] + (e.z - g.at[1]) * n[1]; return s > 0.8 && Math.hypot(e.x - g.at[0], e.z - g.at[1]) < 4; }
+function herdFunnel(e) { const L = herdLeg(); if (!L || HERD.stage !== 'through' || L.g.open < 0.55) return [0, 0];
+  const g = L.g, n = g.nrm[L.to]; if (crossed(e, L)) { return [n[0] * 0.8, n[1] * 0.8]; }   // through: keep walking on, into the field
+  const nf = g.nrm[L.from], lat = g.axis === 'z' ? Math.abs(e.z - g.at[1]) : Math.abs(e.x - g.at[0]), front = (e.x - g.at[0]) * nf[0] + (e.z - g.at[1]) * nf[1];
+  const l0 = Math.hypot(g.at[0] - e.x, g.at[1] - e.z); if (l0 > 16) return [0, 0]; const k = (16 - l0) / 16 * (HERD.legT > 600 ? 3.2 : 1.7);
+  // round the corner first: to a point square in front of the gate, then through it
+  const tx = lat > g.w / 2 - 0.4 && front < 4 ? g.at[0] + nf[0] * 3.5 : g.at[0] - nf[0] * 2, tz = lat > g.w / 2 - 0.4 && front < 4 ? g.at[1] + nf[1] * 3.5 : g.at[1] - nf[1] * 2;
+  const dx = tx - e.x, dz = tz - e.z, l = Math.hypot(dx, dz) || 1; return [dx / l * k, dz / l * k]; }
+function herdTick(dt) {
+  if (!HERD.active) return; HERD.t += dt; HERD.legT += dt; const L = herdLeg();
+  if (!L) { HERD.active = false; S.flockAt = HERD.to; dog.mode = 'free'; logEv(`the flock is in ${FNAME[HERD.to]}`); S.exp = clamp(S.exp + 0.012, 0, 1); S.workedToday++; return; }
+  const g = L.g; const n = flock.filter(e => crossed(e, L)).length; const C = flockC();
+  const farmerThere = !farmer.visible || Math.hypot(farmer.pos.x - g.stand[L.from][0], farmer.pos.z - g.stand[L.from][1]) < 2.5;
+  if (farmerThere) g.want = 1;
+  if (HERD.stage === 'gather' && g.open > 0.6 && Math.hypot(C[0] - g.side[L.from][0], C[1] - g.side[L.from][1]) < 10) HERD.stage = 'through';
+  if (HERD.stage === 'gather' && HERD.legT > 420 && g.open > 0.6) HERD.stage = 'through';
+  if (n >= flock.length || (HERD.legT > 1500 && n >= flock.length - 1)) {
+    if (n < flock.length) { const e = flock.find(q => !crossed(q, L)); const p = g.side[L.to]; e.x = p[0] + rr(-1, 1); e.z = p[1] + rr(-1, 1); }   // the farmer walked the last one through
+    HERD.i++; HERD.legT = 0; HERD.stage = 'gather'; HERD.closeG = g; }
+  if (HERD.t > 3600) { placeFlock(HERD.to); HERD.i = HERD.path.length; logEv('the farmer and the dog took the long way round'); }
+}
+
+/* ---------- FARM: Bernard's own day */
+Object.assign(dog, { mode: 'free', task: 'sleep', taskT: 0, taskDur: 0, note: 'asleep in the byre', goal: null, lastDir: 1, flankR: -1, ateDay: -1, drank: 0, ghost: false, zone: 'yard' });
+function dogGo(x, z, sp, arrive = 0.5) { const dx = x - dog.pos.x, dz = z - dog.pos.z, d = Math.hypot(dx, dz); if (d < arrive) { dog.want.set(0, 0, 0); return true; }
+  const s = clamp(d * 1.1, 0.4, sp); dog.want.set(dx / d * s, 0, dz / d * s); return false; }
+function flankVel(C, dir, r, sp) { const rx = dog.pos.x - C[0], rz = dog.pos.z - C[1], d = Math.hypot(rx, rz) || 0.01; const hx = rx / d, hz = rz / d;
+  let vx = -hz * dir * sp + hx * clamp((r - d) * 1.4, -3, 5), vz = hx * dir * sp + hz * clamp((r - d) * 1.4, -3, 5); const l = Math.hypot(vx, vz); if (l > sp) { vx *= sp / l; vz *= sp / l; } return V(vx, 0, vz); }
+function dogWork(dt) {   // the balance point: the far side of the flock from where they're going; collect a stray first
+  const L = herdLeg(); if (!L) return; const g = L.g; const thr = HERD.stage === 'through';
+  const loose = flock.filter(e => !crossed(e, L)); const nf = g.nrm[L.from];
+  const lateral = loose.filter(e => (g.axis === 'z' ? Math.abs(e.z - g.at[1]) : Math.abs(e.x - g.at[0])) > g.w / 2 + 1.5).length;
+  const A = [g.at[0] + nf[0] * 3.5, g.at[1] + nf[1] * 3.5];   // square in front of the gate
+  const goal = thr && lateral * 2 < loose.length ? [g.side[L.to][0] + g.nrm[L.to][0] * 12, g.side[L.to][1] + g.nrm[L.to][1] * 12] : thr ? A : g.side[L.from]; if (!loose.length) { dogGo(g.side[L.from][0], g.side[L.from][1], 3); dog.crouchT = 0.2; return; }
+  let cx = 0, cz = 0; for (const e of loose) { cx += e.x; cz += e.z; } cx /= loose.length; cz /= loose.length;
+  let r2 = 0, far = 0, out = loose[0]; for (const e of loose) { const d = Math.hypot(e.x - cx, e.z - cz); r2 += d * d; if (d > far) { far = d; out = e; } }
+  const R = Math.sqrt(r2 / loose.length), exp = S.exp;
+  if (!thr && g.open < 0.55 && Math.hypot(cx - goal[0], cz - goal[1]) < 9) { dog.want.set(0, 0, 0); dog.downT = 1; dog.look.set(cx, 0, cz); dog.hasLook = true; dog.note = 'holding them at the gate'; return; } const rw = clamp(R * 1.5 + 6, 7, 20) * lerp(0.75, 1.1, exp);
+  const collect = far > 2.2 * Math.sqrt(loose.length) + 4;
+  let P; if (collect) { const ox = out.x - cx, oz = out.z - cz, l = Math.hypot(ox, oz) || 1; P = [out.x + ox / l * 5, out.z + oz / l * 5]; }
+  else { const gx = cx - goal[0], gz = cz - goal[1], l = Math.hypot(gx, gz) || 1; let r = rw; P = [cx + gx / l * r, cz + gz / l * r];
+    while (r > 2.5 && areaAt(P[0], P[1]) !== L.from) { r *= 0.8; P = [cx + gx / l * r, cz + gz / l * r]; } }   // a corner: get in behind them, tight
+  const angP = Math.atan2(P[1] - cz, P[0] - cx), angD = Math.atan2(dog.pos.z - cz, dog.pos.x - cx); const diff = wrapA(angP - angD), rP = Math.hypot(P[0] - cx, P[1] - cz);
+  dog.look.set(cx, 0, cz); dog.hasLook = true; dog.downT = 0; dog.wagT = 0;
+  if (Math.abs(diff) > 0.42 && Math.hypot(dog.pos.x - P[0], dog.pos.z - P[1]) > 4) {
+    let dir = Math.sign(diff); if (Math.abs(diff) > 2.6) dir = dog.lastDir; dog.lastDir = dir;
+    const sp = (Math.abs(diff) > 1.2 ? 7.6 : 4.6) * lerp(1.12, 1, exp); dog.want.copy(flankVel([cx, cz], dir, Math.max(rP, rw) + 2, sp)); dog.crouchT = 0.08; dog.note = dir > 0 ? 'flanking, come-bye side' : 'flanking, away side'; return; }
+  const tx = P[0] - dog.pos.x, tz = P[1] - dog.pos.z, tl = Math.hypot(tx, tz);
+  if (tl > 3 && Math.hypot(dog.pos.x - cx, dog.pos.z - cz) > rP - 1) { const s = clamp(tl * 0.9, 1, 4); dog.want.set(tx / tl * s, 0, tz / tl * s); dog.crouchT = 0.3; dog.note = 'steady, to the balance'; return; }
+  let near = 1e9; for (const e of loose) near = Math.min(near, Math.hypot(e.x - dog.pos.x, e.z - dog.pos.z));
+  let sp2 = (near > 5 ? 1.6 : 0.6) * lerp(1.45, 1, exp); if (near < 3.2) sp2 = HERD.legT > 100 ? 0.35 : 0;
+  const ux = cx - dog.pos.x, uz = cz - dog.pos.z, ul = Math.hypot(ux, uz) || 1; dog.want.set(ux / ul * sp2, 0, uz / ul * sp2); dog.crouchT = 0.68; dog.note = sp2 > 0 ? 'walking up on them' : 'holding them with his eye';
+}
+function dogSet(task, dur, note) { dog.task = task; dog.taskT = 0; dog.taskDur = dur; if (note) dog.note = note; dog.goal = null; }
+function dogTickBrain(dt, night) {
+  dog.taskT += dt; dog.ghost = false; const F = farmer; const fp = F.pos;
+  if (dog.stuckT > 6 && !HERD.active) { dog.stuckT = 0; if (dog.task === 'wander' || dog.task === 'watch') dog.goal = null; else if (dog.task !== 'bed' && dog.task !== 'rise') dogSet('free', 0); }
+  if (HERD.active) { if (dog.task !== 'work') dogSet('work', 0, 'gone out round them'); dogWork(dt); return; }
+  if (dog.task === 'work') dogSet('heel', 30, 'coming in to the farmer');
+  if (dog.task === 'come') { dog.downT = 0; dog.crouchT = 0; dog.wagT = 1; dog.hasLook = true; dog.look.set(fp.x, 1.2, fp.z);
+    if (!F.visible || dogGo(fp.x - Math.cos(F.heading) * 1.2 + Math.sin(F.heading) * 0.8, fp.z - Math.sin(F.heading) * 1.2 - Math.cos(F.heading) * 0.8, 7.5, 1.0)) dogSet('heel', rr(20, 60), 'at heel'); return; }
+  // where he wants to be
+  const wantSleep = night && !F.visible;
+  if (wantSleep && dog.task !== 'sleep' && dog.task !== 'bed') dogSet('bed', 0, 'going in to the byre for the night');
+  if (dog.task === 'bed') { dog.ghost = true; const d0 = Math.hypot(dog.pos.x - BYRE_OUT[0], dog.pos.z - BYRE_OUT[1]);
+    if (!dog.goal) dog.goal = d0 < 1.2 ? 'in' : 'door';
+    if (dog.goal === 'door' && dogGo(BYRE_OUT[0], BYRE_OUT[1], 3.2, 0.7)) dog.goal = 'in';
+    if (dog.goal === 'in' && dogGo(BED[0], BED[1], 1.2, 0.35)) { dogSet('sleep', 0, 'asleep in the byre'); logEv('Bernard went in to his bed'); } dog.crouchT = 0; dog.downT = 0; dog.hasLook = false; return; }
+  if (dog.task === 'sleep') { dog.ghost = true; dog.want.set(0, 0, 0); dog.downT = 1; dog.crouchT = 0.2; dog.wagT = 0; dog.hasLook = false;
+    if (!night || F.visible) { if (dog.taskT > 30 && (F.visible || SUNM.sun.el > 0.02)) { dogSet('rise', 0, 'up and out of the byre'); } } return; }
+  if (dog.task === 'rise') { dog.ghost = true; dog.downT = 0; if (dogGo(BYRE_OUT[0], BYRE_OUT[1], 2, 0.6)) dogSet('free', 0); return; }
+  // the farmer is away down the lane: he waits at the yard's edge facing the lane
+  if (F.away) { const w = [LANE_END[0] * 0.2 + 4, Math.min(LANE_END[1], 18)];
+    if (dog.task !== 'wait') dogSet('wait', 0, 'waiting for the farmer at the lane'); dog.downT = 0; dog.crouchT = 0; if (dogGo(w[0], w[1], 3.4, 0.8)) { dog.downT = dog.taskT > 40 ? 1 : 0.6; dog.look.set(LANE_END[0], 0, LANE_END[1]); dog.hasLook = true; } return; }
+  if (dog.task === 'wait') dogSet('free', 0);
+  const fd = F.visible ? Math.hypot(dog.pos.x - fp.x, dog.pos.z - fp.z) : 0;
+  if (F.visible && fd > 28 && (dog.task === 'watch' || dog.task === 'wander') && !live.ev) dogSet('heel', rr(40, 120), 'going after the farmer');
+  if (dog.task === 'free' || dog.taskT > dog.taskDur) {   // choose what next
+    const h = galwayParts(simMs).hour, hungry = dog.ateDay !== S.days && h > 11.5 && h < 19, thirsty = simT - dog.drank > rr(5400, 9000);
+    const fWalking = F.visible && F.speed > 0.3, fWorking = F.visible && (F.task === 'lay' || F.task === 'lean' || F.task === 'stand');
+    if (!F.visible) { if (hungry) dogSet('eat', 600, 'eating at the bowl'); else if (night) dogSet('bed', 0); else if (rnd() < 0.55) dogSet('doorstep', rr(600, 2400), 'lying at the farmhouse door'); else dogSet('wander', rr(120, 400), 'nosing round the yard'); }
+    else if (fWalking || fd > 30) dogSet('heel', rr(40, 120), 'with the farmer');
+    else if (hungry && Math.hypot(fp.x - BOWL[0], fp.z - BOWL[1]) < 60) dogSet('eat', 600, 'eating at the bowl');
+    else if (thirsty) dogSet('drink', 600, 'drinking at the trough');
+    else if (fWorking) dogSet(rnd() < 0.7 ? 'watch' : 'wander', rr(240, 900), rnd() < 0.5 ? 'lying down, watching the flock' : 'lying near the farmer');
+    else dogSet('heel', rr(30, 90), 'with the farmer');
+  }
+  dog.crouchT = 0; dog.wagT = 0.15; dog.downT = 0;
+  switch (dog.task) {
+    case 'heel': { if (!F.visible) { dogSet('free', 0); break; } dog.downT = 0; dog.hasLook = F.speed < 0.2; dog.look.set(fp.x, 1.2, fp.z);
+      const side = (dog.i0 = dog.i0 || (rnd() < 0.5 ? 1 : -1)); const hx = fp.x - Math.cos(F.heading) * 1.6 + Math.sin(F.heading) * 1.1 * side, hz = fp.z - Math.sin(F.heading) * 1.6 - Math.cos(F.heading) * 1.1 * side;
+      const d = Math.hypot(hx - dog.pos.x, hz - dog.pos.z); if (d > 2.5 || F.speed > 0.2) dogGo(hx, hz, d > 12 ? 6.5 : 2.6, 0.6); else { dog.want.set(0, 0, 0); if (dog.taskT > 25 && F.speed < 0.1) dog.downT = 0.6; } dog.wagT = d < 4 ? 0.5 : 0.2; break; }
+    case 'watch': { if (!F.visible) { dogSet('free', 0); break; } if (!dog.goal) { const C = flockC(); const a = Math.atan2(C[1] - fp.z, C[0] - fp.x) + rr(-0.6, 0.6), r = rr(5, 11); dog.goal = [fp.x + Math.cos(a) * r, fp.z + Math.sin(a) * r];
+        [dog.goal[0], dog.goal[1]] = wallHit(dog.goal[0], dog.goal[1], 1.2, WSEG); }
+      const C = flockC(); if (dogGo(dog.goal[0], dog.goal[1], 2.2, 0.6)) { dog.downT = 1; dog.look.set(C[0], 0, C[1]); dog.hasLook = true; } break; }
+    case 'wander': { if (!dog.goal || dogGo(dog.goal[0], dog.goal[1], 1.3, 0.8)) { const base = F.visible ? [fp.x, fp.z] : [4, 4]; dog.goal = [base[0] + rr(-14, 14), base[1] + rr(-14, 14)]; [dog.goal[0], dog.goal[1]] = pushCirc(...wallHit(dog.goal[0], dog.goal[1], 1, WSEG), 0.8); }
+      dog.downT = 0; dog.hasLook = false; dog.crouchT = 0.25; break; }   // nose down
+    case 'doorstep': { const d = [HOUSE_DOOR[0], HOUSE_DOOR[1]]; if (dogGo(d[0], d[1], 2.4, 1.2)) { dog.downT = 1; dog.hasLook = true; dog.look.set(d[0] + 6, 0, d[1] + 3); } if (F.visible) dogSet('free', 0); break; }
+    case 'eat': { if (dogGo(BOWL[0] + 0.5, BOWL[1], 2.6, 0.9) || (dog.taskT > 90 && Math.hypot(dog.pos.x - BOWL[0], dog.pos.z - BOWL[1]) < 2.5)) { dog.crouchT = 0.9; dog.hasLook = true; dog.look.set(BOWL[0], -0.4, BOWL[1]); if (dog.goal == null) dog.goal = dog.taskT; if (dog.taskT > dog.goal + 70) { dog.ateDay = S.days; if (rnd() < 0.4) logEv('Bernard ate'); dogSet('free', 0); } } else if (dog.taskT > 240) dogSet('free', 0); break; }
+    case 'drink': { if (dogGo(TROUGH[0] + 0.9, TROUGH[1], 2.6, 0.9)) { dog.crouchT = 0.6; dog.hasLook = true; dog.look.set(TROUGH[0], 0.3, TROUGH[1]); if (dog.taskT > 40) { dog.drank = simT; dogSet('free', 0); } } else if (dog.taskT > 240) { dog.drank = simT; dogSet('free', 0); } break; }
+    default: dogSet('free', 0);
+  }
+  if (live.ev === 'gather' || live.ev === 'lie' || live.ev === 'stone') eventDog();
+}
+function dogZone() { if (dog.task === 'sleep' || dog.task === 'bed') return 'byre'; return areaAt(dog.pos.x, dog.pos.z); }
+
+/* ---------- FARM: the farmer's day (a queue of plain tasks) */
+Object.assign(farmer, { task: 'in', taskT: 0, q: [], away: false, inside: true, path: [], note: 'indoors', walkTo: null, lay: null, whistleT: 0 });
+function fWalkPlan(x, z, note) { // to a point, through the gates in order
+  const from = areaAt(farmer.pos.x, farmer.pos.z), to = areaAt(x, z); const r = (from === 'out' || to === 'out') ? [] : (route(from, to) || []); const steps = [];
+  for (const L of r) { steps.push({ t: 'walk', to: L.g.stand[L.from], note }); steps.push({ t: 'gate', g: L.g, open: 1 }); steps.push({ t: 'walk', to: L.g.side[L.from], note, thru: true }); steps.push({ t: 'walk', to: L.g.side[L.to], note, thru: true }); steps.push({ t: 'gate', g: L.g, open: 0, from: L.to }); }
+  steps.push({ t: 'walk', to: [x, z], note }); return steps; }
+function fPush(...steps) { farmer.q.push(...steps.flat()); }
+function farmerTick(dt, night) {
+  const F = farmer; F.taskT += dt;
+  if (!F.cur) { if (!F.q.length) farmerPlan(night); F.cur = F.q.shift(); F.taskT = 0; if (F.cur && F.cur.note) F.note = F.cur.note; }
+  const c = F.cur; if (!c) return; F.stoopT = 0; F.carryT = 0; F.armT = 0; let done = false; F.task = c.t;
+  if (c.t === 'walk') { F.visible = true; F.inside = false; const dx = c.to[0] - F.pos.x, dz = c.to[1] - F.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.35 || F.taskT > 900) { F.speed = 0; done = true; if (F.taskT > 900) { F.pos.set(c.to[0], 0, c.to[1]); } }
+    else { const sp = (c.fast ? 1.45 : 1.1) * (WX.precip > 1 ? 1.25 : 1) * clamp(d * 1.5, 0.3, 1); F.speed = sp; const want = Math.atan2(dz, dx); F.heading += wrapA(want - F.heading) * (1 - Math.exp(-dt * 3));
+      let nx = F.pos.x + Math.cos(F.heading) * sp * dt, nz = F.pos.z + Math.sin(F.heading) * sp * dt; if (!c.thru) { if (sweptBlock(F.pos.x, F.pos.z, nx, nz)) { nx = F.pos.x; nz = F.pos.z; } [nx, nz] = wallHit(nx, nz, 0.35, WSEG); [nx, nz] = pushCirc(nx, nz, 0.3); }
+      F.pos.x = nx; F.pos.z = nz; treadAt(nx, nz, sp * dt * 0.5); } }
+  else { F.speed = 0; }
+  if (c.t === 'gate') { const g = c.g; F.hasLook = true; F.look.set(g.at[0], 1, g.at[1]); g.want = c.open; if (Math.abs(g.open - c.open) < 0.05) { done = true; AUD.gate(g); }
+    if (c.open === 0 && flock.some(e => Math.hypot(e.x - g.at[0], e.z - g.at[1]) < 2.2)) { g.want = 1; if (F.taskT > 120) done = true; } }
+  if (c.t === 'stand') { F.hasLook = !!c.look; if (c.look) F.look.set(c.look[0], 1, c.look[1]); if (c.face != null) F.heading += wrapA(c.face - F.heading) * (1 - Math.exp(-dt)); done = F.taskT > c.dur; }
+  if (c.t === 'lean') { F.stoopT = 0.25; F.hasLook = true; const C = flockC(); F.look.set(C[0], 1, C[1]); done = F.taskT > c.dur; }
+  if (c.t === 'herd') { F.hasLook = true; const C = flockC(); F.look.set(C[0], 1, C[1]); const L = herdLeg();
+    if (!HERD.active) { done = true; if (HERD.closeG) { fPush({ t: 'gate', g: HERD.closeG, open: 0 }); HERD.closeG = null; } }
+    else if (L) { if (HERD.closeG && HERD.closeG !== L.g) { const g = HERD.closeG; HERD.closeG = null; F.q.unshift({ t: 'herd' }); F.q.unshift({ t: 'gate', g, open: 0 }); F.cur = null; return; }
+      const s = L.g.stand[L.from]; if (Math.hypot(F.pos.x - s[0], F.pos.z - s[1]) > 2) { F.q.unshift({ t: 'herd' }); F.q.unshift(...fWalkPlan(s[0], s[1], 'going to hold the gate')); F.cur = null; return; }
+      if (F.taskT > 4 && L.g.open < 0.5) L.g.want = 1; } }
+  if (c.t === 'lay') { // stoop for a stone from the tumble, carry it, set it, step back to look
+    if (S.wallLaid >= SITE.total) { done = true; } else {
+      const k = S.wallLaid, slot = SITE.slots[k], tum = SITE.tumble[SITE.total - 1 - k];
+      if (!c.ph) { c.ph = 'fetch'; c.t0 = F.taskT; }
+      if (c.ph === 'fetch') { const d = Math.hypot(tum[0] - F.pos.x, tum[2] - F.pos.z); if (d > 0.9) { const a = Math.atan2(tum[2] - F.pos.z, tum[0] - F.pos.x); F.heading += wrapA(a - F.heading) * (1 - Math.exp(-dt * 3)); F.speed = 0.7; F.pos.x += Math.cos(F.heading) * 0.7 * dt; F.pos.z += Math.sin(F.heading) * 0.7 * dt; }
+        else { F.stoopT = 1; if (F.taskT - c.t0 > rr(6, 9)) { c.ph = 'carry'; SITE.lying.count = Math.max(0, SITE.total - S.wallLaid - 1); c.t0 = F.taskT; AUD.stone(V(tum[0], tum[1], tum[2]), 0.5); } } }
+      if (c.ph === 'carry') { F.carryT = 1; const d = Math.hypot(slot[0] - F.pos.x, slot[2] + 0.9 - F.pos.z); const a = Math.atan2(slot[2] + 0.9 - F.pos.z, slot[0] - F.pos.x);
+        if (d > 0.5) { F.heading += wrapA(a - F.heading) * (1 - Math.exp(-dt * 3)); F.speed = 0.6; F.pos.x += Math.cos(F.heading) * 0.6 * dt; F.pos.z += Math.sin(F.heading) * 0.6 * dt; } else { F.heading += wrapA(-Math.PI / 2 - F.heading) * (1 - Math.exp(-dt * 2)); if (F.taskT - c.t0 > 10) { c.ph = 'set'; c.t0 = F.taskT; } } }
+      if (c.ph === 'set') { F.stoopT = 0.6; F.carryT = 0.6; if (F.taskT - c.t0 > rr(5, 12)) { S.wallLaid++; siteUpdate(); AUD.stone(V(slot[0], slot[1], slot[2]), 1); c.ph = 'look'; c.t0 = F.taskT; if (S.wallLaid % 10 === 0) logEv(`the new wall reached ${S.wallLaid} stones`); } }
+      if (c.ph === 'look') { F.hasLook = true; F.look.set(slot[0], slot[1], slot[2]); if (F.taskT - c.t0 > rr(20, 60)) done = true; } } }
+  if (c.t === 'in') { F.visible = false; F.inside = true; F.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]); done = F.taskT > c.dur || (c.until && c.until()); }
+  if (c.t === 'away') { F.visible = false; F.away = true; F.pos.set(LANE_END[0], 0, LANE_END[1]); done = F.taskT > c.dur || night; if (done) { F.away = false; logEv('the farmer came back up the lane'); } }
+  if (c.t === 'whistle') { F.armT = 1; F.hasLook = true; F.look.copy(dog.pos); if (F.taskT > 0.6 && !c.blown) { c.blown = true; AUD.whistle(); if (dog.task !== 'sleep' && dog.task !== 'work') dogSet('come', 0, 'called over'); } done = F.taskT > 2.2; }
+  if (c.t === 'herdStart') { if (!herdStart(c.to, c.why)) {} done = true; }
+  if (c.t === 'log') { logEv(c.text); done = true; }
+  if (c.t === 'out') { F.visible = true; F.inside = false; F.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]); F.heading = Math.atan2(4 - HOUSE_DOOR[1], 4 - HOUSE_DOOR[0]); done = true; }
+  if (done) { F.cur = null; }
+  F.pos.y = groundAt(F.pos.x, F.pos.z); if (!isFinite(F.pos.x)) F.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]);
+}
+function farmerPlan(night) {
+  const F = farmer, h = galwayParts(simMs).hour, sEl = SUNM.sun.el / D2R, wet = WX.precip > 2.2, fa = flockArea(), M = S.moved || (S.moved = {});
+  const goIn = (dur, note, until) => { if (F.visible) fPush(fWalkPlan(HOUSE_DOOR[0], HOUSE_DOOR[1], note || 'going in')); fPush({ t: 'log', text: note === 'going in for the night' ? 'the farmer went in for the night' : 'the farmer went in' }, { t: 'in', dur, until }); };
+  const comeOut = () => { if (!F.visible) fPush({ t: 'out' }, { t: 'log', text: 'the farmer came out' }); };
+  const herd = (to, why) => { if (fa === to) return false; const r = route(fa, to); if (!r || !r.length) return false; comeOut(); const s = r[0].g.stand[r[0].from]; fPush(fWalkPlan(s[0], s[1], why)); fPush({ t: 'herdStart', to, why }, { t: 'herd', note: why }); return true; };
+  if (sEl < -4 || (sEl < 4 && h > 14)) { // evening and night: the flock in, the farmer in
+    if (!M.dusk && fa !== 'fold' && sEl > -9) { M.dusk = true; if (herd('fold', 'bringing them in to the fold for the night')) return; }
+    if (F.visible) { goIn(1800, 'going in for the night'); return; }
+    fPush({ t: 'in', dur: 1800, until: () => SUNM.sun.el > -0.03 && galwayParts(simMs).hour < 13 }); return; }
+  if (wet) { if (F.visible) { goIn(rr(900, 2400), 'going in out of the rain'); return; } fPush({ t: 'in', dur: rr(600, 1500) }); return; }
+  if (!M.am && h < 14) { M.am = true; const to = bestField(); if (herd(to, 'moving the flock to fresh grass')) return; }
+  if (!M.mid && h > 11 && h < 16 && GRAZE_FIELDS.includes(fa) && fieldMean(fa) < 0.36) { const to = bestField(fa); if (to && fieldMean(to) > fieldMean(fa) + 0.15) { M.mid = true; if (herd(to, 'the grass is short, moving them on')) return; } }
+  const wasIn = !F.visible;
+  comeOut();
+  const opts = [['wall', S.wallLaid < SITE.total ? 3.2 : 0], ['look', 1.4], ['yard', 1], ['tea', wasIn ? 0 : h > 10 && h < 16 ? 0.6 : 0.15], ['away', h > 9.5 && h < 17 && !M.away ? 0.55 : 0]];
+  let tot = opts.reduce((s, o) => s + o[1], 0), r = rnd() * tot, pick = 'yard'; for (const o of opts) { r -= o[1]; if (r <= 0) { pick = o[0]; break; } }
+  if (pick === 'wall') { const s = SITE.slots[Math.min(S.wallLaid, SITE.total - 1)]; fPush(fWalkPlan(s[0] + rr(-1, 1), s[2] + 1.4, 'out to the new wall')); const n = Math.floor(rr(2, 6));
+    for (let i = 0; i < n; i++) { fPush({ t: 'lay', note: 'laying stone on the new wall' }); if (rnd() < 0.5) fPush({ t: 'lean', dur: rr(60, 240), note: 'leaning on the wall, looking at the flock' }); fPush({ t: 'stand', dur: rr(120, 400), note: 'working at the wall' }); } }
+  if (pick === 'look') { const f = FIELDS.find(q => q.id === fa) || FIELDS[0]; const p = randIn(fa === 'out' ? 'field.home' : fa, 3, flockC(), 14); fPush(fWalkPlan(p[0], p[1], 'walking out among the ewes')); fPush({ t: 'stand', dur: rr(90, 300), look: flockC(), note: 'looking over the flock' }); }
+  if (pick === 'yard') { const p = randIn('yard', 1.5); fPush(fWalkPlan(p[0], p[1], 'about the yard')); fPush({ t: 'stand', dur: rr(120, 480), note: 'about the yard' }); }
+  if (pick === 'tea') goIn(rr(900, 2700), 'in for his tea');
+  if (pick === 'away') { M.away = true; fPush(fWalkPlan(LANE_END[0] * 0.3 + 3, 14, 'heading off down the lane')); fPush({ t: 'walk', to: LANE_END, note: 'heading off down the lane', thru: true }, { t: 'log', text: 'the farmer went off down the lane' }, { t: 'away', dur: rr(1800, 5400) }, { t: 'walk', to: [LANE_END[0] * 0.3 + 3, 14], note: 'back up the lane', thru: true }); }
+  // now and then, when the dog has strayed, a low whistle brings him over
+  if (rnd() < 0.3 && F.visible) fPush({ t: 'whistle', note: 'whistling Bernard over' });
+}
+function dayTick() { const d = new Date(simMs).toLocaleDateString('en-GB', { timeZone: 'Europe/Dublin' }); if (S.lastDay !== d) { if (S.lastDay) S.days++; S.lastDay = d; S.moved = {}; S.workedToday = 0; } }
+
+/* ---------- FARM: the world as it is when you arrive (it was running before you came) */
+function settle() {
+  const h = galwayParts(simMs).hour, sEl = SUNM.sun.el / D2R, night = sEl < -3; dayTick();
+  if (S.flockPos && S.flockPos.length === flock.length) { flock.forEach((e, i) => { e.x = S.flockPos[i][0]; e.z = S.flockPos[i][1]; e.heading = rnd() * TAU; }); }
+  else { const area = night ? 'fold' : (S.flockAt || (h > 8 && h < 18 ? bestField() : 'fold')); placeFlock(area); S.flockAt = area; if (!night && area !== 'fold') S.moved.am = true; }
+  flock.forEach(e => { e.inArea = areaAt(e.x, e.z); if (night) { e.lie = 1; e.lieT = 1; } });
+  const fa = flockArea(); S.flockAt = fa;
+  if (night || WX.precip > 2.2) { farmer.visible = false; farmer.inside = true; farmer.pos.set(HOUSE_DOOR[0], 0, HOUSE_DOOR[1]); farmer.cur = { t: 'in', dur: rr(300, 1500) };
+    if (night) { dogPlace(BED[0], BED[1], rnd() * TAU); dog.down = 1; dogSet('sleep', 0, 'asleep in the byre'); } else { dogPlace(HOUSE_DOOR[0] + 1.5, HOUSE_DOOR[1] + 1, 0.5); dogSet('doorstep', 600, 'lying at the farmhouse door'); } }
+  else { const atWall = S.wallLaid < SITE.total && rnd() < 0.6; let p;
+    if (atWall) { const s = SITE.slots[S.wallLaid]; p = [s[0], s[2] + 1.4]; farmer.cur = { t: 'stand', dur: rr(30, 200) }; farmer.note = 'working at the wall'; }
+    else { p = randIn(fa === 'out' || fa === 'fold' ? 'yard' : fa, 3); farmer.cur = { t: 'stand', dur: rr(30, 200), look: flockC() }; farmer.note = 'looking over the flock'; }
+    farmer.pos.set(p[0], 0, p[1]); farmer.visible = true; farmer.inside = false; farmer.heading = rnd() * TAU;
+    const a = rnd() * TAU; dogPlace(p[0] + Math.cos(a) * 6, p[1] + Math.sin(a) * 6, a + Math.PI); dog.down = 1; dogSet('watch', rr(200, 600), 'lying down, watching the flock'); dog.goal = [dog.pos.x, dog.pos.z]; }
+  farmer.pos.y = groundAt(farmer.pos.x, farmer.pos.z);
+}

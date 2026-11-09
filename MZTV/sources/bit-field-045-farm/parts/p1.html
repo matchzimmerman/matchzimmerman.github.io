@@ -1,0 +1,196 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MZ World Farm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* MZ WORLD · FARM — a working farm above Galway Bay, printed; the info box is printed in the current inks */
+:root { --ink:#1b1f3a; --paper:#efe6cf; --hot:#f0603f; --deep:#2c3e7a; --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark }
+html, body { height:100%; margin:0; background:var(--ink); overflow:hidden }
+canvas { display:block; width:100%; height:100% }
+#hud { position:fixed; left:calc(20px + env(safe-area-inset-left,0px)); bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:min(480px, calc(100vw - 40px)); box-sizing:border-box; padding:11px 13px 10px; font:400 11px/1.5 var(--mono);
+  color:var(--ink); background:color-mix(in srgb, var(--paper) 90%, transparent); border:2px solid var(--ink);
+  letter-spacing:.01em; font-variant-numeric:tabular-nums; pointer-events:none }
+#hud b { font-weight:600 }
+#hud .t { display:flex; justify-content:space-between; gap:12px; font-weight:600; letter-spacing:.08em; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:6px }
+#hud .r { display:grid; grid-template-columns:1fr auto; gap:0 10px }
+#hud .r span:last-child { color:var(--deep); text-align:right }
+#hud .ev { color:var(--hot); font-weight:600 }
+#hud .log { margin-top:6px; padding-top:5px; border-top:1px dashed var(--ink); min-height:3em }
+#hud .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#hud .cr { margin-top:6px; font-size:10px; letter-spacing:.06em; opacity:.8 }
+#tap { position:fixed; right:calc(20px + env(safe-area-inset-right,0px)); top:calc(20px + env(safe-area-inset-top,0px)); font:600 11px/1 var(--mono);
+  color:var(--ink); background:var(--paper); border:2px solid var(--ink); padding:8px 10px; letter-spacing:.08em; cursor:pointer }
+</style>
+
+<div id="hud" hidden></div>
+<button id="tap" type="button" hidden>CLICK FOR SOUND</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ====================================================================== params */
+const Q = new URLSearchParams(location.search);
+const CAPTURE = Q.get('capture') === '1';
+const RATE = Math.max(0.01, +(Q.get('rate') || 1));
+const LINES = +(Q.get('lines') || 720);
+let INFO = Q.get('info') !== '0';
+const AUDIO_WANTED = Q.get('audio') !== '0';
+const SEED = +(Q.get('seed') || 1);
+const LIVE_WX = Q.get('live') !== '0';
+const KEY = 'mzworld-farm-v1' + (Q.has('seed') ? '-s' + SEED : '');
+if (Q.get('fresh') === '1') { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+const LAT = 53.2442, LON = -9.4042;        // the SHEEPDOG farmstead anchor (user-selected site), above Galway Bay
+const TAU = Math.PI * 2, D2R = Math.PI / 180;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const wrapA = (a) => ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+function mulberry(s) { return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry(SEED * 7919 + (Date.now() % 100000));
+const rr = (a, b) => a + (b - a) * rnd();
+const wrnd = mulberry(4501);                 // the place is the same for every seed
+const wr = (a, b) => a + (b - a) * wrnd();
+
+/* ====================================================================== clock */
+const dublin = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Dublin', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+function galwayParts(ms) { const s = dublin.format(new Date(ms)); const [h, m, sec] = s.split(':').map(Number); return { h, m, sec, str: s, hour: h + m / 60 + sec / 3600 }; }
+let simMs = Date.now();
+if (Q.has('hour')) { const want = +Q.get('hour'); const cur = galwayParts(simMs).hour; simMs += (((want - cur) % 24 + 24) % 24) * 3600e3; }
+if (Q.has('ff')) simMs += (+Q.get('ff')) * 60e3;
+let simT = 0;
+
+/* ====================================================================== noise + terrain (fixed salt so the place is the same for every seed) */
+function hash2(x, y) { let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + 104729; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+function fbm(x, y) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 4; i++) { s += a * vnoise(x * f, y * f); f *= 2.03; a *= 0.5; } return s; }
+
+/* ====================================================================== FARM: the world model (generated by tools/build_model.py from farm.world.json; do not hand-edit) */
+const FM = /*<FARM_MODEL>*/{}/*</FARM_MODEL>*/;
+// authoritative layer: EU-DEM 25 m samples (measured), bilinear. Everything finer is artistic and stated as such.
+const DEM = FM.dem;
+function demH(x, z) {
+  const fr = (x - DEM.origin_local_xz[0]) / DEM.step_m, fc = (z - DEM.origin_local_xz[1]) / DEM.step_m;
+  const r = clamp(fr, 0, DEM.rows - 1.0001), c = clamp(fc, 0, DEM.cols - 1.0001);
+  const r0 = Math.floor(r), c0 = Math.floor(c), tr = r - r0, tc = c - c0, S = DEM.samples_m, C = DEM.cols;
+  const h = lerp(lerp(S[r0 * C + c0], S[r0 * C + c0 + 1], tc), lerp(S[(r0 + 1) * C + c0], S[(r0 + 1) * C + c0 + 1], tc), tr);
+  // beyond the sampled grid: continue the regional slope (about 3.6 m per 100 m, rising north) - estimated, not measured
+  return h + 0.036 * (fr < 0 ? fr * DEM.step_m : fr > DEM.rows - 1 ? (fr - DEM.rows + 1) * DEM.step_m : 0);
+}
+const SHORE_X = FM.props && FM.props.shore ? FM.props.shore.at_x : -750;   // estimated shore (see farm.world.json)
+const shoreX = (z) => SHORE_X + 30 * (fbm(z * 0.004, 7.1) - 0.5) + 14 * Math.sin(z * 0.0021);
+const pip = (x, z, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j];
+  if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
+const segD = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1; const t = clamp(((px - ax) * dx + (pz - az) * dz) / L2, 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); };
+const PADS = [];   // levelled ground around buildings: [x, z, r, y]
+function terrainH(x, z) {
+  let h = demH(x, z);
+  h += 0.55 * (fbm(x * 0.031 + 3, z * 0.031) - 0.5) + 0.16 * (vnoise(x * 0.23, z * 0.23) - 0.5);   // artistic micro-relief
+  for (const p of PADS) { const d = Math.hypot(x - p[0], z - p[1]); if (d < p[2] + 6) h = lerp(h, p[3], 1 - smoothstep(p[2], p[2] + 6, d)); }
+  const s = shoreX(z); if (x < s + 140) { const k = smoothstep(s + 140, s - 10, x); h = lerp(h, Math.min(h, -4 - 0.01 * (s - x)), k); }   // down to the bay
+  return h;
+}
+
+/* ====================================================================== sun + moon */
+function sunMoon(ms) {
+  const d = ms / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * D2R, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, e = (23.439 - 0.00000036 * d) * D2R;
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const lst = (gmst * 15 + LON) * D2R, la = LAT * D2R;
+  const place = (lon, lat) => {
+    const ra = Math.atan2(Math.cos(e) * Math.sin(lon) - Math.tan(lat) * Math.sin(e), Math.cos(lon));
+    const dec = Math.asin(Math.sin(lat) * Math.cos(e) + Math.cos(lat) * Math.sin(e) * Math.sin(lon));
+    const ha = lst - ra;
+    const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+    const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+    return { el, az };
+  };
+  const sun = place(L, 0);
+  const Lm = (218.316 + 13.176396 * d) * D2R, Mm = (134.963 + 13.064993 * d) * D2R, F = (93.272 + 13.229350 * d) * D2R;
+  const mlon = Lm + 6.289 * D2R * Math.sin(Mm), mlat = 5.128 * D2R * Math.sin(F);
+  const moon = place(mlon, mlat);
+  const phase = ((mlon - L) % TAU + TAU) % TAU;
+  return { sun, moon, illum: 0.5 * (1 - Math.cos(phase)) };
+}
+// world axes (as HEADLAND and INVERIN): +x north, +z east, y up; the bay is to the south (-x)
+const azElToVec = (az, el) => V(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
+const fromBearingTravel = (deg) => { const b = deg * D2R; return new THREE.Vector2(-Math.cos(b), -Math.sin(b)); };
+const compass = (deg) => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+
+/* ====================================================================== palettes (6 inks: INK DEEP SEA HOT GLOW PAPER) */
+// Relational intent (v1.2 rule 3/13): the field is the mid mass (DEEP/SEA with GLOW where the grass is long and lit);
+// grazed and trodden ground goes lighter and stippled; the lace walls carry the darkest line rhythm (INK against PAPER);
+// fleece is the light mass that moves; Bernard is the one black-and-white figure; HOT is held back for the raddle mark,
+// the farmhouse door and a low sun. Shared names keep HEADLAND's canonical inks.
+const COLORWAYS = [
+  { name: 'ATLANTIC PRINT', c: ['#1b1f3a', '#2c3e7a', '#3f9aa6', '#f0603f', '#f2c14e', '#efe6cf'] },
+  { name: 'RADDLE',         c: ['#2a1418', '#3d4f6e', '#8fae8b', '#e8542e', '#e9c46a', '#f4ecdc'] },   // oxblood ink, slate deep, sage field against raddle orange and straw
+  { name: 'SIGNAL FLARE',   c: ['#24123a', '#5b3fd1', '#6fd3c1', '#ff7a8a', '#ffd24a', '#fbf3e4'] },
+  { name: 'FUCHSIA',        c: ['#1c1530', '#22524a', '#7cc0a4', '#e0337a', '#f2b84b', '#f7eee6'] },   // the Connemara hedge: bottle green against magenta
+  { name: 'PISTACHIO NIGHT',c: ['#10202b', '#1f4a6e', '#b6d97a', '#ff5a7a', '#f9e7b0', '#eef4ea'] },
+  { name: 'TURF SMOKE',     c: ['#191d22', '#4e4339', '#7f9aa6', '#c95b3a', '#cdb98a', '#e9e6dc'] },   // peat brown deep, smoke-blue field, ember hot
+  { name: 'ULTRAMARINE',    c: ['#0c1440', '#1f3bb3', '#44b8e8', '#ff6a1a', '#ffd0a1', '#fff7ec'] },
+  { name: 'LICHEN',         c: ['#22261d', '#4b5b3a', '#a7c5a0', '#d9475b', '#e8d27c', '#f3eedf'] },
+];
+const hexV = (h) => { const n = parseInt(h.slice(1), 16); return V(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+// material ids → [dark, mid, light] ink roles, hatch strength, speckle
+const INK = 0, DEEP = 1, SEA = 2, HOT = 3, GLOW = 4, PAPER = 5;
+const MAT = [
+  /* 0 sky    */ [DEEP, HOT, PAPER, 0.9, 1],  /* 1 sun    */ [HOT, GLOW, PAPER, 1.0, 0],  /* 2 sea    */ [INK, DEEP, SEA, 1.0, 0],
+  /* 3 fleece */ [DEEP, PAPER, PAPER, 0.85, 0], /* 4 stone  */ [INK, DEEP, SEA, 1.0, 0],  /* 5 grass  */ [DEEP, SEA, GLOW, 0.95, 0],
+  /* 6 wood   */ [INK, DEEP, GLOW, 1.0, 0],   /* 7 dark   */ [INK, INK, DEEP, 0.3, 0],    /* 8 coat   */ [INK, DEEP, SEA, 1.0, 0],
+  /* 9 white  */ [DEEP, PAPER, PAPER, 0.5, 0],  /*10 iron   */ [INK, SEA, PAPER, 1.0, 0],   /*11 grazed */ [DEEP, SEA, PAPER, 0.55, 1],
+  /*12 lane   */ [DEEP, GLOW, PAPER, 0.8, 0],   /*13 cloud  */ [SEA, PAPER, PAPER, 0.8, 0], /*14 moon   */ [DEEP, SEA, PAPER, 0.8, 0],
+  /*15 lamp   */ [GLOW, GLOW, PAPER, 0.0, 0],
+];
+
+/* ====================================================================== persistent state (memory) */
+const GW = 128, GH = 104, GB = { x0: -100, z0: -175, sx: 320, sz: 260 };   // grazing + tread maps over the fields (2.5 m cells)
+const DEF = () => ({
+  v: 1, born: Date.now(), epoch: 1, epochStart: 0, epochLen: rr(50, 95) * 60, tension: 0, colorway: 0, cwVisits: [1, 0, 0, 0, 0, 0, 0, 0],
+  grammar: { period: 7.0, dith: 0.12, wob: 8, outline: 1, hatch: 1.0, angBias: 0 }, center: 38,
+  uncanny: { next: rr(4, 9) * 60, counts: {}, last: {}, mem: {} }, log: [], runSec: 0,
+  grass: null, tread: null, wallLaid: 96, days: 0, lastDay: null, exp: 0.35, ewe: { breaks: 0, sides: [] },
+  flockAt: null, workedToday: 0, lastMs: Date.now(),
+});
+let S = DEF();
+try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && o.v === 1) S = Object.assign(DEF(), o); } } catch (e) {}
+const T0 = S.runSec || 0; simT = T0;
+const b64 = { enc(a) { let s = ''; for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s); }, dec(s, n) { const out = new Uint8Array(n); try { const b = atob(s); for (let i = 0; i < Math.min(n, b.length); i++) out[i] = b.charCodeAt(i); } catch (e) {} return out; } };
+const GRASS = S.grass ? b64.dec(S.grass, GW * GH) : new Uint8Array(GW * GH).fill(0);
+const TREAD = S.tread ? b64.dec(S.tread, GW * GH) : new Uint8Array(GW * GH);
+function save() { try { S.runSec = simT; S.lastMs = simMs; S.grass = b64.enc(GRASS); S.tread = b64.enc(TREAD); localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function logEv(text) { S.log.unshift({ t: galwayParts(simMs).str, text }); if (S.log.length > 40) S.log.length = 40; }
+if (!S.log.length) logEv('the farm woke for the first time');
+else logEv('the farm resumed (epoch ' + S.epoch + ')');
+
+/* ====================================================================== renderer + targets */
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: CAPTURE });
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.autoClear = true;
+document.body.prepend(renderer.domElement);
+let W = 2, H = 2, IW = 2, IH = 2;
+const rtData = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, generateMipmaps: false });
+const rtPrint = new THREE.WebGLRenderTarget(2, 2, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, generateMipmaps: false });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.08, 40000);
+function resize() {
+  W = innerWidth; H = innerHeight; renderer.setSize(W, H, false);
+  IH = Math.min(LINES, H); IW = Math.round(IH * W / H);
+  rtData.setSize(IW, IH); rtPrint.setSize(IW, IH);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  PU.uRes.value.set(IW, IH);
+}

@@ -1,0 +1,210 @@
+
+/* ====================================================================== FARM: bodies (Bernard, the farmer, the ewes) */
+const UNIT = new THREE.SphereGeometry(0.5, 14, 9); withT(UNIT, V(1, 0, 0));
+const capGeo = (r, l) => withT(new THREE.CapsuleGeometry(r, l, 3, 9), V(0, 1, 0));
+const _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _s = V(1, 1, 1), _Y = V(0, 1, 0);
+function partMesh(geo, mat) { const m = new THREE.Mesh(geo, mat); m.matrixAutoUpdate = false; m.frustumCulled = false; scene.add(m); return m; }
+function seg(m, a, b, len) { const d = b.clone().sub(a); const l = d.length(); if (l < 1e-5) return; _q.setFromUnitVectors(_Y, d.divideScalar(l)); _s.set(1, len ? l / len : 1, 1); m.matrix.compose(a.clone().add(b).multiplyScalar(0.5), _q, _s); m.matrixWorldNeedsUpdate = true; }
+function place(m, basisM, origin, local, size) { const p = local.clone().applyMatrix4(basisM).add(origin); _q.setFromRotationMatrix(basisM); _s.copy(size); m.matrix.compose(p, _q, _s); m.matrixWorldNeedsUpdate = true; }
+function ik(a, target, l1, l2, pole) { const d = target.clone().sub(a); const dist = clamp(d.length(), Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.001); const dir = d.normalize();
+  const x = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist), h = Math.sqrt(Math.max(l1 * l1 - x * x, 0)); const p = pole.clone().sub(dir.clone().multiplyScalar(pole.dot(dir)));
+  if (p.lengthSq() < 1e-8) p.copy(_Y).cross(dir); return a.clone().add(dir.multiplyScalar(x)).add(p.normalize().multiplyScalar(h)); }
+const xzD = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const segX = (ax, az, bx, bz, cx, cz, dx, dz) => { const d1 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d2 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax), d3 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx), d4 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx); return d1 * d2 < 0 && d3 * d4 < 0; };
+function pushOut(x, z, r, segs) { for (const s of segs) { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1; const t = clamp(((x - s[0]) * dx + (z - s[1]) * dz) / L2, 0, 1);
+    const cx = s[0] + dx * t, cz = s[1] + dz * t, ex = x - cx, ez = z - cz, l = Math.hypot(ex, ez); if (l < r && l > 1e-5) { x = cx + ex / l * r; z = cz + ez / l * r; } } return [x, z]; }
+function pushBox(x, z, r, skip) { for (const b of BLD) { if (b.tag === 'ruins' || b === skip) continue; const o = b.o, c = Math.cos(o.ang), s = Math.sin(o.ang), dx = x - o.cx, dz = z - o.cz;
+    const u = dx * c + dz * s, v = -dx * s + dz * c, hu = o.L / 2 + r, hv = o.Wd / 2 + r; if (Math.abs(u) >= hu || Math.abs(v) >= hv) continue;
+    let nu = u, nv = v; if (hu - Math.abs(u) < hv - Math.abs(v)) nu = Math.sign(u || 1) * hu; else nv = Math.sign(v || 1) * hv; x = o.cx + nu * c - nv * s; z = o.cz + nu * s + nv * c; } return [x, z]; }
+function pushCirc(x, z, r, skip) { [x, z] = pushBox(x, z, r, skip); for (const o of OBST) { if (o[3]) continue; const dx = x - o[0], dz = z - o[1], l = Math.hypot(dx, dz), m = o[2] + r; if (l < m && l > 1e-5) { x = o[0] + dx / l * m; z = o[1] + dz / l * m; } } return [x, z]; }
+const groundAt = (x, z) => terrainH(x, z);
+
+/* ---------- Bernard: a procedural border collie (ported from the SHEEPDOG Godot test, with its head and tail fixes) */
+const DOGM = { black: objMat(7, 3, V(1, 0, 0)), white: objMat(9, 3, V(1, 0, 0)), dark: objMat(7, 0), eye: objMat(7, 0) };
+const C_ = { F_UP: 0.19, F_LO: 0.20, F_PAS: 0.075, H_UP: 0.21, H_LO: 0.23, H_MET: 0.13, BODY_HALF: 0.23, SHO_H: 0.47, HIP_H: 0.525, SHO_W: 0.068, HIP_W: 0.078, TAIL_SEG: 0.062 };
+const GAITS = {
+  stand: { off: [0.25, 0.75, 0.0, 0.5], duty: 0.86, f0: 1.8, fk: 0, arc: 0.05 }, walk: { off: [0.25, 0.75, 0.0, 0.5], duty: 0.63, f0: 0.85, fk: 0.55, arc: 0.055 },
+  trot: { off: [0.0, 0.5, 0.5, 0.0], duty: 0.46, f0: 1.45, fk: 0.28, arc: 0.075 }, canter: { off: [0.6, 0.3, 0.3, 0.0], duty: 0.40, f0: 1.9, fk: 0.12, arc: 0.09 },
+  gallop: { off: [0.52, 0.42, 0.0, 0.1], duty: 0.30, f0: 2.3, fk: 0.09, arc: 0.11 } };
+const dog = { pos: V(), heading: 0, speed: 0, yawRate: 0, vel: V(), gait: 'stand', phase: 0, duty: 0.86, crouch: 0, down: 0, wag: 0, gallop: 0, t: 0,
+  want: V(), look: V(), hasLook: false, crouchT: 0, downT: 0, wagT: 0, hop: 0, hopY: 0, steps: 0, legs: [], tail: [], tailL: [], headL: null, headQ: new THREE.Quaternion(), headP: V(), body: new THREE.Matrix4(), bodyO: V(), hl: 0.23 };
+const fwdOf = (h) => V(Math.cos(h), 0, Math.sin(h)), sideOf = (h) => V(-Math.sin(h), 0, Math.cos(h));
+{ const P = {}; for (const k of ['chest', 'brisket', 'under', 'loin', 'hips', 'back', 'flank']) P[k] = partMesh(UNIT, ['brisket', 'under'].includes(k) ? DOGM.white : DOGM.black);
+  P.neck = partMesh(capGeo(0.06, 0.2), DOGM.black); P.collar = partMesh(capGeo(0.064, 0.06), DOGM.white);
+  for (const k of ['skull', 'blaze', 'cheek', 'nose', 'eyeL', 'eyeR']) P[k] = partMesh(UNIT, ['blaze', 'cheek'].includes(k) ? DOGM.white : k === 'nose' ? DOGM.dark : k.startsWith('eye') ? DOGM.eye : DOGM.black);
+  P.muzzle = partMesh(capGeo(0.03, 0.1), DOGM.white); for (const k of ['earL', 'earR']) { P[k] = partMesh(capGeo(0.021, 0.06), DOGM.black); P[k + 't'] = partMesh(capGeo(0.016, 0.03), DOGM.black); }
+  dog.P = P;
+  for (let i = 0; i < 4; i++) { const front = i < 2; dog.legs.push({ front, s: i % 2 === 0 ? 1 : -1, off: 0, stance: true, foot: V(), lift: V(), land: V(),
+      up: partMesh(capGeo(front ? 0.042 : 0.047, front ? C_.F_UP : C_.H_UP), DOGM.black), lo: partMesh(capGeo(front ? 0.027 : 0.034, front ? C_.F_LO : C_.H_LO), front ? DOGM.white : DOGM.black),
+      pas: partMesh(capGeo(front ? 0.023 : 0.024, front ? C_.F_PAS : C_.H_MET), DOGM.white), paw: partMesh(UNIT, DOGM.white), j1: partMesh(UNIT, DOGM.black), j2: partMesh(UNIT, front ? DOGM.white : DOGM.black) }); }
+  [0.034, 0.039, 0.041, 0.039, 0.034, 0.028, 0.021].forEach((r, i) => { dog.tail.push(partMesh(capGeo(r, C_.TAIL_SEG), i >= 5 ? DOGM.white : DOGM.black)); dog.tailL.push(null); }); }
+function anchor(i, half) { const L = dog.legs[i], f = fwdOf(dog.heading), sd = sideOf(dog.heading);
+  const a = dog.pos.clone().addScaledVector(f, L.front ? half + 0.015 : -half).addScaledVector(sd, L.s * (L.front ? C_.SHO_W : C_.HIP_W) * (1 + dog.crouch * 0.25)); a.y = groundAt(a.x, a.z); return a; }
+function dogPlace(x, z, yaw) { dog.pos.set(x, groundAt(x, z), z); dog.heading = yaw; dog.speed = 0; dog.want.set(0, 0, 0); for (let i = 0; i < 4; i++) { const a = anchor(i, C_.BODY_HALF); const L = dog.legs[i]; L.foot.copy(a); L.lift.copy(a); L.land.copy(a); L.stance = true; L.off = GAITS.stand.off[i]; }
+  dog.headL = null; dog.tailL.fill(null); }
+function dogLocomote(dt) {
+  dog.crouch = moveT(dog.crouch, dog.crouchT, dt * 2.4); dog.down = moveT(dog.down, dog.downT, dt * (dog.downT > dog.down ? 5.5 : 2.0)); dog.wag = moveT(dog.wag, dog.wagT, dt * 2.0);
+  let want = Math.hypot(dog.want.x, dog.want.z); if (dog.down > 0.25 || dog.downT > 0.5) want = 0; want = Math.min(want, lerp(9.0, 1.2, dog.crouch));
+  dog.speed = moveT(dog.speed, want, (want > dog.speed ? 13 : 18) * dt);
+  let ty = dog.heading; if (want > 0.05) ty = Math.atan2(dog.want.z, dog.want.x); else if (dog.hasLook) { const lx = dog.look.x - dog.pos.x, lz = dog.look.z - dog.pos.z; if (Math.hypot(lx, lz) > 0.6) ty = Math.atan2(lz, lx); }
+  const dy = wrapA(ty - dog.heading); let maxY = clamp(11 / Math.max(dog.speed, 0.1), 0.7, 5.0); if (dog.down > 0.5) maxY = 0.4;
+  if (Math.abs(dy) > 1.9 && dog.speed > 3) dog.speed = moveT(dog.speed, 2.2, 22 * dt);
+  const st = clamp(dy, -maxY * dt, maxY * dt); dog.yawRate = lerp(dog.yawRate, st / Math.max(dt, 1e-4), 1 - Math.exp(-dt * 10)); dog.heading = wrapA(dog.heading + st);
+  dog.vel.copy(fwdOf(dog.heading)).multiplyScalar(dog.speed);
+  let nx = dog.pos.x + dog.vel.x * dt, nz = dog.pos.z + dog.vel.z * dt;
+  if (dog.hop <= 0 && dog.speed > 0.4) for (const s of WSEG) if (segX(dog.pos.x, dog.pos.z, nx + dog.vel.x * 0.12, nz + dog.vel.z * 0.12, ...s) && !gateCut((dog.pos.x + nx) / 2, (dog.pos.z + nz) / 2)) { dog.hop = 0.5; break; }
+  if (dog.hop > 0) { dog.hop -= dt; dog.hopY = Math.max(0, Math.sin(Math.PI * (1 - dog.hop / 0.5))) * 1.05; if (dog.hop <= 0) dog.hopY = 0; }
+  else if (dog.speed < 0.4) [nx, nz] = pushOut(nx, nz, 0.3, WSEG);
+  if (!dog.ghost) [nx, nz] = pushCirc(nx, nz, 0.3);
+  if (!isFinite(nx) || !isFinite(nz)) { nx = 8; nz = -6; }
+  dog.pos.set(nx, groundAt(nx, nz), nz);
+}
+const moveT = (a, b, d) => a < b ? Math.min(b, a + d) : Math.max(b, a - d);
+function dogGait(dt) {
+  const v = dog.speed; let g = dog.gait;
+  if (g === 'stand') { if (v > 0.12) g = 'walk'; } else if (g === 'walk') { if (v < 0.06) g = 'stand'; else if (v > 1.75) g = 'trot'; }
+  else if (g === 'trot') { if (v < 1.45) g = 'walk'; else if (v > 3.9) g = 'canter'; } else if (g === 'canter') { if (v < 3.5) g = 'trot'; else if (v > 5.8) g = 'gallop'; } else if (v < 5.3) g = 'canter';
+  if (dog.down > 0.4) g = 'stand'; dog.gait = g; const G = GAITS[g];
+  dog.duty = lerp(dog.duty, G.duty, 1 - Math.exp(-dt * 6));
+  for (let i = 0; i < 4; i++) { const d = wrapA((G.off[i] - dog.legs[i].off) * TAU) / TAU; dog.legs[i].off = ((dog.legs[i].off + d * Math.min(1, dt * 7)) % 1 + 1) % 1; }
+  let f = G.f0 + G.fk * v; if (v > 0.01) f = Math.max(f, v * dog.duty / 0.62);
+  const half = C_.BODY_HALF + dog.gallop * 0.045 * Math.sin(TAU * dog.phase + 0.6); const A = [0, 1, 2, 3].map(i => anchor(i, half));
+  if (g === 'stand') { let need = false, all = true; for (let i = 0; i < 4; i++) { if (!dog.legs[i].stance) all = false; else if (xzD(dog.legs[i].foot, A[i]) > 0.055) need = true; } f = (need || !all) ? 1.9 : 0; }
+  dog.phase = ((dog.phase + f * dt) % 1 + 1) % 1; const invF = 1 / Math.max(f, 0.001);
+  for (let i = 0; i < 4; i++) { const L = dog.legs[i]; const p = ((dog.phase + L.off) % 1 + 1) % 1; const inSt = p < dog.duty;
+    if (dog.hop > 0) { L.foot.copy(A[i]).add(V(0, dog.hopY * 0.8, 0)); L.stance = false; L.lift.copy(L.foot); continue; }
+    if (inSt && !L.stance) { L.stance = true; L.foot.copy(L.land); dog.steps++; } else if (!inSt && L.stance) { L.stance = false; L.lift.copy(L.foot); }
+    if (L.stance) { if (xzD(L.foot, A[i]) > 0.62) L.foot.lerp(A[i], 0.3); L.foot.y = groundAt(L.foot.x, L.foot.z); }
+    else { const s = (p - dog.duty) / (1 - dog.duty); const land = A[i].clone(); if (g !== 'stand') land.addScaledVector(dog.vel, (1 - s) * (1 - dog.duty) * invF + 0.5 * dog.duty * invF);
+      land.y = groundAt(land.x, land.z); L.land.copy(land); const e = smoothstep(0, 1, s); L.foot.copy(L.lift).lerp(land, e); L.foot.y = lerp(L.lift.y, land.y, e) + G.arc * (1 - dog.crouch * 0.35) * Math.sin(Math.PI * s); } }
+}
+function dogPose(dt) {
+  const f = fwdOf(dog.heading), sd0 = sideOf(dog.heading), root = dog.pos;
+  dog.gallop = moveT(dog.gallop, dog.gait === 'canter' || dog.gait === 'gallop' ? 1 : 0, dt * 2.5);
+  const w = TAU * dog.phase, half = C_.BODY_HALF + dog.gallop * 0.045 * Math.sin(w + 0.6);
+  const bob = dog.gait === 'walk' ? 0.006 * Math.cos(2 * w) : dog.gait === 'trot' ? 0.014 * Math.cos(2 * w) : dog.gait === 'stand' ? 0 : 0.03 * Math.sin(w);
+  const dn = smoothstep(0, 1, dog.down); const shoH = C_.SHO_H * (1 - 0.30 * dog.crouch) * (1 - 0.60 * dn), hipH = C_.HIP_H * (1 - 0.17 * dog.crouch) * (1 - 0.68 * dn);
+  const Sp = root.clone().addScaledVector(f, half); Sp.y = groundAt(Sp.x, Sp.z) + shoH + bob + dog.gallop * 0.035 * Math.sin(w + 1.2) + dog.hopY;
+  const Hp = root.clone().addScaledVector(f, -half); Hp.y = groundAt(Hp.x, Hp.z) + hipH + bob - dog.gallop * 0.035 * Math.sin(w + 1.2) + dog.hopY * 0.9;
+  const roll = clamp(dog.yawRate * dog.speed * 0.035, -0.32, 0.32); const fb = Sp.clone().sub(Hp).normalize();
+  const up = _Y.clone().sub(fb.clone().multiplyScalar(fb.y)).normalize().applyAxisAngle(fb, roll); const sd = fb.clone().cross(up);
+  const B = new THREE.Matrix4().makeBasis(fb, up, sd); const O = Sp.clone().add(Hp).multiplyScalar(0.5); dog.body.copy(B); dog.bodyO.copy(O);
+  const hl = Sp.distanceTo(Hp) * 0.5; dog.hl = hl; const arch = dog.gallop * 0.02 * Math.sin(w + 2); const P = dog.P; const L3 = (x, y, z) => V(x, y, z);
+  const BW = (v) => v.clone().applyMatrix4(B).add(O);
+  place(P.chest, B, O, L3(hl * 0.6, -0.035, 0), L3(0.35, 0.27, 0.22)); place(P.brisket, B, O, L3(hl * 1.06, -0.065, 0), L3(0.14, 0.21, 0.17)); place(P.under, B, O, L3(hl * 0.45, -0.125, 0), L3(0.2, 0.07, 0.14));
+  place(P.loin, B, O, L3(-hl * 0.15, 0.012 + arch, 0), L3(0.4, 0.18, 0.17)); place(P.hips, B, O, L3(-hl * 0.74, 0.04, 0), L3(0.27, 0.155, 0.15)); place(P.back, B, O, L3(0, 0.075 + arch, 0), L3(0.62, 0.11, 0.15));
+  place(P.flank, B, O, L3(hl * 0.25, -0.02, 0), L3(0.32, 0.18, 0.18));
+  for (let i = 0; i < 4; i++) { const L = dog.legs[i], A = anchor(i, half); let foot = L.foot.clone();
+    if (dn > 0.001) { const tg = A.clone().addScaledVector(f, L.front ? 0.3 : 0.15).addScaledVector(sd0, L.s * (L.front ? 0 : 0.07)); tg.y = groundAt(tg.x, tg.z); foot.lerp(tg, dn); }
+    const paw = foot.clone().add(V(0, 0.022, 0)); let rj, mj, lt;
+    if (L.front) { rj = BW(L3(hl, -0.035, L.s * C_.SHO_W)); lt = paw.clone().add(V(0, C_.F_PAS * (1 - 0.65 * dn), 0)).addScaledVector(f, 0.012 + 0.05 * dn);
+      mj = ik(rj, lt, C_.F_UP, C_.F_LO, fb.clone().negate().addScaledVector(sd, L.s * 0.15)); seg(L.up, rj, mj); seg(L.lo, mj, mj.clone().add(lt.clone().sub(mj).normalize().multiplyScalar(C_.F_LO))); }
+    else { rj = BW(L3(-hl, 0, L.s * C_.HIP_W)); lt = paw.clone().add(V(0, C_.H_MET * (0.95 - 0.55 * dn), 0)).addScaledVector(f, -(0.045 - 0.02 * dn));
+      mj = ik(rj, lt, C_.H_UP, C_.H_LO, fb.clone().addScaledVector(sd, L.s * 0.2)); seg(L.up, rj, mj); seg(L.lo, mj, mj.clone().add(lt.clone().sub(mj).normalize().multiplyScalar(C_.H_LO))); }
+    seg(L.pas, lt, paw); const I = new THREE.Matrix4(); const jr = L.front ? 0.04 : 0.036;
+    place(L.j1, I, mj, V(), V(jr * 2, jr * 2, jr * 2)); place(L.j2, I, lt, V(), L.front ? V(0.05, 0.05, 0.05) : V(0.055, 0.055, 0.055));
+    place(L.paw, new THREE.Matrix4().makeBasis(f, _Y, sd0), paw.clone().addScaledVector(f, 0.018), V(), V(0.075, 0.042, 0.055)); }
+  // neck and head, smoothed in the body's frame (no lag at speed)
+  const N = BW(L3(hl + 0.07, 0.06 - 0.03 * dog.crouch, 0)); const headLow = clamp(dog.crouch * 0.95 + dog.gallop * 0.3 + dn * 0.15, 0, 1);
+  const want = N.clone().addScaledVector(f, 0.12 + 0.09 * headLow).add(V(0, 0.21 - 0.26 * headLow, 0)); const Binv = B.clone().invert(); const wl = want.clone().sub(O).applyMatrix4(Binv);
+  if (!dog.headL) dog.headL = wl.clone(); dog.headL.lerp(wl, 1 - Math.exp(-dt * 12)); let hp = dog.headL.clone().applyMatrix4(B).add(O); const nv = hp.clone().sub(N); if (nv.length() > 0.3) hp = N.clone().add(nv.setLength(0.3)); dog.headP.copy(hp);
+  let look = f.clone().add(V(0, -(0.12 + 0.3 * headLow), 0));
+  if (dog.hasLook) { const lv = V(dog.look.x, groundAt(dog.look.x, dog.look.z) + dog.look.y + 0.35, dog.look.z).sub(hp); const yaw = dog.heading + clamp(wrapA(Math.atan2(lv.z, lv.x) - dog.heading), -1.15, 1.15); const pitch = clamp(Math.atan2(lv.y, Math.hypot(lv.x, lv.z)), -0.75, 0.35);
+    look = V(Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch)).lerp(look.normalize(), dog.gallop * 0.6); }
+  const hx = look.normalize(), hup = _Y.clone().sub(hx.clone().multiplyScalar(hx.y)).normalize(); const HB = new THREE.Matrix4().makeBasis(hx, hup, hx.clone().cross(hup));
+  dog.headQ.slerp(new THREE.Quaternion().setFromRotationMatrix(HB), 1 - Math.exp(-dt * 11)); const HM = new THREE.Matrix4().makeRotationFromQuaternion(dog.headQ); dog.headM = HM;
+  const HW = (v) => v.clone().applyMatrix4(HM).add(hp);
+  seg(P.neck, N, HW(L3(-0.05, -0.02, 0))); seg(P.collar, N.clone().lerp(hp, 0.18), N.clone().lerp(hp, 0.42));
+  const alert = clamp(1 - dn * 0.4 + dog.crouch * 0.3, 0, 1.2);
+  place(P.skull, HM, hp, V(), L3(0.145, 0.12, 0.125)); place(P.blaze, HM, hp, L3(0.035, 0.05, 0), L3(0.11, 0.028, 0.032)); place(P.cheek, HM, hp, L3(0.07, -0.045, 0), L3(0.09, 0.05, 0.075));
+  seg(P.muzzle, HW(L3(0.06, -0.025, 0)), HW(L3(0.155, -0.04, 0))); place(P.nose, HM, hp, L3(0.188, -0.033, 0), L3(0.034, 0.028, 0.034));
+  place(P.eyeL, HM, hp, L3(0.062, 0.022, 0.041), L3(0.022, 0.022, 0.022)); place(P.eyeR, HM, hp, L3(0.062, 0.022, -0.041), L3(0.022, 0.022, 0.022));
+  for (const [k, s] of [['earL', 1], ['earR', -1]]) { const base = L3(-0.025, 0.05, s * 0.042), tip = L3(-0.005 + 0.025 * dog.crouch, 0.05 + 0.065 * alert, s * (0.062 + 0.015 * (1 - alert)));
+    seg(P[k], HW(base), HW(tip)); seg(P[k + 't'], HW(tip), HW(tip.clone().add(L3(0.03, -0.02, s * 0.006)))); }
+  // tail: a chain in the body's frame; low with an upward sweep, swinging with the stride, steering on turns
+  const low = clamp(dog.crouch + dn * 0.3, 0, 1), ang = lerp(lerp(1.2, 1.42, low), 0.88, dog.gallop), curl = lerp(0.16, 0.06, low) * (1 - dog.gallop * 0.25);
+  const wagA = Math.sin(dog.t * 10.5) * dog.wag * 0.6 + Math.sin(dog.t * 1.3 + 0.7) * 0.07, rud = clamp(-dog.yawRate * 0.3, -0.55, 0.55) * Math.min(dog.speed / 3, 1), trot = clamp(dog.speed / 3, 0, 1) * (1 - dog.gallop);
+  let prev = L3(-hl - 0.09, 0.07, 0); const n = dog.tail.length;
+  for (let i = 0; i < n; i++) { const u = i / n, swing = Math.sin(TAU * dog.phase - i * 0.55) * (0.24 * dog.gallop + 0.08 * trot);
+    const a = ang - curl * i + swing * (0.3 + 0.7 * u), yaw = wagA * (0.35 + 0.65 * u) + rud * u + Math.sin(TAU * dog.phase * 0.5 - i * 0.4) * 0.12 * trot;
+    const dir = V(-Math.cos(a), -Math.sin(a), 0).applyAxisAngle(_Y, yaw); const des = prev.clone().addScaledVector(dir, C_.TAIL_SEG);
+    if (!dog.tailL[i]) dog.tailL[i] = des.clone(); dog.tailL[i].lerp(des, 1 - Math.exp(-dt * (16 - i * 1.4))); dog.tailL[i] = prev.clone().add(dog.tailL[i].clone().sub(prev).setLength(C_.TAIL_SEG));
+    seg(dog.tail[i], BW(prev), BW(dog.tailL[i])); prev = dog.tailL[i]; }
+}
+function dogEye() { const HM = dog.headM || new THREE.Matrix4(); const x = V(1, 0, 0).applyMatrix4(HM), y = V(0, 1, 0).applyMatrix4(HM); return { p: V(0.13, 0.07, 0).applyMatrix4(HM).add(dog.headP), d: x.add(y.multiplyScalar(0.12)).normalize() }; }
+function dogTick(dt) { dog.t += dt; const px = dog.pos.x, pz = dog.pos.z; dogLocomote(dt); dogGait(dt);
+  // stuck against something: give up on that goal
+  const moved = Math.hypot(dog.pos.x - px, dog.pos.z - pz), w = Math.hypot(dog.want.x, dog.want.z); dog.stuckT = (w > 0.5 && moved < w * dt * 0.25) ? (dog.stuckT || 0) + dt : 0; }
+
+/* ---------- the farmer: waxed coat, flat cap, hooked crook; walks, stoops, carries */
+const FMAT = { coat: objMat(8, 7, V(0, 1, 0)), trousers: objMat(7, 3, V(0, 1, 0)), boots: objMat(7, 0), skin: objMat(9, 0), cap: objMat(8, 3, V(1, 0, 0)), wood: objMat(6, 3, V(0, 1, 0)), stone: objMat(4, 1, V(0, 1, 0)) };
+const farmer = { pos: V(), heading: 0, speed: 0, sp: 0, ph: 0, t: 0, stoop: 0, stoopT: 0, carry: 0, carryT: 0, arm: 0, armT: 0, look: V(), hasLook: false, headYaw: 0, visible: true, M: {} };
+{ const M = farmer.M; for (const s of ['L', 'R']) { M['thigh' + s] = partMesh(capGeo(0.078, 0.44), FMAT.trousers); M['shin' + s] = partMesh(capGeo(0.066, 0.44), FMAT.trousers); M['boot' + s] = partMesh(UNIT, FMAT.boots);
+    M['upper' + s] = partMesh(capGeo(0.062, 0.29), FMAT.coat); M['fore' + s] = partMesh(capGeo(0.056, 0.27), FMAT.coat); M['hand' + s] = partMesh(UNIT, FMAT.skin); }
+  M.coat = partMesh(capGeo(0.21, 0.62), FMAT.coat); M.skirt = partMesh(capGeo(0.225, 0.22), FMAT.coat); M.shoulders = partMesh(capGeo(0.1, 0.36), FMAT.coat); M.neck = partMesh(capGeo(0.05, 0.06), FMAT.skin);
+  M.head = partMesh(UNIT, FMAT.skin); M.cap = partMesh(UNIT, FMAT.cap); M.peak = partMesh(UNIT, FMAT.cap); M.staff = partMesh(capGeo(0.018, 1.0), FMAT.wood); M.held = partMesh(stoneGeo, FMAT.stone);
+  M.hook = Array.from({ length: 6 }, () => partMesh(capGeo(0.017, 0.045), FMAT.wood)); }
+function segS(m, a, b, len, r, sx = 1, sz = 1, fwd) { const d = b.clone().sub(a), l = d.length(); if (l < 1e-5) return; const y = d.divideScalar(l); let z = y.clone().cross(fwd); if (z.lengthSq() < 0.0025) z = y.clone().cross(V(0, 0, 1)); z.normalize(); const x = y.clone().cross(z);
+  const R = new THREE.Matrix4().makeBasis(x, y, z); _q.setFromRotationMatrix(R); _s.set(sx, (l + 2 * r) / (len + 2 * r), sz); m.matrix.compose(a.clone().add(b).multiplyScalar(0.5), _q, _s); m.matrixWorldNeedsUpdate = true; }
+function farmerPose(dt) {
+  const F = farmer, M = F.M; F.t += dt; F.sp = lerp(F.sp, F.speed, 1 - Math.exp(-dt * 6)); const walk = clamp(F.sp / 1.1, 0, 1); F.ph = ((F.ph + dt * (0.9 + F.sp * 0.85) * walk) % 1 + 1) % 1;
+  F.stoop = moveT(F.stoop, F.stoopT, dt * 1.3); F.carry = moveT(F.carry, F.carryT, dt * 2.5); F.arm = moveT(F.arm, F.armT, dt * 4);
+  for (const k in M) { const v = M[k]; (Array.isArray(v) ? v : [v]).forEach(m => m.visible = F.visible); } if (!F.visible) return;
+  const f = fwdOf(F.heading), zr = sideOf(F.heading), up = _Y, O = F.pos;
+  const P = (x, y, z) => O.clone().addScaledVector(f, x).add(V(0, y, 0)).addScaledVector(zr, z);
+  const s = Math.sin(TAU * F.ph), c = Math.cos(TAU * F.ph), st = smoothstep(0, 1, F.stoop);
+  const breathe = Math.sin(F.t * 1.6) * 0.006 * (1 - walk), hipY = 0.95 - 0.02 * walk + Math.abs(c) * 0.025 * walk - 0.16 * st, sway = s * 0.02 * walk, lean = 0.04 * walk;
+  for (const [sd, side] of [['L', 1], ['R', -1]]) { const sw = s * side; const hip = P(-0.06 * st, hipY, side * 0.105 + sway);
+    const lift = Math.max(0, Math.cos(TAU * F.ph + (side > 0 ? 0 : Math.PI))) * 0.09 * walk; const foot = P(0.28 * sw * walk + 0.12 * st * side, 0, side * 0.12); foot.y = groundAt(foot.x, foot.z) + 0.07 + lift;
+    const knee = ik(hip, foot, 0.47, 0.46, f); segS(M['thigh' + sd], hip, knee, 0.44, 0.078, 1, 1, f); segS(M['shin' + sd], knee, foot, 0.44, 0.066, 1, 1, f);
+    place(M['boot' + sd], new THREE.Matrix4().makeBasis(f, up, zr), foot.clone().addScaledVector(f, 0.05).add(V(0, -0.035, 0)), V(), V(0.28, 0.1, 0.12)); }
+  const pelvis = P(lean * 0.3 - 0.05 * st, hipY + 0.06, sway); const chest = P(lean + 0.5 * st, 1.44 - 0.42 * st + breathe, sway * 0.5);
+  segS(M.coat, pelvis, chest, 0.62, 0.21, 0.74, 1, f); segS(M.skirt, P(-0.04 * st, hipY - 0.12, sway), P(0.06 * st, hipY + 0.08, sway), 0.22, 0.225, 0.8, 1, f);
+  const tilt = chest.clone().sub(pelvis).normalize(); const shL = chest.clone().addScaledVector(zr, 0.21).addScaledVector(tilt, 0.03), shR = chest.clone().addScaledVector(zr, -0.21).addScaledVector(tilt, 0.03);
+  segS(M.shoulders, shL, shR, 0.36, 0.1, 0.8, 0.8, f); const neckB = chest.clone().addScaledVector(tilt, 0.08), headC = chest.clone().addScaledVector(tilt, 0.25).addScaledVector(f, 0.03 + 0.12 * st);
+  segS(M.neck, neckB, headC.clone().addScaledVector(tilt, -0.08), 0.06, 0.05, 1, 1, f);
+  let yawT = 0; if (F.hasLook) { const lv = F.look.clone().sub(headC); yawT = clamp(Math.atan2(lv.dot(zr), lv.dot(f)), -0.8, 0.8); } F.headYaw = lerp(F.headYaw, yawT, 1 - Math.exp(-dt * 2));
+  const hf = f.clone().applyAxisAngle(up, -F.headYaw), hz = zr.clone().applyAxisAngle(up, -F.headYaw), HB = new THREE.Matrix4().makeBasis(hf, up, hz);
+  place(M.head, HB, headC, V(), V(0.2, 0.24, 0.18)); place(M.cap, HB, headC, V(-0.005, 0.095, 0), V(0.25, 0.075, 0.22)); place(M.peak, HB, headC, V(0.115, 0.075, 0), V(0.13, 0.03, 0.18));
+  // arms: the right hand holds the crook (or a stone with both hands); the left swings, or rises to the mouth to whistle
+  const ground = P(0.55, 0, 0); ground.y = groundAt(ground.x, ground.z) + 0.18;
+  const stoneAtHands = P(0.32 + 0.25 * st, 1.0 - 0.55 * st, 0).lerp(ground, st * (1 - F.carry) * 0.8);
+  let hR = P(0.24 + 0.05 * s * walk, 1.02 - 0.3 * st, -0.29).lerp(stoneAtHands.clone().addScaledVector(zr, -0.14), Math.max(F.carry, st * 0.7));
+  const swL = P(-0.2 * s * walk + 0.02, 0.86, 0.27); const mouth = headC.clone().addScaledVector(f, 0.12).add(V(0, -0.06, 0));
+  let hL = swL.lerp(mouth, smoothstep(0, 1, F.arm)).lerp(stoneAtHands.clone().addScaledVector(zr, 0.14), Math.max(F.carry, st * 0.7) * (1 - F.arm));
+  for (const [sd, sh, hd] of [['R', shR, hR], ['L', shL, hL]]) { const el = ik(sh, hd, 0.31, 0.29, f.clone().negate().add(V(0, -0.3, 0))); segS(M['upper' + sd], sh, el, 0.29, 0.062, 1, 1, f); segS(M['fore' + sd], el, hd, 0.27, 0.056, 1, 1, f); place(M['hand' + sd], new THREE.Matrix4(), hd, V(), V(0.085, 0.085, 0.085)); }
+  M.held.visible = F.carry > 0.05; if (M.held.visible) place(M.held, new THREE.Matrix4().makeRotationY(F.heading), stoneAtHands, V(), V(0.26, 0.18, 0.2));
+  // the crook: planted when he works (leaning on the wall), carried when he walks
+  const base = st > 0.3 || F.carry > 0.3 ? P(0.1, 0, -0.75) : P(0.34 + 0.12 * s * walk, 0, -0.33); base.y = groundAt(base.x, base.z);
+  const hold = st > 0.3 || F.carry > 0.3 ? base.clone().add(V(0.05, 1.2, -0.08)) : hR; const upv = hold.clone().sub(base).normalize(); const top = base.clone().addScaledVector(upv, 1.42);
+  segS(M.staff, base, top, 1.0, 0.018, 1, 1, f); let pv = top; for (let i = 0; i < M.hook.length; i++) { const a = Math.PI * (i + 1) / M.hook.length * 1.15; const q = top.clone().addScaledVector(upv, Math.sin(a) * 0.075).addScaledVector(f, (1 - Math.cos(a)) * 0.075); segS(M.hook[i], pv, q, 0.045, 0.017, 1, 1, zr); pv = q; }
+}
+
+/* ---------- the ewes: blackface, horned, one with a raddle mark */
+const SHM = { fleece: objMat(3, 4, V(1, 0, 0), { uSway: { value: 2 } }), face: objMat(7, 3, V(1, 0, 0)), mott: objMat(9, 0), horn: objMat(6, 3, V(1, 0, 0)), mark: objMat(3, 4, V(1, 0, 0), { uAcc: { value: 1 } }) };
+const hornGeo = (() => { const g = new THREE.TorusGeometry(0.07, 0.022, 6, 10, Math.PI * 1.3); withT(g, V(1, 0, 0)); return g; })();
+const legGeo = (() => { const g = new THREE.CylinderGeometry(0.035, 0.028, 0.46, 6); g.translate(0, -0.23, 0); withT(g, V(0, 1, 0)); return g; })();
+const flock = [];
+function ewe(i) {
+  const g = new THREE.Group(); const body = new THREE.Group(); g.add(body); const blob = (mat, p, s, parent = body) => { const m = new THREE.Mesh(UNIT, mat); m.position.copy(p); m.scale.copy(s); parent.add(m); return m; };
+  blob(SHM.fleece, V(0, 0.62, 0), V(0.98, 0.56, 0.6)); blob(SHM.fleece, V(0.24, 0.76, 0), V(0.5, 0.36, 0.48)); blob(SHM.fleece, V(-0.24, 0.73, 0), V(0.52, 0.38, 0.52)); blob(SHM.fleece, V(-0.47, 0.6, 0), V(0.13, 0.2, 0.13)); blob(SHM.fleece, V(0.02, 0.44, 0), V(0.78, 0.3, 0.5));   // the fleece hangs below the belly
+  const neck = blob(SHM.fleece, V(0.42, 0.72, 0), V(0.26, 0.3, 0.26));
+  const head = new THREE.Group(); head.position.set(0.48, 0.76, 0); body.add(head);
+  blob(SHM.face, V(0.14, 0, 0), V(0.26, 0.16, 0.14), head); blob(SHM.mott, V(0.24, -0.015, 0), V(0.1, 0.07, 0.1), head); blob(SHM.face, V(0.3, -0.03, 0), V(0.085, 0.075, 0.085), head);
+  for (const s of [-1, 1]) { blob(SHM.face, V(0.06, 0.02, s * 0.1), V(0.12, 0.04, 0.07), head); const h = new THREE.Mesh(hornGeo, SHM.horn); h.position.set(0.04, 0.05, s * 0.07); h.rotation.set(0, s > 0 ? 0.3 : -0.3, 0.6); h.scale.z = s; head.add(h); }
+  const legs = []; for (let k = 0; k < 4; k++) { const L = new THREE.Group(); L.position.set(k < 2 ? 0.3 : -0.28, 0.44, k % 2 === 0 ? 0.15 : -0.15); const m = new THREE.Mesh(legGeo, SHM.face); L.add(m); body.add(L); legs.push(L); }
+  scene.add(g);
+  return { i, g, body, head, legs, neck, x: 0, z: 0, vx: 0, vz: 0, heading: 0, speed: 0, graze: 1, lie: 0, lieT: 0, calmFor: 0, gph: rnd() * 5, fear: 0, temper: rr(0.8, 1.25), rogue: false, bolt: 0, boltDir: [0, 0], bolting: false, inArea: 'fold', freeze: 0, faceTo: null, bleatAt: rr(10, 200), mark: null };
+}
+for (let i = 0; i < 20; i++) flock.push(ewe(i));
+{ let r = flock[0]; for (const e of flock) if (e.temper > r.temper) r = e; r.rogue = true; r.temper = Math.max(r.temper, 1.3);
+  const m = new THREE.Mesh(UNIT, SHM.mark); m.position.set(-0.08, 0.92, 0); m.scale.set(0.34, 0.1, 0.3); r.body.add(m); r.mark = m; }
+function ewePose(e, dt) {
+  e.g.position.set(e.x, groundAt(e.x, e.z), e.z); e.g.rotation.y = -e.heading;
+  e.gph += dt * (0.4 + e.speed * 1.9); const amp = Math.min(e.speed * 0.22, 0.55) * (1 - e.lie);
+  e.legs.forEach((L, k) => { const diag = (k === 0 || k === 3) ? 0 : Math.PI; L.rotation.z = Math.sin(e.gph * TAU + diag) * amp + e.lie * (k < 2 ? -1.35 : 1.35); L.scale.y = 1 - 0.45 * e.lie; });
+  e.body.position.y = Math.abs(Math.sin(e.gph * TAU)) * 0.035 * Math.min(e.speed, 1.5) - 0.36 * e.lie;
+  const chew = e.lie > 0.5 ? Math.sin(simT * 7 + e.i) * 0.03 : 0;
+  e.head.rotation.z = (e.faceTo ? 0.25 : lerp(0.15, -1.05, e.graze * (1 - e.lie))) + Math.sin(simT * 3 + e.i) * 0.04 * e.graze + chew;
+  e.head.rotation.y = e.faceTo ? 0 : Math.sin(simT * 0.6 + e.i * 2) * 0.25 * (1 - e.fear);
+}

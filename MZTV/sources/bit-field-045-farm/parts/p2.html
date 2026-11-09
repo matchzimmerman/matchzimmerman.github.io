@@ -1,0 +1,256 @@
+
+/* ====================================================================== shaders */
+const COMMON = /* glsl */`
+uniform mat4 uVP; uniform float uAspect; uniform float uPerPx, uWobPx, uPxK;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+// SRUTHÁN v3: the hatching is carved into the surface. Lines run along T, spaced across it in the surface's own
+// coordinates; spacing follows distance in octaves so the print keeps its density on screen. Still things keep still patterns.
+float lineAt(vec3 W, vec3 N, vec3 T, float dist, float extra){
+  vec3 A=cross(N,T); if(dot(A,A)<1e-6) A=cross(N,vec3(0.,1.,0.)); if(dot(A,A)<1e-6) A=vec3(1.,0.,0.); A=normalize(A);
+  vec3 B=cross(A,N); B=dot(B,B)<1e-6?vec3(0.,0.,1.):normalize(B);
+  float s=dot(W,A), t=dot(W,B);
+  // spacing follows the surface's own foreshortening (world units per pixel across the lines), in octaves: no moire at grazing angles
+  float base=max(dist,0.01)*uPxK; float ds=length(vec2(dFdx(s),dFdy(s)));
+  float per=uPerPx*1.4*clamp(ds,base*0.8,base*10.);   // octaves land between 0.7x and 1.4x: HEADLAND's weight on average
+  float L=log2(max(per,1e-5)); float f=smoothstep(0.,1.,fract(L)); float p0=exp2(floor(L)), p1=p0*2.; float wk=uWobPx/max(uPerPx,0.1)*1.35;
+  float l0=cos((s+((vn(vec2(s,t)/(p0*7.)+3.1)-.5)*wk+extra)*p0)*6.2831853/p0);
+  float l1=cos((s+((vn(vec2(s,t)/(p1*7.)+3.1)-.5)*wk+extra)*p1)*6.2831853/p1);
+  return 0.5+0.5*mix(l0,l1,f); }
+vec4 pack(float sh, float id, float line, float acc){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., clamp(line,0.,1.), step(0.5,acc)); }
+`;
+const SH = {   // shared uniforms (same objects referenced by every material)
+  uVP: { value: new THREE.Matrix4() }, uAspect: { value: 1.78 }, uTime: { value: 0 },
+  uSunD: { value: V(0, 1, 0) }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
+  uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 1600 }, uFogShade: { value: 0.6 },
+  uDay: { value: 1 }, uKeyUp: { value: 1 }, uPerPx: { value: 7 }, uWobPx: { value: 8 }, uPxK: { value: 0.0012 },
+  uWindL: { value: V(0.5, 0, 0.3) }, uHush: { value: 0 },
+  uGrass: { value: null }, uGB: { value: new THREE.Vector4(GB.x0, GB.z0, GB.sx, GB.sz) },
+  uPh: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },
+};
+const OBJ_VERT = /* glsl */`
+uniform float uTime, uSway, uHush; uniform vec3 uWindL; uniform vec4 uPh[8];
+attribute vec3 aT; attribute float aG;
+varying vec3 vW, vN, vL, vT; varying float vC;
+void main(){
+  vC=0.;
+  vec4 lp=vec4(position,1.); vec3 ln=normal; vec3 lt=aT; float bh=0.;
+  if(uSway>0.5&&uSway<1.5){ lp.y*=0.1+0.95*aG; bh=lp.y; }      // a blade: its height is the grazing map
+  #ifdef USE_INSTANCING
+    lp=instanceMatrix*lp; ln=mat3(instanceMatrix)*ln; lt=mat3(instanceMatrix)*lt;
+  #endif
+  vec4 w=modelMatrix*lp;
+  if(uSway>0.5&&uSway<1.5){
+    float k=bh*bh*2.2;
+    float gust=0.55+0.45*sin(uTime*1.7+w.x*0.21+w.z*0.17)+0.25*sin(uTime*3.1+w.x*0.6-w.z*0.4);
+    w.xz+=uWindL.xz*k*gust*(1.-uHush)*0.55;
+    for(int i=0;i<8;i++){ vec4 p=uPh[i]; if(p.w<=0.) continue; vec2 d=w.xz-p.xy; float r=length(d); float f=p.w*(1.-smoothstep(0.,p.z,r));
+      w.xz+=normalize(d+1e-4)*f*k*0.7; w.y-=f*bh*0.75; }       // something heavy passing through the grass
+  }
+  if(uSway>1.5) w.xyz+=uWindL*0.012*sin(uTime*5.+w.x*3.+w.z*2.)*(1.-uHush);   // fleece shivers
+  vec3 n=normalize(mat3(modelMatrix)*ln);
+  vW=w.xyz; vN=n; vL=w.xyz-modelMatrix[3].xyz; vT=mat3(modelMatrix)*lt;
+  gl_Position=projectionMatrix*viewMatrix*w;
+}`;
+const OBJ_FRAG = /* glsl */`
+${COMMON}
+uniform float uId, uMode, uEmit, uAcc, uTime, uHush;
+uniform float uAmb, uDiff, uFogD, uFogShade, uDay;
+uniform vec3 uKeyD, uCamP, uT, uWindL;
+uniform sampler2D uGrass; uniform vec4 uGB;
+varying vec3 vW, vN, vL, vT; varying float vC;
+void stoneC(vec3 N, inout vec3 T, inout float sh, inout float acc){   // each stone carved in its own lie
+  vec3 base=length(vT)>0.01?normalize(vT):vec3(0.,1.,0.);
+  float n1=vn(vL.xz*1.7+vL.y*1.3);
+  T=normalize(base+0.4*vec3(n1-0.5,0.,vn(vL.zx*1.3+3.)-0.5));
+  sh+=0.05-0.13*(1.-n1);
+  acc=step(0.986,hash(floor(vW.xz*9.+vW.y*7.)))*step(0.55,vn(vW.xz*0.4))*step(0.2,N.y);   // lichen on the tops
+}
+void main(){
+  vec3 N=normalize(vN); if(!gl_FrontFacing) N=-N;
+  float sh=uAmb+uDiff*max(dot(N,uKeyD),0.)+vC;
+  float id=uId; vec3 T=length(vT)>0.01?normalize(vT):uT; float acc=0.; float extra=0.;
+  vec3 W=vL;
+  if(uMode>0.5&&uMode<1.5){ stoneC(N,T,sh,acc); }
+  else if(uMode>1.5&&uMode<2.5){   // the ground reads the field's memory: long grass, grazed, trodden, lane
+    vec2 guv=(vW.xz-uGB.xy)/uGB.zw; vec4 g=vec4(0.82,0.,0.,0.);
+    bool inMap=guv.x>0.&&guv.x<1.&&guv.y>0.&&guv.y<1.; if(inMap) g=texture2D(uGrass,guv);
+    float wob=vn(vW.xz*0.35)*0.18-0.09;
+    vec2 wd=uWindL.xz; float wl=length(wd); wd=wl>0.01?wd/wl:vec2(0.6,0.8);
+    if(N.y<0.7){ id=4.; stoneC(N,T,sh,acc); sh-=0.05; }
+    else if(g.b>0.5){ id=12.; T=vec3(1.,0.,0.); sh+=0.06*(vn(vW.xz*3.)-0.5); }
+    else if(g.g+wob>0.52){ id=12.; float e=0.7;
+      float gz=texture2D(uGrass,guv+vec2(0.,e/uGB.w)).g-texture2D(uGrass,guv-vec2(0.,e/uGB.w)).g;
+      float gx=texture2D(uGrass,guv+vec2(e/uGB.z,0.)).g-texture2D(uGrass,guv-vec2(e/uGB.z,0.)).g;
+      T=normalize(vec3(gz,0.,-gx)+vec3(1e-3,0.,0.)); sh+=0.05*(vn(vW.xz*6.)-0.5); }
+    else if(g.r+wob<0.36){ id=11.; float a=vn(vW.xz*0.9)*6.283; T=vec3(cos(a),0.,sin(a)); sh+=0.1*(vn(vW.xz*7.)-0.5)+0.05; }
+    else { id=5.; T=normalize(vec3(wd.x,0.,wd.y)+0.55*vec3(vn(vW.xz*0.07)-0.5,0.,vn(vW.zx*0.07+4.)-0.5));
+      extra=(vn(vW.xz*0.25-wd*uTime*0.9*(1.-uHush))-0.5)*1.6*clamp(wl,0.25,1.4); sh+=0.1*(vn(vW.xz*0.6)-0.5)+0.07*(g.r-0.6); }
+  }
+  if(uMode>1.5&&uMode<2.5&&id>4.5&&id<5.5) sh-=0.1;   // the field is the mid mass
+  if(uMode>2.5&&uMode<3.5){ sh+=0.08*(vn(vec2(dot(vL,T)*4.,dot(vL,cross(T,N))*30.))-0.5); }          // grain, hair, straw
+  else if(uMode>3.5&&uMode<4.5){   // fleece: looping curls carved into the wool, clumped
+    vec3 A=normalize(abs(N.y)<0.9?cross(N,vec3(0.,1.,0.)):cross(N,vec3(1.,0.,0.))); vec3 B=cross(N,A);
+    float a=vn(vL.xz*15.+vL.y*12.)*9.+vn(vL.xy*31.)*3.; T=normalize(A*cos(a)+B*sin(a));
+    float clump=vn(vL.xz*22.+vL.y*17.); sh+=0.16*(clump-0.5)+0.05; extra=clump*1.2;
+  }
+  else if(uMode>4.5&&uMode<5.5){   // corrugated iron: carved down the sheets, rust weeps at the laps
+    sh+=0.07*sin(dot(vL,normalize(cross(N,T)))*41.); acc=step(0.992,hash(floor(vL.xz*3.+vL.y*11.)))*step(0.6,vn(vL.xz*0.9));
+  }
+  else if(uMode>5.5&&uMode<6.5){ sh+=0.07*(vn(vL.xy*2.+vL.zy*2.)-0.5)+0.04; }   // whitewash: sparse, along the courses
+  else if(uMode>6.5){ sh+=0.6*vC; }
+  acc=max(acc,uAcc);
+  float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
+  if(uEmit>0.){ sh=uEmit; fog*=0.4; }
+  sh=mix(sh,uFogShade,fog);
+  gl_FragColor=pack(sh,id,lineAt(W,N,T,dist,extra),acc*(1.-fog));
+}`;
+function objMat(id, mode = 0, T = V(0, 1, 0), extra = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: OBJ_VERT, fragmentShader: OBJ_FRAG, side: THREE.DoubleSide,
+    uniforms: Object.assign({}, SH, { uId: { value: id }, uMode: { value: mode }, uT: { value: T.clone().normalize() },
+      uEmit: { value: 0 }, uAcc: { value: 0 }, uSway: { value: 0 } }, extra)
+  });
+}
+
+/* ---------- sea (the bay, far below the fields) */
+const NW = 6, NC = 6;
+const seaU = { uW: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uW2: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },
+  uC: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uCalm: { value: 1 }, uSkyB: { value: 0.6 } };
+const SEA_VERT = /* glsl */`
+uniform vec4 uW[8]; uniform vec4 uW2[8]; uniform float uTime, uCalm; uniform vec3 uCamP;
+varying vec3 vW; varying vec2 vXZ; varying float vCrest;
+void main(){
+  vec2 x0=position.xz; float fade=uCalm*(1.-smoothstep(1500.,6000.,length(x0-uCamP.xz)));
+  vec3 d=vec3(0.); float crest=0.;
+  for(int i=0;i<${NW};i++){ vec4 a=uW[i]; vec4 b=uW2[i];
+    float ph=a.z*dot(a.xy,x0)-b.x*uTime+b.z; float A=a.w*fade;
+    d.x+=b.y*A*a.x*cos(ph); d.z+=b.y*A*a.y*cos(ph); d.y+=A*sin(ph); crest+=b.y*A*a.z*sin(ph); }
+  vec3 w=vec3(x0.x+d.x,d.y,x0.y+d.z); vW=w; vXZ=x0; vCrest=crest;
+  gl_Position=projectionMatrix*viewMatrix*vec4(w,1.);
+}`;
+const SEA_FRAG = /* glsl */`
+${COMMON}
+uniform vec4 uW[8]; uniform vec4 uW2[8]; uniform vec4 uC[8];
+uniform vec3 uKeyD, uCamP; uniform float uTime, uCalm, uAmb, uDiff, uFogD, uFogShade, uKeyUp, uSkyB, uDay;
+varying vec3 vW; varying vec2 vXZ; varying float vCrest;
+void main(){
+  vec2 x0=vXZ; float dist=length(vW-uCamP);
+  float fade=uCalm*(1.-smoothstep(1500.,6000.,length(x0-uCamP.xz)));
+  vec3 n=vec3(0.,1.,0.);
+  for(int i=0;i<${NW};i++){ vec4 a=uW[i]; vec4 b=uW2[i]; float ph=a.z*dot(a.xy,x0)-b.x*uTime+b.z; float A=a.w*fade;
+    n.x-=A*a.z*a.x*cos(ph); n.z-=A*a.z*a.y*cos(ph); }
+  float cf=uCalm*(1.-smoothstep(300.,2500.,dist));
+  for(int i=0;i<${NC};i++){ vec4 c=uC[i]; float w=sqrt(9.81*c.z); float ph=c.z*dot(c.xy,vW.xz)-w*uTime+float(i)*1.7;
+    n.x-=c.w*cf*c.z*c.x*cos(ph); n.z-=c.w*cf*c.z*c.y*cos(ph); }
+  n=normalize(n);
+  vec3 Vd=normalize(uCamP-vW);
+  float lam=max(dot(n,uKeyD),0.);
+  float fres=pow(1.-max(dot(n,Vd),0.),4.);
+  vec3 R=reflect(-Vd,n); float spec=pow(max(dot(R,uKeyD),0.),160.)*uKeyUp;
+  float sh=uAmb*0.8+uDiff*0.35*lam+0.12*uSkyB+0.45*fres*uSkyB+spec*1.7;
+  float crest=smoothstep(0.3,0.62,vCrest)*(0.55+0.7*vn(vW.xz*0.05+uTime*0.02));
+  float id=2.; if(crest*(1.-smoothstep(1500.,4000.,dist))>0.5){ id=3.; sh=0.6+0.3*lam+0.2*uDay; }
+  vec3 T=normalize(vec3(-uW[0].y,0.,uW[0].x)+0.5*vec3(n.x,0.,n.z));
+  float fog=1.-exp(-dist/(uFogD*1.6));
+  sh=mix(sh,uFogShade,fog);
+  gl_FragColor=pack(sh,id==3.?9.:2.,lineAt(vW,vec3(0.,1.,0.),T,dist,(vn(vW.xz*0.02+uTime*0.03)-0.5)*0.8),0.);
+}`;
+
+/* ---------- sky */
+const SKY_FRAG = /* glsl */`
+${COMMON}
+uniform vec3 uSunD, uCamP; uniform float uDay, uCloud, uTime; uniform vec2 uWind;
+varying vec3 vW;
+void main(){
+  vec3 d=normalize(vW-uCamP); float el=d.y;
+  float sg=pow(max(dot(d,uSunD),0.),5.)*smoothstep(-0.25,0.05,uSunD.y);
+  float low=smoothstep(-0.28,0.,uSunD.y)*(1.-smoothstep(0.12,0.5,uSunD.y));
+  float az=pow(max(dot(normalize(d.xz+1e-4),normalize(uSunD.xz+1e-4)),0.),2.);
+  float band=(1.-smoothstep(0.,0.32,max(el,0.)))*az*low;
+  float sh=mix(0.1,0.55,uDay)+0.38*sg-0.16*smoothstep(0.,0.7,el)*uDay+0.12*(1.-smoothstep(0.,0.2,el))*uDay+0.42*band;
+  float id=0.; vec3 T=vec3(1.,0.,0.);
+  if(el>0.){
+    vec2 cp=d.xz/max(el,0.035)*500.+uWind*uTime*6.;
+    float cl=vn(cp*0.0016)*0.62+vn(cp*0.0055+3.)*0.38;
+    float thr=1.05-uCloud*0.75;
+    float cov=smoothstep(thr,thr+0.12,cl)*smoothstep(0.01,0.09,el);
+    if(cov>0.5){ id=13.; sh=mix(0.32,0.86,uDay)-0.45*(cl-thr)+0.28*sg; T=normalize(vec3(1.,0.15*(cl-0.6),0.)); }
+  }
+  // HEADLAND's sky: level hatching, anchored to elevation (still when the lens pans), the cloud lines tilt with the cloud
+  float azi=atan(d.z,d.x); float sy=asin(clamp(el,-1.,1.))/max(uPxK,1e-5);
+  float wob=(vn(vec2(azi*40.,sy*0.02))-0.5)*uWobPx*0.6+(id>12.5?T.y*90.:0.);
+  float line=0.5+0.5*cos((sy+wob)*6.2831853/max(uPerPx*1.15,1.));
+  gl_FragColor=pack(sh,id,line,0.);
+}`;
+const SKY_VERT = /* glsl */`varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; gl_Position.z=gl_Position.w*0.99999; }`;
+
+/* ---------- sun / moon disc */
+const DISC_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.); gl_Position.z=gl_Position.w*0.99998; }`;
+const DISC_FRAG = /* glsl */`
+${COMMON}
+uniform float uIsMoon, uIllum, uDim, uPhaseS; varying vec2 vUv;
+void main(){
+  vec2 p=vUv*2.-1.; float r=length(p); if(r>1.) discard;
+  float id=uIsMoon>0.5?14.:1.;
+  float sh=uIsMoon>0.5?0.55+0.4*uIllum:0.9-0.32*smoothstep(0.5,1.,r);
+  if(uIsMoon>0.5){ float tx=p.x*uPhaseS; float lit=step(-sqrt(max(1.-p.y*p.y,0.))*(2.*uIllum-1.),tx); sh=mix(0.18,sh,lit); }
+  sh*=uDim;
+  gl_FragColor=pack(sh,id,0.5+0.5*cos(dot(p,vec2(0.6,0.8))*44.),0.);
+}`;
+
+/* ---------- print pass: linocut lines through OBAS inks (the line arrives carved into each surface) */
+const PU = {
+  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) },
+  uPal: { value: Array.from({ length: 6 }, () => V()) },
+  uTab: { value: MAT.map(m => V(m[0], m[1], m[2])) }, uHat: { value: MAT.map(m => m[3]) }, uSpk: { value: MAT.map(m => m[4]) },
+  uDith: { value: 0.12 }, uOutline: { value: 1 }, uHatch: { value: 1 },
+  uSeed: { value: rnd() * 100 }, uRain: { value: 0 }, uRainDir: { value: new THREE.Vector2(0.3, -1).normalize() }, uTime: { value: 0 },
+};
+const PRINT_FRAG = /* glsl */`
+uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uTab[16]; uniform float uHat[16]; uniform float uSpk[16];
+uniform float uDith, uOutline, uHatch, uSeed, uRain, uTime; uniform vec2 uRainDir;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float b2(vec2 a){ a=floor(a); return fract(dot(a,vec2(0.5,a.y*0.75))); }
+float b4(vec2 a){ return b2(0.5*a)*0.25+b2(a); }
+float b8(vec2 a){ return b4(0.5*a)*0.25+b2(a); }
+int idAt(vec2 fc){ return int(floor(texture2D(uData,fc/uRes).g*16.)); }
+bool soft(int a,int b){
+  bool sa=(a==0||a==13||a==1||a==14), sb=(b==0||b==13||b==1||b==14);
+  if(sa&&sb) return true;
+  if((a==2||a==9)&&(b==2||b==9)&&(a==2||b==2)) return true;
+  bool ga=(a==5||a==11||a==12), gb=(b==5||b==11||b==12);   // the ground's own states are one surface
+  if(ga&&gb) return true;
+  return false; }
+void main(){
+  vec2 fc=gl_FragCoord.xy;
+  vec4 d=texture2D(uData,fc/uRes);
+  float s=d.r; int id=int(floor(d.g*16.)); float acc=d.a>0.5?1.:0.;
+  vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
+  float line=d.b*2.-1.;
+  float mid=1.-abs(2.*s-1.);
+  float v=s+line*hs*0.3*(0.3+0.7*mid)+(b8(fc)-0.5)*uDith;
+  int k=v<0.36?0:(v<0.69?1:2);
+  float ink=k==0?tab.x:(k==1?tab.y:tab.z);
+  if(uSpk[id]>0.5){ float h=hash(floor(fc/2.6)+uSeed); if(h>0.972){ if(s<0.28) ink=5.; else if(k==2) ink=tab.y; else if(k==1) ink=tab.x; } }
+  if(acc>0.5) ink=3.;
+  if(uOutline>0.5){
+    int il=idAt(fc+vec2(-1.,0.)), iu=idAt(fc+vec2(0.,-1.));
+    if((il!=id&&!soft(il,id))||(iu!=id&&!soft(iu,id))) ink=0.;
+  }
+  if(uRain>0.01){
+    vec2 rp=vec2(dot(fc,vec2(-uRainDir.y,uRainDir.x)), dot(fc,uRainDir)+uTime*520.);
+    vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
+    if(h>1.-uRain*0.06 && fract(rp.y/46.)<0.35 && fract(rp.x/5.)<0.3) ink=(s<0.5)?float(tab.z):5.;
+  }
+  gl_FragColor=vec4(uPal[int(ink+0.5)],1.);
+}`;
+const BLIT_FRAG = /* glsl */`uniform sampler2D uTex; varying vec2 vUv;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){ vec3 c=texture2D(uTex,vUv).rgb; float g=hash(floor(gl_FragCoord.xy*0.5)); c*=0.965+0.035*g; gl_FragColor=vec4(c,1.); }`;
+const QUAD_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const printMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: PRINT_FRAG, uniforms: PU, depthTest: false, depthWrite: false });
+const blitMat = new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLIT_FRAG, uniforms: { uTex: { value: rtPrint.texture } }, depthTest: false, depthWrite: false });
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), printMat); postScene.add(quad);
