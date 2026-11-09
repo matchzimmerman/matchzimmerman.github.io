@@ -95,7 +95,8 @@ function terrainH0(x, z) {
   return h + (slope - h) * g;
 }
 
-const FINE = { x0: -120, x1: 50, z0: -22, z1: 215 };
+const FINES = [{ x0: -120, x1: 50, z0: -22, z1: 215 }, { x0: 50, x1: 152, z0: -45, z1: 95 }];
+const inFine = (x, z) => FINES.some(F => x > F.x0 + 1.5 && x < F.x1 - 1.5 && z > F.z0 + 1.5 && z < F.z1 - 1.5);
 /* ====================================================================== INVERIN: one ground for every place in it */
 const CC = { x: -62, z: 150 }; const CC_Y = terrainH0(-62, 150);   // TWISTED TREE's clearing, inland of the west headland
 const STREAM_C = [[-36, 196], [-30, 168], [-41, 138], [-36, 112], [-52, 84], [-50, 58], [-68, 34], [-72, 10], [-76, -2], [-78, -14]];   // SRUTHÁN, from the wood down to the sea
@@ -114,6 +115,7 @@ function streamNear(x, z) { let best = 1e9, bi = 0; const P = STREAM.pts; for (l
   for (let i = Math.max(0, bi - 4); i <= Math.min(P.length - 1, bi + 4); i++) { const d = (P[i].x - x) ** 2 + (P[i].z - z) ** 2; if (d < best) { best = d; bi = i; } } return { d: Math.sqrt(best), p: P[bi] }; }
 function terrainH(x, z) {
   let y = terrainH0(x, z);
+  { const q = Math.exp(-Math.pow((x - 100) / 44, 2)), W = Math.max(0, (q - 0.06) / 0.94); if (W > 0) { const d = z - coastZ(x), top = landTop(x, z); const b = d < 0 ? Math.max(-6, 0.25 + d * 0.42) : d < 16 ? 0.25 + d * 0.085 : 1.61 + (top - 1.61) * smoothstep(16, 88, d); y = lerp(y, b + 0.25 * (vnoise(x * 0.4, z * 0.4) - 0.5), W); } }
   const dc2 = (x - CC.x) ** 2 + (z - CC.z) ** 2;
   if (dc2 < 2500) y = lerp(y, CC_Y, Math.exp(-dc2 / 260)) + 0.32 * Math.exp(-dc2 / 7);
   if (x > SB.x0 && x < SB.x1 && z > SB.z0 && z < SB.z1) { const n = streamNear(x, z); const k = 1 - smoothstep(n.p.w * 0.7, n.p.w + 4.2, n.d);
@@ -221,7 +223,7 @@ const SH = {   // shared uniforms (same objects referenced by every material)
   uVP: { value: new THREE.Matrix4() }, uAspect: { value: 1.78 }, uTime: { value: 0 },
   uSunD: { value: V(0, 1, 0) }, uKeyD: { value: V(0, 1, 0) }, uCamP: { value: V() },
   uAmb: { value: 0.3 }, uDiff: { value: 0.6 }, uFogD: { value: 1600 }, uFogShade: { value: 0.6 },
-  uBreath: { value: 0 }, uDay: { value: 1 }, uKeyUp: { value: 1 },
+  uBreath: { value: 0 }, uDay: { value: 1 }, uKeyUp: { value: 1 }, uHold: { value: 0 }, uWrInv: { value: new THREE.Matrix4() },
 };
 const OBJ_VERT = /* glsl */`
 uniform float uTime, uBreath, uBreathOn, uCloth, uClothH, uWalk, uMove; uniform vec3 uWindL;
@@ -263,7 +265,7 @@ void main(){
 }`;
 const OBJ_FRAG = /* glsl */`
 ${COMMON}
-uniform float uId, uMode, uEmit, uFace, uStackH, uTime;
+uniform float uId, uMode, uEmit, uFace, uStackH, uTime, uHold; uniform mat4 uWrInv;
 uniform float uAmb, uDiff, uFogD, uFogShade;
 uniform vec3 uKeyD, uCamP, uT;
 varying vec3 vW, vN, vL, vT; varying float vC;
@@ -291,6 +293,7 @@ void main(){
     float e1=length(vec2((a-0.36)/0.15,ey)), e2=length(vec2((a+0.36)/0.15,ey));
     if(min(e1,e2)<1.){ id=7.; sh=0.06; acc=0.; }
   }
+  if(uHold>0.01){ vec3 q=(uWrInv*vec4(vW,1.)).xyz; float x=clamp(q.x/13.,-1.,1.); float b=x<0.?3.5*(1.-.22*x*x):3.5*pow(max(cos(x*1.5708),0.),.7)+.1; if(abs(q.z)<b+.08&&abs(q.x)<13.1&&q.y<3.62) sh*=mix(1.,.34,uHold); }
   float dist=length(vW-uCamP); float fog=1.-exp(-dist/uFogD);
   if(uEmit>0.){ sh=uEmit; fog*=0.4; }
   sh=mix(sh,uFogShade,fog);
@@ -486,7 +489,7 @@ const TER = { x0: -500, z0: -450, sx: 1000, sz: 1200 };
 {
   const g = new THREE.PlaneGeometry(TER.sx, TER.sz, 400, 480); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i) + TER.z0 + TER.sz / 2; p.setZ(i, z); const fineIn = x > FINE.x0 + 1.5 && x < FINE.x1 - 1.5 && z > FINE.z0 + 1.5 && z < FINE.z1 - 1.5; p.setY(i, terrainH(x, z) - (fineIn ? 2.2 : 0)); }
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i) + TER.z0 + TER.sz / 2; p.setZ(i, z); const fineIn = inFine(x, z); p.setY(i, terrainH(x, z) - (fineIn ? 2.2 : 0)); }
   g.computeVertexNormals();
   scene.add(new THREE.Mesh(g, objMat(4, 2, V(0, 1, 0), { uBreathOn: { value: 1 } })));
   // height texture for the sea's shore foam
@@ -674,7 +677,7 @@ const prnd = mulberry(35310); const pr = (a, b) => a + (b - a) * prnd();
 function withT(g, T) { const n = g.attributes.position.count, t = new Float32Array(n * 3); for (let i = 0; i < n; i++) { t[i * 3] = T.x; t[i * 3 + 1] = T.y; t[i * 3 + 2] = T.z; } g.setAttribute('aT', new THREE.BufferAttribute(t, 3)); return g; }
 function clean(g) { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'aT'].includes(k)) g.deleteAttribute(k); return g; }
 // fine ground where people walk; the coarse sheet sinks beneath it
-{ const P = FINE, nx = Math.round((P.x1 - P.x0) / 0.65), nz = Math.round((P.z1 - P.z0) / 0.65);
+for (const P of FINES) { const nx = Math.round((P.x1 - P.x0) / 0.65), nz = Math.round((P.z1 - P.z0) / 0.65);
   const g = new THREE.PlaneGeometry(P.x1 - P.x0, P.z1 - P.z0, nx, nz); g.rotateX(-Math.PI / 2); g.translate((P.x0 + P.x1) / 2, 0, (P.z0 + P.z1) / 2);
   const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, terrainH(p.getX(i), p.getZ(i))); g.computeVertexNormals();
   scene.add(new THREE.Mesh(g, objMat(4, 2, V(0, 1, 0), { uBreathOn: { value: 1 } }))); }
@@ -752,33 +755,106 @@ const streamU = Object.assign({}, SH, { uLevel: { value: 0 } });
     ms.push(new THREE.Matrix4().compose(V(x, terrainH(x, z) - 0.01, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.25, 0.25), pr(0, TAU), pr(-0.25, 0.25))), V(pr(1, 2), h, 1))); }
   const im = new THREE.InstancedMesh(bg, objMat(5, 0, V(0, 1, 0)), ms.length); ms.forEach((m, k) => im.setMatrixAt(k, m)); im.frustumCulled = false; scene.add(im); }
 
+/* ---------- THE WRECK: a heeled wooden coaster on the shingle. Local axes: +x bow, +y up, +z landward */
+const WR = (() => { const L = 26, B = 3.4, DECK_Y = 3.6, FLOOR_Y = 0.9;
+  const X = (u) => clamp(u / (L / 2), -1, 1);
+  const beam = (u) => { const x = X(u); return x < 0 ? B * (1 - 0.22 * x * x) : B * Math.pow(Math.max(0, Math.cos(x * Math.PI / 2)), 0.7) + 0.08; };
+  const keel = (u) => u > 8 ? (u - 8) * 0.22 : 0, sheer = (u) => 4 + 1.4 * Math.pow(Math.max(X(u), 0), 2.2) + 0.2 * Math.pow(Math.max(-X(u), 0), 2);
+  const wAt = (u, t) => beam(u) * (1 - Math.pow(1 - clamp(t, 0, 1), 2.4));
+  const bAt = (u, y) => wAt(u, (y - keel(u)) / (sheer(u) - keel(u)));
+  const z0 = coastZ(100) + 0.5, O = V(100, terrainH(100, z0) - 0.72, z0);
+  const M = new THREE.Matrix4().compose(O, new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.3, -0.2, 0.09, 'YZX')), V(1, 1, 1)), I = M.clone().invert();
+  const P0 = V(), C1 = V(); const hit = (x, z, yf) => { P0.set(x, 0, z).applyMatrix4(I); C1.set(0, 1, 0).transformDirection(I); const t = (yf - P0.y) / C1.y; return { u: P0.x + C1.x * t, v: P0.z + C1.z * t, y: t }; };
+  const toW = (u, y, v) => V(u, y, v).applyMatrix4(M);
+  return { L, B, DECK_Y, FLOOR_Y, beam, keel, sheer, wAt, bAt, O, M, I, hit, toW, breach: [-1.6, 1.7], stair: [3.8, 6.6], gang: [-3.7, -2.5], layer: 'ground', nl: 'ground' };
+})();
+SH.uWrInv.value.copy(WR.I);
+{ const by = { 6: [], 7: [], 9: [], 8: [] }, G = (id, g) => { g.applyMatrix4(WR.M); by[id].push(clean(g).toNonIndexed()); };
+  const quad = (a, b, c, d, T) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...b, ...c, ...b, ...d, ...c], 3)); g.computeVertexNormals(); withT(g, T); return g; };
+  const box = (w, h, d, x, y, z, ry = 0, rx = 0, rz = 0, T = V(1, 0, 0)) => { const g = new THREE.BoxGeometry(w, h, d); g.deleteAttribute('uv'); withT(g, T); g.applyMatrix4(new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(1, 1, 1))); return g; };
+  const tube = (id, pts, r0, r1, segs = 10, o = {}) => { const t = []; if (pts.length < 2) return; limb(pts.map(p => V(...p)), r0, r1, Math.max(2, segs), { radial: o.radial || 6, into: t, knot: o.knot }); G(id, t[0]); };
+  const PORTS = [[8.2, 3.5], [10, 3.9], [6.4, 3.2]];
+  /* planking: individual strakes, with rot, the breach and the ports left open */
+  const NT = 15, DU = 0.5;
+  for (const s of [-1, 1]) for (let j = 0; j < NT; j++) for (let u = -13; u < 13 - 1e-6; u += DU) { const u2 = u + DU, um = u + DU / 2, t0 = (j + 0.04) / NT, t1 = (j + 0.95) / NT, tm = (t0 + t1) / 2, ym = lerp(WR.keel(um), WR.sheer(um), tm);
+    const rot = vnoise(um * 0.55 + s * 7, j * 0.6 + 2); let drop = rot > 0.74 + 0.1 * (1 - tm);
+    if (s > 0 && um > WR.breach[0] - 0.8 * vnoise(j, 3) && um < WR.breach[1] + 0.8 * vnoise(j, 9) && ym < 3.1 + 0.6 * vnoise(um * 2, 4)) drop = true;
+    for (const q of PORTS) if (Math.hypot(um - q[0], ym - q[1]) < 0.42) drop = true;
+    if (j === NT - 1) drop = rot > 0.86; if (drop) continue;
+    const pt = (uu, t) => { const y = lerp(WR.keel(uu), WR.sheer(uu), t); return [uu, y, s * WR.wAt(uu, t)]; }; const paint = tm > 0.46 && tm < 0.82 && vnoise(um * 1.3 + 4, j * 1.7) > 0.42;
+    G(tm < 0.3 ? 7 : paint ? 9 : 6, quad(pt(u, t0), pt(u2, t0), pt(u, t1), pt(u2, t1), V(1, 0.05, 0))); }
+  /* transom, keel, stem */
+  for (let v = -2.5; v < 2.5; v += 0.34) { if (vnoise(v * 2.1, 8) > 0.78) continue; const top = WR.sheer(-13) - 0.5 * vnoise(v * 3, 2); G(6, box(0.07, top - 0.4, 0.3, -13.02, 0.4 + (top - 0.4) / 2, v, 0, 0, 0, V(0, 1, 0))); }
+  tube(6, [[-13, 0.1, 0], [0, 0, 0], [8, 0, 0], [12.6, 1.2, 0], [13.15, 6.4, 0], [13.1, 7.0, 0.1]], 0.2, 0.14, 40, { knot: 3 });
+  /* ribs, some broken and standing proud of the planking */
+  for (let u = -12.2; u < 12.2; u += 1.15) for (const s of [-1, 1]) { const f = vnoise(u * 2.3, s * 3 + 11), tTop = f > 0.78 ? 0.55 + f * 0.25 : 1.05 + 0.2 * f, pts = []; for (let t = 0; t <= tTop + 1e-3; t += tTop / 7) { pts.push([u, lerp(WR.keel(u), WR.sheer(u), t), s * (WR.wAt(u, Math.min(t, 1)) - 0.11)]); } tube(6, pts, 0.1, 0.075, 14); }
+  /* hold floor and deck */
+  for (let v = -3; v < 3; v += 0.4) for (let u = -11; u < 10; u += 1.1) { if (Math.abs(v) + 0.2 > WR.bAt(u, WR.FLOOR_Y)) continue; if (vnoise(u * 1.1 + 2, v * 1.7) > 0.8) continue; G(7, box(1.02, 0.07, 0.34, u, WR.FLOOR_Y - 0.05, v)); }
+  for (let v = -3.2; v < 3.2; v += 0.26) for (let u = -12.5; u < 11; u += 0.9) { const um = u + 0.45; if (Math.abs(v) + 0.1 > WR.bAt(um, WR.DECK_Y)) continue; if (um > WR.stair[0] - 0.2 && um < WR.stair[1] && Math.abs(v) < 1) continue; if (um > 0.4 && um < 2.6 && Math.abs(v) < 0.5) continue; if (vnoise(um * 0.9 + 6, v * 1.3 + 3) > 0.73) continue; G(6, box(0.86, 0.06, 0.22, um, WR.DECK_Y - 0.03, v)); }
+  for (let u = -12; u < 11; u += 1.5) { const w = WR.bAt(u, WR.DECK_Y - 0.15); G(6, box(0.14, 0.16, w * 2, u, WR.DECK_Y - 0.15, 0, 0, 0, 0, V(0, 0, 1))); }
+  /* companion stair */
+  for (let k = 0; k < 9; k++) { const q = k / 8, u = lerp(WR.stair[0] + 0.15, WR.stair[1] - 0.15, q), y = lerp(WR.FLOOR_Y, WR.DECK_Y, q); G(6, box(0.24, 0.05, 1.5, u, y, 0)); } for (const s of [-0.78, 0.78]) tube(6, [[WR.stair[0], WR.FLOOR_Y, s], [WR.stair[1], WR.DECK_Y, s]], 0.05, 0.05, 2, { radial: 5 });
+  /* iron rail, sagging where it is lost */
+  for (const s of [-1, 1]) { const top = []; for (let u = -12.4; u < 12.2; u += 0.8) { if (s > 0 && u > WR.gang[0] - 0.2 && u < WR.gang[1] + 0.2) { if (top.length > 1) tube(7, top.slice(), 0.03, 0.03, top.length * 3, { radial: 5 }); top.length = 0; continue; } const y = WR.sheer(u), w = s * WR.wAt(u, 1), broke = vnoise(u * 0.7, s * 5 + 2) > 0.72; if (broke) { if (top.length > 1) tube(7, top.slice(), 0.03, 0.03, top.length * 3, { radial: 5 }); top.length = 0; continue; } const h = 0.95 + 0.06 * Math.sin(u * 3); tube(7, [[u, y - 0.1, w], [u, y + h, w * 0.99]], 0.028, 0.028, 2, { radial: 5 }); top.push([u, y + h, w * 0.99]); } if (top.length > 1) tube(7, top, 0.03, 0.03, top.length * 3, { radial: 5 }); }
+  /* ports */
+  for (const s of [-1, 1]) for (const q of PORTS) { const g = new THREE.TorusGeometry(0.4, 0.06, 8, 22); g.deleteAttribute('uv'); withT(g, V(1, 0, 0)); g.applyMatrix4(new THREE.Matrix4().makeTranslation(q[0], q[1], s * (WR.bAt(q[0], q[1]) + 0.02))); G(7, g); }
+  /* wheelhouse: walls in panels, windows open, door forward */
+  { const x0 = -10, x1 = -5.4, w = 2, h = 2.4, y0 = WR.DECK_Y, W0 = 0.08;
+    const wall = (ax, az, bx, bz, op) => { const len = Math.hypot(bx - ax, bz - az), ry = -Math.atan2(bz - az, bx - ax); const n = Math.round(len / 0.6); for (let i = 0; i < n; i++) { const c = (i + 0.5) / n, x = lerp(ax, bx, c), z = lerp(az, bz, c), door = op && op(x, z), win = i % 2 === 1; if (door) { G(9, box(len / n, 0.45, W0, x, y0 + h - 0.22, z, ry, 0, 0, V(0, 1, 0))); continue; } if (win) { G(9, box(len / n, 1.05, W0, x, y0 + 0.52, z, ry, 0, 0, V(0, 1, 0))); G(9, box(len / n, 0.42, W0, x, y0 + h - 0.22, z, ry, 0, 0, V(0, 1, 0))); } else G(9, box(len / n, h, W0, x, y0 + h / 2, z, ry, 0, 0, V(0, 1, 0))); } };
+    wall(x0, -w, x1, -w); wall(x0, w, x1, w); wall(x0, -w, x0, w); wall(x1, -w, x1, w, (x, z) => Math.abs(z) < 0.6);
+    for (let u = x0 - 0.25; u < x1 + 0.2; u += 0.42) { if (vnoise(u * 2.2, 15) > 0.75) continue; G(6, box(0.4, 0.08, w * 2 + 0.5, u + 0.2, y0 + h + 0.05, 0, 0, 0, 0.04, V(0, 0, 1))); }
+    G(7, box(0.5, 1.05, 0.5, -6.5, y0 + 0.52, 0)); tube(7, [[-6.5, y0 + 1.05, 0], [-6.25, y0 + 1.5, 0]], 0.05, 0.05, 2, { radial: 5 }); { const g = new THREE.TorusGeometry(0.34, 0.03, 6, 16); g.deleteAttribute('uv'); withT(g, V(1, 0, 0)); g.applyMatrix4(new THREE.Matrix4().compose(V(-6.2, y0 + 1.5, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2 - 0.3, 0)), V(1, 1, 1))); G(7, g); } }
+  /* mast, crosstree, stays */
+  { const a = [1.5, WR.FLOOR_Y, 0], top = [-1.2, 13.4, 0.6]; tube(6, [a, [1.0, 6.5, 0.1], top], 0.2, 0.09, 24, { knot: 8 }); const yd = [-0.75, 11.2, 0.5]; tube(6, [[yd[0] - 0.2, yd[1], yd[2] - 1.5], [yd[0], yd[1] - 0.05, yd[2]], [yd[0] + 0.1, yd[1] + 0.2, yd[2] + 1.5]], 0.05, 0.03, 6, { radial: 5 });
+    for (const s of [-1, 1]) { const end = [1.7, WR.sheer(1.7) - 0.1, s * WR.wAt(1.7, 1)]; tube(8, [end, [(end[0] + yd[0]) / 2, (end[1] + yd[1]) / 2, (end[2] + yd[2] * 0.5) / 1.8], [yd[0], yd[1], yd[2] + s * 1.2]], 0.013, 0.013, 8, { radial: 4 }); } tube(8, [top, [6, 8.8, 0.3], [12.9, WR.sheer(12.9) + 0.6, 0]], 0.014, 0.014, 14, { radial: 4 }); tube(8, [top, [-6, 8, 0.2], [-12.7, WR.sheer(-12.7) + 0.9, 0]], 0.014, 0.014, 14, { radial: 4 }); }
+  for (const s of [by]) for (const id of Object.keys(s)) { if (s[id].length) scene.add(new THREE.Mesh(mergeGeometries(s[id]), objMat(+id, id === '6' || id === '9' ? 3 : 0))); }
+  /* the gangway: a fallen hatch-beam from the landward rail to the shingle */
+  const A = WR.toW((WR.gang[0] + WR.gang[1]) / 2, WR.sheer(-3) + 0.05, WR.wAt(-3, 1)); const dir = V(0.05, 0, 1).normalize(); const Bx = A.x + dir.x * 7.5, Bz = A.z + dir.z * 7.5; const B = V(Bx, terrainH(Bx, Bz) + 0.08, Bz); WR.ramp = { A, B, len: Math.hypot(B.x - A.x, B.z - A.z), dx: (B.x - A.x), dz: (B.z - A.z) };
+  { const gs = [], up = V(0, 1, 0), f = B.clone().sub(A), n = f.length(), fd = f.clone().normalize(), side = V().crossVectors(fd, up).normalize(); for (let s = 0; s < n; s += 0.3) { const c = A.clone().addScaledVector(fd, s + 0.15); if (vnoise(s * 3, 6) > 0.84) continue; const o = new THREE.Object3D(); o.position.copy(c); o.lookAt(c.clone().add(fd)); o.updateMatrix(); const g = new THREE.BoxGeometry(1.15, 0.06, 0.25); g.deleteAttribute('uv'); withT(g, V(1, 0, 0)); g.applyMatrix4(o.matrix); gs.push(clean(g).toNonIndexed()); } for (const q of [-0.5, 0.5]) { const a = A.clone().addScaledVector(side, q).add(V(0, -0.07, 0)), b = B.clone().addScaledVector(side, q).add(V(0, -0.07, 0)), t = []; limb([a, a.clone().lerp(b, 0.5), b], 0.08, 0.08, 6, { radial: 6, into: t }); gs.push(t[0].toNonIndexed()); } scene.add(new THREE.Mesh(mergeGeometries(gs), objMat(6, 3))); }
+  /* rope to a rock ashore */
+  { const a = WR.toW(12.4, WR.sheer(12.4) - 0.6, 0.5), e = V(a.x + 7, 0, a.z + 15); e.y = terrainH(e.x, e.z) + 0.5; const t = []; limb([a, a.clone().lerp(e, 0.35).add(V(0, -1.1, 0)), a.clone().lerp(e, 0.7).add(V(0, -0.7, 0)), e], 0.04, 0.04, 22, { radial: 5, into: t, twist: 0.7, rope: 0.2, ropeN: 3 }); scene.add(new THREE.Mesh(t[0], objMat(8, 3))); const r = withT(clean(blob(4.2, 3, false, 0.32)), V(0, 1, 0)); r.applyMatrix4(new THREE.Matrix4().compose(e, new THREE.Quaternion(), V(1.3, 0.9, 1.1))); scene.add(new THREE.Mesh(r, objMat(4, 1))); OBST.push([e.x, e.z, 1.2]); }
+  /* wrack, stakes, planks and shingle */
+  { const P = []; const pebG = [0, 1, 2].map(i => withT(clean(blob(i * 3.3, 1, false, 0.3)).toNonIndexed(), V(0, 1, 0))); const buckets = pebG.map(() => []); for (let i = 0; i < 9000; i++) { const x = pr(50, 150), z = coastZ(x) + pr(-5, 26) * Math.pow(pr(0.3, 1), 0.6); const y = terrainH(x, z); if (y > 3 || y < -0.7) continue; const near = Math.hypot(x - 100, z - WR.O.z) < 32; if (!near && prnd() < 0.5) continue; const r = 0.03 + 0.2 * Math.pow(pr(0, 1), 3.2) + (prnd() < 0.05 ? 0.14 : 0); buckets[i % 3].push(new THREE.Matrix4().compose(V(x, y + r * 0.2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.3, 0.3), pr(0, TAU), pr(-0.3, 0.3))), V(r * pr(1, 1.5), r * pr(0.45, 0.8), r))); } buckets.forEach((b, k) => { const im = new THREE.InstancedMesh(pebG[k], objMat(k === 1 ? 12 : 4, k === 1 ? 0 : 1), b.length); b.forEach((m, i) => im.setMatrixAt(i, m)); im.frustumCulled = false; scene.add(im); });
+    const wrack = []; for (let i = 0; i < 120; i++) { const u = pr(-14, 14), s = prnd() < 0.7 ? 1 : -1, off = pr(0, 3.2), p = WR.toW(u, 1, s * (WR.beam(u) * 0.8 + off)); const y = terrainH(p.x, p.z); if (y < -0.5) continue; const r = pr(0.25, 0.9), g = clean(blob(i * 0.7, 1, false, 0.5)).toNonIndexed(); withT(g, V(0, 1, 0)); g.applyMatrix4(new THREE.Matrix4().compose(V(p.x, y + 0.05, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, pr(0, TAU), 0)), V(r * pr(1, 2), r * 0.22, r))); wrack.push(g); } for (let i = 0; i < 90; i++) { const u = pr(-10, 12), y0 = pr(0.5, 1.6), s = prnd() < 0.8 ? 1 : -1, w = s * (WR.bAt(u, y0) + 0.05), a = WR.toW(u, y0, w), t = []; limb([a, a.clone().add(V(pr(-0.2, 0.2), -0.55, 0.05)), a.clone().add(V(pr(-0.25, 0.25), -pr(0.9, 1.5), s * 0.1))], 0.07, 0.015, 5, { radial: 4, into: t }); wrack.push(t[0].toNonIndexed()); } scene.add(new THREE.Mesh(mergeGeometries(wrack), objMat(7, 0)));
+    const debris = []; for (let i = 0; i < 46; i++) { const x = WR.O.x + pr(-20, 20), z = WR.O.z + pr(-1, 20), y = terrainH(x, z); if (y < -0.2 || WR.hit(x, z, 1.2).v ** 2 < WR.B ** 2 * 1.1 && Math.abs(WR.hit(x, z, 1.2).u) < 14) continue; const l = pr(0.6, 3.1), g = new THREE.BoxGeometry(l, 0.06, pr(0.12, 0.3)); g.deleteAttribute('uv'); withT(g, V(1, 0, 0)); g.applyMatrix4(new THREE.Matrix4().compose(V(x, y + 0.07, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pr(-0.12, 0.12), pr(0, TAU), pr(-0.12, 0.12))), V(1, 1, 1))); debris.push(clean(g).toNonIndexed()); } for (const [u, v, h] of [[15.2, 1.4, 1.9], [16, -0.8, 1.2], [14.6, -2.2, 1.5], [16.6, 2.6, 0.9], [-15, 1.8, 1.1]]) { const p = WR.toW(u, 0.2, v), t = [], y = terrainH(p.x, p.z); limb([V(p.x, y - 0.3, p.z), V(p.x + 0.1, y + h * 0.5, p.z + 0.05), V(p.x + 0.04, y + h, p.z - 0.07)], 0.22, 0.09, 8, { radial: 7, into: t, knot: u }); debris.push(t[0].toNonIndexed()); OBST.push([p.x, p.z, 0.45]); } scene.add(new THREE.Mesh(mergeGeometries(debris), objMat(6, 3))); }
+}
+
 /* ---------- walking */
 const WALK = { on: Q.get('walk') !== '0', x: 0, z: 0, yaw: 2.9, pitch: -0.06, vx: 0, vz: 0, y: 0, bob: 0, kneel: 0, kneeling: false, keys: {}, joy: null, stick: [0, 0], look: { p: V(), tgt: V(), fov: 62 }, place: 'THE HEADLAND' };
 OBST.push([HOUSE.x, HOUSE.z, 7]);
 const inPier = (x, z) => Math.abs(x - PIER_X) < 1.65 && z <= zL && z >= PIER_END_Z + 1.5;
-const groundAt = (x, z) => { const h = terrainH(x, z); return inPier(x, z) ? Math.max(h, DECK) : h; };
-const PLACES = { 1: ['THE HOUSE', HOUSE.x - 8, HOUSE.z - 12, 3.4], 2: ['THE PIER', PIER_X, zL - 6, 3.14], 3: ['TWISTED TREE', CC.x + 3, CC.z - 9.5, 3.45], 4: ['SRUTHÁN', -44, 96, 3.3] };
-function walkTo(k) { const p = PLACES[k]; if (!p) return; WALK.x = p[1]; WALK.z = p[2]; WALK.yaw = p[3]; WALK.y = groundAt(WALK.x, WALK.z); WALK.vx = WALK.vz = 0; }
+function wrFloor(x, z) { let yf = WR.FLOOR_Y; for (let i = 0; i < 3; i++) { const q = WR.hit(x, z, yf); yf = (q.u > WR.stair[0] && q.u < WR.stair[1] && Math.abs(q.v) < 0.8) ? lerp(WR.FLOOR_Y, WR.DECK_Y, (q.u - WR.stair[0]) / (WR.stair[1] - WR.stair[0])) : WR.FLOOR_Y; } return yf; }
+const rampS = (x, z) => { const r = WR.ramp, l2 = r.dx * r.dx + r.dz * r.dz, s = ((x - r.A.x) * r.dx + (z - r.A.z) * r.dz) / l2, w = Math.abs((x - r.A.x) * r.dz - (z - r.A.z) * r.dx) / Math.sqrt(l2); return { s, w }; };
+const groundAt = (x, z, layer = WR.layer) => { if (layer === 'hold') return WR.O.y + (WR.hit(x, z, wrFloor(x, z)).y - WR.O.y); if (layer === 'deck') return WR.hit(x, z, WR.DECK_Y).y; if (layer === 'ramp') { const q = rampS(x, z); return lerp(WR.ramp.A.y, WR.ramp.B.y, clamp(q.s, 0, 1)) + 0.04; } const h = terrainH(x, z); return inPier(x, z) ? Math.max(h, DECK) : h; };
+function wrFree(x, z) { const L = WR.layer; WR.nl = L;
+  if (L === 'hold') { const yf = wrFloor(x, z), q = WR.hit(x, z, yf), inBreach = q.u > WR.breach[0] && q.u < WR.breach[1]; if (inBreach && q.v > WR.bAt(q.u, 1.3) - 0.1) { WR.nl = 'ground'; return true; } if (q.u < -11.6 || q.u > 10.8) return false; if (Math.abs(q.v) > WR.bAt(q.u, WR.FLOOR_Y + 0.4) - 0.28) return false; if (Math.abs(q.u - 1.5) < 0.42 && Math.abs(q.v) < 0.42) return false; if (q.u > WR.stair[0] + 0.5 && q.u < WR.stair[1] && Math.abs(q.v) > 0.75 && Math.abs(q.v) < 0.95) return false; if (q.u >= WR.stair[1] - 0.05 && Math.abs(q.v) < 0.8) { WR.nl = 'deck'; return true; } return true; }
+  if (L === 'deck') { const q = WR.hit(x, z, WR.DECK_Y); if (q.u > WR.gang[0] && q.u < WR.gang[1] && q.v > WR.bAt(q.u, WR.DECK_Y) - 0.2) { WR.nl = 'ramp'; return true; } if (q.u < -12.4 || q.u > 11.2 || Math.abs(q.v) > WR.bAt(q.u, WR.DECK_Y) - 0.22) return false; if (q.u > WR.stair[0] && q.u < WR.stair[1] - 0.1 && Math.abs(q.v) < 0.9) { if (q.u > WR.stair[1] - 0.35) { WR.nl = 'hold'; return true; } return false; } if (Math.abs(q.u - 1.5) < 0.42 && Math.abs(q.v) < 0.42) return false; const inWH = q.u > -10.1 && q.u < -5.3 && Math.abs(q.v) < 2.1, wasWall = q.u > -10.1 && q.u < -9.85 || q.u < -5.3 && q.u > -5.55 && Math.abs(q.v) > 0.6 || (q.u > -10.1 && q.u < -5.3 && Math.abs(Math.abs(q.v) - 2) < 0.14); if (inWH && wasWall) return false; if (Math.hypot(q.u + 6.5, q.v) < 0.45) return false; return true; }
+  if (L === 'ramp') { const q = rampS(x, z); if (q.w > 0.6) return false; if (q.s < 0.02) { WR.nl = 'deck'; return true; } if (q.s > 0.96) { WR.nl = 'ground'; return true; } return true; }
+  const q = WR.hit(x, z, 1.3); const ramp = rampS(x, z); if (ramp.s > 0.86 && ramp.s < 0.97 && ramp.w < 0.6) { WR.nl = 'ramp'; return true; } if (Math.abs(q.u) < 13.3 && Math.abs(q.v) < WR.beam(q.u) + 0.25) { if (q.v > 0 && q.u > WR.breach[0] && q.u < WR.breach[1]) { if (q.v < WR.bAt(q.u, 1.3) - 0.15) WR.nl = 'hold'; return true; } return false; } return true; }
+const PLACES = { 1: ['THE HOUSE', HOUSE.x - 8, HOUSE.z - 12, 3.4], 2: ['THE PIER', PIER_X, zL - 6, 3.14], 5: ['THE WRECK', 104, WR.O.z + 13, 3.0], 3: ['TWISTED TREE', CC.x + 3, CC.z - 9.5, 3.45], 4: ['SRUTHÁN', -44, 96, 3.3] };
+function walkTo(k) { const p = PLACES[k]; if (!p) return; WALK.x = p[1]; WALK.z = p[2]; WALK.yaw = p[3]; WR.layer = WR.nl = 'ground'; WALK.y = groundAt(WALK.x, WALK.z); WALK.vx = WALK.vz = 0; }
 walkTo(4);
 function walkFree(x, z, ox, oz) {
   if (inPier(x, z)) return true; const stair = Math.abs(x - PIER_X) < 1.6 && z >= zL && z <= zT + 3; if (stair) return true;
-  const h = terrainH(x, z); if (h < 0.3) return false;
+  const nearW = Math.abs(x - 100) < 70; if (WR.layer !== 'ground' || (nearW && Math.hypot(x - WR.O.x, z - WR.O.z) < 26)) { if (!wrFree(x, z)) return false; if (WR.layer !== 'ground' || WR.nl !== 'ground') return true; }
+  const h = terrainH(x, z); if (h < (nearW ? -0.75 : 0.3)) return false;
   const h0 = terrainH(ox, oz), dd = Math.hypot(x - ox, z - oz) || 1e-4; if (Math.abs(h - h0) / dd > 1.6 && h < h0 + 8) return false;
-  for (const o of OBST) if ((x - o[0]) ** 2 + (z - o[1]) ** 2 < o[2] * o[2]) return false; return true;
+  if (WR.layer === 'ground') for (const o of OBST) if ((x - o[0]) ** 2 + (z - o[1]) ** 2 < o[2] * o[2]) return false; return true;
 }
 function walkStep(dt) { dt = Math.min(dt, 0.1); const W = WALK, k = W.keys;
   let fx = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0) + W.stick[0], fz = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0) + W.stick[1]; const fl = Math.hypot(fx, fz); if (fl > 1) { fx /= fl; fz /= fl; }
   const speed = (k.shift ? 8.5 : 3.8) * (W.kneeling ? 0.3 : 1), sy = Math.sin(W.yaw), cy = Math.cos(W.yaw); const tx = (cy * fx + sy * fz) * speed, tz = (sy * fx - cy * fz) * speed, a = 1 - Math.exp(-dt * 9); W.vx += (tx - W.vx) * a; W.vz += (tz - W.vz) * a;
-  const nx = W.x + W.vx * dt, nz = W.z + W.vz * dt; if (walkFree(nx, nz, W.x, W.z)) { W.x = nx; W.z = nz; } else if (walkFree(nx, W.z, W.x, W.z)) { W.x = nx; W.vz = 0; } else if (walkFree(W.x, nz, W.x, W.z)) { W.z = nz; W.vx = 0; } else { W.vx = W.vz = 0; }
+  const nx = W.x + W.vx * dt, nz = W.z + W.vz * dt; if (walkFree(nx, nz, W.x, W.z)) { W.x = nx; W.z = nz; WR.layer = WR.nl; } else if (walkFree(nx, W.z, W.x, W.z)) { W.x = nx; W.vz = 0; WR.layer = WR.nl; } else if (walkFree(W.x, nz, W.x, W.z)) { W.z = nz; W.vx = 0; WR.layer = WR.nl; } else { W.vx = W.vz = 0; }
   const g = groundAt(W.x, W.z), sp = Math.hypot(W.vx, W.vz); W.y += (g - W.y) * (1 - Math.exp(-dt * 12)); W.bob += sp * dt * 2.1; W.kneel += ((W.kneeling ? 1 : 0) - W.kneel) * (1 - Math.exp(-dt * 6));
   const eye = lerp(1.62, 0.34, W.kneel) + 0.028 * Math.sin(W.bob * 2) * Math.min(sp, 3) * (1 - W.kneel), cp = Math.cos(W.pitch), L = W.look; L.p.set(W.x, W.y + eye, W.z); L.tgt.set(W.x + sy * cp * 20, W.y + eye + Math.sin(W.pitch) * 20, W.z - cy * cp * 20); L.fov = lerp(62, 46, W.kneel); DIR.look = L; }
-function placeName() { const x = camera.position.x, z = camera.position.z; const dc = Math.hypot(x - CC.x, z - CC.z), n = streamNear(x, z).d; if (dc < 14) return 'TWISTED TREE'; if (n < 7) return 'SRUTHÁN'; if (dc < 70) return 'THE WOOD'; if (inPier(x, z)) return 'THE PIER'; if (Math.hypot(x - HOUSE.x, z - HOUSE.z) < 24) return 'THE HOUSE'; if (coastZ(x) + 18 > z) return 'THE SHORE'; return 'THE HEADLAND'; }
-let WOODQ = 1, STREAMQ = 0;
+function placeName() { const x = camera.position.x, z = camera.position.z; const dc = Math.hypot(x - CC.x, z - CC.z), n = streamNear(x, z).d; if (WR.layer === 'hold') return 'THE WRECK · HOLD'; if (WR.layer === 'deck' || WR.layer === 'ramp') { const q = WR.hit(x, z, WR.DECK_Y); return q.u < -5.3 && q.u > -10.1 && Math.abs(q.v) < 2 ? 'THE WRECK · WHEELHOUSE' : 'THE WRECK · DECK'; } if (Math.hypot(x - WR.O.x, z - WR.O.z) < 34) return 'THE WRECK'; if (dc < 14) return 'TWISTED TREE'; if (n < 7) return 'SRUTHÁN'; if (dc < 70) return 'THE WOOD'; if (inPier(x, z)) return 'THE PIER'; if (Math.hypot(x - HOUSE.x, z - HOUSE.z) < 24) return 'THE HOUSE'; if (coastZ(x) + 18 > z) return 'THE SHORE'; return 'THE HEADLAND'; }
+let WOODQ = 1, STREAMQ = 0, WRECKQ = 0, HOLDQ = 0;
 function worldTick(dt) { if (WALK.on) walkStep(dt); else if (DIR.look === WALK.look) DIR.look = null;
   S.rain = clamp((S.rain || 0) + (WX.precip * 0.08 - (S.rain || 0) / 2880) * dt, 0, 6); const lv = clamp(S.rain * 0.35, 0, 1); streamU.uLevel.value += (lv - streamU.uLevel.value) * Math.min(1, dt * 0.2);
-  const x = camera.position.x, z = camera.position.z; WALK.place = placeName(); const near = (x > SB.x0 - 30 && x < SB.x1 + 30 && z > SB.z0 - 30 && z < SB.z1 + 30) ? streamNear(x, z).d : 99; STREAMQ = Math.pow(1 - smoothstep(1, 46, near), 2) * (1 + lv); WOODQ = 1 - 0.6 * (1 - smoothstep(30, 78, Math.hypot(x - CC.x, z - CC.z))); }
-{ const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = 'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–4 PLACES'; hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
-  addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; } if ('1234'.includes(k)) walkTo(k); });
+  const x = camera.position.x, z = camera.position.z; WALK.place = placeName(); const near = (x > SB.x0 - 30 && x < SB.x1 + 30 && z > SB.z0 - 30 && z < SB.z1 + 30) ? streamNear(x, z).d : 99; STREAMQ = Math.pow(1 - smoothstep(1, 46, near), 2) * (1 + lv); WOODQ = 1 - 0.6 * (1 - smoothstep(30, 78, Math.hypot(x - CC.x, z - CC.z)));
+  const hv = WR.layer === 'hold' ? 1 : 0; HOLDQ += (hv - HOLDQ) * Math.min(1, dt * 3); SH.uHold.value = HOLDQ; WRECKQ = 1 - smoothstep(4, 42, Math.hypot(x - WR.O.x, z - WR.O.z)); if (WR.layer !== 'ground' && !S.boarded) { S.boarded = true; logEv('someone went aboard the wreck'); } }
+{ const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = 'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–5 PLACES'; hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
+  addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; } if ('12345'.includes(k)) walkTo(k); });
   addEventListener('keyup', e => { WALK.keys[e.key.toLowerCase()] = false; }); addEventListener('blur', () => { WALK.keys = {}; });
   cv.style.touchAction = 'none'; cv.addEventListener('click', () => { if (WALK.on && cv.requestPointerLock && matchMedia('(pointer:fine)').matches) { try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
   addEventListener('mousemove', e => { if (document.pointerLockElement === cv) { WALK.yaw += e.movementX * 0.0022; WALK.pitch = clamp(WALK.pitch - e.movementY * 0.0022, -1.35, 1.25); } });
@@ -963,6 +1039,7 @@ const AUD = {
     { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 33; const gg = g(0); o.connect(gg).connect(master); o.start(); this.sub = { o, g: gg }; }
     { const s = loop(this.brown), f = bq('bandpass', 95, 3.5), gg = g(0); s.connect(f).connect(gg).connect(master); gg.connect(this.room.rIn); this.grind = { g: gg, f }; }
     { const s = loop(this.white), f = bq('bandpass', 620, 0.6), f2 = bq('lowpass', 1100), gg = g(0); s.connect(f).connect(f2).connect(gg).connect(master); gg.connect(this.room.rIn); this.stream = { g: gg, f }; }
+    { const s = loop(this.brown), f = bq('bandpass', 150, 4), gg = g(0); s.connect(f).connect(gg).connect(master); gg.connect(this.room.rIn); this.wreck = { g: gg, f }; }
     this.wreG = g(0); this.wreG.connect(this.room.rIn); this.wreG.connect(master); this.wreO = [0, 1].map(i => { const o = c.createOscillator(); o.type = 'sine'; o.connect(this.wreG); o.start(); return o; });
     this.retune(true);
   },
@@ -1052,7 +1129,8 @@ const AUD = {
   frame(dt) {
     const c = this.ctx; if (!c || c.state !== 'running') return; const t = c.currentTime;
     const shore = clamp(SHORE_ENV, 0, 1.5), calm = live.calm;
-    this.sea.forEach((s, i) => { s.g.gain.setTargetAtTime((0.05 + 0.16 * shore + 0.04 * WX.swellH) * calm * WOODQ, t, 0.25); s.f.frequency.setTargetAtTime(170 + 330 * shore + 40 * WX.swellH, t, 0.3); });
+    this.sea.forEach((s, i) => { s.g.gain.setTargetAtTime((0.05 + 0.16 * shore + 0.04 * WX.swellH) * calm * WOODQ, t, 0.25); s.f.frequency.setTargetAtTime((170 + 330 * shore + 40 * WX.swellH) * (1 - 0.6 * HOLDQ), t, 0.3); });
+    this.wreck.g.gain.setTargetAtTime(WRECKQ * (0.05 + 0.2 * Math.pow(Math.max(0, Math.sin(simT * 0.71) * Math.sin(simT * 0.23 + 1)), 3)) * calm, t, 0.3); this.wreck.f.frequency.setTargetAtTime(120 + 90 * Math.sin(simT * 0.37), t, 0.5);
     this.stream.g.gain.setTargetAtTime(0.1 * STREAMQ * calm, t, 0.4); this.stream.f.frequency.setTargetAtTime(520 + 260 * clamp(streamU.uLevel.value, 0, 1), t, 1);
     this.wind.g.gain.setTargetAtTime(Math.pow(WX.wind, 1.3) * 0.0032 * (live.ev === 'hush' ? 0.2 : 1), t, 0.8); this.wind.f.frequency.setTargetAtTime(220 + WX.wind * 22, t, 1);
     this.wind.p.pan.setTargetAtTime(0.5 * Math.sin(simT * 0.07), t, 1);
@@ -1364,6 +1442,6 @@ window.MZ = {
   setWx(o) { Object.assign(WXT, o); Object.assign(WX, o); WX.live = true; },
   analyser() { return AUD.an; },
   audio: AUD,
-  walk: { get s() { return { x: WALK.x, y: WALK.y, z: WALK.z, yaw: WALK.yaw, place: WALK.place }; }, go: (k) => walkTo(k), set(x, z, yaw, pitch = -0.06) { WALK.x = x; WALK.z = z; WALK.yaw = yaw; WALK.pitch = pitch; WALK.y = groundAt(x, z); }, kneel(v) { WALK.kneeling = v; }, press(k, v) { WALK.keys[k] = v; }, stream: STREAM.pts.filter((_, i) => i % 40 === 0).map(p => [p.x, p.z]), cc: CC },
+  walk: { get s() { return { x: WALK.x, y: WALK.y, z: WALK.z, yaw: WALK.yaw, place: WALK.place }; }, go: (k) => walkTo(k), get layer() { return WR.layer; }, sim(n, dt = 0.05) { for (let i = 0; i < n; i++) walkStep(dt); }, wr: (u, y, v) => WR.toW(u, y, v).toArray(), get ramp() { return { A: WR.ramp.A.toArray(), B: WR.ramp.B.toArray() }; }, hit: (x, z, y) => WR.hit(x, z, y), set(x, z, yaw, pitch = -0.06) { WALK.x = x; WALK.z = z; WALK.yaw = yaw; WALK.pitch = pitch; WALK.y = groundAt(x, z); }, kneel(v) { WALK.kneeling = v; }, press(k, v) { WALK.keys[k] = v; }, stream: STREAM.pts.filter((_, i) => i % 40 === 0).map(p => [p.x, p.z]), cc: CC },
 };
 </script>
