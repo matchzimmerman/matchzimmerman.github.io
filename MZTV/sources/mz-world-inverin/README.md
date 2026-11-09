@@ -12,7 +12,7 @@ The shared, walkable MZ WORLD. HEADLAND is the ground, with TWISTED TREE planted
 - **SRUTHÁN:** one stream carved into the terrain, ending in a cascade over the cliff. Rain raises it and it drains over hours (SRUTHÁN's rain store). Its macro water, leaf and midges are not ported yet.
 - A walked path joins the keeper's route to the clearing. Sea, stream and wind in the mix change with where you stand.
 
-- **THE WRECK:** a heeled wooden coaster on a shingle cove east of the pier, modelled from Match's reference photos. Walk around it, enter by the breach on the landward side, climb the companion stair to the deck, go into the wheelhouse, and leave by the fallen gangway. The hold darkens and the sea goes muffled.
+- **THE WRECK:** a heeled wooden coaster on a shingle cove east of the pier, modelled from Match's reference photos. Walk around it, enter by the breach on the landward side, climb the companion stair to the deck, go into the wheelhouse, and leave by the fallen gangway. The hold darkens and the sea goes muffled. The print dissolves into a scratched black-and-white pinhole negative as you approach, fully by about 19 m and whenever you are aboard.
 
 ## Next
 SHEEPDOG and HEN on the land, BREAKWATER on the shore, HAMBURGER CAVE hidden, then the Bryson district.

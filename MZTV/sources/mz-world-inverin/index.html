@@ -426,7 +426,7 @@ void main(){ if(vLife<=0.) discard; vec2 c=gl_PointCoord*2.-1.; if(dot(c,c)>1.) 
 
 /* ---------- print pass: linocut lines through OBAS inks */
 const PU = {
-  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) },
+  uData: { value: rtData.texture }, uRes: { value: new THREE.Vector2(2, 2) }, uPhoto: { value: 0 },
   uPal: { value: Array.from({ length: 6 }, () => V()) },
   uTab: { value: MAT.map(m => V(m[0], m[1], m[2])) }, uHat: { value: MAT.map(m => m[3]) }, uSpk: { value: MAT.map(m => m[4]) },
   uPeriod: { value: 6 }, uDith: { value: 0.12 }, uWob: { value: 7 }, uOutline: { value: 1 }, uHatch: { value: 1 },
@@ -434,7 +434,7 @@ const PU = {
 };
 const PRINT_FRAG = /* glsl */`
 uniform sampler2D uData; uniform vec2 uRes; uniform vec3 uPal[6]; uniform vec3 uTab[16]; uniform float uHat[16]; uniform float uSpk[16];
-uniform float uPeriod, uDith, uWob, uOutline, uHatch, uSeed, uRain, uTime; uniform vec2 uRainDir;
+uniform float uPeriod, uDith, uWob, uOutline, uHatch, uSeed, uRain, uTime, uPhoto; uniform vec2 uRainDir;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
@@ -448,6 +448,27 @@ bool soft(int a,int b){
   if((a==2||a==3)&&(b==2||b==3)) return true;
   if((a==4||a==5)&&(b==4||b==5)) return false;
   return false; }
+// THE WRECK: near it the print gives way to a scratched pinhole negative
+float ALB[16];
+float toneAt(vec2 p){ vec4 d=texture2D(uData,p/uRes); int i=int(floor(d.g*16.)); float s=d.r, a=ALB[i];
+  if(i==0||i==13||i==14){ vec2 q=p/uRes.y; float m=vn(q*2.1+uSeed)*.6+vn(q*5.3)*.3+vn(q*11.)*.1; return .34+.42*s*.7+.3*m; } if(i==1||i==15) return 1.; if(i==3) return .55+.45*s;
+  return pow(clamp(s*a*1.75,0.,1.),1.15); }
+vec3 photoAt(vec2 fc, float angLine){
+  ALB[0]=.95;ALB[1]=1.;ALB[2]=.5;ALB[3]=.95;ALB[4]=.4;ALB[5]=.52;ALB[6]=.46;ALB[7]=.13;ALB[8]=.16;ALB[9]=.86;ALB[10]=.2;ALB[11]=.4;ALB[12]=.62;ALB[13]=1.;ALB[14]=.9;ALB[15]=1.;
+  vec2 uv=fc/uRes, c=(uv-.5)*vec2(uRes.x/uRes.y,1.); float r2=dot(c,c);
+  float rad=.7+uRes.y*.0075*smoothstep(.07,.5,r2); float t=toneAt(fc)*.28; float w=.28;
+  for(int i=0;i<8;i++){ float a=float(i)*.7854+.3; vec2 o=vec2(cos(a),sin(a))*rad; t+=toneAt(fc+o)*.09; w+=.09; }
+  t/=w; t+=angLine*.035;
+  t=smoothstep(.02,.98,t); t=mix(t,t*t*(3.-2.*t),.45);
+  float g=hash(floor(fc/1.35)+7.); t+=(g-.5)*.12*(1.-.5*abs(2.*t-1.));
+  // water spots, dust, hairs, scratches on the plate
+  vec2 q=fc/uRes.y; float blot=smoothstep(.56,.96,vn(q*5.+3.)); t=mix(t,t*.8,blot*.45); float drop=smoothstep(.87,.985,vn(q*36.+vec2(9.,2.))); t=mix(t,min(1.,t+.16),drop*.55);
+  float dust=step(.9968,hash(floor(fc/2.2)+3.)); t=mix(t,hash(floor(fc/2.2))>.45?.02:.98,dust);
+  float sx=fract(uv.x*17.3+.2*vn(vec2(uv.y*3.,5.))); float scr=smoothstep(.0028,.0,abs(sx-.5))*step(.62,vn(vec2(floor(uv.x*17.3)*7.,uv.y*2.5))); t=mix(t,.94,scr*.55);
+  // the round, uneven edge of the lens and a burned corner
+  float edge=length(c*vec2(.66,1.))+.05*(vn(q*2.6)-.5)+.012*(vn(q*30.)-.5); float vig=smoothstep(.78,.48,edge); t*=mix(.04,1.,vig);
+  t+=.08*smoothstep(.55,.8,uv.y+.3*vn(q*1.5))*vig;
+  return mix(vec3(.05,.05,.056),vec3(.93,.915,.88),clamp(t,0.,1.)); }
 void main(){
   vec2 fc=gl_FragCoord.xy;
   vec4 d=texture2D(uData,fc/uRes);
@@ -472,7 +493,9 @@ void main(){
     vec2 cell=floor(rp/vec2(5.,46.)); float h=hash(cell+uSeed);
     if(h>1.-uRain*0.06 && fract(rp.y/46.)<0.35 && fract(rp.x/5.)<0.3) ink=(s<0.5)?float(tab.z):5.;
   }
-  gl_FragColor=vec4(uPal[int(ink+0.5)],1.);
+  vec3 col=uPal[int(ink+0.5)];
+  if(uPhoto>0.003){ float th=.66*vn(fc/uRes.y*3.2+uSeed*.1)+.34*hash(floor(fc/1.5)+11.); float m=smoothstep(th-.05,th+.05,uPhoto*1.2-.1); if(uPhoto>.995) m=1.; if(m>.003) col=mix(col,photoAt(fc,line*hs),m); }
+  gl_FragColor=vec4(col,1.);
 }`;
 const BLIT_FRAG = /* glsl */`uniform sampler2D uTex; uniform vec2 uOut; varying vec2 vUv;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
@@ -852,15 +875,16 @@ let WOODQ = 1, STREAMQ = 0, WRECKQ = 0, HOLDQ = 0;
 function worldTick(dt) { if (WALK.on) walkStep(dt); else if (DIR.look === WALK.look) DIR.look = null;
   S.rain = clamp((S.rain || 0) + (WX.precip * 0.08 - (S.rain || 0) / 2880) * dt, 0, 6); const lv = clamp(S.rain * 0.35, 0, 1); streamU.uLevel.value += (lv - streamU.uLevel.value) * Math.min(1, dt * 0.2);
   const x = camera.position.x, z = camera.position.z; WALK.place = placeName(); const near = (x > SB.x0 - 30 && x < SB.x1 + 30 && z > SB.z0 - 30 && z < SB.z1 + 30) ? streamNear(x, z).d : 99; STREAMQ = Math.pow(1 - smoothstep(1, 46, near), 2) * (1 + lv); WOODQ = 1 - 0.6 * (1 - smoothstep(30, 78, Math.hypot(x - CC.x, z - CC.z)));
+  PU.uPhoto.value = WR.layer !== 'ground' ? 1 : 1 - smoothstep(19, 96, Math.hypot(x - WR.O.x, z - WR.O.z));
   const hv = WR.layer === 'hold' ? 1 : 0; HOLDQ += (hv - HOLDQ) * Math.min(1, dt * 3); SH.uHold.value = HOLDQ; WRECKQ = 1 - smoothstep(4, 42, Math.hypot(x - WR.O.x, z - WR.O.z)); if (WR.layer !== 'ground' && !S.boarded) { S.boarded = true; logEv('someone went aboard the wreck'); } }
-{ const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = 'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–5 PLACES'; hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
+{ const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = ''+(matchMedia('(pointer:coarse)').matches?'DRAG LEFT WALK · DRAG RIGHT LOOK · TAP HIDES INFO':'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–5 PLACES'); hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
   addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; } if ('12345'.includes(k)) walkTo(k); });
   addEventListener('keyup', e => { WALK.keys[e.key.toLowerCase()] = false; }); addEventListener('blur', () => { WALK.keys = {}; });
   cv.style.touchAction = 'none'; cv.addEventListener('click', () => { if (WALK.on && cv.requestPointerLock && matchMedia('(pointer:fine)').matches) { try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
   addEventListener('mousemove', e => { if (document.pointerLockElement === cv) { WALK.yaw += e.movementX * 0.0022; WALK.pitch = clamp(WALK.pitch - e.movementY * 0.0022, -1.35, 1.25); } });
-  const ptrs = new Map(); cv.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') return; ptrs.set(e.pointerId, { left: e.clientX < innerWidth / 2, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY }); });
-  addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; if (p.left) { WALK.stick = [clamp((e.clientX - p.ox) / 60, -1, 1), clamp((p.oy - e.clientY) / 60, -1, 1)]; } else { WALK.yaw += (e.clientX - p.x) * 0.006; WALK.pitch = clamp(WALK.pitch - (e.clientY - p.y) * 0.006, -1.35, 1.25); p.x = e.clientX; p.y = e.clientY; } });
-  const up = e => { const p = ptrs.get(e.pointerId); if (p && p.left) WALK.stick = [0, 0]; ptrs.delete(e.pointerId); }; addEventListener('pointerup', up); addEventListener('pointercancel', up); }
+  const ptrs = new Map(); cv.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') return; ptrs.set(e.pointerId, { t: performance.now(), moved: 0, left: e.clientX < innerWidth / 2, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY }); });
+  addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.ox, e.clientY - p.oy)); if (p.left) { WALK.stick = [clamp((e.clientX - p.ox) / 60, -1, 1), clamp((p.oy - e.clientY) / 60, -1, 1)]; } else { WALK.yaw += (e.clientX - p.x) * 0.006; WALK.pitch = clamp(WALK.pitch - (e.clientY - p.y) * 0.006, -1.35, 1.25); p.x = e.clientX; p.y = e.clientY; } });
+  const up = e => { const p = ptrs.get(e.pointerId); if (p && e.type === 'pointerup' && p.moved < 10 && performance.now() - p.t < 320) { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); } if (p && p.left) WALK.stick = [0, 0]; ptrs.delete(e.pointerId); }; addEventListener('pointerup', up); addEventListener('pointercancel', up); }
 
 /* ====================================================================== weather */
 const WX = { wind: 7, windDir: 245, cloud: 0.55, precip: 0, temp: 12, hum: 84, swellH: 1.5, swellT: 10, swellDir: 265, live: false, at: 0 };
