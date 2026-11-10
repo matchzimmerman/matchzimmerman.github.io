@@ -131,6 +131,23 @@ body.drift #view{cursor:none}
 .pin::after{content:"";width:2px;height:10px;background:var(--phos)}
 .pin.sel span{background:var(--amber)}
 .pin.sel::after{background:var(--amber)}
+.pin.gps span{background:#6fb7ff} .pin.gps::after{background:#6fb7ff} .pin.gps.sel span{background:var(--amber)} .pin.gps.sel::after{background:var(--amber)}
+#meRing{position:absolute;border-radius:50%;background:rgba(80,160,255,.16);border:1px solid rgba(110,180,255,.75);transform:translate(-50%,-50%);pointer-events:none}
+#meDot{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#2f8fff;border:2.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45);pointer-events:none}
+#meDot::after{content:'';position:absolute;inset:-2.5px;border-radius:50%;border:2px solid #6fb7ff;animation:mePulse 2s ease-out infinite}
+#meDot.stale{background:#8a97a3} #meDot.stale::after{animation:none;opacity:0}
+@keyframes mePulse{from{transform:scale(1);opacity:.9}to{transform:scale(3.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){#meDot::after{animation:none;opacity:0}}
+#pinPop{left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));width:min(360px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:12px;z-index:30;display:grid;gap:8px;box-shadow:0 8px 28px rgba(0,0,0,.45)}
+#pinPop[hidden]{display:none}
+#marks.pass .pin,#marks.pass .cand,#marks.pass .refl{pointer-events:none}
+#pinPop label{display:grid;gap:3px;font:500 10.5px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+#pinPop input{background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:8px;font:500 14px var(--ui);color:var(--fg);width:100%;box-sizing:border-box}
+#pinPop textarea{min-height:64px;font:400 13px/1.4 var(--ui)}
+#pinPopInfo{font:500 11px/1.5 var(--mono);color:var(--dim);font-variant-numeric:tabular-nums}
+#fwStatus{font:500 11.5px/1.5 var(--mono);font-variant-numeric:tabular-nums;color:var(--fg);margin:6px 0}
+#fwStatus .k{color:var(--dim)}
+.item .nt{grid-column:1/-1;font:400 12px/1.4 var(--ui);color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
 .dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:2px solid var(--ink);background:var(--phos);box-shadow:0 0 0 1px var(--phos)}
 .dot.b{background:var(--amber);box-shadow:0 0 0 1px var(--amber)}
 .dot em{position:absolute;left:12px;top:-6px;font:700 10px var(--mono);font-style:normal;color:var(--fg);text-shadow:0 1px 3px #000}
@@ -247,6 +264,12 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
     </div>
   </div>
 
+  <div id="pinPop" class="float" hidden>
+    <label>Label<input id="ppName" autocomplete="off" enterkeyhint="done"></label>
+    <label>Notes<textarea id="ppNote" placeholder="What is here?"></textarea></label>
+    <div id="pinPopInfo"></div>
+    <div class="btns"><button class="btn pri" id="ppDone">Save</button><button class="btn ghost" id="ppDel">Delete pin</button></div>
+  </div>
   <div id="hint" class="float" hidden><span id="hintText"></span><button id="hintUndo" hidden>Undo</button><button id="hintFinish" hidden>Finish</button><button id="hintCancel">Cancel</button></div>
   <div id="scalebar" class="float"><span id="sbLabel">100 m</span><i id="sbBar" style="width:100px"></i></div>
   <div id="toast" class="float" hidden></div>
@@ -376,6 +399,18 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         <button class="btn ghost" id="profClear">Clear profile</button>
       </div>
 
+      <div class="grp" id="fwGrp">
+        <div class="lab">Field work</div>
+        <div class="btns"><button class="btn" id="fwLocate" style="grid-column:1/-1">Show my location</button></div>
+        <div id="fwStatus" hidden></div>
+        <label class="toggle" id="fwFollowRow" hidden><input type="checkbox" id="fwFollow"> Keep the map centred on me</label>
+        <div class="btns" id="fwActs" hidden>
+          <button class="btn pri" id="fwPinGps">Pin my GPS position</button>
+          <button class="btn" id="fwPinHere">I'm standing here…</button>
+        </div>
+        <p class="note" id="fwNote">Shows a live dot from your phone's GPS. Pin the GPS reading as it is, or, if the dot is a little off, tap the spot on the scan you are really standing on. Each pin takes a label and notes.</p>
+      </div>
+
       <div class="grp">
         <div class="lab">Pins</div>
         <div class="list" id="pinList"></div>
@@ -387,6 +422,7 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
         <div class="btns">
           <button class="btn" id="copyScene">Copy scene</button>
           <button class="btn" id="copyGeo" style="grid-column:1/-1">Copy GeoJSON (pins, footprints, plans)</button>
+          <button class="btn" id="copyCsv" style="grid-column:1/-1">Copy pins as a table (CSV)</button>
           <button class="btn" id="pasteToggle">Paste scene</button>
         </div>
         <div class="grp" id="pasteGrp" hidden>
@@ -561,7 +597,7 @@ const S = {
 };
 let LS_KEY = 'mcd-ground-survey.v1';
 let HAD_SAVED=false;
-function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = (s.objs||[]).map(o=>{ if(o&&typeof o==='object'){ for(const k of RUNTIME_KEYS) delete o[k]; } return o; }).filter(o=>o&&o.id); S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; S.ref = s.ref||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
+function loadLS(){ try{ const s = JSON.parse(localStorage.getItem(LS_KEY)||'null'); if(s){ HAD_SAVED=true; Object.assign(S.view, s.view||{}); Object.assign(S.layer, s.layer||{}); S.pins = s.pins||[]; S.objs = (s.objs||[]).map(o=>{ if(o&&typeof o==='object'){ for(const k of RUNTIME_KEYS) delete o[k]; } return o; }).filter(o=>o&&o.id); S.pending = s.pending||{}; S.assetAdj = s.assetAdj||{}; S.field = s.field||{}; S.ref = s.ref||{}; if(s.assetsOff) S.assetsOff = s.assetsOff; } }catch(e){} }
 let saveT = 0;
 const RUNTIME_KEYS=new Set(['wrap','orient','content','tex','mesh','group','helper','img']);
 function stateJSON(){ return JSON.stringify(S,(k,v)=>{ if(RUNTIME_KEYS.has(k)) return undefined; if(v&&typeof v==='object'&&(v.isObject3D||v.isTexture||v.isMaterial||v.isBufferGeometry)) return undefined; return v; }); }
@@ -997,8 +1033,8 @@ function updateOverlays(){
   const seen=new Set();
   for(const p of S.pins){
     let el=pinEls.get(p.id);
-    if(!el){ el=document.createElement('div'); el.className='pin'; el.innerHTML='<span></span>'; el.addEventListener('click',()=>{selPin(p.id); openTab('marks');}); host.appendChild(el); pinEls.set(p.id,el); }
-    el.firstChild.textContent=p.name; el.classList.toggle('sel', p.id===selPinId);
+    if(!el){ el=document.createElement('div'); el.className='pin'; el.innerHTML='<span></span>'; el.addEventListener('click',()=>{selPin(p.id); openPinPop(p);}); host.appendChild(el); pinEls.set(p.id,el); }
+    el.firstChild.textContent=p.name; el.classList.toggle('sel', p.id===selPinId); el.classList.toggle('gps', !!p.src&&p.src!=='map');
     const w=toWorld(p.E,p.N); const y=renderY(w.x,w.z)??0; const s=project(w.x,y,w.z);
     el.style.display=s.vis?'':'none'; el.style.left=s.x+'px'; el.style.top=s.y+'px'; seen.add(p.id);
   }
@@ -1010,7 +1046,7 @@ function updateOverlays(){
   align.pts.forEach((p,i)=>dots.push([p, ['1','1′','2','2′'][i], i%2?'':'b']));
   trace.pts.forEach((p,i)=>dots.push([p, String(i+1), 'b']));
   if(gcpPend) dots.push([gcpPend.world, 'plan', '']);
-  candLabels(host); assetLabels(host); refLabels(host);
+  candLabels(host); assetLabels(host); refLabels(host); fieldDot(host);
   for(const [p,label,cls] of dots){ const y=p.y!==undefined?p.y:(renderY(p.x,p.z)??0); const s=project(p.x,y,p.z); if(!s.vis) continue;
     const d=document.createElement('div'); d.className='dot '+cls; d.style.left=s.x+'px'; d.style.top=s.y+'px'; if(label) d.innerHTML=`<em>${label}</em>`; host.appendChild(d); }
   // scale bar & north
@@ -1108,6 +1144,7 @@ function setTool(t){
   else if(t==='trace') hint('Tap each corner of the footprint, then Finish');
   else if(t==='gcp') hint('Tap a point on the plan image');
   else if(t==='walkpick') hint('Tap where you want to stand');
+  else if(t==='here') hint('Tap the spot on the scan where you are standing');
   else hint(null);
   if(t==='prof'){ prof.a=prof.b=null; prof.samples=null; profLine.visible=false; $('profGrp').hidden=true; }
   if(t!=='trace'){ trace.pts=[]; updateTraceLine(); }
@@ -1115,6 +1152,7 @@ function setTool(t){
   $('hintFinish').hidden = t!=='trace'; $('hintUndo').hidden = t!=='trace';
   $('tTrace').classList.toggle('on', t==='trace');
   if(t && sheetSmall()) setSheet(false);
+  $('marks').classList.toggle('pass', !!t);
   req();
 }
 $('tPin').onclick=()=>setTool(tool==='pin'?null:'pin');
@@ -1136,6 +1174,7 @@ let tcWasDragged=false; tc.addEventListener('mouseUp',()=>{ tcWasDragged=true; s
 
 function onTap(cx,cy){
   if(tool==='pin'){ const p=pickGround(cx,cy); if(!p) return; addPin(p); setTool(null); return; }
+  if(tool==='here'){ const p=pickGround(cx,cy); if(!p) return; setTool(null); addFieldPin(p,'corrected'); return; }
   if(tool==='prof'){ const p=pickGround(cx,cy); if(!p) return;
     if(!prof.a){ prof.a=p; hint('Tap the end point'); req(); }
     else { prof.b=p; setTool(null); prof.a=prof.a; buildProfile(); }
@@ -1166,17 +1205,102 @@ function renderPins(){
   for(const p of S.pins){
     const it=document.createElement('div'); it.className='item'+(p.id===selPinId?' sel':'');
     it.innerHTML=`<input class="nm" value="" aria-label="Pin name"><div class="meta">E ${p.E.toFixed(1)} · N ${p.N.toFixed(1)} · ${p.h.toFixed(2)} m</div>
-      <div class="acts"><button title="Go to pin" data-a="go">⌖</button><button title="Copy coordinates" data-a="cp">⧉</button><button title="Delete pin" data-a="del">✕</button></div>`;
+      <div class="acts"><button title="Label and notes" data-a="ed">✎</button><button title="Go to pin" data-a="go">⌖</button><button title="Copy coordinates" data-a="cp">⧉</button><button title="Delete pin" data-a="del">✕</button></div>`;
+    { const m=it.querySelector('.meta'); if(p.src==='gps') m.textContent+=` · GPS ±${Math.round(p.gps.acc)} m`; else if(p.src==='corrected') m.textContent+=p.gps?` · placed by hand, GPS was ${p.gps.off.toFixed(1)} m away`:' · placed by hand in the field';
+      if(p.note){ const n=document.createElement('div'); n.className='nt'; n.textContent=p.note; it.appendChild(n); } }
     const nm=it.querySelector('.nm'); nm.value=p.name;
     nm.addEventListener('input',()=>{ p.name=nm.value||'pin'; save(); req(); });
     nm.addEventListener('focus',()=>selPin(p.id));
     it.querySelector('.acts').onclick=e=>{ const a=e.target.closest('button')?.dataset.a; if(!a) return;
+      if(a==='ed'){ selPin(p.id); openPinPop(p); }
       if(a==='go'){ selPin(p.id); flyTo(p.E,p.N, Math.min(160, currentSpan())); if(sheetSmall()) setSheet(false); }
       if(a==='cp'){ const [la,lo]=utmToLL(p.E,p.N); copyText(`${p.name}\tE ${p.E.toFixed(2)}\tN ${p.N.toFixed(2)}\t${p.h.toFixed(2)} m NAVD88\t${la.toFixed(6)}, ${lo.toFixed(6)}`,'Pin copied'); }
-      if(a==='del'){ S.pins=S.pins.filter(q=>q!==p); renderPins(); save(); req(); } };
+      if(a==='del'){ if(PP.pin===p) closePinPop(); S.pins=S.pins.filter(q=>q!==p); renderPins(); save(); req(); } };
     L.appendChild(it);
   }
 }
+/* ---------- field work: live GPS dot and field pins ---------- */
+function llToUTM(lat,lon){
+  const a=6378137,f=1/298.257222101,k0=0.9996,e2=f*(2-f),ep2=e2/(1-e2),lon0=-75*Math.PI/180;
+  const p=lat*Math.PI/180,l=lon*Math.PI/180,s=Math.sin(p),c=Math.cos(p),t=Math.tan(p),Nn=a/Math.sqrt(1-e2*s*s),T=t*t,C=ep2*c*c,A=(l-lon0)*c;
+  const Mm=a*((1-e2/4-3*e2*e2/64-5*e2**3/256)*p-(3*e2/8+3*e2*e2/32+45*e2**3/1024)*Math.sin(2*p)+(15*e2*e2/256+45*e2**3/1024)*Math.sin(4*p)-(35*e2**3/3072)*Math.sin(6*p));
+  return {E:500000+k0*Nn*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*ep2)*A**5/120), N:k0*(Mm+Nn*t*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*ep2)*A**6/720))};
+}
+const FW={watch:null, fix:null, lock:null, centre:null, tick:null};
+const PP={pin:null};
+const fwFollow=()=>!S.field || S.field.follow!==false;
+function fwFail(msg){ stopGPS(); $('fwStatus').hidden=false; $('fwStatus').innerHTML=`<span class="k">${msg}</span>`; toast(msg,5000); }
+function startGPS(){
+  if(!('geolocation' in navigator)){ fwFail('This browser has no location service.'); return; }
+  $('fwLocate').textContent='Stop showing my location'; $('fwLocate').classList.add('on'); $('fwStatus').hidden=false; $('fwStatus').innerHTML='<span class="k">Waiting for a GPS fix…</span>';
+  try{
+    FW.watch=navigator.geolocation.watchPosition(onFix, e=>{
+      if(e.code===1) fwFail(window.top!==window.self ? 'Location is not available in this view. Open the public web page in your phone\'s browser.' : 'Location permission was refused. Allow it for this site in your browser settings.');
+      else if(!FW.fix){ $('fwStatus').innerHTML='<span class="k">No GPS fix yet. Move into the open and wait a moment.</span>'; }
+    }, {enableHighAccuracy:true, maximumAge:2000, timeout:30000});
+  }catch(e){ fwFail('Location is not available in this view. Open the public web page in your phone\'s browser.'); return; }
+  try{ navigator.wakeLock?.request('screen').then(l=>FW.lock=l).catch(()=>{}); }catch(e){}
+  FW.tick=setInterval(()=>{ if(FW.fix){ fwRender(); req(); } }, 5000);
+}
+function stopGPS(){
+  if(FW.watch!==null){ try{ navigator.geolocation.clearWatch(FW.watch); }catch(e){} } FW.watch=null; FW.fix=null; FW.centre=null; clearInterval(FW.tick);
+  try{ FW.lock?.release(); }catch(e){} FW.lock=null;
+  $('fwLocate').textContent='Show my location'; $('fwLocate').classList.remove('on'); $('fwStatus').hidden=true; $('fwActs').hidden=true; $('fwFollowRow').hidden=true; req();
+}
+function onFix(pos){
+  const c=pos.coords, u=llToUTM(c.latitude,c.longitude), w=toWorld(u.E,u.N), h=heightAt(w.x,w.z), first=!FW.fix;
+  FW.fix={lat:c.latitude, lon:c.longitude, acc:c.accuracy||0, E:u.E, N:u.N, x:w.x, z:w.z, h, t:pos.timestamp||Date.now(), at:Date.now()};
+  fwRender();
+  if(h===null){ if(first) toast('You are outside the mapped area, so the dot cannot be shown.',5000); req(); return; }
+  if(first){ FW.centre={x:w.x,z:w.z}; flyTo(u.E,u.N, Math.min(currentSpan(),140)); }
+  else if(fwFollow() && tool!=='here' && (!FW.centre || Math.hypot(w.x-FW.centre.x,w.z-FW.centre.z)>2.5)){ FW.centre={x:w.x,z:w.z}; flyTo(u.E,u.N,currentSpan()); }
+  req();
+}
+function fwRender(){
+  const f=FW.fix; if(!f) return; const age=Math.round((Date.now()-f.at)/1000), inside=f.h!==null;
+  $('fwStatus').hidden=false;
+  $('fwStatus').innerHTML=`${f.lat.toFixed(6)}, ${f.lon.toFixed(6)} <span class="k">± ${Math.round(f.acc)} m</span><br>`+(inside?`<span class="k">lidar ground</span> ${f.h.toFixed(2)} m <span class="k">· E ${f.E.toFixed(1)} N ${f.N.toFixed(1)}</span>`:'<span class="k">outside the mapped area</span>')+(age>12?`<br><span class="k">last fix ${age} s ago</span>`:'');
+  $('fwActs').hidden=false; $('fwFollowRow').hidden=false; $('fwPinGps').disabled=!inside; $('fwFollow').checked=fwFollow();
+}
+function fieldDot(host){
+  let d=$('meDot'), r=$('meRing'); const f=FW.fix;
+  if(!f || f.h===null || S.view.mode==='walk'){ d?.remove(); r?.remove(); return; }
+  if(!d){ r=document.createElement('div'); r.id='meRing'; host.appendChild(r); d=document.createElement('div'); d.id='meDot'; host.appendChild(d); }
+  const y=renderY(f.x,f.z)??0, s=project(f.x,y,f.z), e=project(f.x+Math.max(f.acc,1),y,f.z), px=Math.hypot(e.x-s.x,e.y-s.y);
+  d.style.display=r.style.display=s.vis?'':'none'; d.style.left=r.style.left=s.x+'px'; d.style.top=r.style.top=s.y+'px';
+  r.style.width=r.style.height=Math.min(px*2,4000)+'px'; d.classList.toggle('stale', Date.now()-f.at>15000);
+}
+function addFieldPin(p,src){
+  const f=FW.fix, {E,N}=toUTM(p.x,p.z);
+  const n=S.pins.length? Math.max(...S.pins.map(q=>+((q.name.match(/^P(\d+)$/)||[])[1]||0)))+1 : 1;
+  const pin={id:'p'+Date.now().toString(36), name:'P'+n, E:+E.toFixed(2), N:+N.toFixed(2), h:+p.h.toFixed(2), src, t:Date.now(), note:''};
+  if(f && Date.now()-f.at<60000) pin.gps={lat:+f.lat.toFixed(7), lon:+f.lon.toFixed(7), acc:+f.acc.toFixed(1), off:+Math.hypot(f.E-E,f.N-N).toFixed(1)};
+  S.pins.push(pin); selPinId=pin.id; renderPins(); saveNow(); req(); openPinPop(pin,true);
+}
+function openPinPop(pin,fresh){
+  PP.pin=pin; $('ppName').value=pin.name; $('ppNote').value=pin.note||''; const [la,lo]=utmToLL(pin.E,pin.N);
+  const how = pin.src==='gps' ? `GPS reading, ± ${Math.round(pin.gps.acc)} m` : pin.src==='corrected' ? (pin.gps?`placed by hand; GPS read ${pin.gps.off.toFixed(1)} m away (± ${Math.round(pin.gps.acc)} m)`:'placed by hand in the field') : 'placed on the map';
+  $('pinPopInfo').textContent=`${la.toFixed(6)}, ${lo.toFixed(6)} · ground ${pin.h.toFixed(2)} m\n${how}${pin.t?' · '+new Date(pin.t).toLocaleString([], {dateStyle:'medium', timeStyle:'short'}):''}`; $('pinPopInfo').style.whiteSpace='pre-line';
+  $('pinPop').hidden=false; if(sheetSmall()) setSheet(false); if(fresh){ $('ppName').focus(); $('ppName').select(); }
+}
+function closePinPop(){ PP.pin=null; $('pinPop').hidden=true; renderPins(); req(); }
+$('ppName').addEventListener('input',()=>{ if(PP.pin){ PP.pin.name=$('ppName').value||'pin'; save(); req(); } });
+$('ppNote').addEventListener('input',()=>{ if(PP.pin){ PP.pin.note=$('ppNote').value; save(); } });
+$('ppName').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('ppNote').focus(); } });
+$('ppDone').onclick=()=>{ saveNow(); closePinPop(); };
+$('ppDel').onclick=()=>{ const p=PP.pin; closePinPop(); if(p){ S.pins=S.pins.filter(q=>q!==p); renderPins(); saveNow(); req(); } };
+$('fwLocate').onclick=()=>{ FW.watch===null ? startGPS() : stopGPS(); };
+$('fwFollow').onchange=()=>{ (S.field=S.field||{}).follow=$('fwFollow').checked; FW.centre=null; save(); };
+$('fwPinGps').onclick=()=>{ const f=FW.fix; if(!f||f.h===null) return; if(Date.now()-f.at>20000){ toast('The GPS fix is old. Wait for a fresh one.',3500); return; } addFieldPin({x:f.x,z:f.z,h:f.h},'gps'); };
+$('fwPinHere').onclick=()=>setTool(tool==='here'?null:'here');
+$('copyCsv').onclick=()=>{
+  const q=v=>{ v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const rows=[['label','lat','lon','easting_m','northing_m','ground_elev_m','source','gps_lat','gps_lon','gps_accuracy_m','gps_offset_m','recorded','notes']];
+  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); rows.push([p.name,la.toFixed(7),lo.toFixed(7),p.E,p.N,p.h,p.src||'map',p.gps?.lat,p.gps?.lon,p.gps?.acc,p.gps?.off,p.t?new Date(p.t).toISOString():'',p.note||'']); }
+  copyText(rows.map(r=>r.map(q).join(',')).join('\n'), `Table copied · ${S.pins.length} pins`);
+};
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && FW.watch!==null && !FW.lock){ try{ navigator.wakeLock?.request('screen').then(l=>FW.lock=l).catch(()=>{}); }catch(e){} } else if(document.hidden) FW.lock=null; });
+
 function currentSpan(){ return S.view.mode==='plan' ? S.view.mpp*Math.min(canvas.clientWidth,canvas.clientHeight) : persp.position.distanceTo(controls.target); }
 async function copyText(t,msg){ try{ await navigator.clipboard.writeText(t); toast(msg); }catch(e){ $('pasteGrp').hidden=false; $('pasteBox').value=t; $('pasteBox').select(); openTab('marks'); toast('Copy blocked here; text selected below'); } }
 
@@ -1803,7 +1927,7 @@ function applyLayerQuiet(){ const L=S.layer; G.uMode.value=MODES[L.mode].id; con
 /* ---------- GeoJSON ---------- */
 $('copyGeo').onclick=()=>{
   const F=[]; const ll=(x,z)=>{ const u=toUTM(x,z); const [la,lo]=utmToLL(u.E,u.N); return [+lo.toFixed(8),+la.toFixed(8)]; };
-  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); F.push({type:'Feature', geometry:{type:'Point', coordinates:[+lo.toFixed(8),+la.toFixed(8)]}, properties:{kind:'pin', name:p.name, elev_m_navd88:p.h, E:p.E, N:p.N}}); }
+  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); F.push({type:'Feature', geometry:{type:'Point', coordinates:[+lo.toFixed(8),+la.toFixed(8)]}, properties:{kind:'pin', name:p.name, elev_m_navd88:p.h, E:p.E, N:p.N, note:p.note||undefined, source:p.src||'map', recorded:p.t?new Date(p.t).toISOString():undefined, gps_lat:p.gps?.lat, gps_lon:p.gps?.lon, gps_accuracy_m:p.gps?.acc, gps_offset_m:p.gps?.off}}); }
   for(const o of S.objs){
     if(o.kind==='mass' && o.wrap){ o.wrap.updateMatrixWorld(true); const ring=o.poly.map(([x,z])=>{ const v=new THREE.Vector3(x,0,z).applyMatrix4(o.orient.matrixWorld); return ll(v.x,v.z); }); ring.push(ring[0]);
       F.push({type:'Feature', geometry:{type:'Polygon', coordinates:[ring]}, properties:{kind:'footprint', name:o.name, area_m2:+polyArea(o.poly).toFixed(1)*o.scale*o.scale, wall_m:o.height, roof:o.roof, roof_rise_m:o.rise, base_elev_m:o.elev}}); }
