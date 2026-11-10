@@ -144,6 +144,16 @@ body.drift #view{cursor:none}
 #pinPop label{display:grid;gap:3px;font:500 10.5px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
 #pinPop input{background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:8px;font:500 14px var(--ui);color:var(--fg);width:100%;box-sizing:border-box}
 #pinPop textarea{min-height:64px;font:400 13px/1.4 var(--ui)}
+#ppPhotos{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+#ppPhotos:empty{display:none}
+#ppPhotos img,.item .ph img{width:64px;height:64px;object-fit:cover;border-radius:5px;border:1px solid var(--line);flex:none;cursor:pointer;background:var(--ink)}
+.item .ph{grid-column:1/-1;display:flex;gap:5px;overflow-x:auto} .item .ph img{width:44px;height:44px}
+#pinPop{max-height:calc(100dvh - 150px);overflow-y:auto}
+#phView{position:fixed;inset:0;z-index:60;background:rgba(4,10,12,.94);display:grid;grid-template-rows:1fr auto;gap:10px;padding:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+#phView[hidden]{display:none}
+#phView img{width:100%;height:100%;object-fit:contain;min-height:0}
+#phView .btns{max-width:420px;width:100%;margin:0 auto}
+#fwStore{font:500 11px/1.5 var(--mono);color:var(--dim);margin:8px 0 6px}
 #pinPopInfo{font:500 11px/1.5 var(--mono);color:var(--dim);font-variant-numeric:tabular-nums}
 #fwStatus{font:500 11.5px/1.5 var(--mono);font-variant-numeric:tabular-nums;color:var(--fg);margin:6px 0}
 #fwStatus .k{color:var(--dim)}
@@ -267,9 +277,14 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
   <div id="pinPop" class="float" hidden>
     <label>Label<input id="ppName" autocomplete="off" enterkeyhint="done"></label>
     <label>Notes<textarea id="ppNote" placeholder="What is here?"></textarea></label>
+    <div id="ppPhotos"></div>
+    <div class="btns"><button class="btn" id="ppCam">Take photo</button><button class="btn" id="ppLib">Add photos</button></div>
+    <input type="file" id="ppCamIn" accept="image/*" capture="environment" hidden>
+    <input type="file" id="ppLibIn" accept="image/*" multiple hidden>
     <div id="pinPopInfo"></div>
     <div class="btns"><button class="btn pri" id="ppDone">Save</button><button class="btn ghost" id="ppDel">Delete pin</button></div>
   </div>
+  <div id="phView" hidden><img id="phImg" alt="Pin photo"><div class="btns"><button class="btn pri" id="phClose">Close</button><button class="btn ghost" id="phDel">Delete photo</button></div></div>
   <div id="hint" class="float" hidden><span id="hintText"></span><button id="hintUndo" hidden>Undo</button><button id="hintFinish" hidden>Finish</button><button id="hintCancel">Cancel</button></div>
   <div id="scalebar" class="float"><span id="sbLabel">100 m</span><i id="sbBar" style="width:100px"></i></div>
   <div id="toast" class="float" hidden></div>
@@ -408,7 +423,10 @@ textarea{background:var(--ink);border:1px solid var(--line);border-radius:5px;pa
           <button class="btn pri" id="fwPinGps">Pin my GPS position</button>
           <button class="btn" id="fwPinHere">I'm standing here…</button>
         </div>
-        <p class="note" id="fwNote">Shows a live dot from your phone's GPS. Pin the GPS reading as it is, or, if the dot is a little off, tap the spot on the scan you are really standing on. Each pin takes a label and notes.</p>
+        <div id="fwStore"></div>
+        <div class="btns"><button class="btn" id="fwPack" style="grid-column:1/-1">Save field pack (pins + photos)</button><button class="btn" id="fwLoad" style="grid-column:1/-1">Load a field pack</button></div>
+        <input type="file" id="fwLoadIn" accept=".zip,application/zip" hidden>
+        <p class="note" id="fwNote">Shows a live dot from your phone's GPS. Pin the GPS reading as it is, or, if the dot is a little off, tap the spot on the scan you are really standing on. Each pin takes a label, notes and photos. Everything is kept on this device only, and works with no signal. Save a field pack to move it to another device or hand it on.</p>
       </div>
 
       <div class="grp">
@@ -1198,7 +1216,7 @@ function addPin(p){
 }
 function selPin(id){ selPinId=id; renderPins(); req(); }
 function renderPins(){
-  $('pinCount').textContent=S.pins.length||'';
+  $('pinCount').textContent=S.pins.length||''; fwStore();
   const L=$('pinList');
   if(!S.pins.length){ L.innerHTML='<div class="empty">No pins yet. Use <b>Drop a pin</b> to mark a suspected footing, corner or pad.</div>'; return; }
   L.innerHTML='';
@@ -1207,7 +1225,8 @@ function renderPins(){
     it.innerHTML=`<input class="nm" value="" aria-label="Pin name"><div class="meta">E ${p.E.toFixed(1)} · N ${p.N.toFixed(1)} · ${p.h.toFixed(2)} m</div>
       <div class="acts"><button title="Label and notes" data-a="ed">✎</button><button title="Go to pin" data-a="go">⌖</button><button title="Copy coordinates" data-a="cp">⧉</button><button title="Delete pin" data-a="del">✕</button></div>`;
     { const m=it.querySelector('.meta'); if(p.src==='gps') m.textContent+=` · GPS ±${Math.round(p.gps.acc)} m`; else if(p.src==='corrected') m.textContent+=p.gps?` · placed by hand, GPS was ${p.gps.off.toFixed(1)} m away`:' · placed by hand in the field';
-      if(p.note){ const n=document.createElement('div'); n.className='nt'; n.textContent=p.note; it.appendChild(n); } }
+      if(p.note){ const n=document.createElement('div'); n.className='nt'; n.textContent=p.note; it.appendChild(n); }
+      if(p.photos&&p.photos.length){ const ph=document.createElement('div'); ph.className='ph'; it.appendChild(ph); photoStrip(ph,p); } }
     const nm=it.querySelector('.nm'); nm.value=p.name;
     nm.addEventListener('input',()=>{ p.name=nm.value||'pin'; save(); req(); });
     nm.addEventListener('focus',()=>selPin(p.id));
@@ -1215,7 +1234,7 @@ function renderPins(){
       if(a==='ed'){ selPin(p.id); openPinPop(p); }
       if(a==='go'){ selPin(p.id); flyTo(p.E,p.N, Math.min(160, currentSpan())); if(sheetSmall()) setSheet(false); }
       if(a==='cp'){ const [la,lo]=utmToLL(p.E,p.N); copyText(`${p.name}\tE ${p.E.toFixed(2)}\tN ${p.N.toFixed(2)}\t${p.h.toFixed(2)} m NAVD88\t${la.toFixed(6)}, ${lo.toFixed(6)}`,'Pin copied'); }
-      if(a==='del'){ if(PP.pin===p) closePinPop(); S.pins=S.pins.filter(q=>q!==p); renderPins(); save(); req(); } };
+      if(a==='del'){ if(PP.pin===p) closePinPop(); dropPhotos(p); S.pins=S.pins.filter(q=>q!==p); renderPins(); save(); req(); } };
     L.appendChild(it);
   }
 }
@@ -1281,24 +1300,114 @@ function openPinPop(pin,fresh){
   PP.pin=pin; $('ppName').value=pin.name; $('ppNote').value=pin.note||''; const [la,lo]=utmToLL(pin.E,pin.N);
   const how = pin.src==='gps' ? `GPS reading, ± ${Math.round(pin.gps.acc)} m` : pin.src==='corrected' ? (pin.gps?`placed by hand; GPS read ${pin.gps.off.toFixed(1)} m away (± ${Math.round(pin.gps.acc)} m)`:'placed by hand in the field') : 'placed on the map';
   $('pinPopInfo').textContent=`${la.toFixed(6)}, ${lo.toFixed(6)} · ground ${pin.h.toFixed(2)} m\n${how}${pin.t?' · '+new Date(pin.t).toLocaleString([], {dateStyle:'medium', timeStyle:'short'}):''}`; $('pinPopInfo').style.whiteSpace='pre-line';
-  $('pinPop').hidden=false; if(sheetSmall()) setSheet(false); if(fresh){ $('ppName').focus(); $('ppName').select(); }
+  photoStrip($('ppPhotos'),pin); $('pinPop').hidden=false; if(sheetSmall()) setSheet(false); if(fresh){ $('ppName').focus(); $('ppName').select(); }
 }
 function closePinPop(){ PP.pin=null; $('pinPop').hidden=true; renderPins(); req(); }
 $('ppName').addEventListener('input',()=>{ if(PP.pin){ PP.pin.name=$('ppName').value||'pin'; save(); req(); } });
 $('ppNote').addEventListener('input',()=>{ if(PP.pin){ PP.pin.note=$('ppNote').value; save(); } });
 $('ppName').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('ppNote').focus(); } });
 $('ppDone').onclick=()=>{ saveNow(); closePinPop(); };
-$('ppDel').onclick=()=>{ const p=PP.pin; closePinPop(); if(p){ S.pins=S.pins.filter(q=>q!==p); renderPins(); saveNow(); req(); } };
+$('ppDel').onclick=()=>{ const p=PP.pin; closePinPop(); if(p){ dropPhotos(p); S.pins=S.pins.filter(q=>q!==p); renderPins(); saveNow(); req(); } };
 $('fwLocate').onclick=()=>{ FW.watch===null ? startGPS() : stopGPS(); };
 $('fwFollow').onchange=()=>{ (S.field=S.field||{}).follow=$('fwFollow').checked; FW.centre=null; save(); };
 $('fwPinGps').onclick=()=>{ const f=FW.fix; if(!f||f.h===null) return; if(Date.now()-f.at>20000){ toast('The GPS fix is old. Wait for a fresh one.',3500); return; } addFieldPin({x:f.x,z:f.z,h:f.h},'gps'); };
 $('fwPinHere').onclick=()=>setTool(tool==='here'?null:'here');
-$('copyCsv').onclick=()=>{
+function pinsCsv(){
   const q=v=>{ v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
-  const rows=[['label','lat','lon','easting_m','northing_m','ground_elev_m','source','gps_lat','gps_lon','gps_accuracy_m','gps_offset_m','recorded','notes']];
-  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); rows.push([p.name,la.toFixed(7),lo.toFixed(7),p.E,p.N,p.h,p.src||'map',p.gps?.lat,p.gps?.lon,p.gps?.acc,p.gps?.off,p.t?new Date(p.t).toISOString():'',p.note||'']); }
-  copyText(rows.map(r=>r.map(q).join(',')).join('\n'), `Table copied · ${S.pins.length} pins`);
+  const rows=[['label','lat','lon','easting_m','northing_m','ground_elev_m','source','gps_lat','gps_lon','gps_accuracy_m','gps_offset_m','recorded','notes','photos']];
+  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); rows.push([p.name,la.toFixed(7),lo.toFixed(7),p.E,p.N,p.h,p.src||'map',p.gps?.lat,p.gps?.lon,p.gps?.acc,p.gps?.off,p.t?new Date(p.t).toISOString():'',p.note||'',photoNames(p).join(' ')]); }
+  return rows.map(r=>r.map(q).join(',')).join('\n');
+}
+$('copyCsv').onclick=()=>copyText(pinsCsv(), `Table copied · ${S.pins.length} pins`);
+/* ---------- pin photos (kept in this browser's database) and field packs ---------- */
+const PH={urls:new Map(), view:null};
+const safeName=t=>(t||'pin').replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||'pin';
+function photoNames(p){ return (p.photos||[]).map((f,i)=>`${safeName(p.name)}_${p.id}_${i+1}.jpg`); }
+async function photoUrl(id,thumb){ const k='ph:'+id+(thumb?':t':''); if(PH.urls.has(k)) return PH.urls.get(k); const b=await idbGet(k); if(!b) return null; const u=URL.createObjectURL(b); PH.urls.set(k,u); return u; }
+function photoStrip(host,pin){
+  host.innerHTML=''; for(const f of (pin.photos||[])){ const im=document.createElement('img'); im.alt='Photo for '+pin.name; im.loading='lazy'; host.appendChild(im);
+    photoUrl(f.id,true).then(u=>{ if(u) im.src=u; }); im.onclick=e=>{ e.stopPropagation(); openPhoto(pin,f); }; }
+}
+async function openPhoto(pin,f){ const u=await photoUrl(f.id,false); if(!u){ toast('That photo is not stored on this device.',3500); return; } PH.view={pin,f}; $('phImg').src=u; $('phView').hidden=false; }
+$('phClose').onclick=()=>{ $('phView').hidden=true; PH.view=null; };
+$('phDel').onclick=()=>{ const v=PH.view; if(!v) return; $('phView').hidden=true; PH.view=null; v.pin.photos=v.pin.photos.filter(q=>q!==v.f); idbDel('ph:'+v.f.id); idbDel('ph:'+v.f.id+':t'); saveNow(); if(PP.pin===v.pin) photoStrip($('ppPhotos'),v.pin); renderPins(); };
+function dropPhotos(pin){ for(const f of (pin.photos||[])){ idbDel('ph:'+f.id); idbDel('ph:'+f.id+':t'); } }
+function fpShrink(src,w,h,max,q){ const k=Math.min(1,max/Math.max(w,h)), c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k)); c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+  return new Promise(res=>c.toBlob(b=>res({blob:b,w:c.width,h:c.height}),'image/jpeg',q)); }
+async function fpDecode(file){
+  try{ const b=await createImageBitmap(file,{imageOrientation:'from-image'}); return {src:b,w:b.width,h:b.height}; }catch(e){}
+  return new Promise((res,rej)=>{ const im=new Image(), u=URL.createObjectURL(file); im.onload=()=>{ res({src:im,w:im.naturalWidth,h:im.naturalHeight}); setTimeout(()=>URL.revokeObjectURL(u),2000); }; im.onerror=()=>{ URL.revokeObjectURL(u); rej(new Error('unreadable image')); }; im.src=u; });
+}
+async function addPhotos(files){
+  const pin=PP.pin; if(!pin||!files||!files.length) return;
+  if(!IDB.db){ toast('This browser will not store photos. Use the public web page in your phone\'s browser.',5000); return; }
+  try{ navigator.storage?.persist?.(); }catch(e){}
+  let ok=0, bad=0;
+  for(const file of files){
+    try{ const d=await fpDecode(file), full=await fpShrink(d.src,d.w,d.h,2000,0.86), th=await fpShrink(d.src,d.w,d.h,220,0.7); if(!full.blob||!th.blob) throw new Error('encode');
+      const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      if(!(await idbPut('ph:'+id,full.blob)) || !(await idbPut('ph:'+id+':t',th.blob))){ idbDel('ph:'+id); throw new Error('store'); }
+      (pin.photos=pin.photos||[]).push({id, w:full.w, h:full.h, kb:Math.round(full.blob.size/1024), t:file.lastModified||Date.now()}); ok++;
+    }catch(e){ console.warn(e); bad++; }
+  }
+  saveNow(); if(PP.pin===pin) photoStrip($('ppPhotos'),pin); renderPins();
+  toast(bad ? `${ok} photo${ok===1?'':'s'} added, ${bad} could not be read or stored` : `${ok} photo${ok===1?'':'s'} added`, bad?5000:2200);
+}
+$('ppCam').onclick=()=>$('ppCamIn').click(); $('ppLib').onclick=()=>$('ppLibIn').click();
+for(const id of ['ppCamIn','ppLibIn']) $(id).addEventListener('change',e=>{ const f=[...e.target.files]; e.target.value=''; addPhotos(f); });
+function fwStore(){ const el=$('fwStore'); if(!el) return; let n=0,kb=0; for(const p of S.pins) for(const f of (p.photos||[])){ n++; kb+=f.kb||0; }
+  el.textContent=`On this device: ${S.pins.length} pin${S.pins.length===1?'':'s'}, ${n} photo${n===1?'':'s'}${n?` (${(kb/1024).toFixed(1)} MB)`:''}`; $('fwPack').disabled=!S.pins.length; }
+/* a plain uncompressed zip, so a pack opens anywhere */
+const CRC=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return b=>{ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=t[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }; })();
+function zipStore(files){
+  const enc=new TextEncoder(), parts=[], cd=[]; let off=0; const d=new Date(), dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(), tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  for(const f of files){ const nm=enc.encode(f.name), crc=CRC(f.data), h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint16(10,tm,true); h.setUint16(12,dt,true); h.setUint32(14,crc,true); h.setUint32(18,f.data.length,true); h.setUint32(22,f.data.length,true); h.setUint16(26,nm.length,true); h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),nm,f.data);
+    const c=new DataView(new ArrayBuffer(46)); c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true); c.setUint16(12,tm,true); c.setUint16(14,dt,true); c.setUint32(16,crc,true); c.setUint32(20,f.data.length,true); c.setUint32(24,f.data.length,true); c.setUint16(28,nm.length,true); c.setUint32(42,off,true);
+    cd.push(new Uint8Array(c.buffer),nm); off+=30+nm.length+f.data.length; }
+  const cdLen=cd.reduce((a,b)=>a+b.length,0), e=new DataView(new ArrayBuffer(22)); e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,cdLen,true); e.setUint32(16,off,true);
+  return new Blob([...parts,...cd,new Uint8Array(e.buffer)],{type:'application/zip'});
+}
+function unzipStore(buf){
+  const v=new DataView(buf), u=new Uint8Array(buf), dec=new TextDecoder(), out={}; let i=buf.byteLength-22; while(i>=0 && v.getUint32(i,true)!==0x06054b50) i--; if(i<0) throw new Error('not a zip');
+  const n=v.getUint16(i+10,true); let p=v.getUint32(i+16,true);
+  for(let k=0;k<n;k++){ if(v.getUint32(p,true)!==0x02014b50) throw new Error('bad zip'); if(v.getUint16(p+10,true)!==0) throw new Error('compressed zip'); const sz=v.getUint32(p+24,true), nl=v.getUint16(p+28,true), el=v.getUint16(p+30,true), cl=v.getUint16(p+32,true), lo=v.getUint32(p+42,true);
+    const name=dec.decode(u.subarray(p+46,p+46+nl)), ds=lo+30+v.getUint16(lo+26,true)+v.getUint16(lo+28,true); out[name]=u.subarray(ds,ds+sz); p+=46+nl+el+cl; }
+  return out;
+}
+async function buildPack(){
+  const enc=new TextEncoder(), files=[], F=[]; let missing=0;
+  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N), names=photoNames(p);
+    F.push({type:'Feature', geometry:{type:'Point', coordinates:[+lo.toFixed(8),+la.toFixed(8)]}, properties:{name:p.name, note:p.note||undefined, elev_m_navd88:p.h, E:p.E, N:p.N, source:p.src||'map', recorded:p.t?new Date(p.t).toISOString():undefined, gps_lat:p.gps?.lat, gps_lon:p.gps?.lon, gps_accuracy_m:p.gps?.acc, gps_offset_m:p.gps?.off, photos:names.length?names:undefined}});
+    for(let i=0;i<names.length;i++){ const b=await idbGet('ph:'+p.photos[i].id); if(!b){ missing++; continue; } files.push({name:'photos/'+names[i], data:new Uint8Array(await b.arrayBuffer())}); } }
+  files.unshift({name:'pins.csv', data:enc.encode(pinsCsv())}, {name:'pins.geojson', data:enc.encode(JSON.stringify({type:'FeatureCollection', name:(M.title||'ground survey')+' field pins', features:F},null,1))},
+    {name:'pins.json', data:enc.encode(JSON.stringify({app:'mcd-ground-survey', pack:1, site:M.title||'', saved:new Date().toISOString(), pins:S.pins}))},
+    {name:'README.txt', data:enc.encode(`Field pack from ${M.title||'Ground Survey'}, saved ${new Date().toString()}\n\npins.csv      one row per pin: label, lat/lon (WGS84), UTM 18N easting/northing, lidar ground elevation (NAVD88), how it was placed, notes, photo file names\npins.geojson  the same pins for GIS software\npins.json     the pins in the survey's own format; load this pack in the Ground Survey to restore pins and photos\nphotos/       pin photos, named label_pinid_number.jpg\n`)});
+  return {blob:zipStore(files), missing, photos:files.length-4};
+}
+$('fwPack').onclick=async()=>{
+  if(!S.pins.length) return; toast('Building the field pack…',8000);
+  let pack; try{ pack=await buildPack(); }catch(e){ console.warn(e); toast('Could not build the field pack.',4000); return; }
+  const d=new Date(), name=`ground-survey-field-pack-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}.zip`;
+  const msg=`Field pack saved · ${S.pins.length} pins, ${pack.photos} photos`+(pack.missing?` · ${pack.missing} photos missing from this device`:'');
+  try{ const file=new File([pack.blob],name,{type:'application/zip'}); if(matchMedia('(pointer:coarse)').matches && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:name}); toast(msg,4500); return; } }catch(e){ if(e&&e.name==='AbortError'){ toast('Not saved.',2000); return; } }
+  try{ const a=document.createElement('a'), u=URL.createObjectURL(pack.blob); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),30000); toast(msg,4500); }
+  catch(e){ toast('This view cannot save files. Use the public web page.',5000); }
 };
+$('fwLoad').onclick=()=>$('fwLoadIn').click();
+$('fwLoadIn').addEventListener('change',async e=>{
+  const file=e.target.files[0]; e.target.value=''; if(!file) return;
+  try{ const z=unzipStore(await file.arrayBuffer()); if(!z['pins.json']) throw new Error('no pins.json'); const j=JSON.parse(new TextDecoder().decode(z['pins.json'])); if(!Array.isArray(j.pins)) throw new Error('no pins');
+    const have=new Set(S.pins.map(p=>p.id)); let np=0, nph=0, lost=0;
+    for(const p of j.pins){ if(have.has(p.id)) continue; const names=photoNames(p), kept=[];
+      for(let i=0;i<names.length;i++){ const bytes=z['photos/'+names[i]]; if(!bytes||!IDB.db){ lost++; continue; } const blob=new Blob([bytes],{type:'image/jpeg'}); let th=blob;
+        try{ const d=await fpDecode(blob); th=(await fpShrink(d.src,d.w,d.h,220,0.7)).blob||blob; }catch(_){}
+        if((await idbPut('ph:'+p.photos[i].id,blob)) && (await idbPut('ph:'+p.photos[i].id+':t',th))){ kept.push(p.photos[i]); nph++; } else lost++; }
+      p.photos=kept; S.pins.push(p); np++; }
+    renderPins(); saveNow(); req(); toast(np ? `Loaded ${np} pin${np===1?'':'s'} and ${nph} photo${nph===1?'':'s'}`+(lost?` · ${lost} photos could not be stored`:'') : 'Every pin in that pack is already here.', 5000);
+  }catch(err){ console.warn(err); toast('That file is not a Ground Survey field pack.',4500); }
+});
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden && FW.watch!==null && !FW.lock){ try{ navigator.wakeLock?.request('screen').then(l=>FW.lock=l).catch(()=>{}); }catch(e){} } else if(document.hidden) FW.lock=null; });
 
 function currentSpan(){ return S.view.mode==='plan' ? S.view.mpp*Math.min(canvas.clientWidth,canvas.clientHeight) : persp.position.distanceTo(controls.target); }
@@ -1927,7 +2036,7 @@ function applyLayerQuiet(){ const L=S.layer; G.uMode.value=MODES[L.mode].id; con
 /* ---------- GeoJSON ---------- */
 $('copyGeo').onclick=()=>{
   const F=[]; const ll=(x,z)=>{ const u=toUTM(x,z); const [la,lo]=utmToLL(u.E,u.N); return [+lo.toFixed(8),+la.toFixed(8)]; };
-  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); F.push({type:'Feature', geometry:{type:'Point', coordinates:[+lo.toFixed(8),+la.toFixed(8)]}, properties:{kind:'pin', name:p.name, elev_m_navd88:p.h, E:p.E, N:p.N, note:p.note||undefined, source:p.src||'map', recorded:p.t?new Date(p.t).toISOString():undefined, gps_lat:p.gps?.lat, gps_lon:p.gps?.lon, gps_accuracy_m:p.gps?.acc, gps_offset_m:p.gps?.off}}); }
+  for(const p of S.pins){ const [la,lo]=utmToLL(p.E,p.N); F.push({type:'Feature', geometry:{type:'Point', coordinates:[+lo.toFixed(8),+la.toFixed(8)]}, properties:{kind:'pin', name:p.name, elev_m_navd88:p.h, E:p.E, N:p.N, note:p.note||undefined, source:p.src||'map', recorded:p.t?new Date(p.t).toISOString():undefined, gps_lat:p.gps?.lat, gps_lon:p.gps?.lon, gps_accuracy_m:p.gps?.acc, gps_offset_m:p.gps?.off, photos:(p.photos&&p.photos.length)?photoNames(p):undefined}}); }
   for(const o of S.objs){
     if(o.kind==='mass' && o.wrap){ o.wrap.updateMatrixWorld(true); const ring=o.poly.map(([x,z])=>{ const v=new THREE.Vector3(x,0,z).applyMatrix4(o.orient.matrixWorld); return ll(v.x,v.z); }); ring.push(ring[0]);
       F.push({type:'Feature', geometry:{type:'Polygon', coordinates:[ring]}, properties:{kind:'footprint', name:o.name, area_m2:+polyArea(o.poly).toFixed(1)*o.scale*o.scale, wall_m:o.height, roof:o.roof, roof_rise_m:o.rise, base_elev_m:o.elev}}); }
