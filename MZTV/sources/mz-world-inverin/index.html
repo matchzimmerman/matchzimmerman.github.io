@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MZ World Inverin</title>
+<title>MZ World Inverland</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -49,7 +49,9 @@ const LIVE_WX = Q.get('live') !== '0';
 const KEY = 'mzworld-inverin-v1' + (Q.has('seed') ? '-s' + SEED : '');
 if (Q.get('fresh') === '1') { try { localStorage.removeItem(KEY); } catch (e) {} }
 
-const LAT = 53.236, LON = -9.48;           // Inverin, Galway Bay
+const LAT = 53.236, LON = -9.48;           // Inverin, Galway Bay: the moon, the clock and the ground stay here
+// INVERLAND's sky belongs to three cities. The sun is a relay: it shines while any of them has daylight.
+const RELAY = [{ k: 'BAL', name: 'Baltimore', lat: 39.29, lon: -76.61 }, { k: 'GAL', name: 'Galway', lat: 53.27, lon: -9.05 }, { k: 'LON', name: 'London', lat: 51.51, lon: -0.13 }];
 const TAU = Math.PI * 2, D2R = Math.PI / 180;
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -131,7 +133,13 @@ function terrainH(x, z) {
 }
 
 /* ====================================================================== sun + moon */
-function sunMoon(ms) {
+function sunMoon(ms) {   // relay sun: the highest of the three cities' suns carries the sky, handed on smoothly (soft maximum); night only when all three are down
+  const base = sunMoonAt(ms, LAT, LON), T = 5, q = RELAY.map(c => sunMoonAt(ms, c.lat, c.lon).sun);
+  const top = Math.max(...q.map(o => o.el / D2R)); const w = q.map(o => Math.exp((o.el / D2R - top) / T)); const tw = w.reduce((a, b) => a + b, 0);
+  let el = 0, hx = 0, hz = 0; q.forEach((o, i) => { const wi = w[i] / tw; el += wi * o.el; hx += wi * Math.cos(o.az); hz += wi * Math.sin(o.az); });
+  base.city = base.sun; base.sun = { el, az: Math.atan2(hz, hx) }; base.relay = RELAY.map((c, i) => ({ k: c.k, el: q[i].el / D2R, w: w[i] / tw })); return base;
+}
+function sunMoonAt(ms, LAT, LON) {
   const d = ms / 86400000 - 10957.5;
   const g = (357.529 + 0.98560028 * d) * D2R, q = 280.459 + 0.98564736 * d;
   const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, e = (23.439 - 0.00000036 * d) * D2R;
@@ -883,7 +891,12 @@ SH.uWrInv.value.copy(WR.I);
 }
 
 /* ---------- walking */
-const WALK = { on: Q.get('walk') !== '0', x: 0, z: 0, yaw: 2.9, pitch: -0.06, vx: 0, vz: 0, y: 0, bob: 0, kneel: 0, kneeling: false, keys: {}, joy: null, stick: [0, 0], look: { p: V(), tgt: V(), fov: 62 }, place: 'THE HEADLAND' };
+const WALK = { on: Q.get('walk') !== '0', x: 0, z: 0, yaw: 2.9, pitch: -0.06, vx: 0, vz: 0, y: 0, bob: 0, kneel: 0, kneeling: false, keys: {}, joy: null, stick: [0, 0], look: { p: V(), tgt: V(), fov: 62 }, place: 'THE HEADLAND', idle: 0, drove: true };
+// INVERLAND: the visitor walks as the keeper. Third-person tracking camera by default; a territory can ask for its own view (VIEW.rules).
+// After KEEPER_IDLE seconds with no hand on the controls she goes back to her own errands and the camera follows her; a touch takes her again where she is.
+const KEEPER_IDLE = Q.has('idle') ? +Q.get('idle') : 75;
+const VIEW = { mode: 'third', cp: V(), snap: true, dist: 5.2, rules: [() => WR.layer === 'hold' ? 'eyes' : null] };
+const viewMode = () => { for (const f of VIEW.rules) { const m = f(); if (m) return m; } return 'third'; };
 OBST.push([HOUSE.x, HOUSE.z, 7]);
 const inPier = (x, z) => Math.abs(x - PIER_X) < 1.65 && z <= zL && z >= PIER_END_Z + 1.5;
 function wrFloor(x, z) { let yf = WR.FLOOR_Y; for (let i = 0; i < 3; i++) { const q = WR.hit(x, z, yf); yf = (q.u > WR.stair[0] && q.u < WR.stair[1] && Math.abs(q.v) < 0.8) ? lerp(WR.FLOOR_Y, WR.DECK_Y, (q.u - WR.stair[0]) / (WR.stair[1] - WR.stair[0])) : WR.FLOOR_Y; } return yf; }
@@ -895,7 +908,7 @@ function wrFree(x, z) { const L = WR.layer; WR.nl = L;
   if (L === 'ramp') { const q = rampS(x, z); if (q.w > 0.6) return false; if (q.s < 0.02) { WR.nl = 'deck'; return true; } if (q.s > 0.96) { WR.nl = 'ground'; return true; } return true; }
   const q = WR.hit(x, z, 1.3); const ramp = rampS(x, z); if (ramp.s > 0.86 && ramp.s < 0.97 && ramp.w < 0.6) { WR.nl = 'ramp'; return true; } if (Math.abs(q.u) < 13.3 && Math.abs(q.v) < WR.beam(q.u) + 0.25) { if (q.v > 0 && q.u > WR.breach[0] && q.u < WR.breach[1]) { if (q.v < WR.bAt(q.u, 1.3) - 0.15) WR.nl = 'hold'; return true; } return false; } return true; }
 const PLACES = { 6: ['THE FARM', 0, 0, -1.45], 1: ['THE HOUSE', HOUSE.x - 8, HOUSE.z - 12, 3.4], 2: ['THE PIER', PIER_X, zL - 6, 3.14], 5: ['THE WRECK', 104, WR.O.z + 13, 3.0], 3: ['TWISTED TREE', CC.x + 3, CC.z - 9.5, 3.45], 4: ['SRUTHÁN', -44, 96, 3.3] };
-function walkTo(k) { const p = PLACES[k]; if (!p) return; if (k == 6 && typeof FARM_SPOT !== 'undefined') { p[1] = FARM_SPOT.x; p[2] = FARM_SPOT.z; } WALK.x = p[1]; WALK.z = p[2]; WALK.yaw = p[3]; WR.layer = WR.nl = 'ground'; WALK.y = groundAt(WALK.x, WALK.z); WALK.vx = WALK.vz = 0; }
+function walkTo(k) { const p = PLACES[k]; if (!p) return; if (k == 6 && typeof FARM_SPOT !== 'undefined') { p[1] = FARM_SPOT.x; p[2] = FARM_SPOT.z; } WALK.x = p[1]; WALK.z = p[2]; WALK.yaw = p[3]; WR.layer = WR.nl = 'ground'; WALK.y = groundAt(WALK.x, WALK.z); WALK.vx = WALK.vz = 0; WALK.idle = 0; WALK.drove = true; VIEW.snap = true; }
 walkTo(4);
 function walkFree(x, z, ox, oz) {
   if (inPier(x, z)) return true; const stair = Math.abs(x - PIER_X) < 1.6 && z >= zL && z <= zT + 3; if (stair) return true;
@@ -905,26 +918,47 @@ function walkFree(x, z, ox, oz) {
   if (WR.layer === 'ground') for (const o of OBST) if ((x - o[0]) ** 2 + (z - o[1]) ** 2 < o[2] * o[2]) return false;
   if (HOOKS.walkBlock && HOOKS.walkBlock(x, z, ox, oz)) return false; return true;
 }
+function keeperTakeover() { const W = WALK;   // the visitor picks the keeper up wherever she is
+  if (keeper.visible) { W.x = keeper.pos.x; W.z = keeper.pos.z; W.y = keeper.pos.y; }
+  else { const a = TRAIL[0].p, b = TRAIL[3].p; const d = b.clone().sub(a).setY(0).normalize(); W.x = a.x + d.x * 1.5; W.z = a.z + d.z * 1.5; W.y = groundAt(W.x, W.z); W.yaw = Math.atan2(d.x, -d.z); VIEW.snap = true; logEv('the keeper came out of the house'); }
+  WR.layer = WR.nl = 'ground'; W.vx = W.vz = 0; keeper.ret = null; }
+function lensCam(dt, px, py, pz, yaw, pitch, dist, side) {   // third person: behind and over the shoulder, kept clear of the ground
+  const sy = Math.sin(yaw), cy = Math.cos(yaw), cp = Math.cos(pitch), f = V(sy * cp, Math.sin(pitch), -cy * cp), r = V(cy, 0, sy), L = WALK.look;
+  const piv = V(px, py, pz).addScaledVector(r, side); let d = dist;
+  for (let i = 1; i <= 8; i++) { const t = i / 8, q = piv.clone().addScaledVector(f, -dist * t).add(V(0, 0.45 * t, 0)); if (terrainH(q.x, q.z) + 0.35 > q.y && WR.layer === 'ground') { d = dist * (i - 1) / 8; break; } }
+  const want = piv.clone().addScaledVector(f, -Math.max(d, 0.9)).add(V(0, 0.45 * Math.max(d, 0.9) / dist, 0)); want.y = Math.max(want.y, (WR.layer === 'ground' ? terrainH(want.x, want.z) : -99) + 0.4);
+  if (VIEW.snap || VIEW.cp.distanceTo(want) > 30) { VIEW.cp.copy(want); VIEW.snap = false; } else VIEW.cp.lerp(want, 1 - Math.exp(-dt * 10));
+  L.p.copy(VIEW.cp); L.tgt.copy(piv).addScaledVector(f, 24).add(V(0, 0.2, 0)); return L; }
 function walkStep(dt) { dt = Math.min(dt, 0.1); const W = WALK, k = W.keys;
+  W.idle += dt; const drive = W.idle < KEEPER_IDLE; if (drive && !W.drove) keeperTakeover(); W.drove = drive;
   let fx = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0) + W.stick[0], fz = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0) + W.stick[1]; const fl = Math.hypot(fx, fz); if (fl > 1) { fx /= fl; fz /= fl; }
-  const speed = (k.shift ? 8.5 : 3.8) * (W.kneeling ? 0.3 : 1), sy = Math.sin(W.yaw), cy = Math.cos(W.yaw); const tx = (cy * fx + sy * fz) * speed, tz = (sy * fx - cy * fz) * speed, a = 1 - Math.exp(-dt * 9); W.vx += (tx - W.vx) * a; W.vz += (tz - W.vz) * a;
-  const nx = W.x + W.vx * dt, nz = W.z + W.vz * dt; if (walkFree(nx, nz, W.x, W.z)) { W.x = nx; W.z = nz; WR.layer = WR.nl; } else if (walkFree(nx, W.z, W.x, W.z)) { W.x = nx; W.vz = 0; WR.layer = WR.nl; } else if (walkFree(W.x, nz, W.x, W.z)) { W.z = nz; W.vx = 0; WR.layer = WR.nl; } else { W.vx = W.vz = 0; }
+  if (!drive) { fx = fz = 0; W.vx = W.vz = 0; W.kneeling = false; }
+  const speed = (k.shift ? 7 : 3.0) * (W.kneeling ? 0.3 : 1), sy = Math.sin(W.yaw), cy = Math.cos(W.yaw); const tx = (cy * fx + sy * fz) * speed, tz = (sy * fx - cy * fz) * speed, a = 1 - Math.exp(-dt * 9); W.vx += (tx - W.vx) * a; W.vz += (tz - W.vz) * a;
+  if (drive) { const nx = W.x + W.vx * dt, nz = W.z + W.vz * dt; if (walkFree(nx, nz, W.x, W.z)) { W.x = nx; W.z = nz; WR.layer = WR.nl; } else if (walkFree(nx, W.z, W.x, W.z)) { W.x = nx; W.vz = 0; WR.layer = WR.nl; } else if (walkFree(W.x, nz, W.x, W.z)) { W.z = nz; W.vx = 0; WR.layer = WR.nl; } else { W.vx = W.vz = 0; } }
   const g = groundAt(W.x, W.z), sp = Math.hypot(W.vx, W.vz); W.y += (g - W.y) * (1 - Math.exp(-dt * 12)); W.bob += sp * dt * 2.1; W.kneel += ((W.kneeling ? 1 : 0) - W.kneel) * (1 - Math.exp(-dt * 6));
-  const eye = lerp(1.62, 0.34, W.kneel) + 0.028 * Math.sin(W.bob * 2) * Math.min(sp, 3) * (1 - W.kneel), cp = Math.cos(W.pitch), L = W.look; L.p.set(W.x, W.y + eye, W.z); L.tgt.set(W.x + sy * cp * 20, W.y + eye + Math.sin(W.pitch) * 20, W.z - cy * cp * 20); L.fov = lerp(62, 46, W.kneel); DIR.look = L; }
-function placeName() { const x = camera.position.x, z = camera.position.z; const dc = Math.hypot(x - CC.x, z - CC.z), n = streamNear(x, z).d; if (WR.layer === 'hold') return 'THE WRECK · HOLD'; if (WR.layer === 'deck' || WR.layer === 'ramp') { const q = WR.hit(x, z, WR.DECK_Y); return q.u < -5.3 && q.u > -10.1 && Math.abs(q.v) < 2 ? 'THE WRECK · WHEELHOUSE' : 'THE WRECK · DECK'; } if (Math.hypot(x - WR.O.x, z - WR.O.z) < 34) return 'THE WRECK'; if (dc < 14) return 'TWISTED TREE'; if (n < 7) return 'SRUTHÁN'; if (dc < 70) return 'THE WOOD'; if (inPier(x, z)) return 'THE PIER'; if (Math.hypot(x - HOUSE.x, z - HOUSE.z) < 24) return 'THE HOUSE'; if (coastZ(x) + 18 > z) return 'THE SHORE'; return 'THE HEADLAND'; }
+  if (!drive) {   // nobody is walking: she keeps her own errands and the lens tracks her; indoors, the crew has the picture
+    VIEW.mode = 'track'; if (!keeper.visible) { if (DIR.look === W.look) DIR.look = null; VIEW.snap = true; return; }
+    const ky = Math.atan2(keeper.dir.x, -keeper.dir.z), dy = ((ky - W.yaw + Math.PI) % TAU + TAU) % TAU - Math.PI; W.yaw += dy * (1 - Math.exp(-dt * 0.9)); W.pitch += (-0.1 - W.pitch) * (1 - Math.exp(-dt * 0.9));
+    W.x = keeper.pos.x; W.z = keeper.pos.z; W.y = keeper.pos.y; WR.layer = 'ground';
+    DIR.look = lensCam(dt, keeper.pos.x, keeper.pos.y + 1.75, keeper.pos.z, W.yaw, W.pitch, 5.6, 0.5); DIR.look.fov = 52; return; }
+  VIEW.mode = viewMode(); keeperVisitor(dt, sp); const L = W.look;
+  if (VIEW.mode === 'eyes') { const eye = lerp(1.62, 0.34, W.kneel) + 0.028 * Math.sin(W.bob * 2) * Math.min(sp, 3) * (1 - W.kneel), cp = Math.cos(W.pitch); L.p.set(W.x, W.y + eye, W.z); L.tgt.set(W.x + sy * cp * 20, W.y + eye + Math.sin(W.pitch) * 20, W.z - cy * cp * 20); L.fov = lerp(62, 46, W.kneel); VIEW.snap = true; }
+  else { const onBoard = WR.layer !== 'ground'; lensCam(dt, W.x, W.y + lerp(1.75, 0.95, W.kneel), W.z, W.yaw, W.pitch, (onBoard ? 2.8 : VIEW.dist) * lerp(1, 0.62, W.kneel), onBoard ? 0.35 : 0.55); L.fov = lerp(58, 48, W.kneel); }
+  DIR.look = L; }
+function placeName(x = camera.position.x, z = camera.position.z) { const dc = Math.hypot(x - CC.x, z - CC.z), n = streamNear(x, z).d; if (WR.layer === 'hold') return 'THE WRECK · HOLD'; if (WR.layer === 'deck' || WR.layer === 'ramp') { const q = WR.hit(x, z, WR.DECK_Y); return q.u < -5.3 && q.u > -10.1 && Math.abs(q.v) < 2 ? 'THE WRECK · WHEELHOUSE' : 'THE WRECK · DECK'; } if (Math.hypot(x - WR.O.x, z - WR.O.z) < 34) return 'THE WRECK'; if (dc < 14) return 'TWISTED TREE'; if (n < 7) return 'SRUTHÁN'; if (dc < 70) return 'THE WOOD'; if (inPier(x, z)) return 'THE PIER'; if (Math.hypot(x - HOUSE.x, z - HOUSE.z) < 24) return 'THE HOUSE'; if (coastZ(x) + 18 > z) return 'THE SHORE'; return 'THE HEADLAND'; }
 let WOODQ = 1, STREAMQ = 0, WRECKQ = 0, HOLDQ = 0;
 function worldTick(dt) { if (WALK.on) walkStep(dt); else if (DIR.look === WALK.look) DIR.look = null;
   S.rain = clamp((S.rain || 0) + (WX.precip * 0.08 - (S.rain || 0) / 2880) * dt, 0, 6); const lv = clamp(S.rain * 0.35, 0, 1); streamU.uLevel.value += (lv - streamU.uLevel.value) * Math.min(1, dt * 0.2);
-  const x = camera.position.x, z = camera.position.z; WALK.place = placeName(); const near = (x > SB.x0 - 30 && x < SB.x1 + 30 && z > SB.z0 - 30 && z < SB.z1 + 30) ? streamNear(x, z).d : 99; STREAMQ = Math.pow(1 - smoothstep(1, 46, near), 2) * (1 + lv); WOODQ = 1 - 0.6 * (1 - smoothstep(30, 78, Math.hypot(x - CC.x, z - CC.z)));
+  const x = camera.position.x, z = camera.position.z; WALK.place = WALK.on ? placeName(WALK.x, WALK.z) : placeName(); const near = (x > SB.x0 - 30 && x < SB.x1 + 30 && z > SB.z0 - 30 && z < SB.z1 + 30) ? streamNear(x, z).d : 99; STREAMQ = Math.pow(1 - smoothstep(1, 46, near), 2) * (1 + lv); WOODQ = 1 - 0.6 * (1 - smoothstep(30, 78, Math.hypot(x - CC.x, z - CC.z)));
   PU.uPhoto.value = WR.layer !== 'ground' ? 1 : 1 - smoothstep(19, 96, Math.hypot(x - WR.O.x, z - WR.O.z));
   const hv = WR.layer === 'hold' ? 1 : 0; HOLDQ += (hv - HOLDQ) * Math.min(1, dt * 3); SH.uHold.value = HOLDQ; WRECKQ = 1 - smoothstep(4, 42, Math.hypot(x - WR.O.x, z - WR.O.z)); if (WR.layer !== 'ground' && !S.boarded) { S.boarded = true; logEv('someone went aboard the wreck'); } }
 { const cv = renderer.domElement, hint = document.createElement('div'); hint.id = 'walkhint'; hint.textContent = ''+(matchMedia('(pointer:coarse)').matches?'DRAG LEFT WALK · DRAG RIGHT LOOK · TAP HIDES INFO':'WASD WALK · CLICK TO LOOK · SHIFT RUN · C KNEEL · V CREW · 1–6 PLACES'); hint.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink,#123);background:var(--paper,#eee);border:2px solid var(--ink,#123);padding:7px 10px;white-space:nowrap;max-width:92vw;overflow:hidden'; if (WALK.on && !CAPTURE) { document.body.appendChild(hint); setTimeout(() => hint.remove(), 14000); }
-  addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; } if ('123456'.includes(k)) walkTo(k); });
+  addEventListener('keydown', e => { const k = e.key.toLowerCase(); WALK.keys[k] = true; if (k !== 'i' && k !== 'm') WALK.idle = 0; if (k === 'c') WALK.kneeling = !WALK.kneeling; if (k === 'v') { WALK.on = !WALK.on; if (!WALK.on) DIR.look = null; else { WALK.drove = false; VIEW.snap = true; } } if ('123456'.includes(k)) walkTo(k); });
   addEventListener('keyup', e => { WALK.keys[e.key.toLowerCase()] = false; }); addEventListener('blur', () => { WALK.keys = {}; });
   cv.style.touchAction = 'none'; cv.addEventListener('click', () => { if (WALK.on && cv.requestPointerLock && matchMedia('(pointer:fine)').matches) { try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
-  addEventListener('mousemove', e => { if (document.pointerLockElement === cv) { WALK.yaw += e.movementX * 0.0022; WALK.pitch = clamp(WALK.pitch - e.movementY * 0.0022, -1.35, 1.25); } });
+  addEventListener('mousemove', e => { if (document.pointerLockElement === cv) { WALK.idle = 0; WALK.yaw += e.movementX * 0.0022; WALK.pitch = clamp(WALK.pitch - e.movementY * 0.0022, -1.35, 1.25); } });
   const ptrs = new Map(); cv.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') return; ptrs.set(e.pointerId, { t: performance.now(), moved: 0, left: e.clientX < innerWidth / 2, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY }); });
-  addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.ox, e.clientY - p.oy)); if (p.left) { WALK.stick = [clamp((e.clientX - p.ox) / 60, -1, 1), clamp((p.oy - e.clientY) / 60, -1, 1)]; } else { WALK.yaw += (e.clientX - p.x) * 0.006; WALK.pitch = clamp(WALK.pitch - (e.clientY - p.y) * 0.006, -1.35, 1.25); p.x = e.clientX; p.y = e.clientY; } });
+  addEventListener('pointermove', e => { const p = ptrs.get(e.pointerId); if (!p) return; WALK.idle = 0; p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.ox, e.clientY - p.oy)); if (p.left) { WALK.stick = [clamp((e.clientX - p.ox) / 60, -1, 1), clamp((p.oy - e.clientY) / 60, -1, 1)]; } else { WALK.yaw += (e.clientX - p.x) * 0.006; WALK.pitch = clamp(WALK.pitch - (e.clientY - p.y) * 0.006, -1.35, 1.25); p.x = e.clientX; p.y = e.clientY; } });
   const up = e => { const p = ptrs.get(e.pointerId); if (p && e.type === 'pointerup' && p.moved < 10 && performance.now() - p.t < 320) { INFO = !INFO; hud.hidden = !INFO; if (INFO) hudUpdate(); } if (p && p.left) WALK.stick = [0, 0]; ptrs.delete(e.pointerId); }; addEventListener('pointerup', up); addEventListener('pointercancel', up); }
 
 const HOST_S = S, HOST_LIVE = () => live;
@@ -1804,22 +1838,29 @@ function synthWx(ms) { const h = ms / 3600e3;
     precip: Math.max(0, Math.sin(h * 1.7) * 1.6 - 0.9), temp: 12 + 3 * Math.sin(h * 0.26), hum: 82 + 10 * Math.sin(h * 0.5),
     swellH: 1.4 + 0.8 * Math.sin(h * 0.21), swellT: 10 + 2.6 * Math.sin(h * 0.17), swellDir: 265 + 18 * Math.sin(h * 0.12) }; }
 Object.assign(WXT, synthWx(simMs)); Object.assign(WX, WXT);
+// INVERLAND WEATHER: one sky made from three cities (equal means; wind and swell directions as speed- and height-weighted vector means).
+// Sea state from three marine points: Galway Bay, the mouth of the Chesapeake, the Thames estuary. A point that doesn't answer drops out.
+const MARINE = [{ k: 'GAL', lat: 53.2, lon: -9.65 }, { k: 'BAL', lat: 37.0, lon: -75.95 }, { k: 'LON', lat: 51.55, lon: 1.25 }];
+function vecMean(list, dirKey, magKey) { let x = 0, y = 0; for (const o of list) { const b = o[dirKey] * D2R, m = Math.max(o[magKey], 0.01); x += m * Math.cos(b); y += m * Math.sin(b); } return (Math.atan2(y, x) / D2R + 360) % 360; }
+const mean = (list, k) => list.reduce((t, o) => t + o[k], 0) / list.length;
 async function fetchWx() {
   if (!LIVE_WX) return;
-  try {
-    const [a, b] = await Promise.all([
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`).then(r => r.json()),
-      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=53.2&longitude=-9.65&current=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`).then(r => r.json()).catch(() => null),
-    ]);
-    const c = a.current; const m = b && b.current;
-    const prev = { ...WXT };
-    Object.assign(WXT, { wind: c.wind_speed_10m, windDir: c.wind_direction_10m, cloud: c.cloud_cover / 100, precip: c.precipitation, temp: c.temperature_2m, hum: c.relative_humidity_2m });
-    if (m) { const sh = m.swell_wave_height ?? m.wave_height, sp = m.swell_wave_period ?? m.wave_period, sd = m.swell_wave_direction ?? m.wave_direction;
-      if (sh != null) WXT.swellH = clamp(sh, 0.15, 7); if (sp != null) WXT.swellT = clamp(sp, 4, 18); if (sd != null) WXT.swellDir = sd; }
-    if (!WX.live) logEv('live weather from Galway Bay arrived');
-    else if (Math.abs(prev.swellH - WXT.swellH) > 0.3) logEv(`swell ${prev.swellH.toFixed(1)} → ${WXT.swellH.toFixed(1)} m`);
-    WX.live = true; WXT.live = true;
-  } catch (e) { WX.live = false; }
+  const get = (u) => fetch(u).then(r => r.ok ? r.json() : null).catch(() => null);
+  const [fc, mr] = await Promise.all([
+    Promise.all(RELAY.map(c => get(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`))),
+    Promise.all(MARINE.map(m => get(`https://marine-api.open-meteo.com/v1/marine?latitude=${m.lat}&longitude=${m.lon}&current=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`))) ]);
+  const air = []; fc.forEach((a, i) => { const c = a && a.current; if (c && isFinite(c.wind_speed_10m) && isFinite(c.temperature_2m))
+    air.push({ k: RELAY[i].k, wind: c.wind_speed_10m, windDir: c.wind_direction_10m, cloud: (c.cloud_cover ?? 50) / 100, precip: c.precipitation ?? 0, temp: c.temperature_2m, hum: c.relative_humidity_2m ?? 80 }); });
+  const sea = []; mr.forEach((b, i) => { const m = b && b.current; if (!m) return; const h = m.swell_wave_height ?? m.wave_height, t = m.swell_wave_period ?? m.wave_period, d = m.swell_wave_direction ?? m.wave_direction;
+    if (h != null && t != null && d != null && isFinite(h) && isFinite(t) && isFinite(d)) sea.push({ k: MARINE[i].k, h, t, d }); });
+  if (!air.length) { WX.live = false; WXT.live = false; WX.src = []; WX.seaSrc = []; return; }
+  const prev = { ...WXT };
+  Object.assign(WXT, { wind: mean(air, 'wind'), windDir: vecMean(air, 'windDir', 'wind'), cloud: mean(air, 'cloud'), precip: mean(air, 'precip'), temp: mean(air, 'temp'), hum: mean(air, 'hum') });
+  if (sea.length) { WXT.swellH = clamp(mean(sea, 'h'), 0.15, 7); WXT.swellT = clamp(mean(sea, 't'), 4, 18); WXT.swellDir = vecMean(sea, 'd', 'h'); }
+  WX.src = air.map(o => o.k); WX.seaSrc = sea.map(o => o.k); WX.parts = air;
+  if (!WX.live) logEv(`INVERLAND weather arrived from ${air.map(o => RELAY.find(c => c.k === o.k).name).join(', ')}`);
+  else if (Math.abs(prev.swellH - WXT.swellH) > 0.3) logEv(`swell ${prev.swellH.toFixed(1)} → ${WXT.swellH.toFixed(1)} m`);
+  WX.live = true; WXT.live = true;
 }
 fetchWx(); setInterval(fetchWx, 15 * 60e3);
 
@@ -2134,6 +2175,8 @@ STACKS.slice(0, 3).forEach(s => PROBES.push({ p: V(s.p.x, 0, s.p.z - s.r * 0.9),
 let lastWxRebuild = -999, cwNow = COLORWAYS[S.colorway].c.map(hexV), cwFrom = cwNow.map(v => v.clone()), cwMix = 1;
 
 function keeperTick(dt) {
+  if (keeperDriven()) return;   // the visitor is wearing her walk (walkStep)
+  if (keeper.ret && keeperReturn(dt)) return;
   const sunEl = SUNM.sun.el / D2R; const evening = galwayParts(simMs).hour > 14;
   if (keeper.state === 'dwell') {
     keeper.dwell -= dt; keeper.still += dt;
@@ -2158,12 +2201,38 @@ function keeperTick(dt) {
     keeper.walkDir = dir;
   }
   if (!isFinite(keeper.s)) keeper.s = 0;
-  const at = trailAt(keeper.s); keeper.pos.copy(at.p); keeper.cur = at.kind;
+  const at = trailAt(keeper.s); keeper.pos.copy(at.p); keeper.cur = at.kind; keeper.moveT = keeper.state === 'walk' ? 1 : 0;
   if (keeper.state === 'walk') keeper.dir.copy(at.dir).multiplyScalar(keeper.walkDir || 1);
   else if (keeper.target === 'PIER_END') keeper.dir.lerp(V(SUND.x, 0, SUND.z).normalize(), 0.02).normalize();
   else if (keeper.target === 'CLIFF') keeper.dir.lerp(V(-0.3, 0, -1).normalize(), 0.02).normalize();
-  const m = keeper.mesh; m.visible = keeper.visible; m.position.copy(keeper.pos); m.rotation.y = Math.atan2(keeper.dir.x, keeper.dir.z);
-  keeper.move = lerp(keeper.move || 0, keeper.state === 'walk' ? 1 : 0, 1 - Math.exp(-dt * 1.5));
+  keeperDress(dt);
+}
+const keeperDriven = () => WALK.on && WALK.idle < KEEPER_IDLE;
+function keeperVisitor(dt, sp) { const W = WALK;   // the visitor's walk, worn by the keeper
+  keeper.visible = true; keeper.pos.set(W.x, W.y, W.z); if (sp > 0.15) keeper.dir.lerp(V(W.vx / sp, 0, W.vz / sp), 1 - Math.exp(-dt * 7)).normalize();
+  keeper.walked += sp * dt; keeper.moveT = clamp(sp / 1.25, 0, 1.6); keeper.state = sp > 0.3 ? 'walk' : 'dwell'; keeper.still = sp > 0.3 ? 0 : keeper.still + dt;
+  let best = 'HOUSE', bd = 1e9; for (const k in STOPS) { const q = trailAt(STOPS[k].s).p, d = Math.hypot(q.x - W.x, q.z - W.z); if (d < bd) { bd = d; best = k; } }
+  keeper.target = best; keeper.stopName = bd < 6 ? STOPS[best].name : W.place.toLowerCase(); keeper.cur = inPier(W.x, W.z) ? 'pier' : (Math.abs(W.x - PIER_X) < 1.6 && W.z >= zL && W.z <= zT + 3) ? 'stair' : 'ground';
+  keeper.ret = { stuck: 0, layer: WR.layer }; keeperDress(dt); }
+function keeperReturn(dt) {   // back to the trail from wherever the visitor left her
+  const R = keeper.ret, P = keeper.pos;
+  if (!R.goal) { let bi = 0, bd = 1e9; TRAIL.forEach((t, i) => { const d = Math.hypot(t.p.x - P.x, t.p.z - P.z); if (d < bd) { bd = d; bi = i; } }); R.goal = TRAIL[bi]; R.far = bd; }
+  const g = R.goal.p, d = Math.hypot(g.x - P.x, g.z - P.z);
+  const home = (why) => { keeper.s = 0; keeper.target = 'HOUSE'; keeper.state = 'dwell'; keeper.visible = false; keeper.dwell = rr(15, 40) * 60; keeper.stopName = 'the house'; keeper.ret = null; logEv(why); };
+  if (R.layer !== 'ground' || R.far > 170 || R.stuck > 6) { home('the keeper went home the long way'); return false; }
+  if (d < 0.6) { keeper.s = R.goal.s; keeper.state = 'dwell'; keeper.dwell = rr(20, 90); keeper.still = 0; keeper.ret = null;
+    const near = Object.keys(STOPS).find(k => Math.abs(STOPS[k].s - keeper.s) < 4); keeper.target = near || 'HOUSE'; keeper.stopName = near ? STOPS[near].name : 'the path'; logEv('the keeper went back to her errands'); return false; }
+  const ux = (g.x - P.x) / d, uz = (g.z - P.z) / d, st = Math.min(1.25 * dt, d);
+  WR.layer = 'ground'; R.sideT = (R.sideT || 0) - dt; if (R.sideT <= 0) R.side = 0; let hx = ux, hz = uz, ok = false;   // round a tree or a rock: hold a side-step for a moment
+  for (const off of [R.side || 0, 0.7, -0.7, 1.4, -1.4, 2.1, -2.1]) { const c = Math.cos(off), sn = Math.sin(off); hx = ux * c - uz * sn; hz = ux * sn + uz * c;
+    if (walkFree(P.x + hx * st, P.z + hz * st, P.x, P.z)) { ok = true; if (off && off !== R.side) { R.side = off; R.sideT = 1.6; } break; } }
+  if (ok) { P.x += hx * st; P.z += hz * st; R.stuck = Math.max(0, R.stuck - dt * 0.5); } else R.stuck += dt; R.age = (R.age || 0) + dt; if (R.age > 400) R.stuck = 99;
+  P.y = groundAt(P.x, P.z, 'ground'); keeper.dir.lerp(V(hx, 0, hz), 1 - Math.exp(-dt * 4)).normalize(); keeper.walked += st; keeper.moveT = 1; keeper.state = 'walk'; keeper.visible = true; keeper.cur = 'ground'; keeper.still = 0;
+  keeperDress(dt); return true; }
+function keeperDress(dt) {
+  const m = keeper.mesh; m.visible = keeper.visible && !(keeperDriven() && VIEW.mode === 'eyes'); m.position.copy(keeper.pos); m.rotation.y = Math.atan2(keeper.dir.x, keeper.dir.z);
+  m.scale.set(1.12, 1.12 * lerp(1, 0.56, keeperDriven() ? WALK.kneel : 0), 1.12);
+  keeper.move = lerp(keeper.move || 0, keeper.moveT || 0, 1 - Math.exp(-dt * 1.5));
   const wt = fromBearingTravel(WX.windDir), wl = V(wt.x, 0, wt.y).multiplyScalar(clamp(WX.wind / 12, 0, 1.4)).applyAxisAngle(V(0, 1, 0), -m.rotation.y);
   m.position.y += 0.03 * Math.sin(keeper.walked * 3.4) * keeper.move;
   m.userData.mats.forEach(mt => { mt.uniforms.uWalk.value = keeper.walked; mt.uniforms.uMove.value = keeper.move; mt.uniforms.uWindL.value.copy(wl); });
@@ -2321,11 +2390,12 @@ const tapBtn = document.getElementById('tap');
 function hudUpdate() {
   if (!INFO) return; const g = galwayParts(simMs); const sEl = SUNM.sun.el / D2R; const sAz = (SUNM.sun.az / D2R + 360) % 360;
   const bpm = (240 / AUD.barSec).toFixed(0);
-  const kd = keeper.visible ? (keeper.state === 'walk' ? `walking to ${STOPS[keeper.target].name}` : `at ${keeper.stopName}`) : 'indoors';
+  const kd = keeperDriven() ? `YOU · ${keeper.stopName}` : keeper.ret ? 'going back to her errands' : keeper.visible ? (keeper.state === 'walk' ? `walking to ${STOPS[keeper.target].name}` : `at ${keeper.stopName}`) : 'indoors';
   const deg = STOPS[keeper.state === 'walk' ? keeper.target : (Object.keys(STOPS).find(k => STOPS[k].name === keeper.stopName) || 'HOUSE')].deg;
   const ev = live.ev ? `<div class="ev">NOW · ${live.ev === 'eye' && live.subject === 'moon' ? 'the moon has an eye open' : EVT[live.ev].label}</div>` : '';
-  hud.innerHTML = `<div class="t"><span>MZ WORLD · INVERIN</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
-  <div class="r"><span>GALWAY BAY ${g.str} · sun ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${WX.live ? 'LIVE' : 'SIMULATED'} WEATHER</span></div>
+  hud.innerHTML = `<div class="t"><span>MZ WORLD · INVERLAND</span><span>EPOCH ${S.epoch} · ${COLORWAYS[S.colorway].name}</span></div>
+  <div class="r"><span>INVERLAND ${g.str} · RELAY SUN ${sEl.toFixed(0)}° ${compass(sAz)}</span><span>${(SUNM.relay || []).map(o => o.k + ' ' + Math.round(o.w * 100)).join(' · ')}</span></div>
+  <div class="r"><span>INVERLAND WEATHER · ${WX.live ? (WX.src || []).map(k => RELAY.find(c => c.k === k).name).join(' · ') + ' · LIVE' : 'SIMULATED'}</span><span>${WX.live && WX.seaSrc && WX.seaSrc.length ? 'SEA ' + WX.seaSrc.join(' · ') : (WX.live ? 'SEA SIMULATED' : '')}</span></div>
   <div class="r"><span>SWELL ${WX.swellH.toFixed(1)} m · ${WX.swellT.toFixed(1)} s from ${compass(WX.swellDir)}</span><span>→ sea, bar ${AUD.barSec.toFixed(1)} s (${bpm} bpm)</span></div>
   <div class="r"><span>WIND ${WX.wind.toFixed(1)} m/s ${compass(WX.windDir)} · CLOUD ${(WX.cloud * 100).toFixed(0)}%</span><span>→ chop, sky drift, gulls</span></div>
   <div class="r"><span>HUMIDITY ${WX.hum.toFixed(0)}%${WX.precip > 0.05 ? ' · RAIN ' + WX.precip.toFixed(1) + ' mm' : ''}</span><span>→ haze ${(SH.uFogD.value | 0)} m, echo</span></div>
