@@ -128,8 +128,8 @@ const XR = { lids: [0, 0.32], age: [0, 1], tone: [0, 1], grey: [0, 1], stubble: 
 const HAIRS = ['pulled back', 'short', 'shaved'], CLOTHES = ['fleece', 'sweater'];
 
 function zeroGenome() { const g = { L: new Array(NF).fill(0), R: new Array(NF).fill(0), x: {}, hair: 0, clothes: 0 }; for (const k of XG) g.x[k] = lerp(XR[k][0], XR[k][1], 0.35); return g; }
-function cloneG(g) { return { L: g.L.slice(), R: g.R.slice(), x: Object.assign({}, g.x), hair: g.hair, clothes: g.clothes }; }
-function mixG(a, b, t) { const g = cloneG(a); for (let i = 0; i < NF; i++) { g.L[i] = lerp(a.L[i], b.L[i], t); g.R[i] = lerp(a.R[i], b.R[i], t); } for (const k of XG) g.x[k] = lerp(a.x[k], b.x[k], t); return g; }
+function cloneG(g) { return { L: g.L.slice(), R: g.R.slice(), x: Object.assign({}, g.x), hair: g.hair, clothes: g.clothes, t: g.t ? Object.assign({}, g.t) : undefined }; }
+function mixG(a, b, t) { const g = cloneG(a); if (t >= 0.5 && b.t) g.t = Object.assign({}, b.t); for (let i = 0; i < NF; i++) { g.L[i] = lerp(a.L[i], b.L[i], t); g.R[i] = lerp(a.R[i], b.R[i], t); } for (const k of XG) g.x[k] = lerp(a.x[k], b.x[k], t); return g; }
 function okG(g) { if (!g || !g.L || !g.R || !g.x) return false; for (let i = 0; i < NF; i++) if (!fin(g.L[i]) || !fin(g.R[i])) return false; for (const k of XG) if (!fin(g.x[k])) return false; return true; }
 
 
@@ -172,6 +172,69 @@ function randomPerson() {
   g.hair = Math.floor(R.f() * 3); g.clothes = R.f() < 0.5 ? 0 : 1;
   return g;
 }
+/* ------------------------------------------------------------------ characters: each sitter is a combination of human traits, drawn independently */
+const HAIRC = [['black', [0.035, 0.03, 0.03]], ['espresso', [0.09, 0.06, 0.045]], ['brown', [0.2, 0.13, 0.08]], ['chestnut', [0.3, 0.16, 0.08]], ['auburn', [0.42, 0.15, 0.07]],
+  ['copper', [0.62, 0.28, 0.1]], ['honey', [0.62, 0.45, 0.22]], ['blond', [0.82, 0.68, 0.42]], ['platinum', [0.9, 0.86, 0.76]]];
+// name, hair lines (0 pulled back · 1 short · 2 none), volume, curl, length (fall), recession
+const STYLES = [['pulled back', 0, 0, 0, 0, 0], ['short', 1, 0, 0, 0, 0], ['shaved', 2, 0, 0, 0, 0], ['long', 1, 0.08, 0, 1.25, 0], ['curls', 1, 0.3, 1, 0, 0],
+  ['long curls', 1, 0.2, 0.8, 0.75, 0], ['cropped', 1, -0.04, 0, 0, 0], ['receding', 1, 0, 0, 0, 0.8], ['bald crown', 1, 0, 0, 0, 1.6], ['big hair', 1, 0.5, 0.55, 0.15, 0]];
+const BEARDS = ['clean-shaven', 'stubble', 'moustache', 'goatee', 'full beard'];
+const GLASSES = ['', 'round', 'square', 'cat-eye'], FRAMES = [['black', [0.03, 0.03, 0.035]], ['tortoise', [0.32, 0.17, 0.07]], ['gold', [0.78, 0.6, 0.26]], ['clear', [0.66, 0.68, 0.68]]];
+const NECKS = ['jacket', 'crew neck', 'turtleneck'], EARS = ['', 'gold earrings', 'pearl earrings'];
+const wpick = w => { let s = 0; for (const v of w) s += v; let r = R.f() * s; for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; } return w.length - 1; };
+const geneAdd = (g, name, v) => { const i = F.findIndex(f => f[0] === name); if (i < 0) return; g.L[i] = clamp(g.L[i] + v, -2.7, 2.7); g.R[i] = F[i][4] ? clamp(g.R[i] + v, -2.7, 2.7) : g.L[i]; };
+function defaultT(g) { return { st: g.hair === 2 ? 2 : g.hair === 0 ? 0 : 1, hc: 2, bd: g.x.stubble > 0.3 ? 1 : 0, gl: 0, fr: 0, freck: 0, mole: 0, mx: 0, my: 0, flush: 0.4, under: 0, ear: 0, nk: g.clothes === 0 ? 0 : 1, stripe: 0, c2: 10, soft: 0.3, build: 0 }; }
+const ensureT = g => { if (g && !g.t) g.t = defaultT(g); return g; };
+function makeCharacter() {
+  const g = randomPerson(), t = {};
+  t.soft = R.f() < 0.45 ? R.r(0.55, 1) : R.r(0, 0.35);         // a softer or a stronger face
+  t.build = clamp(R.n() * 0.55, -1, 1);                          // slight to heavy-set
+  const s = t.soft - 0.45, age = g.x.age;
+  geneAdd(g, 'brow ridge', -1.5 * s); geneAdd(g, 'jaw width', -1.1 * s); geneAdd(g, 'chin', -0.5 * s); geneAdd(g, 'lips', 1.3 * s); geneAdd(g, 'nose length', -0.6 * s);
+  geneAdd(g, 'neck', -1.0 * s); geneAdd(g, 'cheekbones', 0.6 * s); geneAdd(g, 'brow height', 0.5 * s);
+  geneAdd(g, 'cheek fat', 1.4 * t.build); geneAdd(g, 'jowls', t.build * (0.4 + age)); geneAdd(g, 'neck', 1.1 * t.build); geneAdd(g, 'face width', 0.8 * t.build); geneAdd(g, 'cheek hollow', -1.0 * t.build);
+  t.st = wpick([1 + t.soft, 1.4, 0.9, 0.3 + 1.6 * t.soft, 1, 0.2 + 1.1 * t.soft, 1, 0.2 + 1.5 * age * (1 - t.soft), 0.1 + 1.4 * age * (1 - t.soft), 0.3 + 0.6 * t.soft]);
+  const tone = g.x.tone;
+  t.hc = wpick([1 + 1.5 * tone, 1 + tone, 1.2, 0.9, 0.5 * (1 - tone) + 0.1, 0.4 * (1 - tone) + 0.05, 0.6 * (1 - tone) + 0.1, 0.8 * (1 - tone) + 0.15, 0.25]);
+  t.bd = t.soft > 0.5 ? (R.f() < 0.9 ? 0 : 1) : wpick([1.2, 1.4, 0.45, 0.45, 0.9]);
+  g.x.stubble = t.bd === 0 ? R.r(0, 0.06) : t.bd === 1 ? R.r(0.5, 1) : R.r(0.7, 1);
+  t.gl = R.f() < 0.36 ? 1 + Math.floor(R.f() * 3) : 0; t.fr = Math.floor(R.f() * FRAMES.length);
+  t.freck = tone < 0.5 && R.f() < 0.35 ? R.r(0.45, 1) : 0;
+  t.mole = R.f() < 0.28 ? 1 : 0; t.mx = R.r(-1, 1); t.my = R.f();
+  t.flush = R.f(); t.under = R.r(-1, 1);
+  t.ear = R.f() < 0.12 + 0.45 * t.soft ? 1 + Math.floor(R.f() * 2) : 0;
+  t.nk = Math.floor(R.f() * 3); g.clothes = t.nk === 0 ? 0 : 1;
+  t.stripe = t.nk > 0 && R.f() < 0.32 ? 1 + Math.floor(R.f() * 2) : 0; t.c2 = R.f() < 0.5 ? 10 : 11;
+  g.hair = STYLES[t.st][1]; g.t = t;
+  return g;
+}
+// a child takes each family of traits from a parent more often than not: glasses, red hair and beards run in families
+function inheritT(t, parents) {
+  if (!parents.length) return t; const o = Object.assign({}, t), from = () => parents[Math.floor(R.f() * parents.length)].g.t;
+  for (const fam of TFAM) { const p = from(); if (p && R.f() < 0.3) for (const k of fam) o[k] = p[k]; }
+  return o;
+}
+// variety: a trait already worn by two sitters on this shelf is drawn again, so families resemble each other without the population collapsing into one character
+const TFAM = [['st'], ['hc'], ['bd'], ['gl', 'fr'], ['freck'], ['mole', 'mx', 'my'], ['ear'], ['nk', 'stripe', 'c2'], ['under']];
+function diversify(g) {
+  const on = S.shelf.filter(Boolean).map(m => m.g.t).filter(Boolean); if (!on.length) return;
+  for (const fam of [['st'], ['hc'], ['bd'], ['gl', 'fr'], ['nk', 'stripe', 'c2']]) {
+    for (let tries = 0; tries < 4; tries++) { const k = fam[0]; if (on.filter(t => t[k] === g.t[k]).length < 2) break;
+      const fresh = makeCharacter().t; for (const f of fam) g.t[f] = fresh[f]; } }
+  g.hair = STYLES[g.t.st][1]; g.clothes = g.t.nk === 0 ? 0 : 1;
+  g.x.stubble = g.t.bd === 0 ? Math.min(g.x.stubble, 0.06) : Math.max(g.x.stubble, 0.5);
+}
+function traitText(g) {
+  const t = g.t; if (!t) return '';
+  const hair = t.st === 2 ? 'shaved head' : t.st === 8 ? HAIRC[t.hc][0] + ', bald crown' : HAIRC[t.hc][0] + ' ' + (t.st === 7 ? 'hair, receding' : STYLES[t.st][0] + (t.st === 0 || t.st === 1 || t.st === 6 || t.st === 3 ? ' hair' : ''));
+  const bits = [hair];
+  if (t.bd > 0) bits.push(BEARDS[t.bd]);
+  if (t.gl) bits.push(GLASSES[t.gl] + ' ' + FRAMES[t.fr][0] + ' glasses');
+  if (t.freck > 0) bits.push('freckles'); if (t.mole) bits.push('beauty mark'); if (t.ear) bits.push(EARS[t.ear]);
+  if (t.build > 0.55) bits.push('heavy-set'); else if (t.build < -0.55) bits.push('slight');
+  bits.push((t.stripe ? (t.stripe === 1 ? 'striped ' : 'pinstriped ') : '') + NECKS[t.nk]);
+  return bits.join(' · ');
+}
 function pickColour() {
   const used = new Set(S.shelf.filter(Boolean).map(m => m.col)); let c = 0;
   for (let tries = 0; tries < 12; tries++) { c = Math.floor(R.f() * CLOTH.length); if (!used.has(c)) break; }
@@ -180,7 +243,7 @@ function pickColour() {
 // a new sitter sits down: a rough draft that drifts toward a person of its own
 function newPortrait() {
   S.person++; S.j = 0; S.kind = '';
-  S.dest = randomPerson();
+  S.dest = makeCharacter();
   let ev = 'sitter ' + pad(S.person, 3) + ' sits down';
   if (SH() >= UNLOCK.split && R.f() < 0.12) { for (let i = 0; i < NF; i++) if (F[i][4]) S.dest.R[i] = clamp(-S.dest.L[i] + R.n() * 0.4, -2.4, 2.4); S.kind = 'split'; S.counts.splits++; ev += ' · the halves will disagree'; }
   else if (SH() >= UNLOCK.caricature && R.f() < 0.22) { const i = Math.floor(R.f() * NF), s = R.f() < 0.5 ? -1 : 1; S.dest.L[i] = S.dest.R[i] = s * R.r(2.3, 2.9); S.kind = 'caricature · ' + F[i][0]; S.counts.caricatures++; ev += ' · caricature of ' + F[i][0]; }
@@ -191,12 +254,15 @@ function newPortrait() {
       const n = 2 + (R.f() < 0.4 ? 1 : 0), ps = [];
       for (let t = 0; t < 12 && ps.length < n; t++) { const m = pool[Math.floor(R.f() * pool.length)]; if (!ps.includes(m)) ps.push(m); }
       let c = cloneG(ps[0].g); for (let i = 1; i < ps.length; i++) c = mixG(c, ps[i].g, 1 / (i + 1));
-      seed = mixG(seed, c, 0.8); S.dest = mixG(S.dest, c, 0.35); S.dest.hair = R.f() < 0.5 ? ps[0].g.hair : S.dest.hair;
+      seed = mixG(seed, c, 0.8); const dt_ = S.dest.t; S.dest = mixG(S.dest, c, 0.35); S.dest.t = dt_;
+      S.dest.t = inheritT(S.dest.t, ps.map(m => ensureT(m.g) && m)); S.dest.hair = STYLES[S.dest.t.st][1]; S.dest.clothes = S.dest.t.nk === 0 ? 0 : 1;
       S.parents = ps.map(m => m.n); S.counts.lineage++; ev += ' · descends from ' + S.parents.map(n => pad(n, 3)).join(' + ');
     }
   }
+  diversify(S.dest);
   for (let i = 0; i < NF; i++) { seed.L[i] = clamp(seed.L[i] + R.n() * 0.15, -2.2, 2.2); seed.R[i] = seed.L[i]; }
-  seed.hair = S.dest.hair; seed.clothes = S.dest.clothes;
+  seed.hair = S.dest.hair; seed.clothes = S.dest.clothes; seed.t = Object.assign({}, S.dest.t); seed.x.stubble = S.dest.x.stubble;
+  ev += ' · ' + traitText(S.dest);
   S.destFrom = cloneG(seed); S.col = pickColour();
   S.detailTarget = S.detailEarned = S.detailNow = 0.1; S.clean = 0;
   return { seed, ev };
@@ -214,7 +280,7 @@ function stepGenome(base) {
     if (F[i][4] && asym === 0 && S.kind !== 'split') g.R[i] = g.L[i] = (g.L[i] + g.R[i]) / 2;
   }
   for (const k of XG) { const [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + R.n() * sig * 0.1 * (b - a) + (D.x[k] - g.x[k]) * pull, a, b); }
-  g.hair = D.hair; g.clothes = D.clothes;
+  g.hair = D.hair; g.clothes = D.clothes; g.t = D.t ? Object.assign({}, D.t) : g.t;
   return g;
 }
 function journey() { if (!S.dest || !S.destFrom) return 0; let a = 0, b = 0; for (let i = 0; i < NF; i++) { a += Math.abs(S.cur.L[i] - S.dest.L[i]); b += Math.abs(S.destFrom.L[i] - S.dest.L[i]); } return clamp(1 - a / (b + 1e-6), 0, 1); }
@@ -234,7 +300,7 @@ function place() {
     bob: Math.round(R.r(0, 628)) / 100, born: S.t, parents: S.parents.slice(), kind: S.kind };
   if (d < 0.95) S.counts.unfinished++;
   S.placedAt = S.t; S.placedCube = i;
-  logLine('R', 'sitter ' + pad(S.person, 3) + ' placed · shelf ' + pad(S.shelfNo, 2) + ' cube ' + (i + 1) + ' · in ' + CLOTH[S.col][0] + ' · drawn at ' + Math.round(d * 100) + '%' + (d < 0.95 ? ' (unfinished)' : ''), 'c');
+  logLine('R', 'sitter ' + pad(S.person, 3) + ' placed · shelf ' + pad(S.shelfNo, 2) + ' cube ' + (i + 1) + ' · ' + traitText(S.cur) + ' in ' + CLOTH[S.col][0] + ' · drawn at ' + Math.round(d * 100) + '%' + (d < 0.95 ? ' (unfinished)' : ''), 'c');
 }
 // detail levels: 0.10, 0.19 … 1.00. Each becomes available as the portrait goes on; the review decides when it is drawn.
 const DSTEP = 0.09;
@@ -329,16 +395,29 @@ vec3 field(vec3 p) { vec3 o = p; for (int i = 0; i < NB; i++) { vec3 q = (p - uB
 uniform mat4 uVP; uniform mat3 uRot; uniform vec3 uPivot; uniform vec3 uOff; uniform float uScl;
 vec3 sway(vec3 p) { return uRot * (p - uPivot) * uScl + uPivot + uOff; }
 `;
+const HAIRMASK_GLSL = `
+// which hair is kept: a receding hairline (front first), then a bald crown
+float hairKeep(vec3 p, float rec) {
+  if (rec <= 0.0) return 1.0;
+  vec3 d = normalize(p - vec3(0.0, 7.35, 0.30));
+  float front = dot(d, vec3(0.0, 0.42, 0.91)) + 0.06 * exp(-p.x * p.x / 0.01);
+  float k = 1.0 - smoothstep(1.0 - 0.3 * min(rec, 1.0) - 0.02, 1.0 - 0.3 * min(rec, 1.0) + 0.02, front);
+  if (rec > 1.0) k *= 1.0 - smoothstep(1.2 - 0.55 * (rec - 1.0) - 0.03, 1.2 - 0.55 * (rec - 1.0) + 0.03, d.y + 0.25 * max(d.z, 0.0));
+  return k;
+}
+`;
 const VS_SKIN = `precision highp float;
 attribute vec3 aP; attribute vec3 aB; attribute vec3 aJ; attribute vec3 aS; attribute vec3 aN0; attribute vec3 aN1; attribute float aAO;
-uniform float uBlink, uJaw, uSw;
+uniform float uBlink, uJaw, uSw, uAnch;
 ${FIELD_GLSL}
 varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
 void main() {
   vec3 p = aP + aB * uBlink + aJ * uJaw + aS * uSw;
   vec3 n = normalize(mix(aN0, aN1, uBlink));
   vec3 t1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0,1,0) : vec3(1,0,0))); vec3 t2 = cross(n, t1);
-  vec3 d0 = field(p), d1 = field(p + t1 * 0.01), d2 = field(p + t2 * 0.01);
+  // a collar rides on the skin point beneath it (aB = its offset from that point), so it moves exactly as the neck does
+  vec3 bs = uAnch > 0.5 ? aP - aB : p, ad = uAnch > 0.5 ? aB : vec3(0.0);
+  vec3 d0 = field(bs) + ad, d1 = field(bs + t1 * 0.01) + ad, d2 = field(bs + t2 * 0.01) + ad;
   vec3 nn = normalize(cross(d1 - d0, d2 - d0)); if (dot(nn, n) < 0.0) nn = -nn;
   vec3 w = sway(d0);
   vN = uRot * nn; vO = aP; vW = w; vAO = aAO;
@@ -355,16 +434,21 @@ float ell(vec3 p, vec3 c, vec3 r, float soft) { float d = length((p - c) / r); r
 const FS_SKIN = COMMON_FS + `
 varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
 uniform float uAge, uTone, uScalp, uStub, uDetail;
+uniform float uFreck, uFlush, uRecede; uniform vec4 uMole; uniform vec3 uUT;
+${HAIRMASK_GLSL}
 void main() {
   vec3 n = normalize(vN), v = normalize(uEye - vW);
   vec3 lite = mix(vec3(0.86, 0.66, 0.56), vec3(0.42, 0.27, 0.19), uTone);
   vec3 dark = mix(vec3(0.70, 0.47, 0.39), vec3(0.30, 0.18, 0.12), uTone);
   float mot = vnoise(vO * 9.0) * 0.6 + vnoise(vO * 31.0) * 0.4;
-  vec3 col = mix(dark, lite, 0.35 + 0.4 * mot);
+  vec3 col = mix(dark, lite, 0.35 + 0.4 * mot) * uUT;
   float pore = vnoise(vO * 140.0) * vnoise(vO * 67.0); col *= 1.0 - 0.16 * uDetail * pore;
   float lips = ell(vO, vec3(0.0, 6.615, 1.56), vec3(0.19, 0.065, 0.12), 0.6);
   float flush = max(ell(vO, vec3(0.0, 6.93, 1.62), vec3(0.13, 0.12, 0.12), 0.9), max(ell(vO, vec3(0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0), ell(vO, vec3(-0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0)));
-  col = mix(col, col * vec3(0.95, 0.72, 0.68), flush * 0.5);
+  col = mix(col, col * vec3(0.95, 0.72, 0.68), flush * (0.2 + 0.55 * uFlush));
+  float fz = ell(vO, vec3(0.0, 7.02, 1.45), vec3(0.62, 0.3, 0.45), 0.7), fs = step(0.84, h31(floor(vO * 110.0 + 0.5)));
+  col = mix(col, col * vec3(0.68, 0.46, 0.34), fs * fz * uFreck);
+  if (uMole.w > 0.0) col = mix(col, vec3(0.16, 0.09, 0.06), ell(vO, uMole.xyz, vec3(uMole.w), 0.35));
   col = mix(col, col * vec3(0.72, 0.42, 0.4), lips);
   float under = max(ell(vO, vec3(0.31, 7.2, 1.36), vec3(0.2, 0.2, 0.14), 1.0), ell(vO, vec3(-0.31, 7.2, 1.36), vec3(0.2, 0.2, 0.14), 1.0));
   col *= 1.0 - under * (0.08 + 0.14 * uAge);
@@ -372,7 +456,7 @@ void main() {
   float beard = step(vO.y, 6.82 - 0.2 * max(abs(vO.x) - 0.24, 0.0)) * step(5.95, vO.y) * step(0.35, vO.z) * step(abs(vO.x), 0.68) * (1.0 - lips);
   col = mix(col, col * 0.62, beard * uStub * 0.8);
   float scalp = clamp(((vO.y - 7.55) - (-0.1 + 0.42 * (vO.z - 0.35))) / 0.12, 0.0, 1.0);
-  col = mix(col, vec3(0.08, 0.06, 0.05), scalp * uScalp);
+  col = mix(col, vec3(0.08, 0.06, 0.05), scalp * uScalp * hairKeep(vO, uRecede));
   // lash line
   for (int s = 0; s < 2; s++) { vec3 c = vec3(s == 0 ? 0.308 : -0.308, 7.284, 1.233); vec3 d = vO - c; float r = length(d);
     float band = clamp(1.0 - abs(r - 0.16) / 0.012, 0.0, 1.0) * clamp(d.y / 0.03, 0.0, 1.0) * step(0.0, d.z); col = mix(col, vec3(0.08, 0.05, 0.04), band * 0.7); }
@@ -381,6 +465,7 @@ void main() {
   float lines = smoothstep(0.75, 1.0, sin((vO.y + 0.03 * vnoise(vO * 6.0)) * 95.0)) * fh;
   col *= 1.0 - lines * uAge * 0.3 * uDetail;
   float ao = mix(1.0, vAO, 0.45 + 0.45 * uDetail);
+  ao = mix(ao, 1.0, 0.55 * (1.0 - smoothstep(6.25, 6.5, vO.y)));   // the baked occlusion under the jaw read as a hole at the throat
   vec3 L = normalize(uKey), F2 = normalize(uFill);
   float nl = dot(n, L), wrap = clamp((nl + 0.35) / 1.35, 0.0, 1.0);
   vec3 sss = mix(vec3(1.0, 0.55, 0.45), vec3(1.0), clamp(nl * 2.0 + 0.3, 0.0, 1.0));
@@ -413,23 +498,46 @@ void main() {
 }`;
 const VS_LINE = `precision highp float;
 attribute vec3 aP; attribute vec3 aP2; attribute vec2 aT;
-uniform float uMixP;
+uniform float uMixP, uVol, uCurl, uDrop, uRecede, uMask;
 ${FIELD_GLSL}
-varying vec2 vT; varying vec3 vW;
-void main() { vec3 p = mix(aP, aP2, uMixP); vec3 w = sway(field(p)); vT = aT; vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+${HAIRMASK_GLSL}
+varying vec2 vT; varying vec3 vW; varying float vM;
+void main() {
+  vec3 p = mix(aP, aP2, uMixP); float s = aT.x, rr = aT.y;
+  float m = hairKeep(aP, uRecede);
+  // facial hair: moustache, goatee (moustache + chin) or the full beard
+  if (uMask > 0.5 && uMask < 2.5) { float mo = step(6.63, aP.y) * step(aP.y, 6.80) * step(abs(aP.x), 0.27) * step(1.28, aP.z);
+    float go = step(abs(aP.x), 0.21) * step(aP.y, 6.6) * step(1.02, aP.z); m *= uMask < 1.5 ? mo : max(mo, go); }
+  vec3 dl = aP - vec3(0.0, 7.35, 0.30); vec3 dir = normalize(dl);
+  // volume pushes tips out from the skull; curls wind each strand into a small helix
+  p += dir * uVol * s * (0.6 + 0.8 * rr);
+  vec3 t1 = normalize(cross(dir, vec3(0.0, 1.0, 0.0)) + vec3(1e-4)); vec3 t2 = cross(dir, t1); float ph = s * 16.0 + rr * 40.0;
+  p += (t1 * sin(ph) + t2 * cos(ph)) * uCurl * 0.06 * s;
+  // length: strands at the sides and back fall toward the shoulders; the face stays clear
+  if (uDrop > 0.0) {
+    // the sides and back fall; the front of the crown sweeps aside instead, so the hair frames the face and never hangs over it
+    float back = 1.0 - smoothstep(0.45, 0.8, aP.z), front = 1.0 - back, sx = aP.x < 0.0 ? -1.0 : 1.0;
+    float fall = uDrop * s * s * (0.75 + 0.5 * rr);
+    vec2 o2 = normalize(vec2(dl.x, min(dl.z, 0.0) - 0.15) + vec2(1e-4));
+    p.y -= fall * back; p.xz += o2 * fall * 0.32 * back;
+    p.x += sx * front * uDrop * 0.16 * s; p.z -= front * uDrop * 0.1 * s; p.y -= front * uDrop * 0.05 * s; }
+  vec3 w = sway(field(p)); vT = aT; vW = w; vM = m; gl_Position = uVP * vec4(w, 1.0);
+}`;
 const FS_LINE = COMMON_FS + `
-varying vec2 vT; varying vec3 vW; uniform vec3 uCol; uniform float uAlpha, uGrey; uniform vec3 uHC;
+varying vec2 vT; varying vec3 vW; varying float vM; uniform vec3 uCol; uniform float uAlpha, uGrey; uniform vec3 uHC;
 void main() {
   float r = vT.y; vec3 c = mix(uCol, vec3(0.78, 0.76, 0.72), step(1.0 - uGrey, r));
   c *= 0.75 + 0.5 * r;
   vec3 L = normalize(uKey); float lit = 0.55 + 0.45 * clamp(dot(normalize(vW - uHC), L), 0.0, 1.0);
-  gl_FragColor = vec4(c * lit * (0.85 + 0.3 * vT.x), uAlpha * (1.0 - 0.55 * vT.x));
+  if (vM < 0.02) discard;
+  gl_FragColor = vec4(c * lit * (0.85 + 0.3 * vT.x), uAlpha * vM * (1.0 - 0.55 * vT.x));
 }`;
 const FS_CLOTH = COMMON_FS + `
-varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO; uniform vec3 uCloth;
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO; uniform vec3 uCloth, uCloth2; uniform vec4 uStripe;
 void main() { vec3 n = normalize(vN), L = normalize(uKey), v = normalize(uEye - vW);
   float d = clamp((dot(n, L) + 0.2) / 1.2, 0.0, 1.0); float sheen = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0) * 0.18;
-  vec3 c = uCloth * (0.85 + 0.3 * vnoise(vO * 60.0));
+  float st = uStripe.x > 0.5 ? step(fract(vO.y * uStripe.y + uStripe.z), uStripe.w) : 0.0;
+  vec3 c = mix(uCloth, uCloth2, st) * (0.85 + 0.3 * vnoise(vO * 60.0));
   gl_FragColor = vec4(c * (0.25 + 0.9 * d) + sheen * uCloth * 3.0, 1.0); }`;
 const VS_POST = `attribute vec2 aQ; varying vec2 vUV; void main() { vUV = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0.0, 1.0); }`;
 
@@ -557,7 +665,9 @@ function decodeData(meta, bin) {
   const P1 = P.map((v, i) => v + Bk[i]);
   D.body = { P, I, B: Bk, J: ddq(blob('body_jaw'), meta.d_Jaw), S: ddq(blob('body_swallow'), meta.d_Swallow), N0: normals(P, I), N1: normals(P1, I), AO: Float32Array.from(blob('body_ao'), v => v / 255) };
   for (const k of ['jacket', 'sweater']) { const Pc = deq(blob(k + '_pos')), Ic = blob(k + '_idx'); D[k] = { P: Pc, I: Ic, N0: normals(Pc, Ic) }; }
-  D.collar = buildCollar(P, normals);
+  D.collar = buildCollar(P, normals); const cz0 = buildCollar.cz;
+  D.turtle = buildCollar(P, normals, { open: 0, offs: [0.095, 0.04], top: 0.6, flare: 0.012, reach: 0.3, cum: false }); buildCollar.cz = cz0;
+  D.glasses = [null, buildGlasses(1, normals), buildGlasses(2, normals), buildGlasses(3, normals)]; D.studs = buildStuds(P, normals);
   D.scan = buildScanMesh(P, D.body.N0);
   // strands → line segments (expanded pairs, so no 32-bit index needed)
   const lines = (pk, nk, pk2) => {
@@ -605,22 +715,26 @@ function buildScanMesh(P, N) {
   return { pts, tag, tris };
 }
 // a stand collar that wraps the whole neck (open at the front), sized from the neck itself
-function buildCollar(P, normals) {
+function buildCollar(P, normals, opt) {
+  opt = opt || {}; const TOP = opt.top || 0.74;
   const zs = []; for (let i = 0; i < P.length; i += 3) if (P[i + 1] > 5.85 && P[i + 1] < 6.25 && Math.abs(P[i]) < 0.6) zs.push(P[i + 2]);
-  zs.sort((a, b) => a - b); const cz = zs[zs.length >> 1] || 0.35;
-  const NA = 72, NL = 9, open = 26 * Math.PI / 180, TAU = Math.PI * 2;
+  // the neck's own centre: halfway between the front of the throat and the back of the neck (030 took a median that the chest pulled forward)
+  let zf = -9, zb = 9; for (let i = 0; i < P.length; i += 3) if (P[i + 1] > 6.0 && P[i + 1] < 6.2 && Math.abs(P[i]) < 0.1) { zf = Math.max(zf, P[i + 2]); zb = Math.min(zb, P[i + 2]); }
+  const cz = zf > zb ? (zf + zb) / 2 : 0.35; buildCollar.cz = cz;
+  const NA = 72, NL = 9, open = (opt.open == null ? 26 : opt.open) * Math.PI / 180, TAU = Math.PI * 2;
   const rings = [];
   for (let j = 0; j < NL; j++) {
-    const yy = 5.8 + 0.74 * j / (NL - 1), ys = Math.min(yy, 6.12), best = new Float32Array(NA);
-    for (let i = 0; i < P.length; i += 3) { if (Math.abs(P[i + 1] - ys) > 0.045) continue; const x = P[i], z = P[i + 2] - cz, r = Math.hypot(x, z); if (r > 0.75) continue;
+    const yy = 5.8 + TOP * j / (NL - 1), ys = yy, best = new Float32Array(NA);
+    for (let i = 0; i < P.length; i += 3) { if (Math.abs(P[i + 1] - ys) > 0.045) continue; const x = P[i], z = P[i + 2] - cz, r = Math.hypot(x, z); if (r > 0.75 + (opt.reach || 0) * Math.max(0, -z / (r || 1))) continue;
       let a = Math.atan2(x, z); if (a < 0) a += TAU; const b = Math.floor(a / TAU * NA) % NA; if (r > best[b]) best[b] = r; }
     for (let pass = 0; pass < NA; pass++) for (let b = 0; b < NA; b++) if (!best[b]) best[b] = best[(b + NA - 1) % NA] || best[(b + 1) % NA];
     const sm = new Float32Array(NA); for (let b = 0; b < NA; b++) { let a = 0; for (let k = -4; k <= 4; k++) a += best[(b + k + NA) % NA] || 0.42; sm[b] = a / 9; }
+    if (j && opt.cum !== false) for (let b = 0; b < NA; b++) sm[b] = Math.max(sm[b], rings[j - 1][b]);
     rings.push(sm);
   }
-  const V = [], ring = (j, k, off) => { const a = open + (TAU - 2 * open) * k / NA, b = Math.floor(((a % TAU) + TAU) % TAU / TAU * NA) % NA;
-    const t = j / (NL - 1), r = rings[j][b] + off + 0.06 * Math.pow(t, 1.5); V.push(Math.sin(a) * r, 5.8 + 0.74 * t, cz + Math.cos(a) * r); };
-  for (const off of [0.11, 0.045]) for (let j = 0; j < NL; j++) for (let k = 0; k <= NA; k++) ring(j, k, off);
+  const V = [], Bo = [], ring = (j, k, off) => { const a = open + (TAU - 2 * open) * k / NA, b = Math.floor(((a % TAU) + TAU) % TAU / TAU * NA) % NA;
+    const t = j / (NL - 1), lift = off + (opt.flare == null ? 0.06 : opt.flare) * Math.pow(t, 1.5), r = rings[j][b] + lift; Bo.push(Math.sin(a) * lift, 0, Math.cos(a) * lift); V.push(Math.sin(a) * r, 5.8 + TOP * t, cz + Math.cos(a) * r); };
+  for (const off of (opt.offs || [0.11, 0.045])) for (let j = 0; j < NL; j++) for (let k = 0; k <= NA; k++) ring(j, k, off);
   const n = (NL) * (NA + 1), id = (o, j, k) => o * n + j * (NA + 1) + k, I = [];
   for (let j = 0; j < NL - 1; j++) for (let k = 0; k < NA; k++) {
     I.push(id(0, j, k), id(0, j, k + 1), id(0, j + 1, k + 1), id(0, j, k), id(0, j + 1, k + 1), id(0, j + 1, k));
@@ -628,7 +742,7 @@ function buildCollar(P, normals) {
   for (let k = 0; k < NA; k++) { const j = NL - 1; I.push(id(0, j, k), id(1, j, k), id(1, j, k + 1), id(0, j, k), id(1, j, k + 1), id(0, j, k + 1)); }
   for (const k of [0, NA]) for (let j = 0; j < NL - 1; j++) I.push(id(0, j, k), id(1, j, k), id(1, j + 1, k), id(0, j, k), id(1, j + 1, k), id(0, j + 1, k));
   const Pc = new Float32Array(V), Ic = new Uint16Array(I);
-  return { P: Pc, I: Ic, N0: normals(Pc, Ic) };
+  return { P: Pc, I: Ic, N0: normals(Pc, Ic), B: new Float32Array(Bo) };
 }
 function sphere(r, nu, nv) {
   const P = [], I = [];
@@ -674,9 +788,10 @@ function initGL() {
   const D = DATA;
   const mesh = (m, withShapes) => { const o = { I: buf(m.I, gl.ELEMENT_ARRAY_BUFFER), n: m.I.length, P: buf(m.P), N0: buf(m.N0) };
     const zero = new Float32Array(m.P.length);
-    o.B = buf(withShapes ? m.B : zero); o.J = buf(withShapes ? m.J : zero); o.S = buf(withShapes ? m.S : zero); o.N1 = buf(withShapes ? m.N1 : m.N0);
+    o.B = buf(withShapes || m.B ? m.B : zero); o.J = buf(withShapes ? m.J : zero); o.S = buf(withShapes ? m.S : zero); o.N1 = buf(withShapes ? m.N1 : m.N0);
     o.AO = buf(withShapes ? m.AO : new Float32Array(m.P.length / 3).fill(1)); return o; };
   G.body = mesh(D.body, true); G.jacket = mesh(D.jacket); G.collar = mesh(D.collar); G.sweater = mesh(D.sweater);
+  G.turtle = mesh(D.turtle); G.glasses = D.glasses.map(m => m ? mesh(m) : null); G.studs = mesh(D.studs);
   const ln = l => l ? { A: buf(l.A), A2: buf(l.A2), T: buf(l.T), n: l.n } : null;
   G.hair = D.hair.map(ln); G.brows = ln(D.brows); G.fuzz = ln(D.fuzz); G.stubble = ln(D.stubble); G.lash = ln(D.lash);
   const sp = sphere(0.118, 40, 30); G.eyeM = { P: buf(sp.P), I: buf(sp.I, gl.ELEMENT_ARRAY_BUFFER), n: sp.I.length };
@@ -727,6 +842,54 @@ function camVP(cam, asp) {
 // world point → pixel in a w×h rect (top-left origin), or null behind the lens
 function projVP(vp, p, w, h) { const x = vp[0] * p[0] + vp[4] * p[1] + vp[8] * p[2] + vp[12], y = vp[1] * p[0] + vp[5] * p[1] + vp[9] * p[2] + vp[13], ww = vp[3] * p[0] + vp[7] * p[1] + vp[11] * p[2] + vp[15];
   if (ww <= 0.01) return null; return [(x / ww * 0.5 + 0.5) * w, (0.5 - y / ww * 0.5) * h]; }
+
+/* ------------------------------------------------------------------ accessories, built once in the head's own space so the face field carries them */
+// a tube along polylines (frames, bridges, arms)
+function tubeMesh(paths, rad, normals) {
+  const P = [], I = [], SEG = 6;
+  for (const path of paths) {
+    const base0 = P.length / 3;
+    for (let i = 0; i < path.length; i++) {
+      const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)], c = path[i];
+      let tx = b[0] - a[0], ty = b[1] - a[1], tz = b[2] - a[2]; const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+      let ux = 0, uy = 1, uz = 0; if (Math.abs(ty) > 0.9) { ux = 1; uy = 0; }
+      let nx = uy * tz - uz * ty, ny = uz * tx - ux * tz, nz = ux * ty - uy * tx; const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+      const bx = ty * nz - tz * ny, by = tz * nx - tx * nz, bz = tx * ny - ty * nx;
+      for (let k = 0; k < SEG; k++) { const q = k / SEG * Math.PI * 2, cs = Math.cos(q) * rad, sn = Math.sin(q) * rad;
+        P.push(c[0] + nx * cs + bx * sn, c[1] + ny * cs + by * sn, c[2] + nz * cs + bz * sn); }
+    }
+    for (let i = 0; i < path.length - 1; i++) for (let k = 0; k < SEG; k++) { const a = base0 + i * SEG + k, b = base0 + i * SEG + (k + 1) % SEG, c = a + SEG, d = b + SEG; I.push(a, b, d, a, d, c); }
+  }
+  const Pf = new Float32Array(P), If = new Uint16Array(I); return { P: Pf, I: If, N0: normals(Pf, If) };
+}
+// glasses: round, square or cat-eye frames on a lens plane that wraps slightly, a bridge, and arms back over the ears
+function buildGlasses(style, normals) {
+  const EY = 7.29, z = x => 1.6 - 0.34 * x * x, paths = [];
+  for (const sx of [1, -1]) {
+    const ex = 0.31 * sx, ring = [];
+    for (let i = 0; i <= 40; i++) { const q = i / 40 * Math.PI * 2, c = Math.cos(q), s = Math.sin(q);
+      let x, y;
+      if (style === 1) { x = 0.165 * c; y = 0.15 * s; }
+      else { const p = 0.5, sc = Math.sign(c) * Math.pow(Math.abs(c), p), ss = Math.sign(s) * Math.pow(Math.abs(s), p); x = 0.19 * sc; y = 0.128 * ss;
+        if (style === 3) y += 0.055 * Math.max(0, sx * c) * Math.max(0, s) + 0.02 * Math.max(0, s); }
+      const X = ex + x; ring.push([X, EY + y, z(X)]); }
+    paths.push(ring);
+    const ox = ex + sx * (style === 1 ? 0.165 : 0.19), oy = EY + (style === 3 ? 0.07 : 0.03);
+    paths.push([[ox, oy, z(ox)], [0.7 * sx, 7.36, 1.22], [0.84 * sx, 7.42, 0.85], [0.86 * sx, 7.4, 0.55], [0.82 * sx, 7.25, 0.42]]);
+  }
+  const bx = style === 1 ? 0.145 : 0.12;
+  paths.push([[-bx, EY + 0.04, z(bx)], [-0.06, EY + 0.075, 1.62], [0.06, EY + 0.075, 1.62], [bx, EY + 0.04, z(bx)]]);
+  return tubeMesh(paths, style === 1 ? 0.011 : 0.016, normals);
+}
+// earring studs at the lobes, found from the mesh: the lowest point of the outer ear
+function buildStuds(P, normals) {
+  let mx = 0; for (let i = 0; i < P.length; i += 3) if (P[i] > 0.6 && P[i + 1] > 6.7 && P[i + 1] < 7.7 && P[i + 2] > 0.2 && P[i + 2] < 1.0) mx = Math.max(mx, P[i]);
+  let lobe = [0.742, 6.86, 0.547], ly = 9;
+  for (let i = 0; i < P.length; i += 3) if (P[i] > mx - 0.14 && P[i + 1] > 6.7 && P[i + 1] < 7.7 && P[i + 2] > 0.2 && P[i + 2] < 1.0 && P[i + 1] < ly) { ly = P[i + 1]; lobe = [P[i], P[i + 1], P[i + 2]]; }
+  const sp = sphere(0.032, 10, 8), V = [], I = [];
+  for (const sx of [1, -1]) { const o = V.length / 3; for (let i = 0; i < sp.P.length; i += 3) V.push(sp.P[i] + lobe[0] * sx + 0.012 * sx, sp.P[i + 1] + lobe[1] - 0.035, sp.P[i + 2] + lobe[2] + 0.02); for (const k of sp.I) I.push(k + o); }
+  const Pf = new Float32Array(V), If = new Uint16Array(I); return { P: Pf, I: If, N0: normals(Pf, If) };
+}
 /* ------------------------------------------------------------------ palette (drifts, pulled home, clamped to family) */
 const HOME = {
   0: [[0.10, 0.09, 0.08], [0.90, 0.875, 0.82], [0.89, 0.64, 0.23], [0.5, 0.48, 0.44]],     // gelatin: warm dark, paper
@@ -768,13 +931,18 @@ function drawMesh(pr, m) {
   bindAttr(pr, 'aN0', m.N0, 3); bindAttr(pr, 'aN1', m.N1, 3); bindAttr(pr, 'aAO', m.AO, 1);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.I); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_SHORT, 0); unbindAll();
 }
-function drawLines(pr, l, col, alpha, grey, mixP, frac) {
+const LM0 = { vol: 0, curl: 0, drop: 0, rec: 0, mask: 0 };
+function drawLines(pr, l, col, alpha, grey, mixP, frac, mod) {
   if (!l || alpha <= 0.003 || frac <= 0) return;
-  gl.uniform3fv(pr.u.uCol, col); gl.uniform1f(pr.u.uAlpha, alpha); gl.uniform1f(pr.u.uGrey, grey); gl.uniform1f(pr.u.uMixP, mixP || 0);
+  const u = pr.u, m = mod || LM0;
+  gl.uniform3fv(u.uCol, col); gl.uniform1f(u.uAlpha, alpha); gl.uniform1f(u.uGrey, grey); gl.uniform1f(u.uMixP, mixP || 0);
+  if (u.uVol) { gl.uniform1f(u.uVol, m.vol); gl.uniform1f(u.uCurl, m.curl); gl.uniform1f(u.uDrop, m.drop); gl.uniform1f(u.uRecede, m.rec); gl.uniform1f(u.uMask, m.mask); }
   bindAttr(pr, 'aP', l.A, 3); bindAttr(pr, 'aP2', l.A2, 3); bindAttr(pr, 'aT', l.T, 2);
   gl.drawArrays(gl.LINES, 0, Math.floor(l.n * clamp(frac, 0, 1) / 2) * 2); unbindAll();
 }
-function hairCol(g, dark) { const m = clamp(0.25 + 0.75 * (1 - g.x.tone * 0.2), 0, 1); const b = [0.22, 0.15, 0.09].map(v => v * (1.25 - m)); return dark ? b.map(v => v * 0.6) : b; }
+function hairCol(g, dark) { const t = g.t || defaultT(g), b = HAIRC[t.hc][1]; return dark ? b.map(v => v * (t.hc >= 6 ? 0.78 : 0.62)) : b; }
+const TRAIT_SKIN = t => { const u = t.under; return u >= 0 ? [1 - 0.03 * u, 1 + 0.01 * u, 1 - 0.1 * u] : [1 - 0.02 * u, 1 + 0.05 * u, 1 + 0.02 * u]; };
+function moleAt(t) { const sx = t.mx < 0 ? -1 : 1, a = Math.abs(t.mx); return [sx * (0.28 + 0.22 * a), 6.72 + 0.32 * t.my, 1.36 - 0.36 * a - 0.12 * Math.max(0, t.my - 0.6)]; }
 const hairFadeOf = g => g.hairFade || [g.hair === 0 ? 1 : 0, g.hair === 1 ? 1 : 0, g.hair === 2 ? 1 : 0];
 let FR = { n: 0, fps: 60, ms: 16, shelfEvery: 1, shelfDirty: true };
 // one sitter, anywhere: studio (xf at home) or floating in a cube (xf moves, turns and scales it)
@@ -783,15 +951,25 @@ function renderHead(vp, eye, xf, p, g, d, frac, cloth) {
   setBumps(g, d);
   gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND);
   let pr = G.skin; gl.useProgram(pr.p); common(pr, vp, eye, xf);
-  gl.uniform1f(pr.u.uBlink, p.blink); gl.uniform1f(pr.u.uJaw, p.jaw); gl.uniform1f(pr.u.uSw, p.swallow || 0);
-  gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble); gl.uniform1f(pr.u.uDetail, d);
+  gl.uniform1f(pr.u.uBlink, p.blink); gl.uniform1f(pr.u.uJaw, p.jaw); gl.uniform1f(pr.u.uSw, p.swallow || 0); if (pr.u.uAnch) gl.uniform1f(pr.u.uAnch, 0);
+  gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble * ((g.t && (g.t.bd === 2 || g.t.bd === 3)) ? 0.12 : 1)); gl.uniform1f(pr.u.uDetail, d);
   gl.uniform1f(pr.u.uScalp, hf[0] + hf[1] + hf[2] * 0.35);
+  const T_ = g.t || defaultT(g), st = STYLES[T_.st] || STYLES[1];
+  if (pr.u.uFreck) { gl.uniform1f(pr.u.uFreck, T_.freck * clamp((d - 0.45) / 0.3, 0, 1)); gl.uniform1f(pr.u.uFlush, T_.flush); gl.uniform1f(pr.u.uRecede, st[5]);
+    const mp = moleAt(T_); gl.uniform4f(pr.u.uMole, mp[0], mp[1], mp[2], T_.mole && d >= 0.5 ? 0.024 : 0); gl.uniform3fv(pr.u.uUT, TRAIT_SKIN(T_)); }
   drawMesh(pr, G.body);
   pr = G.cloth; gl.useProgram(pr.p); common(pr, vp, eye, xf);
   gl.uniform1f(pr.u.uBlink, 0); gl.uniform1f(pr.u.uJaw, 0); gl.uniform1f(pr.u.uSw, 0);
-  if (g.clothes === 0) { gl.uniform3fv(pr.u.uCloth, cloth); drawMesh(pr, G.jacket); drawMesh(pr, G.collar); gl.uniform3fv(pr.u.uCloth, cloth.map(v => v * 0.45 + 0.02)); }
-  else gl.uniform3fv(pr.u.uCloth, cloth);
+  const noStripe = () => gl.uniform4f(pr.u.uStripe, 0, 0, 0, 0);
+  noStripe(); gl.uniform3fv(pr.u.uCloth2, CLOTH[T_.c2][1]);
+  const anch = v => { if (pr.u.uAnch) gl.uniform1f(pr.u.uAnch, v); }; anch(0);
+  if (g.clothes === 0) { gl.uniform3fv(pr.u.uCloth, cloth); drawMesh(pr, G.jacket); anch(1); drawMesh(pr, G.collar); anch(0); gl.uniform3fv(pr.u.uCloth, cloth.map(v => v * 0.45 + 0.02)); }
+  else { gl.uniform3fv(pr.u.uCloth, cloth); if (T_.stripe && d >= 0.28) gl.uniform4f(pr.u.uStripe, 1, T_.stripe === 1 ? 9 : 24, 0.3, T_.stripe === 1 ? 0.42 : 0.16); }
   drawMesh(pr, G.sweater);
+  if (T_.nk === 2 && g.clothes === 1) { anch(1); drawMesh(pr, G.turtle); anch(0); }
+  noStripe();
+  if (T_.gl && d >= 0.37 && G.glasses[T_.gl]) { gl.uniform3fv(pr.u.uCloth, FRAMES[T_.fr][1]); drawMesh(pr, G.glasses[T_.gl]); }
+  if (T_.ear && d >= 0.46) { gl.uniform3fv(pr.u.uCloth, T_.ear === 1 ? [0.85, 0.66, 0.28] : [0.95, 0.93, 0.88]); drawMesh(pr, G.studs); }
   pr = G.eye; gl.useProgram(pr.p); common(pr, vp, eye, xf); gl.uniform1f(pr.u.uIris, g.x.iris);
   const er = rotXYZ(-(p.gy || 0) * Math.PI / 180, (p.gx || 0) * Math.PI / 180, 0);
   for (const sx of [1, -1]) { const c = deformCPU([0.308 * sx, 7.284, 1.233]); gl.uniform3fv(pr.u.uEyeC, c); gl.uniformMatrix3fv(pr.u.uEyeRot, false, er);
@@ -799,9 +977,11 @@ function renderHead(vp, eye, xf, p, g, d, frac, cloth) {
   gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
   pr = G.line; gl.useProgram(pr.p); common(pr, vp, eye, xf);
   const hc = hairCol(g), df = frac * (0.3 + 0.7 * d);
-  for (let i = 0; i < 2; i++) drawLines(pr, G.hair[i], hc, 0.55 * hf[i], g.x.grey * 0.85, 0, df);
+  const grow = 0.45 + 0.55 * d, hm = { vol: st[2] * grow, curl: st[3] * grow, drop: st[4] * grow, rec: st[5], mask: 0 };
+  for (let i = 0; i < 2; i++) drawLines(pr, G.hair[i], hc, 0.55 * hf[i], g.x.grey * 0.85, 0, df, hm);
   drawLines(pr, G.brows, hairCol(g, true), 0.75 * g.x.brows, g.x.grey * 0.5, 0, Math.max(df, 0.6));
-  drawLines(pr, G.stubble, hairCol(g, true), 0.7 * g.x.stubble * (0.5 + 0.5 * d), g.x.grey, 0, df);
+  if (T_.bd <= 1) drawLines(pr, G.stubble, hairCol(g, true), 0.7 * g.x.stubble * (0.5 + 0.5 * d), g.x.grey, 0, df);
+  else drawLines(pr, G.stubble, hairCol(g, true), 0.85, g.x.grey, 0, Math.max(df, 0.5), { vol: (T_.bd === 4 ? 0.09 : 0.04) * grow, curl: T_.bd === 4 ? 0.3 : 0, drop: T_.bd === 4 ? 0.05 * grow : 0, rec: 0, mask: T_.bd === 2 ? 1 : T_.bd === 3 ? 2 : 3 });
   if (frac > 0.5) drawLines(pr, G.fuzz, [0.75, 0.62, 0.52], 0.1 * d, 0, 0, df);
   drawLines(pr, G.lash, [0.03, 0.025, 0.02], 0.9, 0, p.blink, 1);
   gl.depthMask(true); gl.disable(gl.BLEND);
@@ -1149,7 +1329,8 @@ let last = performance.now(), PERF = null;
 function advance(dt) {
   S.t += dt;
   const want = Math.floor(S.t / CFG.sit); let guard = 0;
-  while (S.k < want && guard++ < 40000) { const tt = S.t; S.t = (S.k + 1) * CFG.sit; easeDetail(); newSitting(); liveGenome(); S.t = Math.max(tt, S.t); }
+  // catching up (fast-forward, warm-up, a background tab): every skipped sitting completes its morph, or the face would never move on
+  while (S.k < want && guard++ < 40000) { const tt = S.t; S.t = (S.k + 1) * CFG.sit; easeDetail(); newSitting(); if (S.k < want || tt - S.t >= MORPH) S.morph0 = S.t - MORPH; liveGenome(); S.t = Math.max(tt, S.t); }
 }
 function frame(now) {
   requestAnimationFrame(frame);
@@ -1187,7 +1368,8 @@ function info() {
     'sitter <b>' + pad(S.person, 3) + '</b> · ' + Math.round(journey() * 100) + '% of the way · ' + Math.max(0, Math.ceil(left)) + ' min to the shelf\n' +
     '<span class="a">' + S.event + '</span>\n' +
     'detail ' + Math.round(S.detailNow * 100) + '% <span class="d">(earned ' + Math.round(S.detailEarned * 100) + '% of ' + Math.round(S.detailTarget * 100) + '% available · clean run ' + Math.min(S.clean || 0, cleanNeed()) + '/' + cleanNeed() + ')</span>\n' +
-    (S.parents.length ? 'lineage: descends from ' + S.parents.map(p => pad(p, 3)).join(' + ') : '<span class="d">lineage: first generation</span>') + ' · wears ' + CLOTH[S.col][0] + '\n' +
+    'character: ' + traitText(S.dest || S.cur) + ' · ' + CLOTH[S.col][0] + '\n' +
+    (S.parents.length ? 'lineage: descends from ' + S.parents.map(p => pad(p, 3)).join(' + ') : '<span class="d">lineage: first generation</span>') + '\n' +
     'shelf <b>' + pad(SH(), 2) + '</b> · ' + S.shelf.filter(Boolean).length + ' of 9 · ' + (next < 0 ? 'full' : 'next cube ' + (next + 1)) + ' · ' + S.shelves.length + ' archived · ' + kept + ' kept\n' +
     un + '\n' +
     '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · ' + fmtH(S.t) + ' · ' + CFG.portrait + ' min a sitter · keys I M L</span>';
@@ -1352,6 +1534,7 @@ function load() {
     S.shelf = Array.isArray(S.shelf) && S.shelf.length === 9 ? S.shelf.map(m => okM(m) ? m : null) : new Array(9).fill(null);
     S.shelves = (Array.isArray(S.shelves) ? S.shelves : []).filter(s => s && Array.isArray(s.members) && s.members.length === 9).map(s => ({ no: s.no, at: s.at, members: s.members.map(m => okM(m) ? m : null) }));
     if (!okG(S.dest)) S.dest = null; if (!okG(S.destFrom)) S.destFrom = null;
+    for (const g of [S.cur, S.tgt, S.prev, S.dest, S.destFrom]) ensureT(g); for (const m of allPlaced()) ensureT(m.g);
     for (const k of ['detailNow', 'detailTarget', 'detailEarned']) if (!fin(S[k])) S[k] = 0.1;
     if (!fin(S.clean)) S.clean = 0; if (!fin(S.j)) S.j = 0; if (!fin(S.col) || !CLOTH[S.col]) S.col = 0; if (!Array.isArray(S.parents)) S.parents = [];
     if (!fin(S.shelfNo) || S.shelfNo < 1) S.shelfNo = 1; S.detailT = S.t; S.committedK = -1; S.log = S.log || [];
@@ -1360,12 +1543,13 @@ function load() {
 setInterval(save, 60000); addEventListener('beforeunload', save);
 
 /* ------------------------------------------------------------------ boot */
-function runTo(end) { let guard = 0; while (S.t < end && guard++ < 400000) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); S.cur = cloneG(S.tgt); S.detailNow = detailGoal(); S.detailT = S.t; }
+function finishMorph() { S.morph0 = S.t - MORPH; liveGenome(); }
+function runTo(end) { let guard = 0; while (S.t < end && guard++ < 400000) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); finishMorph(); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); S.cur = cloneG(S.tgt); S.detailNow = detailGoal(); S.detailT = S.t; }
 const MZ = {
   force(op) { if (!S) return;
-    if (op === 'sit') { S.t = (S.k + 1) * CFG.sit; advance(0); }
-    else if (op === 'place') { S.j = SPP() - 1; S.t = (S.k + 1) * CFG.sit; advance(0); }
-    else if (op === 'fill') { let g = 0; while (S.shelf.some(m => !m) && g++ < 12) { S.j = SPP() - 1; S.t = (S.k + 1) * CFG.sit; advance(0); } }
+    if (op === 'sit') { finishMorph(); S.t = (S.k + 1) * CFG.sit; advance(0); }
+    else if (op === 'place') { finishMorph(); S.j = SPP() - 1; S.t = (S.k + 1) * CFG.sit; advance(0); }
+    else if (op === 'fill') { let g = 0; while (S.shelf.some(m => !m) && g++ < 12) { runTo(S.t + (SPP() - S.j) * CFG.sit + 1); } }
     else if (op === 'look') { S.lookPrev = S.look; S.look = (S.look + 1) % 4; S.lookT0 = S.t - 30; }
     else if (op === 'portrait') { runTo(S.t + (SPP() - S.j) * CFG.sit + 1); }
     else if (op === 'nan') { S.tgt.L[3] = NaN; }
@@ -1373,6 +1557,70 @@ const MZ = {
   state: () => S, perf: () => PERF, cfg: CFG, audio: () => AU, fr: () => FR,
 };
 window.MZ = MZ;
+
+/* ------------------------------------------------------------------ QA: turntables and a clipping check, run after every build (see test.mjs · qa.mjs) */
+const QA = {
+  // a cast of finished characters from the real generator, without touching the stream's state or rng
+  cast(n, seed) {
+    const keep = R.s, keepS = S && { shelfNo: S.shelfNo }; R.s = (seed * 2654435761) >>> 0 || 1; const out = [];
+    for (let i = 0; i < n; i++) { const shelf = 1 + (i % 8); if (S) S.shelfNo = shelf; const g = makeCharacter(); out.push({ g, col: Math.floor(R.f() * CLOTH.length), d: 1, label: 'cast ' + (i + 1) + ' · shelf ' + shelf + ' · ' + traitText(g) }); }
+    R.s = keep; if (S && keepS) S.shelfNo = keepS.shelfNo; return out;
+  },
+  // one sitter per trait value, so every style, beard, frame, neckline and pattern is seen in every QA run
+  coverage(seed) {
+    const out = QA.cast(STYLES.length, seed || 3);
+    out.forEach((c, i) => { const t = c.g.t; t.st = i; t.bd = i % BEARDS.length; t.gl = i % GLASSES.length; t.fr = i % FRAMES.length; t.nk = i % 3; t.stripe = t.nk ? i % 3 : 0;
+      t.freck = i % 3 === 0 ? 0.9 : 0; t.mole = i % 2; t.ear = i % 3; t.hc = i % HAIRC.length; t.build = [-0.8, 0, 0.8][i % 3];
+      c.g.hair = STYLES[t.st][1]; c.g.clothes = t.nk === 0 ? 0 : 1; c.g.x.stubble = t.bd === 0 ? 0 : 0.85; c.g.x.grey = 0.05; c.g.x.age = 0.4;
+      c.label = 'cover ' + (i + 1) + ' · ' + traitText(c.g); });
+    return out;
+  },
+  // rows = sitters, columns = angles around the bust; raw colour render on grey, so silhouettes and intersections read
+  sheet(list, angles, size) {
+    angles = angles || [0, 45, 90, 135, 180, 225, 270, 315]; size = size || 176;
+    const T = newTarget(size, size, true), pix = new Uint8Array(size * size * 4), lab = 16;
+    const c = document.createElement('canvas'); c.width = size * angles.length; c.height = (size + lab) * list.length; const x = c.getContext('2d');
+    x.fillStyle = '#1a1d1e'; x.fillRect(0, 0, c.width, c.height); x.font = '11px monospace';
+    const cam = MZCam.lens(MZCam.V(0, 6.9, 12.5), MZCam.V(0, 6.85, 0.45), 24), vp = camVP(cam, 1);
+    list.forEach((it, r) => {
+      x.fillStyle = '#e8dcc0'; x.fillText(it.label || ('sitter ' + r), 4, r * (size + lab) + 12);
+      angles.forEach((a, k) => {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.viewport(0, 0, size, size); gl.disable(gl.SCISSOR_TEST);
+        gl.clearColor(0.52, 0.53, 0.52, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        const xf = { rot: rotXYZ(0, a * Math.PI / 180, 0), piv: HEADP, off: [0, 0, 0], scl: 1 };
+        renderHead(vp, cam.pos, xf, { blink: it.g.x.lids, jaw: 0.05, swallow: 0, gx: 0, gy: 0 }, it.g, it.d == null ? 1 : it.d, 1, CLOTH[it.col || 0][1]);
+        gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pix);
+        const img = x.createImageData(size, size); for (let y = 0; y < size; y++) img.data.set(pix.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
+        x.putImageData(img, k * size, r * (size + lab) + lab); x.fillStyle = '#e8dcc0'; x.fillText(a + '°', k * size + 4, r * (size + lab) + lab + 12);
+      });
+    });
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); freeTarget(T); FR.shelfDirty = true; return c.toDataURL('image/png');
+  },
+  // clothing through skin: around the neck axis, the innermost skin in each wedge is the neck surface; cloth inside it is clipping
+  clip(g) {
+    setBumps(g, 1);
+    const D = DATA, cz = buildCollar.cz || 0.35, NA = 36, y0 = 5.45, dy = 0.06, NH = 22, TAU = Math.PI * 2;
+    const bin = (q) => { const r = Math.hypot(q[0], q[2] - cz); let a = Math.atan2(q[0], q[2] - cz); if (a < 0) a += TAU; const h = Math.floor((q[1] - y0) / dy);
+      return h < 0 || h >= NH ? -1 : h * NA + (Math.floor(a / TAU * NA) % NA); };
+    const skin = new Float32Array(NA * NH).fill(9);
+    const P = D.body.P;
+    for (let i = 0; i < P.length; i += 3) { if (P[i + 1] < y0 - 0.1 || P[i + 1] > y0 + dy * NH + 0.1) continue; const q = deformCPU([P[i], P[i + 1], P[i + 2]]), b = bin(q); if (b < 0) continue;
+      const r = Math.hypot(q[0], q[2] - cz); if (r < skin[b]) skin[b] = r; }
+    const meshes = (g.clothes === 0 ? [['jacket', D.jacket], ['collar', D.collar]] : []).concat([['sweater', D.sweater]]).concat(g.t && g.t.nk === 2 && g.clothes === 1 && D.turtle ? [['turtleneck', D.turtle]] : []);
+    const res = { n: 0, max: 0, sectors: { front: 0, side: 0, back: 0 }, meshes: {} };
+    const outer = new Float32Array(NA * NH).fill(-1), own = new Array(NA * NH).fill('');
+    for (const [name, m] of meshes) { const Q = m.P, Bq = m.B;
+      for (let i = 0; i < Q.length; i += 3) { if (Q[i + 1] < y0 || Q[i + 1] > y0 + dy * NH) continue;
+        const o = Bq ? [Bq[i], Bq[i + 1], Bq[i + 2]] : [0, 0, 0], q0 = deformCPU([Q[i] - o[0], Q[i + 1] - o[1], Q[i + 2] - o[2]]), q = [q0[0] + o[0], q0[1] + o[1], q0[2] + o[2]], b = bin(q);
+        if (b >= 0) { const r = Math.hypot(q[0], q[2] - cz); if (r > outer[b]) { outer[b] = r; own[b] = name; } } } }
+    // every worn layer together: skin is only a problem where it stands outside all of them
+    for (let b = 0; b < NA * NH; b++) { if (outer[b] < 0 || skin[b] > 8) continue; const dep = skin[b] - outer[b];
+      const hb = Math.floor(b / NA), ab = ((b % NA) + 0.5) / NA * 360; if (Math.min(ab, 360 - ab) < 50 && y0 + hb * dy > 6.22) continue;   // under the chin: the jaw overhangs, not a clip
+      if (dep > 0.006) { res.n++; res.max = Math.max(res.max, dep); res.meshes[own[b]] = (res.meshes[own[b]] || 0) + 1; const a = ((b % NA) + 0.5) / NA * 360, af = Math.min(a, 360 - a); res.sectors[af < 50 ? 'front' : af > 130 ? 'back' : 'side']++; } }
+    res.max = +res.max.toFixed(3); return res;
+  },
+};
+MZ.qa = QA;
 (async function boot() {
   resize();
   if (CFG.fresh) { try { localStorage.removeItem(STORE); } catch (e) { } }
