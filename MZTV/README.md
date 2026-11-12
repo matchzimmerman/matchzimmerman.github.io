@@ -393,6 +393,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-042-breakwater/`
 
+### BIT FIELD 045 — SITTERS
+A shelf of screen tests, built on BIT FIELD 030 · SITTER. Every 15 minutes a new sitter is drawn in a locked-off black-and-white screen test: a rough draft that drifts toward a person of its own, reviewed every 30 s sitting (B · BUILD, A · ANALYZE, I · INTERPRET, R · RETURN), with the worst faults fixed first and detail earned through clean sittings. When the portrait is done, it is printed in colour and placed in the next cube of a white 3×3 shelf, where it floats, turns and blinks, and its sweater, skin and hair light the walls of its own box. A full shelf shrinks into an archive strip along the top, so every shelf and every sitter stays on screen. Shelf number unlocks asymmetry and quirks (2), lineage (3, new sitters descend from earlier ones), caricature (4) and split faces (6). The studio look changes with every shelf. Each filled cube holds a quiet voice that swells as its face turns toward you. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?portrait=MIN ?look=NAME ?lite=N ?warm=0
+
+Path:
+`sources/bit-field-045-sitters/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-045-sitters/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 

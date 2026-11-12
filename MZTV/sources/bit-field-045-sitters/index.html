@@ -1,0 +1,1395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV · BIT FIELD 045 · SITTERS</title>
+<!--
+  MZTV · BIT FIELD 045 · SITTERS
+  A shelf of screen tests. On the left, one sitter is drawn in a locked-off black-and-white screen
+  test over 15 minutes (30 sittings of 30 s): it begins as a rough draft and drifts toward a
+  person of its own, coarse form first, while the scanner reviews every sitting (BUILD, ANALYZE,
+  INTERPRET, RETURN). Detail is earned: each level becomes available as the portrait goes on, but
+  is only drawn after a clean sitting (no fault above threshold); the worst faults are fixed first.
+  When the portrait is done it is printed in colour and placed on the right, in the next cube of
+  a white 3x3 shelf, where it floats and turns on its own. Its sweater, skin and hair bounce onto
+  the walls of its own box. When the shelf is full the next sitter starts a new one, and the full
+  shelf is archived in miniature along the top, so the whole progression stays on screen.
+
+  Memory: every sitter is kept. From shelf 3 a new sitter descends from a composite of earlier
+  ones, so families form across shelves. Shelf number unlocks asymmetry (2), quirks (2), lineage
+  (3), caricature (4) and split faces (6); the screen-test look changes with every shelf.
+  Sound: each filled cube holds a quiet voice from its sitter's note that swells as the face turns
+  toward you; every placement lands as a thump and a chime into the echo.
+
+  Faces: BIT FIELD 030 · SITTER's head, hair and clothes (Blender, Python, CC0 MakeHuman base mesh),
+  loaded from ../bit-field-030-sitter/data/. Every feature is a live field of soft displacements.
+
+  Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?sit=SEC ?portrait=MIN
+          ?look=gelatin|bit|silk|phosphor ?lite=N ?warm=0
+  Keys:   I info · M mute · L next look
+-->
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #ece2c8; --dim: rgba(236,226,200,0.6); --bg: rgba(12,24,26,0.82); --acc: #e2a43a; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c181a; }
+  #v, #hud { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #hud { pointer-events: none; }
+  #wrap { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+  #log { position: absolute; left: 1.2vh; bottom: 1.4vh; width: 43vh; max-height: 30vh; overflow: hidden; font: 400 1.02vh/1.42 "JetBrains Mono", ui-monospace, monospace;
+         color: var(--ink); background: var(--bg); border-left: 3px solid var(--acc); padding: 0.7vh 1vh; white-space: pre-wrap; }
+  #log .h { color: var(--acc); font-weight: 700; } #log .d { color: var(--dim); } #log .ph { display: inline-block; width: 2.2em; color: var(--acc); }
+  #log .c { color: #ff7a52; }
+  #info { position: absolute; left: 1.2vh; top: 13.6vh; max-width: 43vh; font: 400 1.05vh/1.46 "JetBrains Mono", ui-monospace, monospace; color: var(--ink);
+          background: var(--bg); border-left: 3px solid var(--acc); padding: 0.8vh 1.1vh; letter-spacing: 0.02em; white-space: pre-wrap; }
+  #info b { font-weight: 700; } #info .d { color: var(--dim); } #info .a { color: var(--acc); }
+</style>
+</head>
+<body>
+<canvas id="v"></canvas>
+<canvas id="hud" width="960" height="540"></canvas>
+<div id="wrap"><div id="info"></div><div id="log"></div></div>
+<script src="../../lib/mzcam.js"></script>
+<script>
+'use strict';
+/* ------------------------------------------------------------------ config */
+const Q = new URLSearchParams(location.search);
+const qn = (k, d) => { const v = parseFloat(Q.get(k)); return Number.isFinite(v) ? v : d; };
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const fin = x => Number.isFinite(x);
+const LOOKS = ['gelatin', 'bit', 'silk', 'phosphor'];
+const CFG = {
+  info: Q.get('info') !== '0', fresh: Q.get('fresh') === '1', audio: Q.get('audio') !== '0', warm: Q.get('warm') !== '0',
+  seed: Math.floor(qn('seed', 45)), rate: clamp(qn('rate', 1), 0.05, 400), lines: clamp(Math.round(qn('lines', 360) / 4) * 4, 180, 1080),
+  ff: clamp(qn('ff', 0), 0, 240), sit: clamp(qn('sit', 30), 5, 600), portrait: clamp(qn('portrait', 15), 1, 240), lite: clamp(qn('lite', 1), 0.02, 1),
+  look: LOOKS.indexOf(Q.get('look')),
+};
+const SPP = () => Math.max(8, Math.round(CFG.portrait * 60 / CFG.sit));   // sittings per portrait
+const STORE = 'mztv-bf045-sitters-v1';
+const DATA_URL = '../bit-field-030-sitter/data/';
+const PIVOT = [0, 5.6, 0.1];     // the studio sitter sways about the neck
+const HEADP = [0, 6.75, 0.45];   // a shelf sitter turns about the middle of the bust
+/* ------------------------------------------------------------------ seeded rng */
+function RNG(s) { this.s = (s >>> 0) || 1; }
+RNG.prototype.f = function () { let t = (this.s = (this.s + 0x6D2B79F5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+RNG.prototype.n = function () { let u = 0, v = 0; while (u === 0) u = this.f(); v = this.f(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2831853 * v); };
+RNG.prototype.r = function (a, b) { return a + (b - a) * this.f(); };
+
+/* ------------------------------------------------------------------ face space
+   Each feature is one or two soft displacement fields (mirrored for symmetric features).
+   Gene value 1 ≈ one noticeable step. Symmetric features carry separate L and R genes so
+   the two halves of the face can drift apart later in the run. */
+const F = [
+  // name, centre (x>0 side), radii, displacement at gene=1, symmetric
+  ['jaw width',      [0.55, 6.45, 0.85], [0.32, 0.30, 0.40], [0.040, 0.000, 0.000], 1],
+  ['chin length',    [0.00, 6.30, 1.30], [0.35, 0.16, 0.40], [0.000,-0.030, 0.015], 0],
+  ['chin',           [0.00, 6.33, 1.38], [0.30, 0.15, 0.30], [0.000, 0.000, 0.025], 0],
+  ['cheekbones',     [0.60, 7.02, 1.02], [0.22, 0.13, 0.28], [0.012, 0.008, 0.025], 1],
+  ['cheek hollow',   [0.48, 6.72, 1.08], [0.20, 0.18, 0.26], [-0.015, 0.00,-0.030], 1],
+  ['nose length',    [0.00, 6.95, 1.66], [0.10, 0.20, 0.20], [0.000,-0.025, 0.030], 0],
+  ['nostrils',       [0.085,6.88, 1.58], [0.07, 0.06, 0.08], [0.012, 0.000, 0.000], 1],
+  ['nose bridge',    [0.00, 7.08, 1.60], [0.06, 0.08, 0.08], [0.000, 0.000, 0.016], 0],
+  ['lips',           [0.00, 6.615,1.57], [0.17, 0.07, 0.10], [0.000, 0.000, 0.018], 0],
+  ['mouth width',    [0.20, 6.615,1.48], [0.08, 0.07, 0.10], [0.018, 0.000, 0.000], 1],
+  ['mouth corners',  [0.22, 6.56, 1.47], [0.06, 0.06, 0.07], [0.000, 0.012, 0.000], 1],
+  ['folds',          [0.20, 6.72, 1.48], [0.04, 0.16, 0.08], [0.000, 0.000,-0.022], 1],
+  ['jowls',          [0.42, 6.38, 1.12], [0.16, 0.12, 0.20], [0.010,-0.020, 0.010], 1],
+  ['brow ridge',     [0.28, 7.50, 1.35], [0.30, 0.10, 0.25], [0.000,-0.012, 0.030], 1],
+  ['brow height',    [0.30, 7.52, 1.30], [0.22, 0.10, 0.20], [0.000, 0.022, 0.000], 1],
+  ['eye depth',      [0.31, 7.29, 1.38], [0.22, 0.20, 0.20], [0.000, 0.000,-0.012], 1],
+  ['under eyes',     [0.32, 7.16, 1.36], [0.17, 0.065,0.12], [0.000,-0.005, 0.020], 1],
+  ['hooded lids',    [0.31, 7.43, 1.36], [0.20, 0.06, 0.12], [0.000,-0.010, 0.010], 1],
+  ['skull width',    [0.78, 7.65, 0.35], [0.35, 0.55, 0.60], [0.060, 0.000, 0.000], 1],
+  ['face width',     [0.72, 6.95, 0.60], [0.25, 0.35, 0.45], [0.035, 0.000, 0.000], 1],
+  ['neck',           [0.42, 6.00, 0.40], [0.22, 0.35, 0.35], [0.040, 0.000, 0.000], 1],
+  ['long face',      [0.00, 6.40, 1.20], [0.60, 0.40, 0.60], [0.000,-0.030, 0.000], 0],
+  ['forehead',       [0.00, 7.90, 1.25], [0.50, 0.30, 0.40], [0.000, 0.000,-0.030], 0],
+  ['cheek fat',      [0.50, 6.70, 1.05], [0.30, 0.30, 0.35], [0.020,-0.020, 0.025], 1],
+];
+const NF = F.length;
+// detail level at which each feature starts to be drawn: the sitter learns coarse form first
+const LEVEL = { 'skull width': 0, 'face width': 0, 'jaw width': 0, 'long face': 0, 'neck': 0, 'chin length': 0, 'forehead': 0,
+  'cheekbones': 0.25, 'cheek fat': 0.25, 'cheek hollow': 0.3, 'nose length': 0.25, 'brow ridge': 0.3, 'brow height': 0.3, 'lips': 0.3, 'chin': 0.25, 'eye depth': 0.35,
+  'nostrils': 0.5, 'nose bridge': 0.45, 'mouth width': 0.45, 'mouth corners': 0.55, 'folds': 0.5, 'jowls': 0.55, 'under eyes': 0.5, 'hooded lids': 0.6 };
+// age writes itself into the face
+const AGEF = { 'folds': 1.3, 'jowls': 1.3, 'under eyes': 1.1, 'hooded lids': 0.9, 'cheek hollow': 0.6, 'mouth corners': -0.7 };
+const FLV = F.map(f => LEVEL[f[0]] || 0), FAG = F.map(f => AGEF[f[0]] || 0);
+const DSCALE = 2.5;   // one gene step ≈ 0.5–1.5 cm: a different person, not a different expression
+// expand to bump instances: [featureIndex, side(0 centre/L=+x, 1 R=-x)]
+const BUMPS = [];
+for (let i = 0; i < NF; i++) { BUMPS.push([i, 0]); if (F[i][4]) BUMPS.push([i, 1]); }
+const NB = BUMPS.length;
+// non-shape genes
+const XG = ['lids', 'age', 'tone', 'grey', 'stubble', 'iris', 'brows', 'restless'];
+const XR = { lids: [0, 0.32], age: [0, 1], tone: [0, 1], grey: [0, 1], stubble: [0, 1], iris: [0, 1], brows: [0.3, 1], restless: [0, 1] };
+const HAIRS = ['pulled back', 'short', 'shaved'], CLOTHES = ['fleece', 'sweater'];
+
+function zeroGenome() { const g = { L: new Array(NF).fill(0), R: new Array(NF).fill(0), x: {}, hair: 0, clothes: 0 }; for (const k of XG) g.x[k] = lerp(XR[k][0], XR[k][1], 0.35); return g; }
+function cloneG(g) { return { L: g.L.slice(), R: g.R.slice(), x: Object.assign({}, g.x), hair: g.hair, clothes: g.clothes }; }
+function mixG(a, b, t) { const g = cloneG(a); for (let i = 0; i < NF; i++) { g.L[i] = lerp(a.L[i], b.L[i], t); g.R[i] = lerp(a.R[i], b.R[i], t); } for (const k of XG) g.x[k] = lerp(a.x[k], b.x[k], t); return g; }
+function okG(g) { if (!g || !g.L || !g.R || !g.x) return false; for (let i = 0; i < NF; i++) if (!fin(g.L[i]) || !fin(g.R[i])) return false; for (const k of XG) if (!fin(g.x[k])) return false; return true; }
+
+
+/* ------------------------------------------------------------------ the sitters' colours: what each one wears, and what its box catches */
+const CLOTH = [
+  ['amber', [0.80, 0.50, 0.13]], ['oxblood', [0.52, 0.10, 0.11]], ['teal', [0.07, 0.42, 0.42]], ['cobalt', [0.12, 0.23, 0.60]],
+  ['moss', [0.33, 0.43, 0.12]], ['rust', [0.70, 0.27, 0.09]], ['plum', [0.40, 0.15, 0.40]], ['mustard', [0.80, 0.68, 0.18]],
+  ['tomato', [0.85, 0.24, 0.15]], ['sea', [0.18, 0.50, 0.58]], ['bone', [0.82, 0.77, 0.66]], ['ink', [0.09, 0.10, 0.14]],
+];
+const skinOf = g => { const t = g.x.tone; return [lerp(0.80, 0.38, t), lerp(0.60, 0.24, t), lerp(0.50, 0.17, t)]; };
+
+/* ------------------------------------------------------------------ state */
+let S = null;
+function newState() {
+  return {
+    v: 1, seed: CFG.seed, rs: (CFG.seed * 2654435761) >>> 0, t: 0, k: 0,
+    prev: zeroGenome(), cur: zeroGenome(), tgt: zeroGenome(), morph0: 0,
+    event: 'first sitting', counts: { lineage: 0, caricatures: 0, splits: 0, unfinished: 0 },
+    look: CFG.look >= 0 ? CFG.look : 0, lookPrev: 0, lookT0: -1e9,
+    quirk: 'none', quirkEnd: 0, pal: [0, 0, 0, 0],
+    person: 0, j: 0, dest: null, destFrom: null, parents: [], col: 0, kind: '',
+    detailTarget: 0.1, detailNow: 0.1, detailEarned: 0.1, clean: 0, detailT: 0, committedK: -1, review: null,
+    shelfNo: 1, shelf: new Array(9).fill(null), shelves: [], placedAt: -1e9, placedCube: -1, archivedAt: -1e9,
+    log: [],
+  };
+}
+const R = { s: 1, f() { const r = new RNG(this.s); const v = r.f(); this.s = r.s; return v; }, n() { const r = new RNG(this.s); const v = r.n(); this.s = r.s; return v; }, r(a, b) { return a + (b - a) * this.f(); } };
+const H = () => S.t / 3600;
+const SH = () => S.shelfNo;
+const UNLOCK = { asym: 2, quirks: 2, lineage: 3, caricature: 4, split: 6 };
+const pad = (n, w) => String(n).padStart(w, '0');
+const allPlaced = () => S.shelves.flatMap(s => s.members).concat(S.shelf).filter(Boolean);
+
+function randomPerson() {
+  const g = zeroGenome(), spread = 0.85 + 0.5 * clamp((SH() - 1) / 8, 0, 1);
+  for (let i = 0; i < NF; i++) { g.L[i] = clamp(R.n() * spread, -2.0, 2.0); g.R[i] = g.L[i]; }
+  const age = R.f();
+  g.x = { lids: R.r(0, 0.22), age, tone: R.f(), grey: clamp(age * 1.2 - 0.3 + R.n() * 0.12, 0, 1), stubble: R.f() < 0.45 ? R.r(0.35, 1) : R.r(0, 0.1),
+    iris: R.f(), brows: R.r(0.45, 1), restless: R.f() };
+  g.hair = Math.floor(R.f() * 3); g.clothes = R.f() < 0.5 ? 0 : 1;
+  return g;
+}
+function pickColour() {
+  const used = new Set(S.shelf.filter(Boolean).map(m => m.col)); let c = 0;
+  for (let tries = 0; tries < 12; tries++) { c = Math.floor(R.f() * CLOTH.length); if (!used.has(c)) break; }
+  return c;
+}
+// a new sitter sits down: a rough draft that drifts toward a person of its own
+function newPortrait() {
+  S.person++; S.j = 0; S.kind = '';
+  S.dest = randomPerson();
+  let ev = 'sitter ' + pad(S.person, 3) + ' sits down';
+  if (SH() >= UNLOCK.split && R.f() < 0.12) { for (let i = 0; i < NF; i++) if (F[i][4]) S.dest.R[i] = clamp(-S.dest.L[i] + R.n() * 0.4, -2.4, 2.4); S.kind = 'split'; S.counts.splits++; ev += ' · the halves will disagree'; }
+  else if (SH() >= UNLOCK.caricature && R.f() < 0.22) { const i = Math.floor(R.f() * NF), s = R.f() < 0.5 ? -1 : 1; S.dest.L[i] = S.dest.R[i] = s * R.r(2.3, 2.9); S.kind = 'caricature · ' + F[i][0]; S.counts.caricatures++; ev += ' · caricature of ' + F[i][0]; }
+  let seed = zeroGenome(); S.parents = [];
+  if (SH() >= UNLOCK.lineage) {
+    const pool = allPlaced();
+    if (pool.length >= 2) {
+      const n = 2 + (R.f() < 0.4 ? 1 : 0), ps = [];
+      for (let t = 0; t < 12 && ps.length < n; t++) { const m = pool[Math.floor(R.f() * pool.length)]; if (!ps.includes(m)) ps.push(m); }
+      let c = cloneG(ps[0].g); for (let i = 1; i < ps.length; i++) c = mixG(c, ps[i].g, 1 / (i + 1));
+      seed = mixG(seed, c, 0.8); S.dest = mixG(S.dest, c, 0.35); S.dest.hair = R.f() < 0.5 ? ps[0].g.hair : S.dest.hair;
+      S.parents = ps.map(m => m.n); S.counts.lineage++; ev += ' · descends from ' + S.parents.map(n => pad(n, 3)).join(' + ');
+    }
+  }
+  for (let i = 0; i < NF; i++) { seed.L[i] = clamp(seed.L[i] + R.n() * 0.15, -2.2, 2.2); seed.R[i] = seed.L[i]; }
+  seed.hair = S.dest.hair; seed.clothes = S.dest.clothes;
+  S.destFrom = cloneG(seed); S.col = pickColour();
+  S.detailTarget = S.detailEarned = S.detailNow = 0.1; S.clean = 0;
+  return { seed, ev };
+}
+function stepGenome(base) {
+  const g = cloneG(base), n = SPP(), D = S.dest || zeroGenome();
+  const pull = 1 - Math.pow(0.06, 1 / Math.max(2, n - 4));      // ~94% of the way by the last few sittings
+  const sig = 0.05 + 0.04 * clamp((SH() - 1) / 6, 0, 1);          // the walk widens a little with every shelf
+  const bound = 2.3 + 0.6 * clamp((SH() - 1) / 8, 0, 1);
+  const asym = SH() < UNLOCK.asym ? 0 : 0.15 + 0.35 * clamp((SH() - UNLOCK.asym) / 8, 0, 1);
+  for (let i = 0; i < NF; i++) {
+    const shared = R.n() * sig;
+    g.L[i] = clamp(g.L[i] + (D.L[i] - g.L[i]) * pull + shared + (F[i][4] ? R.n() * sig * asym : 0), -bound, bound);
+    g.R[i] = F[i][4] ? clamp(g.R[i] + (D.R[i] - g.R[i]) * pull + shared + R.n() * sig * asym, -bound, bound) : g.L[i];
+    if (F[i][4] && asym === 0 && S.kind !== 'split') g.R[i] = g.L[i] = (g.L[i] + g.R[i]) / 2;
+  }
+  for (const k of XG) { const [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + R.n() * sig * 0.1 * (b - a) + (D.x[k] - g.x[k]) * pull, a, b); }
+  g.hair = D.hair; g.clothes = D.clothes;
+  return g;
+}
+function journey() { if (!S.dest || !S.destFrom) return 0; let a = 0, b = 0; for (let i = 0; i < NF; i++) { a += Math.abs(S.cur.L[i] - S.dest.L[i]); b += Math.abs(S.destFrom.L[i] - S.dest.L[i]); } return clamp(1 - a / (b + 1e-6), 0, 1); }
+const roundG = g => { const r = v => Math.round(v * 1000) / 1000, o = cloneG(g); o.L = o.L.map(r); o.R = o.R.map(r); for (const k of XG) o.x[k] = r(o.x[k]); return o; };
+// the portrait is done: printed in colour and placed in the next cube. A full shelf is archived first.
+function place() {
+  let i = S.shelf.findIndex(m => !m);
+  if (i < 0) {
+    S.shelves.push({ no: S.shelfNo, members: S.shelf, at: S.t });
+    if (S.shelves.length > 160) S.shelves.splice(0, S.shelves.length - 160);
+    logLine('R', 'shelf ' + pad(S.shelfNo, 2) + ' complete · archived along the top · a new shelf begins', 'c');
+    S.shelfNo++; S.shelf = new Array(9).fill(null); i = 0; S.archivedAt = S.t;
+    if (CFG.look < 0) { S.lookPrev = S.look; S.look = (S.look + 1 + Math.floor(R.f() * 3)) % LOOKS.length; S.lookT0 = S.t; }
+  }
+  const d = clamp(S.detailNow, 0.1, 1);
+  S.shelf[i] = { n: S.person, g: roundG(S.cur), d: Math.round(d * 1000) / 1000, col: S.col, yaw0: Math.round(R.r(0, 360)), spin: Math.round((R.f() < 0.5 ? -1 : 1) * R.r(5, 10) * 10) / 10,
+    bob: Math.round(R.r(0, 628)) / 100, born: S.t, parents: S.parents.slice(), kind: S.kind };
+  if (d < 0.95) S.counts.unfinished++;
+  S.placedAt = S.t; S.placedCube = i;
+  logLine('R', 'sitter ' + pad(S.person, 3) + ' placed · shelf ' + pad(S.shelfNo, 2) + ' cube ' + (i + 1) + ' · in ' + CLOTH[S.col][0] + ' · drawn at ' + Math.round(d * 100) + '%' + (d < 0.95 ? ' (unfinished)' : ''), 'c');
+}
+// detail levels: 0.10, 0.19 … 1.00. Each becomes available as the portrait goes on; the review decides when it is drawn.
+const DSTEP = 0.09;
+const levelOf = d => Math.round((d - 0.1) / DSTEP);
+function cleanNeed() { return levelOf(S.detailEarned) + 1 >= 5 ? 2 : 1; }
+function detailGoal() { return Math.min(S.detailTarget, S.detailEarned); }
+function easeDetail() { const el = S.t - (fin(S.detailT) ? S.detailT : S.t); if (el > 0) S.detailNow += (detailGoal() - S.detailNow) * (1 - Math.exp(-el / 18)); S.detailT = S.t; }
+
+function newSitting() {
+  commitReview();
+  S.k++; S.prev = cloneG(S.cur); S.morph0 = S.t; S.applied = '';
+  const n = SPP();
+  if (!S.dest || S.j >= n - 1) {
+    if (S.dest) place();
+    const p = newPortrait(); S.tgt = p.seed; S.event = p.ev;
+  } else {
+    S.j++;
+    let g;
+    if (S.j >= n - 1) { g = cloneG(S.cur); S.plan = []; S.event = 'final sitting · sitter ' + pad(S.person, 3) + ' holds still for the shelf'; }
+    else { g = stepGenome(S.cur); if (S.plan && S.plan.length) applyPlan(g); S.event = 'drawing sitter ' + pad(S.person, 3) + ' · sitting ' + S.j + ' of ' + (n - 1); }
+    if (!okG(g)) { g = cloneG(okG(S.destFrom) ? S.destFrom : zeroGenome()); S.event = 'regrown from memory'; }
+    S.tgt = g;
+  }
+  S.detailTarget = clamp(0.1 + DSTEP * Math.min(10, Math.floor(10 * S.j / Math.max(1, Math.round(n * 0.6)))), 0.1, 1);   // every level is on offer by 60% of the way; the rest is the review's
+  if (SH() >= UNLOCK.quirks && S.quirk === 'none' && R.f() < 0.04) { S.quirk = ['metronome', 'still', 'stare'][Math.floor(R.f() * 3)]; S.quirkEnd = S.t + R.r(90, 300); }
+  if (S.quirk !== 'none' && S.t > S.quirkEnd) S.quirk = 'none';
+  BL.forceAt = S.t + 0.02;       // the change happens under a blink
+}
+const MORPH = 7.0;
+function liveGenome() {
+  const u = clamp((S.t - S.morph0) / MORPH, 0, 1), e = u * u * (3 - 2 * u);
+  const g = mixG(S.prev, S.tgt, e); g.hair = e < 0.5 ? S.prev.hair : S.tgt.hair; g.clothes = e < 0.05 ? S.prev.clothes : S.tgt.clothes;
+  g.hairFade = [0, 0, 0]; g.hairFade[S.prev.hair] += 1 - e; g.hairFade[S.tgt.hair] += e;
+  S.cur = g; return g;
+}
+/* ------------------------------------------------------------------ performance: blinks, gaze, breath */
+const BL = { next: 3, t0: -10, forceAt: -1, sacc: [], gx: 0, gy: 0, gtx: 0, gty: 0, nextSacc: 1, swallow: -10, nextSwallow: 25 };
+function blinkCurve(d) { if (d < 0 || d > 0.36) return 0; if (d < 0.09) return Math.sin(d / 0.09 * Math.PI / 2); if (d < 0.13) return 1; const x = (d - 0.13) / 0.23; return 1 - x * x * (3 - 2 * x); }
+function sNoise(t, seed, f) { let s = 0; const ph = [seed * 1.7, seed * 3.1, seed * 5.3, seed * 7.9]; const fr = [1, 2.3, 4.1, 7.7]; for (let i = 0; i < 4; i++) s += Math.sin(t * f * fr[i] + ph[i]) / fr[i]; return s / 1.6; }
+function perform(t, g) {
+  if (BL.forceAt > 0 && t >= BL.forceAt) { BL.t0 = t; BL.forceAt = -1; BL.next = t + R.r(2.5, 6); }
+  if (S.quirk !== 'stare' && t >= BL.next) { BL.t0 = t; BL.next = t + (S.quirk === 'metronome' ? 4.0 : clamp(2.2 + R.n() * 1.4 + R.f() * 2.5, 1.2, 9)); }
+  const blink = blinkCurve(t - BL.t0);
+  const rest = g.x.lids;
+  if (t >= BL.nextSacc) { const a = 0.4 + 1.4 * g.x.restless; BL.gtx = R.n() * a; BL.gty = R.n() * a * 0.6; BL.nextSacc = t + R.r(0.6, 3.2) / (0.5 + g.x.restless); }
+  const k = 1 - Math.exp(-0.016 / 0.025); BL.gx += (BL.gtx - BL.gx) * k; BL.gy += (BL.gty - BL.gy) * k;
+  if (t >= BL.nextSwallow) { BL.swallow = t; BL.nextSwallow = t + R.r(18, 60); }
+  const sd = t - BL.swallow, swallow = sd >= 0 && sd <= 0.7 ? Math.sin(sd / 0.7 * Math.PI) : 0;
+  const still = S.quirk === 'still' ? 0.05 : 1;
+  const breath = Math.sin(t * 2 * Math.PI / 4.2);
+  return {
+    blink: clamp(rest + (1 - rest) * blink, 0, 1), gx: BL.gx + 0.25 * sNoise(t, 3, 9) * still, gy: BL.gy + 0.25 * sNoise(t, 4, 8) * still - 0.6 * blink,
+    jaw: Math.max(0, 0.05 + 0.08 * sNoise(t, 9, 0.5) + 0.04 * Math.sin(t * 2 * Math.PI / 4.2 + 1.2)) * (swallow > 0 ? 0.3 : 1), swallow, breath,
+    pitch: (0.35 * breath + 0.4 * sNoise(t, 1, 0.9)) * still, yaw: 0.6 * sNoise(t, 2, 0.7) * still, roll: 0.35 * sNoise(t, 5, 0.6) * still,
+  };
+}
+
+/* ------------------------------------------------------------------ CPU copy of the field (eyes ride on it) */
+const BC = new Float32Array(NB * 4), BRr = new Float32Array(NB * 4), BD = new Float32Array(NB * 4);
+function setBumps(g, dd) {
+  for (let b = 0; b < NB; b++) {
+    const [i, side] = BUMPS[b], f = F[i], sx = side ? -1 : 1, dt_ = dd !== undefined ? dd : (S ? S.detailNow : 1);
+    const gate = clamp((dt_ - FLV[i]) / 0.25, 0, 1), gate2 = gate * gate * (3 - 2 * gate);
+    const w = ((side ? g.R[i] : g.L[i]) + FAG[i] * (g.x.age - 0.35) * 2) * gate2;
+    BC[b * 4] = f[1][0] * sx; BC[b * 4 + 1] = f[1][1]; BC[b * 4 + 2] = f[1][2];
+    BRr[b * 4] = 1 / f[2][0]; BRr[b * 4 + 1] = 1 / f[2][1]; BRr[b * 4 + 2] = 1 / f[2][2];
+    BD[b * 4] = f[3][0] * sx * w * DSCALE; BD[b * 4 + 1] = f[3][1] * w * DSCALE; BD[b * 4 + 2] = f[3][2] * w * DSCALE;
+  }
+}
+function deformCPU(p) {
+  const o = p.slice();
+  for (let b = 0; b < NB; b++) {
+    const qx = (p[0] - BC[b * 4]) * BRr[b * 4], qy = (p[1] - BC[b * 4 + 1]) * BRr[b * 4 + 1], qz = (p[2] - BC[b * 4 + 2]) * BRr[b * 4 + 2];
+    const w = clamp(1 - Math.sqrt(qx * qx + qy * qy + qz * qz), 0, 1), w2 = w * w;
+    o[0] += w2 * BD[b * 4]; o[1] += w2 * BD[b * 4 + 1]; o[2] += w2 * BD[b * 4 + 2];
+  }
+  return o;
+}
+
+
+/* ------------------------------------------------------------------ GL */
+const cv = document.getElementById('v'), hud = document.getElementById('hud'), hctx = hud.getContext('2d');
+let gl = null, GL = null, DATA = null, glOK = false;
+const curLines = CFG.lines;
+const W = () => Math.round(curLines * 16 / 9), Hh = () => curLines;
+// layout in internal pixels (GL origin bottom-left): the archive strip on top, studio left, shelf right
+const LAY = () => { const w = W(), h = Hh(), top = Math.round(h * 0.125), sw = Math.round(w * 0.45); return { w, h, top, sw, bh: h - top }; };
+const FIELD_GLSL = `
+#define NB ${NB}
+uniform vec4 uBC[NB]; uniform vec4 uBR[NB]; uniform vec4 uBD[NB];
+vec3 field(vec3 p) { vec3 o = p; for (int i = 0; i < NB; i++) { vec3 q = (p - uBC[i].xyz) * uBR[i].xyz; float w = clamp(1.0 - length(q), 0.0, 1.0); o += w * w * uBD[i].xyz; } return o; }
+uniform mat4 uVP; uniform mat3 uRot; uniform vec3 uPivot; uniform vec3 uOff; uniform float uScl;
+vec3 sway(vec3 p) { return uRot * (p - uPivot) * uScl + uPivot + uOff; }
+`;
+const VS_SKIN = `precision highp float;
+attribute vec3 aP; attribute vec3 aB; attribute vec3 aJ; attribute vec3 aS; attribute vec3 aN0; attribute vec3 aN1; attribute float aAO;
+uniform float uBlink, uJaw, uSw;
+${FIELD_GLSL}
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
+void main() {
+  vec3 p = aP + aB * uBlink + aJ * uJaw + aS * uSw;
+  vec3 n = normalize(mix(aN0, aN1, uBlink));
+  vec3 t1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0,1,0) : vec3(1,0,0))); vec3 t2 = cross(n, t1);
+  vec3 d0 = field(p), d1 = field(p + t1 * 0.01), d2 = field(p + t2 * 0.01);
+  vec3 nn = normalize(cross(d1 - d0, d2 - d0)); if (dot(nn, n) < 0.0) nn = -nn;
+  vec3 w = sway(d0);
+  vN = uRot * nn; vO = aP; vW = w; vAO = aAO;
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+const COMMON_FS = `precision highp float;
+uniform vec3 uKey; uniform vec3 uFill; uniform vec3 uEye;
+float h31(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float ell(vec3 p, vec3 c, vec3 r, float soft) { float d = length((p - c) / r); return clamp((1.0 - d) / soft, 0.0, 1.0); }
+`;
+const FS_SKIN = COMMON_FS + `
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO;
+uniform float uAge, uTone, uScalp, uStub, uDetail;
+void main() {
+  vec3 n = normalize(vN), v = normalize(uEye - vW);
+  vec3 lite = mix(vec3(0.86, 0.66, 0.56), vec3(0.42, 0.27, 0.19), uTone);
+  vec3 dark = mix(vec3(0.70, 0.47, 0.39), vec3(0.30, 0.18, 0.12), uTone);
+  float mot = vnoise(vO * 9.0) * 0.6 + vnoise(vO * 31.0) * 0.4;
+  vec3 col = mix(dark, lite, 0.35 + 0.4 * mot);
+  float pore = vnoise(vO * 140.0) * vnoise(vO * 67.0); col *= 1.0 - 0.16 * uDetail * pore;
+  float lips = ell(vO, vec3(0.0, 6.615, 1.56), vec3(0.19, 0.065, 0.12), 0.6);
+  float flush = max(ell(vO, vec3(0.0, 6.93, 1.62), vec3(0.13, 0.12, 0.12), 0.9), max(ell(vO, vec3(0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0), ell(vO, vec3(-0.55, 6.9, 1.1), vec3(0.25, 0.2, 0.3), 1.0)));
+  col = mix(col, col * vec3(0.95, 0.72, 0.68), flush * 0.5);
+  col = mix(col, col * vec3(0.72, 0.42, 0.4), lips);
+  float under = max(ell(vO, vec3(0.31, 7.2, 1.36), vec3(0.2, 0.2, 0.14), 1.0), ell(vO, vec3(-0.31, 7.2, 1.36), vec3(0.2, 0.2, 0.14), 1.0));
+  col *= 1.0 - under * (0.08 + 0.14 * uAge);
+  // stubble shadow and scalp under hair
+  float beard = step(vO.y, 6.82 - 0.2 * max(abs(vO.x) - 0.24, 0.0)) * step(5.95, vO.y) * step(0.35, vO.z) * step(abs(vO.x), 0.68) * (1.0 - lips);
+  col = mix(col, col * 0.62, beard * uStub * 0.8);
+  float scalp = clamp(((vO.y - 7.55) - (-0.1 + 0.42 * (vO.z - 0.35))) / 0.12, 0.0, 1.0);
+  col = mix(col, vec3(0.08, 0.06, 0.05), scalp * uScalp);
+  // lash line
+  for (int s = 0; s < 2; s++) { vec3 c = vec3(s == 0 ? 0.308 : -0.308, 7.284, 1.233); vec3 d = vO - c; float r = length(d);
+    float band = clamp(1.0 - abs(r - 0.16) / 0.012, 0.0, 1.0) * clamp(d.y / 0.03, 0.0, 1.0) * step(0.0, d.z); col = mix(col, vec3(0.08, 0.05, 0.04), band * 0.7); }
+  // age: forehead lines and crow's feet darken the creases
+  float fh = ell(vO, vec3(0.0, 7.78, 1.25), vec3(0.42, 0.2, 0.3), 0.9);
+  float lines = smoothstep(0.75, 1.0, sin((vO.y + 0.03 * vnoise(vO * 6.0)) * 95.0)) * fh;
+  col *= 1.0 - lines * uAge * 0.3 * uDetail;
+  float ao = mix(1.0, vAO, 0.45 + 0.45 * uDetail);
+  vec3 L = normalize(uKey), F2 = normalize(uFill);
+  float nl = dot(n, L), wrap = clamp((nl + 0.35) / 1.35, 0.0, 1.0);
+  vec3 sss = mix(vec3(1.0, 0.55, 0.45), vec3(1.0), clamp(nl * 2.0 + 0.3, 0.0, 1.0));
+  vec3 diff = col * wrap * sss * 1.05 + col * clamp((dot(n, F2) + 0.5) / 1.5, 0.0, 1.0) * 0.28 + col * 0.12;
+  vec3 hv = normalize(L + v); float oil = 0.4 + 0.6 * vnoise(vO * 14.0) + flush * 0.4;
+  float spec = pow(clamp(dot(n, hv), 0.0, 1.0), 38.0 - 18.0 * uAge) * 0.22 * oil * (1.0 - scalp * uScalp);
+  float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 4.0) * 0.12;
+  gl_FragColor = vec4((diff + spec + fres * col) * ao, 1.0);
+}`;
+const VS_EYE = `precision highp float;
+attribute vec3 aP; uniform mat3 uEyeRot; uniform vec3 uEyeC;
+${FIELD_GLSL}
+varying vec3 vL; varying vec3 vN; varying vec3 vW;
+void main() { vec3 w = sway(uEyeC + uEyeRot * aP); vL = normalize(aP); vN = uRot * (uEyeRot * normalize(aP)); vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+const FS_EYE = COMMON_FS + `
+varying vec3 vL; varying vec3 vN; varying vec3 vW; uniform float uIris;
+void main() {
+  float a = degrees(acos(clamp(vL.z, -1.0, 1.0))), ang = atan(vL.y, vL.x);
+  float fib = vnoise(vec3(ang * 9.0, a * 0.35, 1.0));
+  vec3 i0 = mix(vec3(0.38, 0.45, 0.47), vec3(0.24, 0.15, 0.08), uIris), i1 = mix(vec3(0.10, 0.12, 0.13), vec3(0.05, 0.03, 0.02), uIris);
+  vec3 iris = mix(i1, i0, smoothstep(0.3, 0.75, fib));
+  iris = mix(iris, i1 * 0.6, smoothstep(22.0, 27.5, a));
+  vec3 scl = mix(vec3(0.62, 0.55, 0.5), vec3(0.8, 0.76, 0.72), clamp(vL.z, 0.0, 1.0));
+  vec3 col = a < 9.0 ? vec3(0.01) : a < 28.5 ? iris : scl;
+  col = mix(col, scl, smoothstep(27.5, 29.5, a) * step(9.0, a));
+  vec3 n = normalize(vN), v = normalize(uEye - vW), L = normalize(uKey);
+  float d = clamp((dot(n, L) + 0.3) / 1.3, 0.0, 1.0);
+  float sp = pow(clamp(dot(n, normalize(L + v)), 0.0, 1.0), 260.0) * 2.2;
+  gl_FragColor = vec4(col * (0.25 + 0.75 * d) + sp, 1.0);
+}`;
+const VS_LINE = `precision highp float;
+attribute vec3 aP; attribute vec3 aP2; attribute vec2 aT;
+uniform float uMixP;
+${FIELD_GLSL}
+varying vec2 vT; varying vec3 vW;
+void main() { vec3 p = mix(aP, aP2, uMixP); vec3 w = sway(field(p)); vT = aT; vW = w; gl_Position = uVP * vec4(w, 1.0); }`;
+const FS_LINE = COMMON_FS + `
+varying vec2 vT; varying vec3 vW; uniform vec3 uCol; uniform float uAlpha, uGrey; uniform vec3 uHC;
+void main() {
+  float r = vT.y; vec3 c = mix(uCol, vec3(0.78, 0.76, 0.72), step(1.0 - uGrey, r));
+  c *= 0.75 + 0.5 * r;
+  vec3 L = normalize(uKey); float lit = 0.55 + 0.45 * clamp(dot(normalize(vW - uHC), L), 0.0, 1.0);
+  gl_FragColor = vec4(c * lit * (0.85 + 0.3 * vT.x), uAlpha * (1.0 - 0.55 * vT.x));
+}`;
+const FS_CLOTH = COMMON_FS + `
+varying vec3 vN; varying vec3 vO; varying vec3 vW; varying float vAO; uniform vec3 uCloth;
+void main() { vec3 n = normalize(vN), L = normalize(uKey), v = normalize(uEye - vW);
+  float d = clamp((dot(n, L) + 0.2) / 1.2, 0.0, 1.0); float sheen = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0) * 0.18;
+  vec3 c = uCloth * (0.85 + 0.3 * vnoise(vO * 60.0));
+  gl_FragColor = vec4(c * (0.25 + 0.9 * d) + sheen * uCloth * 3.0, 1.0); }`;
+const VS_POST = `attribute vec2 aQ; varying vec2 vUV; void main() { vUV = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0.0, 1.0); }`;
+
+// the shelf: white boxes, each lit by its own sitter (colour bounce + a soft contact shadow)
+const VS_BOX = `precision highp float;
+attribute vec3 aP; attribute vec3 aN0; attribute vec3 aC; uniform mat4 uVP;
+varying vec3 vW; varying vec3 vN; varying vec3 vC;
+void main() { vW = aP; vN = aN0; vC = aC; gl_Position = uVP * vec4(aP, 1.0); }`;
+const FS_BOX = `precision highp float;
+varying vec3 vW; varying vec3 vN; varying vec3 vC;     // vC: cell (-1 frame), edge distance 0..1, depth 0 front .. 1 back
+uniform vec3 uKey, uEye; uniform vec3 uHP[9]; uniform vec3 uHC[9]; uniform vec3 uHS[9]; uniform vec3 uHF[9]; uniform float uHA[9];
+void main() {
+  vec3 n = normalize(vN), base = vec3(0.935, 0.93, 0.905);
+  float lit = 0.66 + 0.34 * clamp(dot(n, normalize(uKey)) * 0.5 + 0.5, 0.0, 1.0);
+  vec3 col = base * lit;
+  if (vC.x > -0.5) {
+    float corner = 0.58 + 0.42 * smoothstep(0.0, 0.2, vC.y);
+    col *= corner * mix(1.0, 0.7, vC.z);
+    vec3 bounce = vec3(0.0); float shade = 1.0;
+    for (int i = 0; i < 9; i++) {
+      float on = 1.0 - step(0.5, abs(vC.x - float(i)));
+      vec3 L = uHP[i] - vW; float d = length(L); vec3 l = L / max(d, 1e-4);
+      float f = clamp(dot(n, l) * 0.8 + 0.2, 0.0, 1.0);
+      // the face lights the wall it is turned toward with skin; the rest of the box catches the sweater and hair
+      float face = clamp(dot(-l, uHF[i]), 0.0, 1.0);
+      vec3 c = mix(uHC[i], uHS[i], face * face * 0.7);
+      bounce += on * uHA[i] * c * f / (1.0 + 0.22 * d * d);
+      if (n.y > 0.5) { vec2 dx = vW.xz - uHP[i].xz; shade *= 1.0 - on * uHA[i] * 0.42 * exp(-dot(dx, dx) * 0.45); }
+    }
+    col = col * shade + bounce * base * 1.35;
+  } else {
+    col *= 0.97 + 0.03 * n.z;
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const FS_POST = `precision highp float;
+varying vec2 vUV; uniform sampler2D uTex; uniform vec2 uRes; uniform float uTime, uFade; uniform int uA, uB;
+uniform vec3 uI0, uI1, uI2, uI3;   // live inks: dark, light, accent, mid
+uniform vec4 uStu; uniform float uSplit, uTopY; uniform vec3 uWall, uStrip;
+float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+float bayer8(vec2 a) { return bayer4(0.5 * a) * 0.25 + bayer2(a); }
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+vec4 S(vec2 px) { return texture2D(uTex, (floor(px) + 0.5) / uRes); }
+float lum(vec3 c) { return dot(c, vec3(0.33, 0.55, 0.12)); }
+float BGL = 0.62;
+float scene(vec2 px, out float m) { vec4 s = S(px); m = s.a; vec2 q = (px - uStu.xy) / uStu.zw - vec2(0.5, 0.62);
+  float bg = BGL - 0.18 * length(q * vec2(1.0, 1.3)) * BGL / 0.62; return mix(bg, lum(s.rgb), m); }
+vec3 look(int k, vec2 px) {
+  BGL = k == 1 ? 0.97 : k == 3 ? 0.07 : 0.62;
+  float m; float y = scene(px, m);
+  float mm; float yl = (scene(px + vec2(1.0, 0.0), mm) + scene(px - vec2(1.0, 0.0), mm) + scene(px + vec2(0.0, 1.0), mm) + scene(px - vec2(0.0, 1.0), mm)) * 0.25;
+  float g = hash(px + fract(uTime * 7.13) * 91.0) - 0.5;
+  vec2 c = (px - uStu.xy) / uStu.zw - 0.5; float vig = 1.0 - 0.35 * pow(max(length(c * vec2(1.4, 1.0)) - 0.35, 0.0), 1.4);
+  if (k == 0) {            // silver gelatin: warm split tone, lifted blacks, fine grain
+    float t = clamp((y + 0.35 * (y - yl)) * 1.08, 0.0, 1.0); t = 0.06 + 0.9 * (t * t * (3.0 - 2.0 * t) * 0.55 + t * 0.45);
+    t = clamp((t + g * 0.06 * (0.4 + 2.0 * t * (1.0 - t))) * vig, 0.0, 1.0);
+    vec3 lo = mix(uI0, mix(uI0, uI1, 0.5), clamp(t / 0.5, 0.0, 1.0)); vec3 hi = mix(mix(uI0, uI1, 0.5), uI1, clamp((t - 0.5) / 0.5, 0.0, 1.0));
+    return t < 0.5 ? lo : hi;
+  }
+  if (k == 1) {            // 1-bit ordered dither + ink contour
+    float t = clamp((y + 0.9 * (y - yl)) * vig, 0.0, 1.0); t = clamp((t - 0.06) / 0.86, 0.0, 1.0);
+    bool ink = (y - yl) < -0.035 || t < bayer8(px);
+    return ink ? uI0 : uI1;
+  }
+  if (k == 2) {            // silkscreen: flat inks, key plate off register, starved pulls
+    float yk = scene(px - vec2(2.0, -1.0), mm); float ykl = (scene(px - vec2(1.0, -1.0), mm) + scene(px - vec2(3.0, -1.0), mm)) * 0.5;
+    vec3 col = m > 0.5 ? (y < 0.42 ? uI3 : uI1) : uI2;
+    bool key = (yk < 0.2 && mm > 0.5) || (yk - ykl) < -0.06; bool rule = yk < 0.12 || mod(px.y + floor(px.x / 3.0), 3.0) > 0.5;
+    if (key && rule) col = uI0;
+    float starve = smoothstep(0.93, 0.97, hash(floor(px / vec2(60.0, 2.0)) + floor(uTime / 6.0))) * step(0.5, m) * ((key && rule) ? 0.0 : 1.0);
+    return mix(col, vec3(0.92), starve * 0.1);
+  }
+  // phosphor: 8 levels, green, scanline gaps, glow
+  float t = floor(clamp(y + 0.6 * (y - yl), 0.0, 1.0) * 7.0 + 0.5) / 7.0;
+  float scan = mod(gl_FragCoord.y, 3.0) < 1.0 ? 0.45 : 1.0;
+  return uI3 * (t * scan * vig + 0.04) * 1.15;
+}
+// the shelf is printed in colour: a few levels per channel, ordered dither, an ink contour, a dark wall behind
+vec3 colour(vec2 px) {
+  vec4 s = S(px);
+  float g = hash(px + fract(uTime * 5.71) * 37.0) - 0.5;
+  if (s.a < 0.5) { vec3 w = uWall * (0.8 + 0.3 * (px.y / uRes.y)); return floor(w * 9.0 + bayer8(px)) / 9.0; }
+  vec3 c = s.rgb;
+  float y = lum(c), yl = (lum(S(px + vec2(1.0, 0.0)).rgb) + lum(S(px - vec2(1.0, 0.0)).rgb) + lum(S(px + vec2(0.0, 1.0)).rgb) + lum(S(px - vec2(0.0, 1.0)).rgb)) * 0.25;
+  c = clamp(c + (c - vec3(y)) * 0.12, 0.0, 1.0);
+  if (y - yl < -0.05) c *= 0.62;
+  c = clamp(c + g * 0.025, 0.0, 1.0);
+  const float L = 6.0;
+  return floor(c * L + bayer8(px)) / L;
+}
+void main() {
+  vec2 px = floor(vUV * uRes);
+  if (px.y >= uTopY) { gl_FragColor = vec4(uStrip * (0.92 + 0.08 * bayer8(px)), 1.0); return; }
+  if (px.x >= uSplit) { gl_FragColor = vec4(colour(px), 1.0); return; }
+  vec3 a = look(uA, px);
+  if (uFade < 1.0) { vec3 b = look(uB, px); a = bayer8(px * 0.5 + 3.0) < uFade ? a : b; }
+  if (px.x >= uSplit - 1.0) a *= 0.4;
+  gl_FragColor = vec4(a, 1.0);
+}`;
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').slice(0, 5).join('\n')); return s; }
+function prog(vs, fs) {
+  const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS), u = {}; for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); const nm = a.name.replace(/\[0\]$/, ''); u[nm] = gl.getUniformLocation(p, nm); }
+  const na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES), at = {}; for (let i = 0; i < na; i++) { const a = gl.getActiveAttrib(p, i); at[a.name] = gl.getAttribLocation(p, a.name); }
+  return { p, u, a: at };
+}
+function buf(data, target) { const b = gl.createBuffer(); gl.bindBuffer(target || gl.ARRAY_BUFFER, b); gl.bufferData(target || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; }
+
+
+/* ------------------------------------------------------------------ data → geometry */
+function decodeData(meta, bin) {
+  const T = { int16: Int16Array, uint16: Uint16Array, uint8: Uint8Array };
+  const blob = k => { const b = meta.blobs[k]; return new T[b.type](bin, b.offset, b.count); };
+  const b0 = meta.box0, b1 = meta.box1;
+  const deq = q => { const o = new Float32Array(q.length); for (let i = 0; i < q.length; i++) { const c = i % 3; o[i] = b0[c] + (q[i] + 32768) / 65535 * (b1[c] - b0[c]); } return o; };
+  const ddq = (q, s) => { const o = new Float32Array(q.length); for (let i = 0; i < q.length; i++) o[i] = q[i] / 32767 * s; return o; };
+  const normals = (P, I) => { const N = new Float32Array(P.length); for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const k of [a, b, c]) { N[k] += nx; N[k + 1] += ny; N[k + 2] += nz; } }
+    for (let i = 0; i < N.length; i += 3) { const l = Math.hypot(N[i], N[i + 1], N[i + 2]) || 1; N[i] /= l; N[i + 1] /= l; N[i + 2] /= l; } return N; };
+  const D = {};
+  const P = deq(blob('body_pos')), I = blob('body_idx'), Bk = ddq(blob('body_blink'), meta.d_Blink);
+  const P1 = P.map((v, i) => v + Bk[i]);
+  D.body = { P, I, B: Bk, J: ddq(blob('body_jaw'), meta.d_Jaw), S: ddq(blob('body_swallow'), meta.d_Swallow), N0: normals(P, I), N1: normals(P1, I), AO: Float32Array.from(blob('body_ao'), v => v / 255) };
+  for (const k of ['jacket', 'sweater']) { const Pc = deq(blob(k + '_pos')), Ic = blob(k + '_idx'); D[k] = { P: Pc, I: Ic, N0: normals(Pc, Ic) }; }
+  D.collar = buildCollar(P, normals);
+  D.scan = buildScanMesh(P, D.body.N0);
+  // strands → line segments (expanded pairs, so no 32-bit index needed)
+  const lines = (pk, nk, pk2) => {
+    const pts = deq(blob(pk)), pts2 = pk2 ? deq(blob(pk2)) : null, ns = nk ? blob(nk) : null;
+    const counts = ns ? Array.from(ns) : new Array(pts.length / 15).fill(5);
+    let segs = 0; for (const c of counts) segs += c - 1;
+    const A = new Float32Array(segs * 6), A2 = new Float32Array(segs * 6), Tt = new Float32Array(segs * 4); let o = 0, base = 0, sid = 0;
+    for (const c of counts) { const rnd = ((Math.imul(sid++ + 1, 2654435761) >>> 0) % 1000) / 1000;
+      for (let j = 0; j < c - 1; j++) for (const e of [j, j + 1]) { const pi = (base + e) * 3; A[o * 3] = pts[pi]; A[o * 3 + 1] = pts[pi + 1]; A[o * 3 + 2] = pts[pi + 2];
+        const q = pts2 || pts; A2[o * 3] = q[pi]; A2[o * 3 + 1] = q[pi + 1]; A2[o * 3 + 2] = q[pi + 2]; Tt[o * 2] = e / (c - 1); Tt[o * 2 + 1] = rnd; o++; }
+      base += c; }
+    return { A, A2, T: Tt, n: o };
+  };
+  D.hair = [lines('hair_bun_pts', 'hair_bun_n'), lines('hair_short_pts', 'hair_short_n'), null];
+  D.brows = lines('brows_pts', 'brows_n'); D.fuzz = lines('fuzz_pts', 'fuzz_n'); D.stubble = lines('stubble_pts', 'stubble_n');
+  D.lash = lines('lash_open_pts', null, 'lash_closed_pts');
+  D.meta = meta;
+  return D;
+}
+// the scanner's face mesh: a jittered grid of front-facing landmarks plus the features, Delaunay triangulated
+function buildScanMesh(P, N) {
+  const pts = [], tag = [];
+  const front = (gx, gy, rx, ry) => { let best = -1, bz = -1e9; for (let i = 0; i < P.length; i += 3) { if (Math.abs(P[i] - gx) > rx || Math.abs(P[i + 1] - gy) > ry || N[i + 2] < 0.25) continue; if (P[i + 2] > bz) { bz = P[i + 2]; best = i; } }
+    return best < 0 ? null : [P[best], P[best + 1], P[best + 2]]; };
+  const FEAT = { 'eye L inner': [0.19, 7.29], 'eye L outer': [0.43, 7.28], 'eye R inner': [-0.19, 7.29], 'eye R outer': [-0.43, 7.28], 'lid L': [0.31, 7.4], 'lid R': [-0.31, 7.4],
+    'brow L': [0.3, 7.5], 'brow R': [-0.3, 7.5], 'brow L out': [0.48, 7.46], 'brow R out': [-0.48, 7.46], 'nose tip': [0, 6.88], 'nose base': [0, 6.8], 'nostril L': [0.09, 6.84], 'nostril R': [-0.09, 6.84],
+    'mouth L': [0.2, 6.6], 'mouth R': [-0.2, 6.6], 'lip top': [0, 6.65], 'lip low': [0, 6.55], 'chin': [0, 6.25], 'jaw L': [0.52, 6.45], 'jaw R': [-0.52, 6.45],
+    'cheek L': [0.55, 6.95], 'cheek R': [-0.55, 6.95], 'temple L': [0.66, 7.5], 'temple R': [-0.66, 7.5], 'hairline': [0, 8.0], 'glabella': [0, 7.42] };
+  for (const [k, [x, y]] of Object.entries(FEAT)) { const p = front(x, y, 0.03, 0.03) || front(x, y, 0.07, 0.07); if (p) { pts.push(p); tag.push(k); } }
+  for (let gy = 6.18; gy <= 8.1; gy += 0.15) for (let gx = -0.66; gx <= 0.67; gx += 0.14) {
+    const jx = gx + ((gy * 7.3) % 1 - 0.5) * 0.05; if ((jx / 0.7) ** 2 + ((gy - 7.15) / 1.0) ** 2 > 1) continue;
+    if (pts.some(q => Math.hypot(q[0] - jx, q[1] - gy) < 0.07)) continue;
+    const p = front(jx, gy, 0.045, 0.045); if (p) { pts.push(p); tag.push(''); } }
+  // Bowyer–Watson in the frontal plane
+  const xy = pts.map(p => [p[0], p[1]]), big = [[-10, 0], [10, 0], [0, 20]], A = xy.concat(big), n = xy.length;
+  let tris = [[n, n + 1, n + 2]];
+  const circ = t => { const [a, b, c] = t.map(i => A[i]); const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])); if (Math.abs(d) < 1e-12) return [0, 0, 1e18];
+    const a2 = a[0] ** 2 + a[1] ** 2, b2 = b[0] ** 2 + b[1] ** 2, c2 = c[0] ** 2 + c[1] ** 2; const ux = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d, uy = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d;
+    return [ux, uy, (a[0] - ux) ** 2 + (a[1] - uy) ** 2]; };
+  for (let i = 0; i < n; i++) { const p = A[i], bad = [], keep = [];
+    for (const t of tris) { const c = circ(t); ((p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 < c[2] ? bad : keep).push(t); }
+    const edges = []; for (const t of bad) for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]]) { const k = edges.findIndex(e => (e[0] === v && e[1] === u) || (e[0] === u && e[1] === v)); if (k >= 0) edges.splice(k, 1); else edges.push([u, v]); }
+    tris = keep.concat(edges.map(([u, v]) => [u, v, i])); }
+  tris = tris.filter(t => t.every(i => i < n) && Math.max(...[[0, 1], [1, 2], [2, 0]].map(([a, b]) => Math.hypot(A[t[a]][0] - A[t[b]][0], A[t[a]][1] - A[t[b]][1]))) < 0.36);
+  return { pts, tag, tris };
+}
+// a stand collar that wraps the whole neck (open at the front), sized from the neck itself
+function buildCollar(P, normals) {
+  const zs = []; for (let i = 0; i < P.length; i += 3) if (P[i + 1] > 5.85 && P[i + 1] < 6.25 && Math.abs(P[i]) < 0.6) zs.push(P[i + 2]);
+  zs.sort((a, b) => a - b); const cz = zs[zs.length >> 1] || 0.35;
+  const NA = 72, NL = 9, open = 26 * Math.PI / 180, TAU = Math.PI * 2;
+  const rings = [];
+  for (let j = 0; j < NL; j++) {
+    const yy = 5.8 + 0.74 * j / (NL - 1), ys = Math.min(yy, 6.12), best = new Float32Array(NA);
+    for (let i = 0; i < P.length; i += 3) { if (Math.abs(P[i + 1] - ys) > 0.045) continue; const x = P[i], z = P[i + 2] - cz, r = Math.hypot(x, z); if (r > 0.75) continue;
+      let a = Math.atan2(x, z); if (a < 0) a += TAU; const b = Math.floor(a / TAU * NA) % NA; if (r > best[b]) best[b] = r; }
+    for (let pass = 0; pass < NA; pass++) for (let b = 0; b < NA; b++) if (!best[b]) best[b] = best[(b + NA - 1) % NA] || best[(b + 1) % NA];
+    const sm = new Float32Array(NA); for (let b = 0; b < NA; b++) { let a = 0; for (let k = -4; k <= 4; k++) a += best[(b + k + NA) % NA] || 0.42; sm[b] = a / 9; }
+    rings.push(sm);
+  }
+  const V = [], ring = (j, k, off) => { const a = open + (TAU - 2 * open) * k / NA, b = Math.floor(((a % TAU) + TAU) % TAU / TAU * NA) % NA;
+    const t = j / (NL - 1), r = rings[j][b] + off + 0.06 * Math.pow(t, 1.5); V.push(Math.sin(a) * r, 5.8 + 0.74 * t, cz + Math.cos(a) * r); };
+  for (const off of [0.11, 0.045]) for (let j = 0; j < NL; j++) for (let k = 0; k <= NA; k++) ring(j, k, off);
+  const n = (NL) * (NA + 1), id = (o, j, k) => o * n + j * (NA + 1) + k, I = [];
+  for (let j = 0; j < NL - 1; j++) for (let k = 0; k < NA; k++) {
+    I.push(id(0, j, k), id(0, j, k + 1), id(0, j + 1, k + 1), id(0, j, k), id(0, j + 1, k + 1), id(0, j + 1, k));
+    I.push(id(1, j, k), id(1, j + 1, k + 1), id(1, j, k + 1), id(1, j, k), id(1, j + 1, k), id(1, j + 1, k + 1)); }
+  for (let k = 0; k < NA; k++) { const j = NL - 1; I.push(id(0, j, k), id(1, j, k), id(1, j, k + 1), id(0, j, k), id(1, j, k + 1), id(0, j, k + 1)); }
+  for (const k of [0, NA]) for (let j = 0; j < NL - 1; j++) I.push(id(0, j, k), id(1, j, k), id(1, j + 1, k), id(0, j, k), id(1, j + 1, k), id(0, j + 1, k));
+  const Pc = new Float32Array(V), Ic = new Uint16Array(I);
+  return { P: Pc, I: Ic, N0: normals(Pc, Ic) };
+}
+function sphere(r, nu, nv) {
+  const P = [], I = [];
+  for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { const th = j / nv * Math.PI, ph = i / nu * 2 * Math.PI;
+    let x = Math.sin(th) * Math.cos(ph), y = Math.sin(th) * Math.sin(ph), z = Math.cos(th); let rr = r; if (z > 0.82) rr += 0.018 * Math.pow(Math.sin((z - 0.82) / 0.18 * Math.PI / 2), 1.4);
+    P.push(x * rr, y * rr, z * rr); }
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = j * (nu + 1) + i, b = a + nu + 1; I.push(a, b, a + 1, a + 1, b, b + 1); }
+  return { P: new Float32Array(P), I: new Uint16Array(I) };
+}
+
+/* ------------------------------------------------------------------ the shelf: a white 3x3 cube unit, open at the front */
+const SH_CS = 4.0, SH_T = 0.3, SH_P = SH_CS + SH_T, SH_SCL = 0.74;
+const cellC = i => [((i % 3) - 1) * SH_P, (1 - Math.floor(i / 3)) * SH_P, 0];
+function buildShelf() {
+  const P = [], N = [], C = [], I = [];
+  const quad = (o, ua, va, n, cell, edgeFn, depthFn, div) => {   // o + u*ua + v*va, u,v in 0..1, subdivided so the shading varyings interpolate
+    const base = P.length / 3;
+    for (let j = 0; j <= div; j++) for (let i = 0; i <= div; i++) { const u = i / div, v = j / div;
+      P.push(o[0] + ua[0] * u + va[0] * v, o[1] + ua[1] * u + va[1] * v, o[2] + ua[2] * u + va[2] * v); N.push(...n); C.push(cell, edgeFn(u, v), depthFn(u, v)); }
+    for (let j = 0; j < div; j++) for (let i = 0; i < div; i++) { const a = base + j * (div + 1) + i, b = a + div + 1; I.push(a, a + 1, b + 1, a, b + 1, b); }
+  };
+  const h = SH_CS / 2, e = (u, v) => Math.min(u, 1 - u, v, 1 - v) * 2, de = (u) => Math.min(u, 1 - u) * 2;
+  for (let i = 0; i < 9; i++) {
+    const [cx, cy] = cellC(i), x0 = cx - h, x1 = cx + h, y0 = cy - h, y1 = cy + h, zb = -h, zf = h, D = SH_CS;
+    quad([x0, y0, zb], [D, 0, 0], [0, D, 0], [0, 0, 1], i, e, () => 1, 8);                         // back
+    quad([x0, y0, zf], [0, 0, -D], [0, D, 0], [1, 0, 0], i, (u, v) => de(v), u => u, 8);              // left wall (u: front→back)
+    quad([x1, y0, zb], [0, 0, D], [0, D, 0], [-1, 0, 0], i, (u, v) => de(v), u => 1 - u, 8);           // right wall
+    quad([x0, y0, zb], [D, 0, 0], [0, 0, D], [0, 1, 0], i, (u, v) => de(u), (u, v) => 1 - v, 8);       // floor
+    quad([x0, y1, zf], [D, 0, 0], [0, 0, -D], [0, -1, 0], i, (u, v) => de(u), (u, v) => v, 8);         // ceiling
+  }
+  // the front edges of the panels
+  const X = 1.5 * SH_P + SH_T / 2, z = h;
+  for (let k = 0; k < 4; k++) { const c = (k - 1.5) * SH_P;
+    quad([c - SH_T / 2, -X, z], [SH_T, 0, 0], [0, 2 * X, 0], [0, 0, 1], -1, () => 1, () => 0, 1);
+    quad([-X, c - SH_T / 2, z], [2 * X, 0, 0], [0, SH_T, 0], [0, 0, 1], -1, () => 1, () => 0, 1); }
+  return { P: new Float32Array(P), N: new Float32Array(N), C: new Float32Array(C), I: new Uint16Array(I) };
+}
+
+function initGL() {
+  gl = cv.getContext('webgl', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false, alpha: false }); if (!gl) throw new Error('no webgl');
+  const G = {};
+  G.skin = prog(VS_SKIN, FS_SKIN); G.cloth = prog(VS_SKIN, FS_CLOTH); G.eye = prog(VS_EYE, FS_EYE); G.line = prog(VS_LINE, FS_LINE); G.post = prog(VS_POST, FS_POST); G.box = prog(VS_BOX, FS_BOX);
+  const D = DATA;
+  const mesh = (m, withShapes) => { const o = { I: buf(m.I, gl.ELEMENT_ARRAY_BUFFER), n: m.I.length, P: buf(m.P), N0: buf(m.N0) };
+    const zero = new Float32Array(m.P.length);
+    o.B = buf(withShapes ? m.B : zero); o.J = buf(withShapes ? m.J : zero); o.S = buf(withShapes ? m.S : zero); o.N1 = buf(withShapes ? m.N1 : m.N0);
+    o.AO = buf(withShapes ? m.AO : new Float32Array(m.P.length / 3).fill(1)); return o; };
+  G.body = mesh(D.body, true); G.jacket = mesh(D.jacket); G.collar = mesh(D.collar); G.sweater = mesh(D.sweater);
+  const ln = l => l ? { A: buf(l.A), A2: buf(l.A2), T: buf(l.T), n: l.n } : null;
+  G.hair = D.hair.map(ln); G.brows = ln(D.brows); G.fuzz = ln(D.fuzz); G.stubble = ln(D.stubble); G.lash = ln(D.lash);
+  const sp = sphere(0.118, 40, 30); G.eyeM = { P: buf(sp.P), I: buf(sp.I, gl.ELEMENT_ARRAY_BUFFER), n: sp.I.length };
+  G.quad = buf(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+  const sb = buildShelf(); G.shelf = { P: buf(sb.P), N0: buf(sb.N), C: buf(sb.C), I: buf(sb.I, gl.ELEMENT_ARRAY_BUFFER), n: sb.I.length };
+  makeTarget(G);
+  G.thT = newTarget(THUMB, THUMB, true); G.thPix = new Uint8Array(THUMB * THUMB * 4);
+  GL = G; glOK = true; FR.shelfDirty = true;
+}
+function newTarget(w, h, depth) {
+  const T = { w, h, tex: gl.createTexture() }; gl.bindTexture(gl.TEXTURE_2D, T.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  T.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, T.tex, 0);
+  if (depth) { T.rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, T.rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, T.rb); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); return T;
+}
+function freeTarget(T) { if (!T) return; gl.deleteFramebuffer(T.fbo); gl.deleteTexture(T.tex); if (T.rb) gl.deleteRenderbuffer(T.rb); }
+function makeTarget(G) { freeTarget(G.main); G.main = newTarget(W(), Hh(), true); G.w = W(); G.h = Hh(); FR.shelfDirty = true; }
+function resize() {
+  const vw = innerWidth, vh = innerHeight, w = W(), h = Hh();
+  const s = Math.max(1, Math.floor(Math.min(vw / w, vh / h)));
+  const cw = w * s, ch = h * s; cv.width = cw; cv.height = ch;
+  const fit = Math.min(vw / cw, vh / ch), csw = Math.round(cw * fit) + 'px', csh = Math.round(ch * fit) + 'px';
+  cv.style.width = hud.style.width = csw; cv.style.height = hud.style.height = csh;
+  const wrap = document.getElementById('wrap'); if (wrap) { wrap.style.width = csw; wrap.style.height = csh; }
+  drawHud();
+}
+addEventListener('resize', resize);
+cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glOK = false; }, false);
+cv.addEventListener('webglcontextrestored', () => { try { THUMBS.clear(); initGL(); } catch (err) { console.error(err); } }, false);
+
+/* ------------------------------------------------------------------ cameras */
+const STUDIO_CAM = () => MZCam.lens(MZCam.V(0, 7.0, 11.6), MZCam.V(0, 7.12, 1.0), 22);
+const SHELF_CAM = t => MZCam.lens(MZCam.V(1.3 * Math.sin(t * 0.011), 0.9 * Math.sin(t * 0.0077 + 1.0), 30), MZCam.V(0, 0, 0), 30);
+const THUMB_CAM = () => MZCam.lens(MZCam.V(0, 7.05, 13.5), MZCam.V(0, 7.05, 1.0), 19);
+function persp(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; }
+function mmul(a, b) { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k]; return o; }
+function rotXYZ(rx, ry, rz) { const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry), cz = Math.cos(rz), sz = Math.sin(rz);
+  return [cy * cz, cy * sz, -sy, sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy, cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy]; }
+const mvec = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
+function camVP(cam, asp) {
+  const p = cam.pos, r = cam.r, u = cam.u, f = cam.f;
+  const view = [r.x, u.x, -f.x, 0, r.y, u.y, -f.y, 0, r.z, u.z, -f.z, 0,
+    -(r.x * p.x + r.y * p.y + r.z * p.z), -(u.x * p.x + u.y * p.y + u.z * p.z), f.x * p.x + f.y * p.y + f.z * p.z, 1];
+  return mmul(persp(cam.fov * Math.PI / 180, asp, 0.25, 120), view);
+}
+// world point → pixel in a w×h rect (top-left origin), or null behind the lens
+function projVP(vp, p, w, h) { const x = vp[0] * p[0] + vp[4] * p[1] + vp[8] * p[2] + vp[12], y = vp[1] * p[0] + vp[5] * p[1] + vp[9] * p[2] + vp[13], ww = vp[3] * p[0] + vp[7] * p[1] + vp[11] * p[2] + vp[15];
+  if (ww <= 0.01) return null; return [(x / ww * 0.5 + 0.5) * w, (0.5 - y / ww * 0.5) * h]; }
+/* ------------------------------------------------------------------ palette (drifts, pulled home, clamped to family) */
+const HOME = {
+  0: [[0.10, 0.09, 0.08], [0.90, 0.875, 0.82], [0.89, 0.64, 0.23], [0.5, 0.48, 0.44]],     // gelatin: warm dark, paper
+  1: [[0.055, 0.10, 0.11], [0.91, 0.86, 0.75], [0.89, 0.64, 0.23], [0.5, 0.5, 0.45]],      // 1-bit: teal-black ink, paper
+  2: [[0.06, 0.09, 0.10], [0.93, 0.68, 0.33], [0.13, 0.42, 0.41], [0.72, 0.36, 0.17]],     // silk: key, amber skin, teal ground, rust shade
+  3: [[0.02, 0.05, 0.04], [0.6, 1.0, 0.55], [0.89, 0.64, 0.23], [0.42, 1.0, 0.5]],         // phosphor green
+};
+const PAL = { d: [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]] };
+function inks(k, t) {
+  const out = [];
+  for (let i = 0; i < 4; i++) { const h = HOME[k][i], d = PAL.d[i];
+    for (let c = 0; c < 3; c++) { d[c] += (sNoise(t * 0.0007 + i * 7 + c * 3, i + c, 1) * 0.06 - d[c]) * 0.002; d[c] = clamp(d[c], -0.05, 0.05); }
+    out.push(h.map((v, c) => clamp(v + d[c] * (i === 0 ? 0.3 : 1), 0, 1))); }
+  return out;
+}
+
+
+/* ------------------------------------------------------------------ render */
+function bindAttr(pr, name, b, size) { const l = pr.a[name]; if (l === undefined || l < 0) return; gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0); }
+let NATTR = 0;
+function unbindAll() { const n = NATTR || (NATTR = gl.getParameter(gl.MAX_VERTEX_ATTRIBS)); for (let i = 0; i < n; i++) gl.disableVertexAttribArray(i); }
+const XF0 = { rot: rotXYZ(0, 0, 0), piv: PIVOT, off: [0, 0, 0], scl: 1 };
+const KEY = [-5.5, 4.4, 9.0];
+function common(pr, vp, eye, xf) {
+  const u = pr.u;
+  if (u.uBC) { gl.uniform4fv(u.uBC, BC); gl.uniform4fv(u.uBR, BRr); gl.uniform4fv(u.uBD, BD); }
+  if (u.uVP) gl.uniformMatrix4fv(u.uVP, false, vp);
+  if (u.uRot) gl.uniformMatrix3fv(u.uRot, false, xf.rot);
+  if (u.uPivot) gl.uniform3fv(u.uPivot, xf.piv);
+  if (u.uOff) gl.uniform3fv(u.uOff, xf.off);
+  if (u.uScl) gl.uniform1f(u.uScl, xf.scl);
+  if (u.uHC) { const q = mvec(xf.rot, [0 - xf.piv[0], 7.4 - xf.piv[1], 0.3 - xf.piv[2]]); gl.uniform3f(u.uHC, q[0] * xf.scl + xf.piv[0] + xf.off[0], q[1] * xf.scl + xf.piv[1] + xf.off[1], q[2] * xf.scl + xf.piv[2] + xf.off[2]); }
+  if (u.uKey) gl.uniform3fv(u.uKey, KEY);
+  if (u.uFill) gl.uniform3f(u.uFill, 6.0, -0.1, 10.0);
+  if (u.uEye) gl.uniform3f(u.uEye, eye.x, eye.y, eye.z);
+}
+function drawMesh(pr, m) {
+  bindAttr(pr, 'aP', m.P, 3); bindAttr(pr, 'aB', m.B, 3); bindAttr(pr, 'aJ', m.J, 3); bindAttr(pr, 'aS', m.S, 3);
+  bindAttr(pr, 'aN0', m.N0, 3); bindAttr(pr, 'aN1', m.N1, 3); bindAttr(pr, 'aAO', m.AO, 1);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.I); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_SHORT, 0); unbindAll();
+}
+function drawLines(pr, l, col, alpha, grey, mixP, frac) {
+  if (!l || alpha <= 0.003 || frac <= 0) return;
+  gl.uniform3fv(pr.u.uCol, col); gl.uniform1f(pr.u.uAlpha, alpha); gl.uniform1f(pr.u.uGrey, grey); gl.uniform1f(pr.u.uMixP, mixP || 0);
+  bindAttr(pr, 'aP', l.A, 3); bindAttr(pr, 'aP2', l.A2, 3); bindAttr(pr, 'aT', l.T, 2);
+  gl.drawArrays(gl.LINES, 0, Math.floor(l.n * clamp(frac, 0, 1) / 2) * 2); unbindAll();
+}
+function hairCol(g, dark) { const m = clamp(0.25 + 0.75 * (1 - g.x.tone * 0.2), 0, 1); const b = [0.22, 0.15, 0.09].map(v => v * (1.25 - m)); return dark ? b.map(v => v * 0.6) : b; }
+const hairFadeOf = g => g.hairFade || [g.hair === 0 ? 1 : 0, g.hair === 1 ? 1 : 0, g.hair === 2 ? 1 : 0];
+let FR = { n: 0, fps: 60, ms: 16, shelfEvery: 1, shelfDirty: true };
+// one sitter, anywhere: studio (xf at home) or floating in a cube (xf moves, turns and scales it)
+function renderHead(vp, eye, xf, p, g, d, frac, cloth) {
+  const G = GL, hf = hairFadeOf(g);
+  setBumps(g, d);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND);
+  let pr = G.skin; gl.useProgram(pr.p); common(pr, vp, eye, xf);
+  gl.uniform1f(pr.u.uBlink, p.blink); gl.uniform1f(pr.u.uJaw, p.jaw); gl.uniform1f(pr.u.uSw, p.swallow || 0);
+  gl.uniform1f(pr.u.uAge, g.x.age); gl.uniform1f(pr.u.uTone, g.x.tone); gl.uniform1f(pr.u.uStub, g.x.stubble); gl.uniform1f(pr.u.uDetail, d);
+  gl.uniform1f(pr.u.uScalp, hf[0] + hf[1] + hf[2] * 0.35);
+  drawMesh(pr, G.body);
+  pr = G.cloth; gl.useProgram(pr.p); common(pr, vp, eye, xf);
+  gl.uniform1f(pr.u.uBlink, 0); gl.uniform1f(pr.u.uJaw, 0); gl.uniform1f(pr.u.uSw, 0);
+  if (g.clothes === 0) { gl.uniform3fv(pr.u.uCloth, cloth); drawMesh(pr, G.jacket); drawMesh(pr, G.collar); gl.uniform3fv(pr.u.uCloth, cloth.map(v => v * 0.45 + 0.02)); }
+  else gl.uniform3fv(pr.u.uCloth, cloth);
+  drawMesh(pr, G.sweater);
+  pr = G.eye; gl.useProgram(pr.p); common(pr, vp, eye, xf); gl.uniform1f(pr.u.uIris, g.x.iris);
+  const er = rotXYZ(-(p.gy || 0) * Math.PI / 180, (p.gx || 0) * Math.PI / 180, 0);
+  for (const sx of [1, -1]) { const c = deformCPU([0.308 * sx, 7.284, 1.233]); gl.uniform3fv(pr.u.uEyeC, c); gl.uniformMatrix3fv(pr.u.uEyeRot, false, er);
+    bindAttr(pr, 'aP', G.eyeM.P, 3); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, G.eyeM.I); gl.drawElements(gl.TRIANGLES, G.eyeM.n, gl.UNSIGNED_SHORT, 0); unbindAll(); }
+  gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+  pr = G.line; gl.useProgram(pr.p); common(pr, vp, eye, xf);
+  const hc = hairCol(g), df = frac * (0.3 + 0.7 * d);
+  for (let i = 0; i < 2; i++) drawLines(pr, G.hair[i], hc, 0.55 * hf[i], g.x.grey * 0.85, 0, df);
+  drawLines(pr, G.brows, hairCol(g, true), 0.75 * g.x.brows, g.x.grey * 0.5, 0, Math.max(df, 0.6));
+  drawLines(pr, G.stubble, hairCol(g, true), 0.7 * g.x.stubble * (0.5 + 0.5 * d), g.x.grey, 0, df);
+  if (frac > 0.5) drawLines(pr, G.fuzz, [0.75, 0.62, 0.52], 0.1 * d, 0, 0, df);
+  drawLines(pr, G.lash, [0.03, 0.025, 0.02], 0.9, 0, p.blink, 1);
+  gl.depthMask(true); gl.disable(gl.BLEND);
+}
+// a shelf sitter's own life: it arrives facing you, then floats and turns; it still blinks
+function memberPose(m, i, t) {
+  const age = t - m.born, a = clamp(age / 3, 0, 1), e = a * a * (3 - 2 * a);
+  const turn = Math.max(0, age - 4), spun = turn < 6 ? turn * turn / 12 : turn - 3;   // spins up gently from facing you
+  const yaw = m.spin * spun * Math.PI / 180;
+  const per = 3.4 + ((m.bob * 1.37) % 3), bt = (t + m.bob * 1.7) % per;
+  const rest = m.g.x.lids;
+  return { yaw, pitch: 2.5 * Math.sin(t * 0.31 + m.bob) * Math.PI / 180, roll: 1.6 * Math.sin(t * 0.23 + m.bob * 2) * Math.PI / 180,
+    bob: 0.12 * Math.sin(t * 0.6 + m.bob), scl: SH_SCL * (0.6 + 0.4 * e), a: e,
+    p: { blink: clamp(rest + (1 - rest) * blinkCurve(bt), 0, 1), jaw: 0.05 + 0.02 * Math.sin(t * 1.5 + m.bob), swallow: 0, gx: 3 * Math.sin(t * 0.17 + m.bob * 3), gy: 0 } };
+}
+function memberXf(i, ps) { const c = cellC(i); return { rot: rotXYZ(ps.pitch, ps.yaw, ps.roll), piv: HEADP, off: [c[0] - HEADP[0], c[1] + ps.bob - HEADP[1] - 0.05, 0.25 - HEADP[2]], scl: ps.scl }; }
+const BOXU = { HP: new Float32Array(27), HC: new Float32Array(27), HS: new Float32Array(27), HF: new Float32Array(27), HA: new Float32Array(9) };
+function drawShelf(t, L) {
+  const G = GL, cam = SHELF_CAM(t), vp = camVP(cam, (L.w - L.sw) / L.bh); FR.shelfVP = vp;
+  const poses = S.shelf.map((m, i) => m ? memberPose(m, i, t) : null);
+  for (let i = 0; i < 9; i++) { const m = S.shelf[i], ps = poses[i], c = cellC(i);
+    BOXU.HA[i] = 0; if (!m || !ps) continue;
+    const cl = CLOTH[m.col][1], hc = hairCol(m.g), sk = skinOf(m.g);
+    BOXU.HP.set([c[0], c[1] + ps.bob - 0.3, 0.35], i * 3);
+    BOXU.HC.set([cl[0] * 0.85 + hc[0] * 0.15, cl[1] * 0.85 + hc[1] * 0.15, cl[2] * 0.85 + hc[2] * 0.15], i * 3);
+    BOXU.HS.set(sk, i * 3); BOXU.HF.set([Math.sin(ps.yaw), 0, Math.cos(ps.yaw)], i * 3);
+    BOXU.HA[i] = ps.a * (1 + 0.6 * Math.exp(-(t - m.born) / 2.5)); }
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND);
+  const pr = G.box; gl.useProgram(pr.p); gl.uniformMatrix4fv(pr.u.uVP, false, vp); gl.uniform3fv(pr.u.uKey, KEY); gl.uniform3f(pr.u.uEye, cam.pos.x, cam.pos.y, cam.pos.z);
+  gl.uniform3fv(pr.u.uHP, BOXU.HP); gl.uniform3fv(pr.u.uHC, BOXU.HC); gl.uniform3fv(pr.u.uHS, BOXU.HS); gl.uniform3fv(pr.u.uHF, BOXU.HF); gl.uniform1fv(pr.u.uHA, BOXU.HA);
+  bindAttr(pr, 'aP', G.shelf.P, 3); bindAttr(pr, 'aN0', G.shelf.N0, 3); bindAttr(pr, 'aC', G.shelf.C, 3);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, G.shelf.I); gl.drawElements(gl.TRIANGLES, G.shelf.n, gl.UNSIGNED_SHORT, 0); unbindAll();
+  const frac = 0.32 * CFG.lite * (FR.shelfEvery > 1 ? 0.7 : 1);
+  for (let i = 0; i < 9; i++) { const m = S.shelf[i], ps = poses[i]; if (!m || !ps) continue;
+    renderHead(vp, cam.pos, memberXf(i, ps), ps.p, m.g, m.d, frac, CLOTH[m.col][1]); }
+}
+function render(simT) {
+  if (!glOK || !GL) return;
+  const G = GL, L = LAY(); if (G.w !== L.w || G.h !== L.h) makeTarget(G);
+  if (cv.width !== W() * Math.max(1, Math.floor(Math.min(innerWidth / W(), innerHeight / Hh())))) resize();
+  S.pal = inks(S.look, S.t);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, G.main.fbo); gl.enable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 0);
+  // the studio: the screen test, every frame
+  gl.viewport(0, 0, L.sw, L.bh); gl.scissor(0, 0, L.sw, L.bh); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const cam = STUDIO_CAM(), vp = camVP(cam, L.sw / L.bh); FR.studioVP = vp;
+  const xf = { rot: rotXYZ(PERF.pitch * Math.PI / 180, PERF.yaw * Math.PI / 180, PERF.roll * Math.PI / 180), piv: PIVOT, off: [0, 0, 0], scl: 1 };
+  renderHead(vp, cam.pos, xf, PERF, S.cur, S.detailNow, CFG.lite, CLOTH[S.col][1]);
+  // the shelf: slow things, so it may skip frames when the machine is struggling
+  if (FR.shelfDirty || FR.n % FR.shelfEvery === 0) {
+    gl.viewport(L.sw, 0, L.w - L.sw, L.bh); gl.scissor(L.sw, 0, L.w - L.sw, L.bh); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    drawShelf(simT, L); FR.shelfDirty = false;
+  }
+  gl.disable(gl.SCISSOR_TEST);
+  postPass(G.main, null, cv.width, cv.height, simT, L);
+}
+const WALL = [0.06, 0.105, 0.11], STRIPC = [0.047, 0.094, 0.102];
+function postPass(src, dst, w, h, simT, L) {
+  const G = GL; gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fbo : null); gl.viewport(0, 0, w, h); gl.disable(gl.DEPTH_TEST);
+  const pr = G.post; gl.useProgram(pr.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(pr.u.uTex, 0);
+  gl.uniform2f(pr.u.uRes, src.w, src.h); gl.uniform1f(pr.u.uTime, simT);
+  gl.uniform1i(pr.u.uA, S.look); gl.uniform1i(pr.u.uB, S.lookPrev); gl.uniform1f(pr.u.uFade, clamp((S.t - S.lookT0) / 20, 0, 1));
+  const ik = S.pal; gl.uniform3fv(pr.u.uI0, ik[0]); gl.uniform3fv(pr.u.uI1, ik[1]); gl.uniform3fv(pr.u.uI2, ik[2]); gl.uniform3fv(pr.u.uI3, ik[3]);
+  gl.uniform4f(pr.u.uStu, 0, 0, L.sw, L.bh); gl.uniform1f(pr.u.uSplit, L.sw); gl.uniform1f(pr.u.uTopY, L.bh);
+  gl.uniform3fv(pr.u.uWall, WALL); gl.uniform3fv(pr.u.uStrip, STRIPC);
+  bindAttr(pr, 'aQ', G.quad, 2); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); unbindAll();
+}
+
+/* ------------------------------------------------------------------ thumbnails: each sitter, printed small for the archive along the top */
+const THUMB = 48, THUMBS = new Map(), BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function makeThumb(m) {
+  const G = GL, T = G.thT, cam = THUMB_CAM(), vp = camVP(cam, 1);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.viewport(0, 0, T.w, T.h); gl.disable(gl.SCISSOR_TEST);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  renderHead(vp, cam.pos, XF0, { blink: m.g.x.lids, jaw: 0.05, swallow: 0, gx: 0, gy: 0 }, m.g, m.d, 0.5, CLOTH[m.col][1]);
+  gl.readPixels(0, 0, T.w, T.h, gl.RGBA, gl.UNSIGNED_BYTE, G.thPix); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const c = document.createElement('canvas'); c.width = c.height = THUMB; const x = c.getContext('2d'), img = x.createImageData(THUMB, THUMB), s = G.thPix, o = img.data, Lv = 5;
+  for (let y = 0; y < THUMB; y++) for (let xx = 0; xx < THUMB; xx++) { const si = ((THUMB - 1 - y) * THUMB + xx) * 4, di = (y * THUMB + xx) * 4, th = (BAYER4[(y & 3) * 4 + (xx & 3)] + 0.5) / 16;
+    if (s[si + 3] < 128) { o[di + 3] = 0; continue; }
+    for (let k = 0; k < 3; k++) o[di + k] = Math.round(Math.floor(s[si + k] / 255 * Lv + th) / Lv * 255);
+    o[di + 3] = 255; }
+  x.putImageData(img, 0, 0); return c;
+}
+function thumbTick() {
+  if (!glOK || !GL || !S) return;
+  const want = [], strip = stripShelves();
+  for (const sh of strip) for (const m of sh.members) if (m && !THUMBS.has(m.n)) want.push(m);
+  for (const m of S.shelf) if (m && !THUMBS.has(m.n)) want.push(m);
+  for (const m of want.slice(0, 2)) { try { THUMBS.set(m.n, makeThumb(m)); } catch (e) { console.error(e); THUMBS.set(m.n, null); } }
+  if (THUMBS.size > 400) { const keep = new Set(allPlaced().map(m => m.n)); for (const k of THUMBS.keys()) if (!keep.has(k)) THUMBS.delete(k); }
+}
+/* ------------------------------------------------------------------ the analysis engine
+   Every sitting runs one pass of an evolution loop:
+     B · BUILD     the face takes its step (the morph, under a blink)
+     A · ANALYZE   the scanner measures the face it now has
+     I · INTERPRET the measurements become critiques
+     R · RETURN    a plan for the next pass, returned to the next sitting, which applies it
+   Faults are ranked by how far past their threshold they land; the worst two become the plan.
+   A sitting with no faults counts toward the clean run that unlocks the next detail level; any
+   fault resets the run.
+   The critic pulls toward a plausible face; the journey keeps moving the goal. No model calls:
+   every line is computed from the geometry and the genome. */
+const SCAN_INKS = [[0.02, 0.05, 0.04], [0.6, 1.0, 0.55], [0.89, 0.64, 0.23], [0.42, 1.0, 0.5]];
+const PHASES = [['B', 'BUILD', 0], ['A', 'ANALYZE', 7], ['I', 'INTERPRET', 0.57], ['R', 'RETURN', 0.8]];
+function phaseOf(t) { const u = (t % CFG.sit) / CFG.sit, a = MORPH / CFG.sit; return u < a ? 0 : u < 0.57 ? 1 : u < 0.8 ? 2 : 3; }
+const LM = name => { const sm = DATA && DATA.scan; const i = sm ? sm.tag.indexOf(name) : -1; return i < 0 ? null : deformCPU(sm.pts[i]); };
+const dist2 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+let NEUTRAL = null;
+function measure(g) {
+  setBumps(g); const L = n => LM(n);
+  const eL = deformCPU([0.308, 7.284, 1.233]), eR = deformCPU([-0.308, 7.284, 1.233]);
+  const m = {}, br = L('brow L'), brR = L('brow R'), tL = L('temple L'), tR = L('temple R'), nb = L('nose base'), ch = L('chin'), hl = L('hairline'), gl_ = L('glabella');
+  m.ipd = dist2(eL, eR); m.face = tL && tR ? dist2(tL, tR) : 1.3; m.eyeRatio = m.ipd / m.face;
+  m.mouth = dist2(L('mouth L') || [0.2, 0], L('mouth R') || [-0.2, 0]) / m.ipd;
+  m.upper = hl && gl_ ? hl[1] - gl_[1] : 0.6; m.middle = gl_ && nb ? gl_[1] - nb[1] : 0.6; m.lower = nb && ch ? nb[1] - ch[1] : 0.6;
+  m.gapL = br ? br[1] - eL[1] : 0.2; m.gapR = brR ? brR[1] - eR[1] : 0.2;
+  m.jaw = dist2(L('jaw L') || [0.5, 0], L('jaw R') || [-0.5, 0]) / m.face;
+  let asy = 0, worst = -1, wv = 0; for (let i = 0; i < NF; i++) if (F[i][4]) { const d = Math.abs(g.L[i] - g.R[i]); asy += d; if (d > wv) { wv = d; worst = i; } } m.asym = asy / NF; m.asymWorst = worst; m.asymV = wv;
+  let ext = -1, ev = 0; for (let i = 0; i < NF; i++) { const v = Math.max(Math.abs(g.L[i]), Math.abs(g.R[i])); if (v > ev) { ev = v; ext = i; } } m.ext = ext; m.extV = ev;
+  return m;
+}
+const AN = { k: -1, rk: -1, done: {}, plan: [], findings: [], focus: [] };
+function logLine(ph, text, cls) { if (!S) return; S.log = S.log || []; S.log.push({ t: S.t, k: S.k, ph, text, cls: cls || '' }); if (S.log.length > 80) S.log.splice(0, S.log.length - 80); }
+// the review of one sitting: measurements and findings for the face it is heading to.
+// Computed once per sitting, whether or not anyone is watching (catch-up and ?ff use it too).
+function reviewSitting() {
+  if (!S || !DATA || !DATA.scan) return null;
+  if (AN.rk === S.k && AN.findings) return AN;
+  if (!NEUTRAL) NEUTRAL = measure(zeroGenome());
+  const g = S.tgt, d = S.detailNow, m = AN.m = measure(g), n = NEUTRAL, F_ = [];
+  const thirds = [m.upper, m.middle, m.lower], tm = (thirds[0] + thirds[1] + thirds[2]) / 3;
+  AN.thirds = thirds.map(v => v / tm);
+    if (Math.min(m.gapL, m.gapR) < n.gapL * 0.72) F_.push({ key: 'brows', sev: (n.gapL * 0.72 - Math.min(m.gapL, m.gapR)) / (n.gapL * 0.72), text: 'brows sitting on the lids: brow hair reads as hair on the eyelids · distracting', fix: ['brow height', 0.45, 'raise brows'], focus: ['brow L', 'brow R', 'lid L', 'lid R'] });
+    if (m.lower / tm > 1.18) F_.push({ key: 'lower', sev: (m.lower / tm - 1.18) / 1.18, text: 'lower third long (' + (m.lower / tm).toFixed(2) + ') · face reads stretched', fix: ['chin length', -0.35, 'shorten chin'], focus: ['chin', 'nose base'] });
+    if (m.lower / tm < 0.84) F_.push({ key: 'lower', sev: (0.84 - m.lower / tm) / 0.84, text: 'lower third short (' + (m.lower / tm).toFixed(2) + ') · jaw compressed', fix: ['chin length', 0.3, 'lengthen chin'], focus: ['chin'] });
+    if (m.eyeRatio / n.eyeRatio < 0.9) F_.push({ key: 'eyes', sev: (0.9 - m.eyeRatio / n.eyeRatio) / 0.9, text: 'eyes close-set for this skull (' + (m.eyeRatio / n.eyeRatio * 100).toFixed(0) + '%)', fix: ['skull width', -0.3, 'narrow skull'], focus: ['eye L outer', 'eye R outer', 'temple L', 'temple R'] });
+    if (m.mouth / n.mouth > 1.22) F_.push({ key: 'mouth', sev: (m.mouth / n.mouth - 1.22) / 1.22, text: 'mouth wide against the eyes (' + (m.mouth / n.mouth * 100).toFixed(0) + '%)', fix: ['mouth width', -0.4, 'narrow mouth'], focus: ['mouth L', 'mouth R'] });
+    if (S.kind !== 'split' && SH() < UNLOCK.split && m.asymV > 0.55) F_.push({ key: 'asym', sev: (m.asymV - 0.55) / 0.55, text: 'asymmetry in ' + F[m.asymWorst][0] + ' (' + m.asymV.toFixed(2) + ') beyond a living face', fix: ['~sym', m.asymWorst, 'meet ' + F[m.asymWorst][0] + ' halfway'], focus: [] });
+    if (m.extV > 2.0) F_.push({ key: 'ext', sev: (m.extV - 2.0) / 2.0, text: F[m.ext][0] + ' at ' + m.extV.toFixed(2) + ' · outside the plausible range', fix: ['~pull', m.ext, 'pull ' + F[m.ext][0] + ' back'], focus: [] });
+    if (g.x.brows < 0.5 && d > 0.35) F_.push({ key: 'browd', sev: (0.5 - g.x.brows) / 0.5, text: 'brows sparse (' + g.x.brows.toFixed(2) + ') at this detail · face reads unfinished', fix: ['x:brows', 0.15, 'increase brow density'], focus: ['brow L', 'brow R'] });
+    if (Math.abs(g.x.grey - clamp(g.x.age * 1.2 - 0.3, 0, 1)) > 0.45) F_.push({ key: 'grey', sev: (Math.abs(g.x.grey - clamp(g.x.age * 1.2 - 0.3, 0, 1)) - 0.45) / 0.45, text: 'grey ' + g.x.grey.toFixed(2) + ' against age ' + g.x.age.toFixed(2) + ' · inconsistent', fix: ['x:grey', clamp(g.x.age * 1.2 - 0.3, 0, 1) - g.x.grey, 'reconcile grey with age'], focus: ['hairline'] });
+    if (g.x.stubble > 0.65 && g.x.age < 0.18) F_.push({ key: 'stub', sev: (g.x.stubble - 0.65) / 0.65, text: 'heavy stubble at age ' + g.x.age.toFixed(2) + ' · unlikely', fix: ['x:stubble', -0.25, 'thin stubble'], focus: ['chin', 'jaw L', 'jaw R'] });
+    if (g.x.lids > 0.24) F_.push({ key: 'lids', sev: (g.x.lids - 0.24) / 0.24, text: 'lids resting low (' + g.x.lids.toFixed(2) + ') · iris half covered', fix: ['x:lids', -0.08, 'open lids'], focus: ['lid L', 'lid R'] });
+    if (d < 0.5) F_.push({ key: 'draft', text: 'draft of sitter ' + pad(S.person, 3) + ': fine features not yet drawn (' + F.filter((f, i) => FLV[i] > d).map(f => f[0]).slice(0, 3).join(', ') + ')', fix: null, focus: [] });
+    if (!F_.length) F_.push({ key: 'ok', text: 'no faults above threshold · holding course toward who sitter ' + pad(S.person, 3) + ' becomes', fix: null, focus: [] });
+  // rank: the faults that miss by the most come first
+  F_.sort((a, b) => (b.fix ? 1 : 0) - (a.fix ? 1 : 0) || (b.sev || 0) - (a.sev || 0));
+  AN.findings = F_; AN.rk = S.k;
+  return AN;
+}
+// close the sitting's review: set the plan, and count it toward (or against) the clean run
+function commitReview() {
+  if (!S || S.committedK === S.k) return S && S.review;
+  const A = reviewSitting(); if (!A) return null;
+  S.committedK = S.k;
+  const faults = A.findings.filter(f => f.fix), fixes = faults.slice(0, 2);
+  S.plan = fixes.map(f => f.fix);
+  const rv = { k: S.k, faults: faults.length, unlocked: false, held: false };
+  if (faults.length) S.clean = 0; else S.clean = (S.clean || 0) + 1;
+  const need = cleanNeed();
+  if (S.detailEarned < S.detailTarget - 1e-6) {
+    if (S.clean >= need) { S.detailEarned = Math.min(1, S.detailEarned + DSTEP); S.clean = 0; rv.unlocked = true; }
+  } else rv.held = true;   // nothing more is available yet at this point in the portrait
+  rv.clean = S.clean; rv.need = cleanNeed(); rv.fixes = fixes;
+  S.review = rv; return rv;
+}
+function analyzeTick() {
+  if (!S || !DATA || !DATA.scan) return;
+  if (!NEUTRAL) NEUTRAL = measure(zeroGenome());
+  if (AN.k !== S.k) { AN.k = S.k; AN.done = {}; AN.focus = []; }
+  const u = (S.t % CFG.sit) / CFG.sit, ph = phaseOf(S.t), g = S.tgt, d = S.detailNow;
+  const once = (key, fn) => { if (!AN.done[key]) { AN.done[key] = 1; fn(); } };
+  if (ph === 0) once('m', () => logLine('B', 'sitting ' + pad(S.k, 4) + ' · ' + S.event + (S.applied ? ' · applied: ' + S.applied : '')));
+  if (ph >= 1) once('a1', () => { const A = reviewSitting(), m = A.m, n = NEUTRAL;
+    logLine('A', 'landmarks ' + DATA.scan.pts.length + ' · mesh ' + DATA.scan.tris.length + ' tris · detail ' + Math.round(d * 100) + '% · sitter ' + pad(S.person, 3) + ' ' + Math.round(journey() * 100) + '% reached');
+    logLine('A', 'eye spacing ' + (m.eyeRatio / n.eyeRatio * 100).toFixed(0) + '% of norm · mouth ' + (m.mouth / n.mouth * 100).toFixed(0) + '% · thirds ' + A.thirds.map(v => v.toFixed(2)).join(' / '));
+  });
+  if (ph >= 1 && u > 0.42) once('a2', () => { const m = AN.m; logLine('A', 'brow–lid gap ' + (m.gapL * 100).toFixed(0) + ' / ' + (m.gapR * 100).toFixed(0) + ' mm · jaw ' + (m.jaw * 100).toFixed(0) + '% of face · halves apart ' + m.asym.toFixed(2)); });
+  if (ph >= 2) AN.findings.forEach((f, i) => { if (u > 0.58 + i * 0.05) once('i' + i, () => { logLine('I', f.text + (f.fix ? ' · miss ' + Math.round(f.sev * 100) + '%' : ''), f.fix ? 'c' : ''); AN.focus = AN.focus.concat(f.focus || []); }); });
+  if (ph >= 3) once('r', () => {
+    // the plan: the two faults that miss by the most, weighed against the pull toward who the sitter becomes
+    const rv = commitReview(); if (!rv) return; const fixes = rv.fixes;
+    if (!fixes.length) logLine('R', 'return: no correction · let the journey lead');
+    for (const f of fixes) { const [gene, v, what] = f.fix; const tgtv = gene[0] !== '~' && gene.indexOf('x:') !== 0 && S.dest ? S.dest.L[F.findIndex(q => q[0] === gene)] : null;
+      logLine('R', 'return: ' + what + (typeof v === 'number' && gene[0] !== '~' ? ' ' + (v > 0 ? '+' : '') + v.toFixed(2) : '') + (tgtv !== null && tgtv !== undefined && Math.sign(tgtv) !== Math.sign(v) && Math.abs(tgtv) > 0.6 ? ' · against where sitter ' + pad(S.person, 3) + ' is heading' : '')); }
+    const nextD = Math.round(Math.min(1, S.detailEarned + DSTEP) * 100);
+    if (rv.unlocked) logLine('R', 'clean run complete · detail unlocked to ' + Math.round(S.detailEarned * 100) + '%');
+    else if (rv.held) logLine('R', (rv.faults ? 'run broken' : 'clean ' + rv.clean) + ' · detail ' + Math.round(S.detailEarned * 100) + '%, all that is available so far', 'd');
+    else logLine('R', (rv.faults ? 'run broken · ' + rv.faults + ' fault' + (rv.faults > 1 ? 's' : '') + ' · ' : 'clean ') + rv.clean + '/' + rv.need + ' toward detail ' + nextD + '%', rv.faults ? 'c' : '');
+  });
+}
+function applyPlan(g) {
+  const done = [];
+  for (const [gene, v, what] of (S.plan || [])) {
+    if (gene === '~sym') { const i = v; const mid = (g.L[i] + g.R[i]) / 2; g.L[i] = lerp(g.L[i], mid, 0.6); g.R[i] = lerp(g.R[i], mid, 0.6); }
+    else if (gene === '~pull') { g.L[v] *= 0.7; g.R[v] *= 0.7; }
+    else if (gene.indexOf('x:') === 0) { const k = gene.slice(2), [a, b] = XR[k]; g.x[k] = clamp(g.x[k] + v, a, b); }
+    else { const i = F.findIndex(f => f[0] === gene); if (i >= 0) { g.L[i] += v * 0.6; g.R[i] += v * 0.6; } }
+    done.push(what);
+  }
+  S.plan = []; S.applied = done.join(', ');
+}
+
+/* ------------------------------------------------------------------ the HUD: bitmap type drawn on the grid */
+const GLYPH = (() => { const src = {
+  A: '01110100011000111111100011000110001', B: '11110100011000111110100011000111110', C: '01110100011000010000100001000101110', D: '11110100011000110001100011000111110',
+  E: '11111100001000011110100001000011111', F: '11111100001000011110100001000010000', G: '01110100011000010111100011000101111', H: '10001100011000111111100011000110001',
+  I: '01110001000010000100001000010001110', J: '00111000100001000010000101001001100', K: '10001100101010011000101001001010001', L: '10000100001000010000100001000011111',
+  M: '10001110111010110101100011000110001', N: '10001100011100110101100111000110001', O: '01110100011000110001100011000101110', P: '11110100011000111110100001000010000',
+  Q: '01110100011000110001101011001001101', R: '11110100011000111110101001001010001', S: '01111100001000001110000010000111110', T: '11111001000010000100001000010000100',
+  U: '10001100011000110001100011000101110', V: '10001100011000110001100010101000100', W: '10001100011000110101101011010101010', X: '10001100010101000100010101000110001',
+  Y: '10001100011000101010001000010000100', Z: '11111000010001000100010001000011111',
+  0: '01110100011001110101110011000101110', 1: '00100011000010000100001000010001110', 2: '01110100010000100010001000100011111', 3: '11111000100010000010000011000101110',
+  4: '00010001100101010010111110001000010', 5: '11111100001111000001000011000101110', 6: '00110010001000011110100011000101110', 7: '11111000010001000100010000100001000',
+  8: '01110100011000101110100011000101110', 9: '01110100011000101111000010001001100', '-': '00000000000000011111000000000000000', '·': '00000000000000000100000000000000000',
+  ':': '00000001000000000000000000010000000', '%': '11000110010001000100010001001100011', '/': '00001000100001000100010000100010000', ' ': '00000000000000000000000000000000000',
+  "'": '00100001000100000000000000000000000' };
+  const o = {}; for (const k in src) o[k] = src[k]; return o; })();
+function btext(g, str, x, y, sc, col) {
+  g.fillStyle = col; let cx = x;
+  for (const ch of String(str).toUpperCase()) { const m = GLYPH[ch] || GLYPH[' '];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) if (m[r * 5 + c] === '1') g.fillRect(cx + c * sc, y + r * sc, sc, sc);
+    cx += 6 * sc; }
+  return cx - x;
+}
+const twidth = (str, sc) => String(str).length * 6 * sc;
+const css = a => 'rgb(' + a.map(v => Math.round(clamp(v, 0, 1) * 255)).join(',') + ')';
+function drawScan(g, d, x0, y0, w, h) {
+  if (!d.cam || !DATA || !DATA.scan || !PERF) return;
+  const sm = DATA.scan, P = MZCam.projector(d.cam, w, h), rot = rotXYZ(PERF.pitch * Math.PI / 180, PERF.yaw * Math.PI / 180, PERF.roll * Math.PI / 180);
+  setBumps(S.cur);
+  const sw = p => { const q = deformCPU(p), a = q[0] - PIVOT[0], b = q[1] - PIVOT[1], c = q[2] - PIVOT[2];
+    return MZCam.V(rot[0] * a + rot[3] * b + rot[6] * c + PIVOT[0], rot[1] * a + rot[4] * b + rot[7] * c + PIVOT[1], rot[2] * a + rot[5] * b + rot[8] * c + PIVOT[2]); };
+  const scr = sm.pts.map(p => { const q = P.proj(sw(p)); return q ? [x0 + q[0], y0 + q[1], q[2]] : null; });
+  const heat = sm.pts.map(p => { const q = deformCPU(p); return clamp(Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) / 0.09, 0, 1); });
+  const ph = phaseOf(S.t), u = (S.t % CFG.sit) / CFG.sit, a0 = MORPH / CFG.sit;
+  const sweep = ph === 1 ? (u - a0) / (0.57 - a0) : ph > 1 ? 1.1 : -0.1;   // scan line runs top to bottom during ANALYZE
+  let ymin = 1e9, ymax = -1e9; for (const q of scr) if (q) { ymin = Math.min(ymin, q[1]); ymax = Math.max(ymax, q[1]); }
+  const sy = ymin + (ymax - ymin) * sweep, focus = new Set(AN.focus.map(n => sm.tag.indexOf(n)).filter(i => i >= 0));
+  g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+  for (const t of sm.tris) { const A = scr[t[0]], B = scr[t[1]], C = scr[t[2]]; if (!A || !B || !C) continue;
+    // facing the scanner only
+    if ((B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]) > 0 === false && Math.abs(d.cam.f.x) > 0.6) continue;
+    const cy = (A[1] + B[1] + C[1]) / 3, scanned = cy < sy, hv = (heat[t[0]] + heat[t[1]] + heat[t[2]]) / 3, foc = ph >= 2 && t.some(i => focus.has(i));
+    if (scanned || foc) { g.fillStyle = foc ? 'rgba(255,90,50,0.42)' : `rgba(${Math.round(40 + 200 * hv)},${Math.round(150 + 60 * (1 - hv))},${Math.round(140 - 100 * hv)},${0.1 + 0.28 * hv})`;
+      g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.lineTo(C[0], C[1]); g.closePath(); g.fill(); }
+    g.strokeStyle = scanned ? 'rgba(160,255,190,0.55)' : 'rgba(160,255,190,0.16)'; g.lineWidth = 0.6;
+    g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.lineTo(C[0], C[1]); g.closePath(); g.stroke(); }
+  // landmarks + measurement lines
+  sm.tag.forEach((tg, i) => { if (!tg || !scr[i]) return; const q = scr[i]; g.fillStyle = focus.has(i) && ph >= 2 ? '#ff5a32' : '#e2a43a'; g.fillRect(Math.round(q[0]) - 1, Math.round(q[1]) - 1, 3, 3); });
+  const pp = n => scr[sm.tag.indexOf(n)];
+  const line = (a, b, col) => { if (!a || !b) return; g.strokeStyle = col; g.lineWidth = 1; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); };
+  if (ph >= 1 && sweep > 0.3) { line(pp('eye L outer'), pp('eye R outer'), 'rgba(226,164,58,0.8)'); line(pp('mouth L'), pp('mouth R'), 'rgba(226,164,58,0.8)'); }
+  if (ph >= 1 && sweep > 0.6) { line(pp('hairline'), pp('glabella'), 'rgba(236,226,200,0.7)'); line(pp('glabella'), pp('nose base'), 'rgba(226,164,58,0.7)'); line(pp('nose base'), pp('chin'), 'rgba(236,226,200,0.7)'); }
+  if (ph === 1 && sweep >= 0 && sweep <= 1) { g.fillStyle = 'rgba(160,255,190,0.85)'; g.fillRect(x0 + 6, Math.round(sy), w - 12, 1); }
+  g.restore();
+}
+
+function scanBanner(g, x0, y0, w) {
+  const ph = phaseOf(S.t), P_ = PHASES[ph], lab = P_[0] + ' · ' + P_[1];
+  const l2 = 'DETAIL ' + Math.round(S.detailNow * 100) + '% · CLEAN ' + Math.min(S.clean || 0, cleanNeed()) + '/' + cleanNeed();
+  const bw = Math.max(twidth(lab, 2) + 10, twidth(l2, 1) + 2, 122), bx = x0 + w - bw - 8, by = y0 + 8;
+  g.fillStyle = 'rgba(12,24,26,0.85)'; g.fillRect(bx, by, twidth(lab, 2) + 10, 20); btext(g, lab, bx + 5, by + 3, 2, '#a0ffbe');
+  let px = bx; for (let k = 0; k < 4; k++) { const on = k === ph; g.fillStyle = on ? '#a0ffbe' : 'rgba(160,255,190,0.25)'; g.fillRect(px, by + 23, 26, 3); px += 30; }
+  g.fillStyle = 'rgba(12,24,26,0.7)'; g.fillRect(bx, by + 29, twidth(l2, 1) + 4, 9); btext(g, l2, bx + 2, by + 30, 1, 'rgba(160,255,190,0.9)');
+  // the sitter's progress toward the shelf
+  const n = SPP(), u = clamp((S.j + (S.t % CFG.sit) / CFG.sit) / n, 0, 1), y = by + 41;
+  g.fillStyle = 'rgba(12,24,26,0.7)'; g.fillRect(bx, y, 122, 5); g.fillStyle = '#a0ffbe'; g.fillRect(bx + 1, y + 1, Math.round(120 * u), 3);
+}
+/* the archive strip: every full shelf, kept small along the top */
+const STRIP = { x0: 0, x1: 952, s: 48, gap: 11, y: 6 };
+function stripLayout() { const n = Math.max(1, Math.floor((STRIP.x1 - STRIP.x0 + STRIP.gap) / (STRIP.s + STRIP.gap))); return n; }
+function stripShelves() { if (!S) return []; const n = stripLayout(); return S.shelves.slice(-n); }
+const rgbs = (c, k) => 'rgb(' + c.map(v => Math.round(clamp(v * (k || 1), 0, 1) * 255)).join(',') + ')';
+function miniShelf(g, x, y, s, members, opts) {
+  opts = opts || {};
+  const pt = Math.max(1, Math.round(s * 0.045)), c = (s - 4 * pt) / 3;
+  g.fillStyle = '#eceae2'; g.fillRect(x, y, s, s);
+  for (let i = 0; i < 9; i++) { const cx = x + pt + (i % 3) * (c + pt), cy = y + pt + Math.floor(i / 3) * (c + pt), m = members[i];
+    if (!m) { g.fillStyle = '#c9c7bd'; g.fillRect(cx, cy, c, c); continue; }
+    const cl = CLOTH[m.col][1]; g.fillStyle = rgbs([0.86 * 0.7 + cl[0] * 0.3, 0.85 * 0.7 + cl[1] * 0.3, 0.82 * 0.7 + cl[2] * 0.3]); g.fillRect(cx, cy, c, c);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(cx, cy, c, Math.max(1, c * 0.12)); g.fillRect(cx, cy, Math.max(1, c * 0.1), c);
+    const th = THUMBS.get(m.n); if (th) { g.imageSmoothingEnabled = s > 90; g.drawImage(th, cx, cy, c, c); } }
+}
+function drawStrip(g, x0, x1, top) {
+  STRIP.x0 = x0; STRIP.x1 = x1;
+  const shown = stripShelves(), n = stripLayout(), more = S.shelves.length - shown.length;
+  const ink = 'rgba(236,226,200,0.85)', dim = 'rgba(236,226,200,0.45)';
+  if (!shown.length) { btext(g, 'ARCHIVE · EVERY FULL SHELF IS KEPT HERE, OLDEST LEFT', x0, STRIP.y + 24, 1, dim); return; }
+  const anim = S.t - S.archivedAt < 3.2 ? clamp((S.t - S.archivedAt) / 3.2, 0, 1) : 1;
+  // newest at the right, so the run reads left to right toward the live shelf
+  let x = x1 - STRIP.s;
+  for (let k = shown.length - 1; k >= 0; k--) { const sh = shown[k];
+    if (!(k === shown.length - 1 && anim < 1)) { miniShelf(g, x, STRIP.y, STRIP.s, sh.members); btext(g, 'S' + pad(sh.no, 2), x, STRIP.y + STRIP.s + 3, 1, ink); }
+    else STRIP.anim = [x, STRIP.y];
+    x -= STRIP.s + STRIP.gap; }
+  if (more > 0) btext(g, '+' + more + ' EARLIER', x0, STRIP.y + STRIP.s + 3, 1, dim);
+}
+function shelfRectHud(sx0, sy0, sw, sh) {
+  if (!FR.shelfVP) return null; const X = 1.5 * SH_P + SH_T / 2, z = SH_CS / 2;
+  const a = projVP(FR.shelfVP, [-X, X, z], sw, sh), b = projVP(FR.shelfVP, [X, -X, z], sw, sh); if (!a || !b) return null;
+  return [sx0 + a[0], sy0 + a[1], b[0] - a[0], b[1] - a[1]];
+}
+function drawShelfHud(g, x0, y0, w, h) {
+  const ink = '#2c3436', acc = css(S.look === 2 ? S.pal[3] : S.pal[2]);
+  const r = shelfRectHud(x0, y0, w, h); if (!r) return;
+  const filled = S.shelf.filter(Boolean).length, next = S.shelf.findIndex(m => !m);
+  const head = 'SHELF ' + pad(SH(), 2) + ' · ' + filled + ' OF 9' + (next < 0 ? ' · COMPLETE · THE NEXT SITTER STARTS A NEW SHELF' : '');
+  g.fillStyle = 'rgba(12,24,26,0.8)'; g.fillRect(r[0], r[1] - 14, twidth(head, 1) + 8, 10); btext(g, head, r[0] + 4, r[1] - 12, 1, 'rgba(236,226,200,0.9)');
+  // museum labels on the panel under each cube
+  for (let i = 0; i < 9; i++) { const c = cellC(i), m = S.shelf[i];
+    const p = projVP(FR.shelfVP, [c[0] - SH_CS / 2 + 0.1, c[1] - SH_CS / 2 - 0.05, SH_CS / 2], w, h); if (!p) continue;
+    const lx = x0 + p[0], ly = y0 + p[1];
+    if (m) btext(g, pad(m.n, 3) + ' ' + CLOTH[m.col][0] + (m.d < 0.95 ? ' ' + Math.round(m.d * 100) + '%' : ''), lx, ly, 1, ink);
+    else if (i === next || (next < 0 && i === 0)) { const on = Math.floor(S.t * 1.2) % 2 === 0; btext(g, (next < 0 ? 'NEW SHELF · ' : 'NEXT · ') + pad(S.person, 3), lx, ly, 1, on ? acc : ink); }
+  }
+  // a placement: the cube it landed in, outlined for a moment
+  const pa = S.t - S.placedAt;
+  if (pa >= 0 && pa < 5 && S.placedCube >= 0) { const c = cellC(S.placedCube), h2 = SH_CS / 2;
+    const a = projVP(FR.shelfVP, [c[0] - h2, c[1] + h2, h2], w, h), b = projVP(FR.shelfVP, [c[0] + h2, c[1] - h2, h2], w, h);
+    if (a && b && Math.floor(pa * 3) % 2 === 0) { g.strokeStyle = acc; g.lineWidth = 2; g.strokeRect(x0 + a[0] + 1, y0 + a[1] + 1, b[0] - a[0] - 2, b[1] - a[1] - 2);
+      btext(g, 'PLACED', x0 + a[0] + 4, y0 + a[1] + 4, 1, acc); } }
+  // a full shelf shrinks into the archive
+  if (S.t - S.archivedAt < 3.2 && STRIP.anim && S.shelves.length) { const u = clamp((S.t - S.archivedAt) / 3.2, 0, 1), e = u * u * (3 - 2 * u);
+    const tx = STRIP.anim[0], ty = STRIP.anim[1], s = lerp(r[3], STRIP.s, e);
+    miniShelf(g, lerp(r[0], tx, e), lerp(r[1], ty, e), s, S.shelves[S.shelves.length - 1].members); }
+}
+function drawHud() {
+  const g = hctx, Wd = 960, Hd = 540; g.clearRect(0, 0, Wd, Hd);
+  if (!S || !S.pal || !S.pal[0]) return;
+  const L = LAY(), k = Wd / L.w, top = L.top * k, sw = L.sw * k;
+  const ink = [0.93, 0.89, 0.79], acc = S.look === 2 ? S.pal[3] : S.pal[2], dark = 'rgba(12,24,26,0.8)';
+  const l1 = 'MZTV', l2 = 'MATCH ZIMMERMAN CREATIVE MEDIA GROUP', l3 = 'BIT FIELD 045 · SITTERS';
+  const bw = Math.max(twidth(l1, 4), twidth(l2, 1), twidth(l3, 1)) + 12;
+  g.fillStyle = dark; g.fillRect(8, 6, bw, 56); g.fillStyle = css(acc); g.fillRect(8, 6, 2, 56);
+  btext(g, l1, 15, 11, 4, css(ink)); btext(g, l2, 15, 44, 1, css(ink)); btext(g, l3, 15, 53, 1, css(acc));
+  drawStrip(g, 8 + bw + 18, Wd - 8, top);
+  g.fillStyle = 'rgba(236,226,200,0.18)'; g.fillRect(0, Math.round(top) - 1, Wd, 1);
+  if (CFG.info) { drawScan(g, { cam: STUDIO_CAM() }, 0, top, sw, Hd - top); scanBanner(g, 0, top, sw); }
+  drawShelfHud(g, sw, top, Wd - sw, Hd - top);
+}
+
+/* ------------------------------------------------------------------ sim clock */
+let last = performance.now(), PERF = null;
+function advance(dt) {
+  S.t += dt;
+  const want = Math.floor(S.t / CFG.sit); let guard = 0;
+  while (S.k < want && guard++ < 40000) { const tt = S.t; S.t = (S.k + 1) * CFG.sit; easeDetail(); newSitting(); liveGenome(); S.t = Math.max(tt, S.t); }
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const raw = clamp((now - last) / 1000, 0, 0.25), dt = raw * CFG.rate; last = now;
+  if (!S) return;
+  try {
+    // adapt: if the machine is struggling, the shelf (slow motion) is redrawn every 2nd or 3rd frame
+    FR.ms += (raw * 1000 - FR.ms) * 0.05; FR.fps = 1000 / Math.max(1, FR.ms);
+    if (FR.n % 60 === 0) FR.shelfEvery = FR.fps < 24 ? 3 : FR.fps < 42 ? 2 : 1;
+    advance(dt);
+    easeDetail();
+    const g = liveGenome();
+    if (!okG(g)) { S.prev = S.tgt = cloneG(okG(S.destFrom) ? S.destFrom : zeroGenome()); S.event = 'regrown from memory'; return; }
+    PERF = perform(S.t, g);
+    render(S.t);
+    thumbTick();
+    analyzeTick(); drawHud();
+    FR.n++;
+  } catch (err) { console.error(err); }
+}
+
+/* ------------------------------------------------------------------ info */
+const infoEl = document.getElementById('info');
+function fmtH(t) { const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = Math.floor(t) % 60; return pad(h, 2) + ':' + pad(m, 2) + ':' + pad(s, 2); }
+function info() {
+  if (!S) return;
+  infoEl.style.display = CFG.info ? 'block' : 'none'; if (!CFG.info) return;
+  const ik = S.pal; if (ik && ik[0]) { const c = a => 'rgb(' + a.map(v => Math.round(v * 255)).join(',') + ')';
+    infoEl.style.setProperty('--acc', c(S.look === 2 ? ik[3] : ik[2])); }
+  const n = SPP(), left = ((n - S.j) * CFG.sit - (S.t % CFG.sit)) / 60, next = S.shelf.findIndex(m => !m);
+  const un = Object.entries(UNLOCK).map(([k, v]) => (SH() >= v ? '<span class="a">' + k + '</span>' : '<span class="d">' + k + ' s' + v + '</span>')).join(' · ');
+  const kept = allPlaced().length;
+  infoEl.innerHTML =
+    '<b>BIT FIELD 045 · SITTERS</b>  <span class="d">a shelf of screen tests</span>\n' +
+    'sitter <b>' + pad(S.person, 3) + '</b> · ' + Math.round(journey() * 100) + '% of the way · ' + Math.max(0, Math.ceil(left)) + ' min to the shelf\n' +
+    '<span class="a">' + S.event + '</span>\n' +
+    'detail ' + Math.round(S.detailNow * 100) + '% <span class="d">(earned ' + Math.round(S.detailEarned * 100) + '% of ' + Math.round(S.detailTarget * 100) + '% available · clean run ' + Math.min(S.clean || 0, cleanNeed()) + '/' + cleanNeed() + ')</span>\n' +
+    (S.parents.length ? 'lineage: descends from ' + S.parents.map(p => pad(p, 3)).join(' + ') : '<span class="d">lineage: first generation</span>') + ' · wears ' + CLOTH[S.col][0] + '\n' +
+    'shelf <b>' + pad(SH(), 2) + '</b> · ' + S.shelf.filter(Boolean).length + ' of 9 · ' + (next < 0 ? 'full' : 'next cube ' + (next + 1)) + ' · ' + S.shelves.length + ' archived · ' + kept + ' kept\n' +
+    un + '\n' +
+    '<span class="d">look ' + ['silver gelatin', '1-bit', 'silkscreen', 'phosphor'][S.look] + ' · ' + fmtH(S.t) + ' · ' + CFG.portrait + ' min a sitter · keys I M L</span>';
+}
+setInterval(info, 500);
+function drawLog() {
+  const el = document.getElementById('log'); if (!el || !S) return;
+  el.style.display = CFG.info ? 'block' : 'none'; if (!CFG.info) return;
+  const L = (S.log || []).slice(-12), esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  el.innerHTML = '<span class="h">ANALYSIS LOG · evolution loop B A I R</span>\n' + L.map(l => '<span class="ph">' + l.ph + '</span><span class="' + (l.cls || '') + '">' + esc(l.text) + '</span> <span class="d">' + pad(l.k, 4) + '</span>').join('\n');
+}
+setInterval(drawLog, 400);
+/* ------------------------------------------------------------------ audio */
+const AU = { ctx: null, g: null, worklet: false, lastCT: -1, stall: 0, silent: 0, builtAt: 0, abuf: new Float32Array(2048), busy: false, ir: null, noiseBuf: null, longNoise: null, thumpFor: -1 };
+let MUTE = !CFG.audio;
+const NOISE_SRC = `class MZNoise extends AudioWorkletProcessor{constructor(){super();this.s=(Math.random()*4294967295)>>>0;this.b=[0,0];}
+process(i,out){const o=out[0];for(let c=0;c<o.length;c++){const a=o[c];let b=this.b[c]||0;for(let k=0;k<a.length;k++){this.s=(Math.imul(this.s,1664525)+1013904223)>>>0;const w=this.s/2147483648-1;b=b*0.992+w*0.1;a[k]=b*0.5;}this.b[c]=b;}return true;}}
+registerProcessor('mz-noise',MZNoise);`;
+function tanhCurve(n, k) { const c = new Float32Array(n), d = Math.tanh(k); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; } return c; }
+function makeNoiseBuffer(ctx, secs) { const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * secs), ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+function makeIR(ctx, secs) { const len = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0; for (let i = 0; i < len; i++) { const t = i / ctx.sampleRate; lp += (Math.random() * 2 - 1 - lp) * (0.15 + 0.5 * Math.exp(-t * 1.6)); d[i] = t < 0.02 ? 0 : lp * Math.exp(-t * 5 / secs) * 0.6; } }
+  return b; }
+function buildGraph(ctx) {
+  const nodes = [], mk = n => (nodes.push(n), n);
+  const out = mk(ctx.createGain()); out.gain.value = 0; out.connect(ctx.destination);
+  const an = mk(ctx.createAnalyser()); an.fftSize = 2048; out.connect(an);
+  const comp = mk(ctx.createDynamicsCompressor()); comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.02; comp.release.value = 0.4;
+  const clip = mk(ctx.createWaveShaper()); clip.curve = tanhCurve(4096, 1.3); clip.oversample = '2x';
+  const tone = mk(ctx.createBiquadFilter()); tone.type = 'lowpass'; tone.frequency.value = 2200; tone.Q.value = 0.4;
+  const hp = mk(ctx.createBiquadFilter()); hp.type = 'highpass'; hp.frequency.value = 26; hp.Q.value = 0.7;
+  const mix = mk(ctx.createGain()); mix.gain.value = 0.7;
+  mix.connect(hp); hp.connect(tone); tone.connect(clip); clip.connect(comp); comp.connect(out);
+  const verb = mk(ctx.createGain()); const conv = mk(ctx.createConvolver()); conv.buffer = AU.ir; const vo = mk(ctx.createGain()); vo.gain.value = 0.35;
+  verb.connect(conv); conv.connect(vo); vo.connect(mix);
+  // echo for the sitting change: filtered + saturated inside the loop, cannot run away
+  const send = mk(ctx.createGain()); const dl = mk(ctx.createDelay(4)); dl.delayTime.value = 1.25; const fb = mk(ctx.createGain()); fb.gain.value = 0.42;
+  const sat = mk(ctx.createWaveShaper()); sat.curve = tanhCurve(2048, 1.1); const lpD = mk(ctx.createBiquadFilter()); lpD.type = 'lowpass'; lpD.frequency.value = 700;
+  send.connect(dl); dl.connect(sat); sat.connect(lpD); lpD.connect(fb); fb.connect(dl); const wet = mk(ctx.createGain()); wet.gain.value = 0.5; lpD.connect(wet); wet.connect(mix);
+  // noise source: worklet (continuous) or crossfaded fresh segments
+  let noise; if (AU.worklet) noise = mk(new AudioWorkletNode(ctx, 'mz-noise', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] })); else { noise = mk(ctx.createGain()); }
+  // room: dark air
+  const rLP = mk(ctx.createBiquadFilter()); rLP.type = 'lowpass'; rLP.frequency.value = 240; const rG = mk(ctx.createGain()); rG.gain.value = 0.05;
+  noise.connect(rLP); rLP.connect(rG); rG.connect(mix);
+  // projector: low band of the noise fluttered by the 24 fps sprocket
+  const pBP = mk(ctx.createBiquadFilter()); pBP.type = 'bandpass'; pBP.frequency.value = 150; pBP.Q.value = 1.6;
+  const pLP = mk(ctx.createBiquadFilter()); pLP.type = 'lowpass'; pLP.frequency.value = 420;
+  const pG = mk(ctx.createGain()); pG.gain.value = 0.11; const lfo = mk(ctx.createOscillator()); lfo.frequency.value = 24; const lfoG = mk(ctx.createGain()); lfoG.gain.value = 0.05;
+  lfo.connect(lfoG); lfoG.connect(pG.gain); noise.connect(pBP); pBP.connect(pLP); pLP.connect(pG); pG.connect(mix);
+  const hum = mk(ctx.createOscillator()); hum.type = 'sine'; hum.frequency.value = 50; const hum2 = mk(ctx.createOscillator()); hum2.frequency.value = 100;
+  const humG = mk(ctx.createGain()); humG.gain.value = 0.018; const h2G = mk(ctx.createGain()); h2G.gain.value = 0.006; hum.connect(humG); hum2.connect(h2G); humG.connect(mix); h2G.connect(mix);
+  // breath: the sitter's air, very close and very quiet
+  const bLP = mk(ctx.createBiquadFilter()); bLP.type = 'lowpass'; bLP.frequency.value = 480; bLP.Q.value = 0.3; const bG = mk(ctx.createGain()); bG.gain.value = 0;
+  noise.connect(bLP); bLP.connect(bG); bG.connect(mix);
+  // drone: the sitter's note, root + fifth, glides at each sitting
+  const d1 = mk(ctx.createOscillator()), d2 = mk(ctx.createOscillator()); d1.type = 'sine'; d2.type = 'triangle'; d1.frequency.value = 55; d2.frequency.value = 82.4;
+  const dLP = mk(ctx.createBiquadFilter()); dLP.type = 'lowpass'; dLP.frequency.value = 320; const dG = mk(ctx.createGain()); dG.gain.value = 0.035;
+  d1.connect(dLP); d2.connect(dLP); dLP.connect(dG); dG.connect(mix); const dS = mk(ctx.createGain()); dS.gain.value = 0.6; dG.connect(dS); dS.connect(verb);
+  // the shelf: one quiet voice per cube, from its sitter's note, panned by column; louder when the face turns toward you
+  const cBus = mk(ctx.createGain()); const cLP = mk(ctx.createBiquadFilter()); cLP.type = 'lowpass'; cLP.frequency.value = 900; cLP.Q.value = 0.3;
+  cBus.connect(cLP); cLP.connect(mix); const cS = mk(ctx.createGain()); cS.gain.value = 0.55; cLP.connect(cS); cS.connect(verb);
+  const cubes = [], cOsc = [];
+  for (let i = 0; i < 9; i++) { const o = mk(ctx.createOscillator()); o.type = i % 2 ? 'triangle' : 'sine'; o.frequency.value = 110; const v = mk(ctx.createGain()); v.gain.value = 0; o.connect(v);
+    if (ctx.createStereoPanner) { const p = mk(ctx.createStereoPanner()); p.pan.value = ((i % 3) - 1) * 0.55; v.connect(p); p.connect(cBus); } else v.connect(cBus);
+    cubes.push({ o, v }); cOsc.push(o); }
+  const t0 = ctx.currentTime; for (const o of [lfo, hum, hum2, d1, d2].concat(cOsc)) o.start(t0);
+  const g = { out, an, mix, tone, send, verb, rG, pG, bG, bLP, d1, d2, dG, dLP, noise, cubes, nNext: 0, nodes };
+  g.stop = () => { const t = ctx.currentTime; for (const n of nodes) { try { if (n.stop) n.stop(t + 0.05); } catch (e) { } } setTimeout(() => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }, 400); };
+  return g;
+}
+async function createContext() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ctx = new AC({ latencyHint: 'playback' }); AU.worklet = false;
+  try { await ctx.audioWorklet.addModule('data:application/javascript;base64,' + btoa(NOISE_SRC)); AU.worklet = true; }
+  catch (e) { try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([NOISE_SRC], { type: 'application/javascript' }))); AU.worklet = true; } catch (e2) { AU.worklet = false; } }
+  AU.ir = makeIR(ctx, 3.5); AU.noiseBuf = makeNoiseBuffer(ctx, 2); AU.longNoise = null; AU.ctx = ctx;
+  AU.g = buildGraph(ctx); AU.builtAt = ctx.currentTime;
+  const t = ctx.currentTime; AU.g.out.gain.setValueAtTime(0, t); AU.g.out.gain.linearRampToValueAtTime(1, t + 1.5);
+  AU.lastCT = -1; AU.stall = 0; AU.silent = 0;
+  try { await ctx.resume(); } catch (e) { }
+}
+function rebuildGraph() { const ctx = AU.ctx; if (!ctx) return; const old = AU.g, t = ctx.currentTime; const ng = buildGraph(ctx);
+  ng.out.gain.setValueAtTime(0, t); ng.out.gain.linearRampToValueAtTime(1, t + 4);
+  if (old) { try { old.out.gain.cancelScheduledValues(t); old.out.gain.setValueAtTime(old.out.gain.value, t); old.out.gain.linearRampToValueAtTime(0, t + 4); } catch (e) { } setTimeout(() => old.stop(), 4500); }
+  AU.g = ng; AU.builtAt = t; AU.silent = 0; }
+async function recreateContext() { if (AU.busy) return; AU.busy = true; try { const old = AU.ctx; AU.ctx = null; AU.g = null; if (old) { try { await old.close(); } catch (e) { } } await createContext(); } finally { AU.busy = false; } }
+function audioWatch() {
+  const ctx = AU.ctx; if (!ctx || AU.busy) return;
+  if (ctx.state === 'closed') { recreateContext(); return; }
+  if (ctx.state !== 'running') { ctx.resume().catch(() => { }); return; }
+  const ct = ctx.currentTime; if (ct === AU.lastCT) { if (++AU.stall > 6) { recreateContext(); return; } } else AU.stall = 0; AU.lastCT = ct;
+  if (!AU.g) return; const b = AU.abuf; AU.g.an.getFloatTimeDomainData(b);
+  let mx = 0, bad = false; for (let i = 0; i < b.length; i++) { const v = b[i]; if (!Number.isFinite(v)) { bad = true; break; } const a = v < 0 ? -v : v; if (a > mx) mx = a; }
+  if (bad) { rebuildGraph(); return; }
+  AU.silent = mx < 1e-5 ? AU.silent + 1 : 0;
+  if (AU.silent > 20) rebuildGraph(); else if (ct - AU.builtAt > 3 * 3600) rebuildGraph();
+}
+function setP(p, v, tc) { if (!Number.isFinite(v)) return; if (p._v !== undefined && Math.abs(p._v - v) <= Math.abs(v) * 0.004 + 1e-5) return; p._v = v; p.setTargetAtTime(v, AU.ctx.currentTime, tc); }
+function done(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (e) { } } }; }
+const FADE_IN = new Float32Array(64).map((_, i) => Math.sin(i / 63 * Math.PI / 2)), FADE_OUT = new Float32Array(64).map((_, i) => Math.cos(i / 63 * Math.PI / 2));
+function noiseSegments() { const ctx = AU.ctx, g = AU.g; if (AU.worklet || !g) return; if (!AU.longNoise) AU.longNoise = makeNoiseBuffer(ctx, 20);
+  if (g.nNext < ctx.currentTime) g.nNext = ctx.currentTime + 0.05;
+  while (g.nNext < ctx.currentTime + 1.0) { const t = g.nNext, len = 7, xf = 1.5; const src = ctx.createBufferSource(), v = ctx.createGain();
+    src.buffer = AU.longNoise; src.playbackRate.value = 0.5 + Math.random() * 0.05; v.gain.value = 0; v.gain.setValueCurveAtTime(FADE_IN, t, xf); v.gain.setValueCurveAtTime(FADE_OUT, t + len - xf, xf);
+    src.connect(v); v.connect(g.noise); src.start(t, Math.random() * 12); src.stop(t + len + 0.05); done(src, [src, v]); g.nNext = t + len - xf; } }
+// the sitting turns: a low felt thump into the echo, and a dark wash
+function vThump(t) { const ctx = AU.ctx, g = AU.g; const o = ctx.createOscillator(), v = ctx.createGain(), s = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(62, t); o.frequency.exponentialRampToValueAtTime(41, t + 0.8);
+  v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(0.26, t + 0.02); v.gain.exponentialRampToValueAtTime(0.0006, t + 1.3); v.gain.linearRampToValueAtTime(0, t + 1.35);
+  s.gain.value = 0.5; o.connect(v); v.connect(g.mix); v.connect(s); s.connect(g.send); o.start(t); o.stop(t + 1.4); done(o, [o, v, s]);
+  const src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), w = ctx.createGain(); src.buffer = AU.noiseBuf; lp.type = 'lowpass'; lp.frequency.setValueAtTime(420, t); lp.frequency.exponentialRampToValueAtTime(80, t + 1.6);
+  w.gain.setValueAtTime(0, t); w.gain.linearRampToValueAtTime(0.06, t + 0.08); w.gain.exponentialRampToValueAtTime(0.0005, t + 1.7); w.gain.linearRampToValueAtTime(0, t + 1.75);
+  src.connect(lp); lp.connect(w); w.connect(g.verb); src.start(t, Math.random() * 0.2, 1.8); done(src, [src, lp, w]); }
+// a placement: a heavier thump and a chime from the placed sitter's note, into the echo
+function vPlace(t, f) { const ctx = AU.ctx, g = AU.g;
+  for (const [mul, a, d] of [[8, 0.05, 3.2], [12, 0.022, 2.2]]) { const o = ctx.createOscillator(), v = ctx.createGain(), s = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(clamp(f * mul, 200, 1400), t);
+    v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(a, t + 0.012); v.gain.exponentialRampToValueAtTime(0.0004, t + d); v.gain.linearRampToValueAtTime(0, t + d + 0.05);
+    s.gain.value = 0.7; o.connect(v); v.connect(g.mix); v.connect(s); s.connect(g.send); v.connect(g.verb); o.start(t); o.stop(t + d + 0.1); done(o, [o, v, s]); }
+  vThump(t + 0.01); }
+const ROOTS = [0, 2, 3, 5, 7, 8, 10];
+function rootFor(g) { let h = 0; for (let i = 0; i < NF; i++) h += (g.L[i] + g.R[i]) * (i + 1); const d = ROOTS[((Math.floor(Math.abs(h) * 3) % 7) + 7) % 7]; return 41.2 * Math.pow(2, d / 12); }   // E1 aeolian
+function audioSchedule() {
+  const ctx = AU.ctx; if (!ctx || !AU.g || ctx.state !== 'running' || !S) return;
+  noiseSegments();
+  // look ahead to the next sitting boundary and place the thump on it exactly
+  const nextB = (S.k + 1) * CFG.sit, dtReal = (nextB - S.t) / CFG.rate;
+  if (dtReal >= 0 && dtReal < 0.4 && AU.thumpFor !== S.k + 1 && CFG.rate <= 4) { AU.thumpFor = S.k + 1; try { vThump(ctx.currentTime + dtReal); if (S.j >= SPP() - 1) vPlace(ctx.currentTime + dtReal + 0.05, rootFor(S.cur)); } catch (e) { } }
+}
+function audioControl() {
+  const ctx = AU.ctx, g = AU.g; if (!ctx || !g || ctx.state !== 'running' || !S || !PERF) return;
+  const gg = S.tgt, f = rootFor(gg);
+  setP(g.d1.frequency, f * 2, 3); setP(g.d2.frequency, f * 3 * (1 + 0.004 * (SH() >= UNLOCK.split ? 1 : 0)), 3);
+  let asym = 0; for (let i = 0; i < NF; i++) if (F[i][4]) asym += Math.abs(gg.L[i] - gg.R[i]); asym /= NF;
+  setP(g.dLP.frequency, clamp(260 + 220 * asym + 120 * gg.x.age, 200, 700), 2);
+  setP(g.dG.gain, 0.03 + 0.012 * clamp(asym, 0, 1), 2);
+  const inhale = clamp(PERF.breath, 0, 1); setP(g.bG.gain, S.quirk === 'still' ? 0 : 0.03 * inhale * inhale, 0.15); setP(g.bLP.frequency, 300 + 200 * inhale, 0.3);
+  if (g.cubes) for (let i = 0; i < 9; i++) { const m = S.shelf[i], cu = g.cubes[i];
+    if (!m) { setP(cu.v.gain, 0, 1.5); continue; }
+    const ps = memberPose(m, i, S.t), face = Math.max(0, Math.cos(ps.yaw)), row = Math.floor(i / 3);
+    setP(cu.o.frequency, clamp(rootFor(m.g) * [4, 6, 8][row], 60, 900), 2); setP(cu.v.gain, 0.0042 * ps.a * (0.3 + 0.7 * face * face), 0.3); }
+}
+function audioUnlock() { if (MUTE) return; if (!AU.ctx) { if (!AU.busy) { AU.busy = true; createContext().finally(() => { AU.busy = false; }); } } else if (AU.ctx.state !== 'running') AU.ctx.resume().catch(() => { }); }
+
+addEventListener('pointerdown', audioUnlock);
+addEventListener('keydown', e => {
+  audioUnlock();
+  const k = e.key.toLowerCase();
+  if (k === 'i') { CFG.info = !CFG.info; info(); drawLog(); }
+  if (k === 'm') { MUTE = !MUTE; if (AU.g) setP(AU.g.out.gain, MUTE ? 0 : 1, 0.2); }
+  if (k === 'l' && S) { S.lookPrev = S.look; S.look = (S.look + 1) % LOOKS.length; S.lookT0 = S.t; }
+});
+setInterval(audioSchedule, 40); setInterval(audioWatch, 1000); setInterval(audioControl, 100);
+
+/* ------------------------------------------------------------------ persistence */
+function save() { try { if (S) localStorage.setItem(STORE, JSON.stringify({ S: Object.assign({}, S, { log: (S.log || []).slice(-30) }), R: R.s, BL: { next: BL.next - S.t }, savedAt: Date.now() })); } catch (e) { } }
+const okM = m => !!m && okG(m.g) && fin(m.n) && fin(m.d) && fin(m.col) && m.col >= 0 && m.col < CLOTH.length && fin(m.born) && fin(m.spin) && fin(m.yaw0) && fin(m.bob);
+function load() {
+  try { const raw = localStorage.getItem(STORE); if (!raw) return false; const o = JSON.parse(raw);
+    if (!o || !o.S || o.S.v !== 1 || !okG(o.S.cur) || !okG(o.S.tgt) || !okG(o.S.prev)) return false;
+    S = o.S; R.s = o.R >>> 0 || 1;
+    S.shelf = Array.isArray(S.shelf) && S.shelf.length === 9 ? S.shelf.map(m => okM(m) ? m : null) : new Array(9).fill(null);
+    S.shelves = (Array.isArray(S.shelves) ? S.shelves : []).filter(s => s && Array.isArray(s.members) && s.members.length === 9).map(s => ({ no: s.no, at: s.at, members: s.members.map(m => okM(m) ? m : null) }));
+    if (!okG(S.dest)) S.dest = null; if (!okG(S.destFrom)) S.destFrom = null;
+    for (const k of ['detailNow', 'detailTarget', 'detailEarned']) if (!fin(S[k])) S[k] = 0.1;
+    if (!fin(S.clean)) S.clean = 0; if (!fin(S.j)) S.j = 0; if (!fin(S.col) || !CLOTH[S.col]) S.col = 0; if (!Array.isArray(S.parents)) S.parents = [];
+    if (!fin(S.shelfNo) || S.shelfNo < 1) S.shelfNo = 1; S.detailT = S.t; S.committedK = -1; S.log = S.log || [];
+    return true; } catch (e) { return false; }
+}
+setInterval(save, 60000); addEventListener('beforeunload', save);
+
+/* ------------------------------------------------------------------ boot */
+function runTo(end) { let guard = 0; while (S.t < end && guard++ < 400000) { S.t = Math.min(end, (S.k + 1) * CFG.sit); advance(0); } S.morph0 = S.t - MORPH; S.prev = cloneG(S.tgt); S.cur = cloneG(S.tgt); S.detailNow = detailGoal(); S.detailT = S.t; }
+const MZ = {
+  force(op) { if (!S) return;
+    if (op === 'sit') { S.t = (S.k + 1) * CFG.sit; advance(0); }
+    else if (op === 'place') { S.j = SPP() - 1; S.t = (S.k + 1) * CFG.sit; advance(0); }
+    else if (op === 'fill') { let g = 0; while (S.shelf.some(m => !m) && g++ < 12) { S.j = SPP() - 1; S.t = (S.k + 1) * CFG.sit; advance(0); } }
+    else if (op === 'look') { S.lookPrev = S.look; S.look = (S.look + 1) % 4; S.lookT0 = S.t - 30; }
+    else if (op === 'portrait') { runTo(S.t + (SPP() - S.j) * CFG.sit + 1); }
+    else if (op === 'nan') { S.tgt.L[3] = NaN; }
+  },
+  state: () => S, perf: () => PERF, cfg: CFG, audio: () => AU, fr: () => FR,
+};
+window.MZ = MZ;
+(async function boot() {
+  resize();
+  if (CFG.fresh) { try { localStorage.removeItem(STORE); } catch (e) { } }
+  let fresh = false;
+  if (!load()) { S = newState(); R.s = S.rs; fresh = true; S.t = 0; newSitting(); S.prev = cloneG(S.tgt); S.cur = cloneG(S.tgt); }
+  try {
+    const [meta, bin] = await Promise.all([fetch(DATA_URL + 'sitter.json').then(r => r.json()), fetch(DATA_URL + 'sitter.bin').then(r => r.arrayBuffer())]);
+    DATA = decodeData(meta, bin);
+    // pre-warm: it was running before you arrived (two sitters on the shelf, a third half drawn)
+    if (fresh && CFG.warm && !CFG.ff) runTo(S.t + (2.5 * SPP()) * CFG.sit + 11);
+    if (CFG.ff > 0) runTo(S.t + CFG.ff * 3600);
+    initGL();
+  } catch (err) { console.error(err); infoEl.textContent = 'SITTERS · could not load the sitter (' + err.message + ')'; }
+  for (const m of S.shelf) if (m && S.t - m.born < 8) m.born = S.t - 8 - Math.random() * 20;   // arrivals during the warm-up are already settled
+  info(); last = performance.now(); requestAnimationFrame(frame);
+  if (!MUTE) audioUnlock();
+})();
+</script>
+</body>
+</html>
