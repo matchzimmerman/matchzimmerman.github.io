@@ -224,7 +224,10 @@ float screenAngle(vec3 w, vec3 T){
   vec4 a=uVP*vec4(w,1.); vec4 b=uVP*vec4(w+T,1.);
   vec2 d=b.xy/max(b.w,1e-3)-a.xy/max(a.w,1e-3); d.x*=uAspect;
   float ang=atan(d.y,d.x); if(ang<0.) ang+=3.14159265; return ang/3.14159265; }
-vec4 pack(float sh, float id, float ang, float acc){ return vec4(clamp(sh,0.,1.), (id+0.5)/16., fract(ang), acc); }
+// data-target contract v2 (INVERLAND): G = domain*16 + material, stored as an exact byte; B = line angle (domain 0) or a carved line value (domains that carve on the surface)
+uniform float uDomain;
+vec4 pack2(float sh, float id, float dom, float b, float acc){ return vec4(clamp(sh,0.,1.), (dom*16.+id)/255., b, acc); }
+vec4 pack(float sh, float id, float ang, float acc){ return pack2(sh, id, uDomain, fract(ang), acc); }
 `;
 const SH = {   // shared uniforms (same objects referenced by every material)
   uVP: { value: new THREE.Matrix4() }, uAspect: { value: 1.78 }, uTime: { value: 0 },
@@ -476,7 +479,9 @@ float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
 float b2(vec2 a){ a=floor(a); return fract(dot(a,vec2(0.5,a.y*0.75))); }
 float b4(vec2 a){ return b2(0.5*a)*0.25+b2(a); }
 float b8(vec2 a){ return b4(0.5*a)*0.25+b2(a); }
-int idAt(vec2 fc){ return int(floor(texture2D(uData,fc/uRes).g*16.)); }
+int matOf(float g){ return int(mod(floor(g*255.+0.5),16.)); }
+int domOf(float g){ return int(floor((floor(g*255.+0.5))/16.)); }
+int idAt(vec2 fc){ return matOf(texture2D(uData,fc/uRes).g); }
 bool soft(int a,int b){
   bool sa=(a==0||a==13||a==1||a==14), sb=(b==0||b==13||b==1||b==14);
   if(sa&&sb) return true;
@@ -485,7 +490,7 @@ bool soft(int a,int b){
   return false; }
 // THE WRECK: near it the print gives way to a scratched pinhole negative
 float ALB[16];
-float toneAt(vec2 p){ vec4 d=texture2D(uData,p/uRes); int i=int(floor(d.g*16.)); float s=d.r, a=ALB[i];
+float toneAt(vec2 p){ vec4 d=texture2D(uData,p/uRes); int i=matOf(d.g); float s=d.r, a=ALB[i];
   if(i==0||i==13||i==14){ vec2 q=p/uRes.y; float m=vn(q*2.1+uSeed)*.6+vn(q*5.3)*.3+vn(q*11.)*.1; return .34+.42*s*.7+.3*m; } if(i==1||i==15) return 1.; if(i==3) return .55+.45*s;
   return pow(clamp(s*a*1.75,0.,1.),1.15); }
 vec3 photoAt(vec2 fc, float angLine){
@@ -507,7 +512,7 @@ vec3 photoAt(vec2 fc, float angLine){
 void main(){
   vec2 fc=gl_FragCoord.xy;
   vec4 d=texture2D(uData,fc/uRes);
-  float s=d.r; int id=int(floor(d.g*16.)); float ang=d.b*3.14159265; float acc=d.a;
+  float s=d.r; int id=matOf(d.g); float ang=d.b*3.14159265; float acc=d.a;
   vec3 tab=uTab[id]; float hs=uHat[id]*uHatch;
   vec2 dir=vec2(cos(ang),sin(ang));
   float u=dot(fc,vec2(-dir.y,dir.x));
