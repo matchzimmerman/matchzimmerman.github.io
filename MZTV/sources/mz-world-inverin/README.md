@@ -34,5 +34,14 @@ The data target's green channel now carries `domain × 16 + material` as an exac
 ## Next
 HEN on the land, the farm's events, BREAKWATER on the shore, HAMBURGER CAVE hidden, then the Bryson district.
 
+## Tested (INVERLAND foundations, 2026-11-12, headless software rendering only)
+- Print contract v2: three views byte-identical to the previous build, and again with every surface forced to domain 15.
+- Relay sun, computed for 9 Nov, 21 Jun and 21 Dec: no step larger than 1.3° in five minutes; 14.6 h of daylight on 9 Nov.
+- Keeper: walked at SRUTHÁN, the pier, the farm and the wreck in third person; left idle at the stream she walked 60 m back to her trail and resumed her errands, and a key press picked her up there. No console errors.
+- Not tested: live three-city weather (the build environment can't reach Open-Meteo), a real GPU, a phone, touch controls with the new camera.
+
 ## Known limits
+- The keeper prints in the hot ink instead of the dark one when seen against the sun at the farm. Not yet understood.
+- The info box says THE HEADLAND when you stand in the farm.
+- Third-person camera only avoids the ground, not walls, trees or the wreck's hull.
 Tested in headless software rendering only, not on a real GPU or phone. Starts in daylight when it is night in Galway. Collision is circles and slope limits. The tree's birds, footbridges, leaves and its own events and sound are not ported.
