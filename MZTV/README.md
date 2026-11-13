@@ -402,6 +402,16 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-045-sitters/`
 
+
+### BIT FIELD 046 — HARBOUR LIGHT (after J.M.W. Turner)
+A harbour under a low sun, printed in six inks of dithered pixels, made for commercial spaces (a lobby, a wall, a room wrapped in screens). Three of Turner's places, four hours each, crossing through a veil: Margate (stone pier and light, luggers), the Thames at Rotherhithe (wharves, cranes, barges, tugs, the Temeraire reach) and Venice from the Giudecca (domes, campanile, gondolas, poles). The sun's real height at each place picks the mood (low-sun morning, high haze, a stretched evening fire, moonlight). Live weather moves it: wind drives the clouds and fills the sails, cloud veils the sun, humidity dissolves far ships into the glow, rain draws curtains, and the marine swell rocks every boat, bands the water and swings the bell buoy. Moorings fill and empty on 50-minute tides. Eras: GLOW, VEIL, GLASS, VORTEX (clouds turn round the sun after gusty pressure, then the inks lean). Memory unlocks steam tugs, lanterns with long reflections, glass water, the vortex and a pale ghost ship. Sound: swell wash and sub, a held chord by place and light, the bell, creaks, a tug engine, a foghorn. Panoramic at any aspect; `?walls=N&wall=i` slices a wraparound across separate machines, clock-synced. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?capture=1 ?live=0 ?site=NAME ?hour=H ?held=evening ?sun=0..1 ?walls=N&wall=i
+
+Path:
+`sources/bit-field-046-harbour-light/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-046-harbour-light/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 
