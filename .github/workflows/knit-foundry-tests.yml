@@ -1,0 +1,26 @@
+name: Knit Foundry 002 tests
+
+on:
+  pull_request:
+    paths:
+      - 'tools/knit-foundry/**'
+      - '.github/workflows/knit-foundry-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/knit-foundry/**'
+      - '.github/workflows/knit-foundry-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test offline conversion engine
+        run: node --test tools/knit-foundry/tests/*.test.js
