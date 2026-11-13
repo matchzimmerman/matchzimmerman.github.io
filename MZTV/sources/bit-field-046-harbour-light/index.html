@@ -15,10 +15,11 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1a1530}
 'use strict';
 /* =====================================================================
    MZTV · BIT FIELD 046 · HARBOUR LIGHT — after J.M.W. Turner
-   v2. A low sun over a working harbour, printed in six inks of dithered
+   v3. A low sun over a working harbour, printed in six inks of dithered
    pixels. Three harbours Turner painted (Margate, the Thames at
    Rotherhithe, Venice) under the sky of wherever this screen is: its
-   own sun, clock and live weather. Focus drifts in and out. Built to run for days on one screen or wrapped
+   own sun, clock and live weather. Focus drifts in and out. Each port
+   carries the craft of its own water in Turner's years. Built to run for days on one screen or wrapped
    round a room (?walls=N&wall=i).
    ===================================================================== */
 const Q=new URLSearchParams(location.search);
@@ -99,30 +100,46 @@ function resize(){
   buildHarbours();
 }
 
+/* ---------- fleets: what was on this water in Turner's years (c.1820–1845) ----------
+   MARGATE  Kentish three-masted luggers, cutter smacks, the old Margate hoy, collier brigs
+            lying to unload, beach galleys; the London steam packet (from 1815) crossing.
+   THAMES   spritsail barges (stumpy rig, sprit always standing), swim-headed lighters worked
+            by a sweep, watermen's wherries, collier brigs in the tiers, a ship with yards
+            crossed and sails furled, a roofed hulk; paddle tugs with tall funnels, and
+            (once remembered) a pale three-decker under tow.
+   VENICE   gondolas with the felze and ferro, sandoli, Chioggia bragozzi and topi under
+            sails al terzo, trabaccoli, a peata rowed standing, a brig in the Bacino.      */
+const FLEET=[
+  {moored:['lugger','smack','brig','lugger','galley','hoy','smack','lugger','brig','galley'],cross:['packet','hoy','lugger']},
+  {moored:['spritbarge','lighter','brig','wherry','spritbarge','shipfurled','lighter','spritbarge','wherry','hulk','brig'],cross:['tug','spritbarge','packet']},
+  {moored:['gondola','bragozzo','sandolo','trabaccolo','gondola','topo','bragozzo','peata','gondola','brig','topo'],cross:['bragozzo','gondola','topo']}];
+const KSIZE={lugger:1,smack:.9,hoy:1,brig:1.3,galley:.56,packet:1.25,spritbarge:1.05,lighter:.8,wherry:.6,shipfurled:1.55,hulk:1.5,tug:.8,temeraire:1.75,
+  gondola:.8,sandolo:.62,bragozzo:.85,trabaccolo:1.1,topo:.6,peata:.8};
+const BIG={brig:1,shipfurled:1,hulk:1,temeraire:1},BELLED={brig:1,shipfurled:1,hulk:1,trabaccolo:1},STEAM={tug:1,packet:1,temeraire:1};
+
 /* ---------- harbours: what stands on the water at each place ---------- */
 let HARB=[];
 function buildHarbours(){
   HARB=SITES.map((s,si)=>{
     const r=mulberry(OPT.seed*131+si*977),things=[],T=TOTALX,sx=T*OPT.sun;
     const n=Math.max(8,Math.round(T*5.5));
-    const kinds=si===0?['lugger','lugger','smack','ship','rowboat','lugger','ship']
-               :si===1?['barge','barge','ship','lighter','barge','ship','rowboat']
-               :['gondola','gondola','trabaccolo','ship','gondola','sandolo','trabaccolo'];
+    const kinds=FLEET[si].moored;
     for(let i=0;i<n;i++){
       const d=.06+.86*Math.pow(r(),1.15); // 0 near .. 1 far
       let u=(i+.15+r()*.7)/n*T;
       if(Math.abs(u-sx)<.08&&d<.5)u+=.18; // keep the near water under the sun open
-      things.push({kind:kinds[i%kinds.length],u,d,ph:r()*6.283,mass:.6+r()*.8,flip:r()<.5?-1:1,slot:i,sz:.8+r()*.4});
+      const kind=kinds[i%kinds.length];
+      things.push({kind,u,d:BIG[kind]?Math.max(d,.42):d,ph:r()*6.283,mass:(.6+r()*.8)*(BIG[kind]?2.2:1),flip:r()<.5?-1:1,slot:i,sz:(.85+r()*.3)*(KSIZE[kind]||1)});
     }
     // crossers: vessels that pass slowly through
     const lanes=[{d:.55,speed:.05},{d:.82,speed:.03}];
     // fixed architecture
     const fixed=[];
-    if(si===0){fixed.push({kind:'pier',u:sx-.95*Math.min(1,T),len:.7,d:.42});fixed.push({kind:'buoy',u:sx+.32,d:.18,ph:r()*6.28});}
+    if(si===0){fixed.push({kind:'pier',u:sx-.95*Math.min(1,T),len:.7,d:.42});fixed.push({kind:'jetty',u:sx+.5,len:.55,d:.5});fixed.push({kind:'buoy',u:sx+.32,d:.18,ph:r()*6.28});}
     if(si===1){fixed.push({kind:'wharf',u:T*.04,len:Math.min(.5,T*.28),d:.25});fixed.push({kind:'city',u:0,len:T,d:.8});fixed.push({kind:'buoy',u:sx-.36,d:.2,ph:r()*6.28});}
     if(si===2){fixed.push({kind:'skyline',u:0,len:T,d:.74});
       for(let k=0;k<Math.round(T*5);k++){fixed.push({kind:'bricola',u:r()*T,d:.08+r()*.5,ph:r()*6.28});}
-      fixed.push({kind:'buoy',u:sx+.4,d:.22,ph:r()*6.28});}
+}
     return{things,lanes,fixed};
   });
 }
@@ -326,14 +343,15 @@ function drawWorld(wx){
     hb.lanes.forEach((ln,li)=>{const per=1500+li*600,blk=Math.floor(simT/per);
       for(let b=blk-3;b<=blk;b++){if(hash3(si*10+li,b,5)>.55)continue;const dirn=hash3(si,b,9)<.5?1:-1;
         const age=(simT-b*per)*ln.speed/60;const u=dirn>0?-.2+age:TOTALX+.2-age;if(u<-.3||u>TOTALX+.3)continue;
-        const kinds=si===1?['tug','barge','ship']:si===0?['ship','lugger','steamer']:['trabaccolo','ship','gondola'];
-        let kind=kinds[(hash3(si,b,4)*3)|0];if((kind==='tug'||kind==='steamer')&&!unlocked('tug'))kind='barge';
-        if(kind==='ship'&&si===1&&unlocked('ghost')&&hash3(b,si,8)<.35)kind='ghost';
-        items.push({kind,u,d:ln.d+hash3(b,li,2)*.08,ph:b,mass:1.2,flip:dirn,slot:900+b,sz:1,away:0,moving:true});}
+        const kinds=FLEET[si].cross;
+        let kind=kinds[(hash3(si,b,4)*3)|0];if(STEAM[kind]&&!unlocked('tug'))kind=kinds[1];
+        if(kind==='tug'&&unlocked('ghost')&&hash3(b,si,8)<.4)kind='temeraire';
+        items.push({kind,u,d:ln.d+hash3(b,li,2)*.08,ph:b,mass:1.2,flip:dirn,slot:900+b,sz:KSIZE[kind]||1,away:0,moving:true});}
     });
     items.sort((p,q)=>q.d-p.d);
     for(const o of items)drawItem(o,si,fade,sw,wx);
   }
+  BUOYS.sort((p,q)=>p.d-q.d);BUOYS.length=Math.min(BUOYS.length,2); // the two nearest ships keep a bell
 }
 function drawItem(o,si,fade,sw,wx){
   const H0=clamp(hazeOf(o.d,fade)+(o.away||0)*1.05,0,1);
@@ -346,7 +364,8 @@ function drawItem(o,si,fade,sw,wx){
   const red=Math.round(H0*255);
   const col=`rgba(${red},${Math.round(clamp(o.d,0,1)*255)},0,1)`;
   if(!o.fixed)VISIBLE.push({u,d:o.d,kind:o.kind,roll:pose.roll});
-  if(o.kind==='tug'||o.kind==='steamer')TUGVIS=Math.max(TUGVIS,1-H0);
+  if(STEAM[o.kind])TUGVIS=Math.max(TUGVIS,1-H0);
+  o.set=!!o.moving||o.away>0||hash3(o.slot,si,61)<(o.kind==='brig'?.15:.42); // under sail, or lying with sails down
   for(const [c,refl] of [[mg,false],[rg,true]]){
     c.setTransform(1,0,0,1,0,0);c.fillStyle=col;c.strokeStyle=col;
     c.translate(x,y0+pose.heave*H);
@@ -360,44 +379,99 @@ function drawItem(o,si,fade,sw,wx){
     const lx=x+Math.sin(pose.roll)*sc*.55,ly=y0-sc*.55*Math.cos(pose.roll)+pose.heave*H;
     LAMPS.push({x:lx|0,y:ly|0,water:y0|0,a:1-H0});
   }
-  if(o.kind==='buoy')BUOYS.push({u,d:o.d,ph:o.ph,roll:pose.roll,haze:H0});
+  if(BELLED[o.kind]&&!o.moving&&H0<.8)BUOYS.push({u,d:o.d,ph:o.ph,roll:pose.roll,haze:H0});
 }
 function poly(c,pts){c.beginPath();c.moveTo(pts[0],pts[1]);for(let i=2;i<pts.length;i+=2)c.lineTo(pts[i],pts[i+1]);c.closePath();c.fill();}
 function mast(c,x,h,w){c.fillRect(x-w/2,-h,Math.max(.6,w),h);}
+function spar(c,x1,y1,x2,y2,w){c.save();c.lineWidth=Math.max(.75,w);c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();c.restore();}
+function hullG(c,L,fb,rise,blunt){poly(c,[-L*.5,-fb*(1+rise*.5),L*(.5-(blunt?.02:0)),-fb*(1+rise),L*(blunt?.47:.42),fb*.3,-L*.46,fb*.3]);}
+function lug(c,mx,h,w,s,set){ // dipping lug / vela al terzo: a third of the sail ahead of the mast, yard peaked aft
+  if(set){poly(c,[mx+w*.33,-s*.15,mx+w*.4,-h*.58,mx-w*.68,-h,mx-w*.64,-s*.17]);spar(c,mx+w*.46,-h*.54,mx-w*.74,-h*1.03,s*.014);}
+  else spar(c,mx+w*.4,-s*.17,mx-w*.66,-s*.2,s*.035);}
+function gaffSail(c,mx,h,boom,s,set){
+  if(set){poly(c,[mx,-s*.14,mx,-h*.66,mx-boom*.72,-h*.93,mx-boom,-s*.17]);}
+  else{spar(c,mx,-s*.17,mx-boom,-s*.2,s*.04);}
+  spar(c,mx,-s*.15,mx-boom*1.03,-s*.18,s*.014);}
+function yards(c,mx,h,w,s,n,set){for(let k=0;k<n;k++){const yy=-h*(.34+k*.25),ww=w*(1-k*.2);
+  if(set&&k>0){const wb=w*(1-(k-1)*.2)*.94,yb=yy+h*.2;poly(c,[mx-ww*.9,yy,mx+ww*.9,yy,mx+wb,yb,mx+wb*.5,yb-h*.035,mx-wb*.5,yb-h*.035,mx-wb,yb]);} // topsails set, courses clewed up
+  c.fillRect(mx-ww,yy-s*.012,ww*2,Math.max(.8,s*.028));}}
+function figure(c,x,s,h){c.fillRect(x-s*.016,-h,Math.max(.8,s*.034),h);}
 const SHAPES={
-  hull(c,s,len,depth,sheer){poly(c,[-len*.5,-s*sheer,len*.5,-s*sheer*1.4,len*.42,s*depth*.4,-len*.4,s*depth*.4]);},
-  lugger(c,s,o,refl,si,wx){const L=s*.62;SHAPES.hull(c,s,L,.12,.08);mast(c,L*.05,s*.78,s*.02);
-    const bell=Math.min(1,.35+wx.wind*.08);poly(c,[L*.08,-s*.72,L*.08+L*.55*bell,-s*.6,L*.08+L*.5*bell,-s*.12,L*.08,-s*.14]);
-    mast(c,-L*.3,s*.42,s*.016);poly(c,[-L*.29,-s*.4,-L*.29+L*.26*bell,-s*.3,-L*.29+L*.22*bell,-s*.1,-L*.29,-s*.12]);},
-  smack(c,s,o,refl,si,wx){const L=s*.7;SHAPES.hull(c,s,L,.13,.07);mast(c,0,s*.9,s*.022);
-    poly(c,[0,-s*.86,L*.42,-s*.14,0,-s*.13]);poly(c,[-s*.02,-s*.82,-L*.5,-s*.18,-s*.02,-s*.16]);},
-  ship(c,s,o,refl,si,wx){const L=s*1.15;SHAPES.hull(c,s,L,.16,.1);c.fillRect(-L*.48,-s*.2,L*.18,s*.08);
-    for(const [mx,mh] of[[-L*.26,.95],[L*.02,1.12],[L*.27,.88]]){mast(c,mx,s*mh,s*.025);
-      const full=.6+Math.min(.4,wx.wind*.04);for(let k=0;k<3;k++){const yy=-s*mh*(.2+k*.27),ww=L*(.13-k*.03)*full;c.fillRect(mx-ww,yy-s*.2,ww*2,s*.17);}}
-    poly(c,[L*.5,-s*.12,L*.78,-s*.36,L*.76,-s*.33,L*.48,-s*.08]);},
-  trabaccolo(c,s,o,refl,si,wx){const L=s*.8;SHAPES.hull(c,s,L,.14,.12);mast(c,-L*.15,s*.75,s*.02);mast(c,L*.18,s*.6,s*.02);
-    poly(c,[-L*.15,-s*.7,-L*.15+L*.34,-s*.5,-L*.15+L*.3,-s*.12,-L*.15,-s*.13]);poly(c,[L*.18,-s*.56,L*.18+L*.28,-s*.42,L*.18+L*.24,-s*.12,L*.18,-s*.13]);},
-  barge(c,s,o,refl,si,wx){const L=s*.85;SHAPES.hull(c,s,L,.1,.05);mast(c,-L*.05,s*.8,s*.022);
-    poly(c,[-L*.04,-s*.76,L*.4,-s*.82,L*.33,-s*.1,-L*.04,-s*.1]);mast(c,L*.38,s*.25,s*.014);},
-  lighter(c,s){const L=s*.7;poly(c,[-L*.5,-s*.06,L*.5,-s*.06,L*.45,s*.04,-L*.45,s*.04]);c.fillRect(-L*.1,-s*.14,L*.3,s*.08);},
-  tug(c,s,o,refl,si,wx){const L=s*.55;SHAPES.hull(c,s,L,.13,.06);c.fillRect(-L*.2,-s*.18,L*.4,s*.12);
-    c.fillRect(-L*.02,-s*.46,s*.05,s*.3);SHAPES.smoke(c,s,L*.0,-s*.46,wx,o,refl);},
-  steamer(c,s,o,refl,si,wx){const L=s*.95;SHAPES.hull(c,s,L,.14,.07);c.fillRect(-L*.25,-s*.2,L*.5,s*.1);
-    c.fillRect(L*.02,-s*.5,s*.05,s*.32);mast(c,-L*.32,s*.7,s*.018);mast(c,L*.36,s*.6,s*.018);
-    c.beginPath();c.arc(-L*.1,-s*.06,s*.09,Math.PI,0);c.fill();SHAPES.smoke(c,s,L*.04,-s*.5,wx,o,refl);},
+  /* --- Margate --- */
+  lugger(c,s,o,refl,si,wx){const L=s*.72;hullG(c,L,s*.075,.5);                       // Kentish three-masted lugger
+    mast(c,L*.34,s*.6,s*.02);mast(c,L*.0,s*.74,s*.022);spar(c,-L*.44,-s*.08,-L*.47,-s*.44,s*.016);spar(c,-L*.46,-s*.1,-L*.72,-s*.13,s*.012); // mizzen and its outrigger
+    lug(c,L*.34,s*.6,L*.34,s,o.set);lug(c,0,s*.74,L*.4,s,o.set);if(o.set)poly(c,[-L*.45,-s*.12,-L*.44,-s*.3,-L*.6,-s*.42,-L*.68,-s*.13]);},
+  smack(c,s,o,refl,si,wx){const L=s*.7;hullG(c,L,s*.08,.35);mast(c,L*.12,s*.92,s*.022);spar(c,L*.48,-s*.1,L*.92,-s*.13,s*.014); // gaff cutter, long bowsprit
+    gaffSail(c,L*.12,s*.74,L*.66,s,o.set);
+    if(o.set){poly(c,[L*.12,-s*.7,L*.12,-s*.9,-L*.32,-s*.72]);poly(c,[L*.14,-s*.66,L*.5,-s*.11,L*.16,-s*.15]);poly(c,[L*.14,-s*.74,L*.9,-s*.13,L*.56,-s*.14]);}
+    else{spar(c,L*.12,-s*.86,L*.9,-s*.13,s*.008);}},
+  hoy(c,s,o,refl,si,wx){const L=s*.82;hullG(c,L,s*.11,.25,1);c.fillRect(-L*.5,-s*.17,L*.22,s*.06);mast(c,L*.14,s*.98,s*.026);spar(c,L*.48,-s*.12,L*.8,-s*.16,s*.016); // the Margate hoy: bluff, one mast
+    gaffSail(c,L*.14,s*.7,L*.6,s,o.set);c.fillRect(L*.14-L*.2,-s*.72,L*.4,Math.max(.8,s*.022));
+    if(o.set){c.fillRect(L*.14-L*.17,-s*.92,L*.34,s*.19);poly(c,[L*.16,-s*.68,L*.5,-s*.13,L*.18,-s*.16]);poly(c,[L*.16,-s*.76,L*.78,-s*.16,L*.54,-s*.15]);}
+    else spar(c,L*.14,-s*.9,L*.78,-s*.16,s*.008);},
+  brig(c,s,o,refl,si,wx){const L=s*.95;hullG(c,L,s*.13,.2,1);c.fillRect(-L*.5,-s*.18,L*.16,s*.05);  // collier or merchant brig: two masts, square-rigged
+    spar(c,L*.48,-s*.14,L*.82,-s*.26,s*.02);
+    for(const mx of[L*.24,-L*.14]){mast(c,mx,s*1.0,s*.026);yards(c,mx,s*1.0,L*.2,s,3,o.set);}
+    gaffSail(c,-L*.14,s*.5,L*.34,s,o.set);
+    spar(c,L*.24,-s*.98,L*.8,-s*.25,s*.007);spar(c,-L*.14,-s*.98,-L*.5,-s*.18,s*.007);},
+  galley(c,s,o){const L=s*.9;c.beginPath();c.moveTo(-L*.5,-s*.14);c.quadraticCurveTo(0,s*.1,L*.5,-s*.18);c.lineTo(L*.44,-s*.02);c.lineTo(-L*.44,-s*.0);c.fill(); // beach galley, pulling
+    for(const fx of[-.2,0,.2])figure(c,L*fx,s,s*.34);spar(c,-L*.1,-s*.14,-L*.3,s*.1,s*.02);spar(c,L*.1,-s*.14,-L*.1,s*.1,s*.02);},
+  packet(c,s,o,refl,si,wx){const L=s*1.2;hullG(c,L,s*.085,.3);spar(c,L*.48,-s*.1,L*.68,-s*.15,s*.016);   // London steam packet, 1820s–40s: paddle box, one tall funnel
+    c.beginPath();c.arc(-L*.02,-s*.075,s*.13,Math.PI,0);c.fill();c.fillRect(-L*.2,-s*.14,L*.3,s*.06);
+    c.fillRect(-L*.1,-s*.66,Math.max(1,s*.05),s*.56);mast(c,L*.3,s*.6,s*.016);mast(c,-L*.34,s*.5,s*.016);
+    spar(c,L*.3,-s*.4,L*.16,-s*.5,s*.012);SHAPES.smoke(c,s,-L*.1+s*.025,-s*.66,wx,o,refl);},
+  /* --- the Thames --- */
+  spritbarge(c,s,o,refl,si,wx){const L=s*1.0;poly(c,[-L*.5,-s*.075,L*.47,-s*.085,L*.5,-s*.03,L*.44,s*.03,-L*.47,s*.03]); // stumpy spritsail barge
+    c.fillRect(-L*.53,-s*.1,s*.03,s*.12);c.beginPath();c.ellipse(L*.02,-s*.01,L*.07,s*.035,0,0,6.283);c.fill(); // rudder, leeboard
+    const mx=L*.18;mast(c,mx,s*.74,s*.024);spar(c,mx,-s*.1,-L*.3,-s*.96,s*.02);                                 // the sprit always stands
+    if(o.set){poly(c,[mx,-s*.12,mx,-s*.72,-L*.3,-s*.95,-L*.34,-s*.14]);poly(c,[mx+s*.01,-s*.7,L*.47,-s*.09,mx+s*.03,-s*.12]);}
+    else{spar(c,mx-s*.01,-s*.72,mx-s*.02,-s*.36,s*.06);spar(c,mx,-s*.7,-L*.12,-s*.82,s*.03);spar(c,mx,-s*.72,L*.47,-s*.09,s*.008);} // brailed to the mast
+    spar(c,-L*.5,-s*.08,-L*.51,-s*.36,s*.014);if(o.set)poly(c,[-L*.5,-s*.12,-L*.51,-s*.3,-L*.6,-s*.36,-L*.62,-s*.13]);},
+  lighter(c,s,o){const L=s*.85;poly(c,[-L*.5,-s*.09,L*.5,-s*.09,L*.38,s*.03,-L*.38,s*.03]);                    // swim-headed dumb barge, one man and a sweep
+    figure(c,-L*.3,s,s*.32);spar(c,-L*.28,-s*.22,-L*.66,s*.06,s*.018);},
+  wherry(c,s,o){const L=s*.95;c.beginPath();c.moveTo(-L*.46,-s*.1);c.quadraticCurveTo(0,s*.08,L*.5,-s*.2);c.lineTo(L*.42,-s*.04);c.lineTo(-L*.42,s*.0);c.fill(); // waterman's wherry
+    figure(c,-L*.02,s,s*.26);figure(c,-L*.28,s,s*.24);spar(c,-L*.02,-s*.12,L*.14,s*.08,s*.02);},
+  shipfurled(c,s,o,refl,si,wx){const L=s*.92;hullG(c,L,s*.12,.22,1);c.fillRect(-L*.5,-s*.19,L*.2,s*.08);spar(c,L*.48,-s*.13,L*.8,-s*.24,s*.018); // ship in the tiers: yards crossed, sails furled
+    for(const [mx,mh] of[[L*.28,.78],[L*.02,.88],[-L*.26,.7]]){mast(c,mx,s*mh,s*.02);yards(c,mx,s*mh,L*.15,s,3,false);}
+    spar(c,L*.28,-s*.76,L*.78,-s*.23,s*.006);spar(c,-L*.26,-s*.68,-L*.5,-s*.19,s*.006);},
+  hulk(c,s,o){const L=s*.95;poly(c,[-L*.5,-s*.24,L*.46,-s*.2,L*.5,-s*.1,L*.42,s*.03,-L*.46,s*.03]);                // dismasted hulk, roofed over
+    poly(c,[-L*.4,-s*.24,-L*.34,-s*.33,L*.3,-s*.31,L*.36,-s*.2]);for(const mx of[L*.24,-L*.02,-L*.28])mast(c,mx,s*.46,s*.03);
+    c.fillRect(-L*.52,-s*.3,L*.08,s*.1);},
+  tug(c,s,o,refl,si,wx){const L=s*.72;hullG(c,L,s*.07,.3);c.beginPath();c.arc(-L*.04,-s*.06,s*.13,Math.PI,0);c.fill(); // Tyne-built paddle tug: tall thin funnel
+    c.fillRect(L*.06,-s*.68,Math.max(1,s*.05),s*.6);mast(c,L*.3,s*.42,s*.016);SHAPES.smoke(c,s,L*.06+s*.025,-s*.68,wx,o,refl);},
+  temeraire(c,s,o,refl,si,wx){const dark=c.fillStyle,pale=`rgba(222,${Math.round(clamp(o.d,0,1)*255)},0,1)`;     // a pale three-decker, towed up to be broken
+    c.save();c.translate(-s*.3,0);c.fillStyle=c.strokeStyle=pale;const L=s*.8;
+    poly(c,[-L*.5,-s*.26,L*.44,-s*.22,L*.5,-s*.12,L*.42,s*.03,-L*.46,s*.03]);c.fillRect(-L*.53,-s*.32,L*.1,s*.12);spar(c,L*.46,-s*.2,L*.74,-s*.3,s*.016);
+    for(const [mx,mh] of[[L*.26,.8],[L*.0,.9],[-L*.26,.72]]){mast(c,mx,s*mh,s*.018);yards(c,mx,s*mh,L*.13,s,3,false);}
+    c.restore();c.save();c.fillStyle=c.strokeStyle=dark;c.translate(s*.42,0);SHAPES.tug(c,s*.4,o,refl,si,wx);spar(c,-s*.14,-s*.03,-s*.34,-s*.1,s*.006);c.restore();},
+  /* --- Venice --- */
+  gondola(c,s,o){const L=s*.95;c.beginPath();c.moveTo(-L*.5,-s*.15);c.quadraticCurveTo(-L*.2,s*.05,0,s*.04);c.quadraticCurveTo(L*.3,s*.04,L*.5,-s*.13);
+    c.lineTo(L*.46,-s*.07);c.quadraticCurveTo(L*.25,s*.085,0,s*.085);c.quadraticCurveTo(-L*.25,s*.085,-L*.47,-s*.08);c.fill();
+    c.fillRect(L*.47,-s*.22,Math.max(1,s*.035),s*.12);                                                              // the ferro
+    c.beginPath();c.arc(L*.04,-s*.035,s*.085,Math.PI,0);c.fill();c.fillRect(L*.04-s*.085,-s*.04,s*.17,s*.08);        // the felze
+    figure(c,-L*.34,s,s*.36);c.fillRect(-L*.34-s*.03,-s*.4,s*.06,s*.045);spar(c,-L*.3,-s*.26,-L*.12,s*.09,s*.014);},
+  sandolo(c,s,o){const L=s*.9;c.beginPath();c.moveTo(-L*.5,-s*.09);c.quadraticCurveTo(0,s*.07,L*.5,-s*.12);c.lineTo(L*.44,-s*.02);c.lineTo(-L*.44,s*.0);c.fill();
+    figure(c,-L*.25,s,s*.42);spar(c,-L*.22,-s*.28,-L*.02,s*.1,s*.02);},
+  bragozzo(c,s,o,refl,si,wx){const L=s*.8;poly(c,[-L*.48,-s*.12,L*.44,-s*.13,L*.5,-s*.08,L*.43,s*.03,-L*.45,s*.03]);  // Chioggia bragozzo: two masts, tall rudder
+    c.fillRect(-L*.53,-s*.26,Math.max(1,s*.04),s*.28);spar(c,L*.26,-s*.1,L*.34,-s*.5,s*.018);mast(c,-L*.06,s*.84,s*.022);
+    lug(c,L*.31,s*.5,L*.3,s,o.set);lug(c,-L*.06,s*.84,L*.5,s,o.set);},
+  trabaccolo(c,s,o,refl,si,wx){const L=s*.9;poly(c,[-L*.5,-s*.17,L*.42,-s*.17,L*.5,-s*.1,L*.44,s*.03,-L*.46,s*.03]); // trabaccolo: bluff, two near-equal masts, bowsprit
+    c.fillRect(-L*.53,-s*.24,Math.max(1,s*.035),s*.26);spar(c,L*.46,-s*.14,L*.78,-s*.2,s*.016);
+    mast(c,L*.22,s*.82,s*.022);mast(c,-L*.2,s*.78,s*.022);lug(c,L*.22,s*.82,L*.38,s,o.set);lug(c,-L*.2,s*.78,L*.38,s,o.set);
+    if(o.set)poly(c,[L*.24,-s*.7,L*.76,-s*.2,L*.46,-s*.17]);},
+  topo(c,s,o,refl,si,wx){const L=s*.85;poly(c,[-L*.48,-s*.12,L*.42,-s*.14,L*.5,-s*.07,L*.42,s*.03,-L*.44,s*.03]);
+    c.fillRect(-L*.53,-s*.24,Math.max(1,s*.045),s*.26);mast(c,L*.02,s*.95,s*.028);lug(c,L*.02,s*.95,L*.62,s,o.set);},
+  peata(c,s,o){const L=s*.9;poly(c,[-L*.5,-s*.1,L*.5,-s*.11,L*.4,s*.03,-L*.4,s*.03]);c.fillRect(-L*.2,-s*.17,L*.36,s*.08); // heavy lagoon lighter, rowed standing
+    figure(c,-L*.36,s,s*.34);figure(c,L*.34,s,s*.34);spar(c,-L*.34,-s*.22,-L*.14,s*.08,s*.016);spar(c,L*.36,-s*.22,L*.56,s*.06,s*.016);},
   smoke(c,s,x,y,wx,o,refl){if(refl)return;const wr=(wx.dir+180)*Math.PI/180,dx=Math.sin(wr)*(o.flip||1);
     c.save();c.globalAlpha=.75;for(let k=0;k<9;k++){const a=(k+(simT*.15%1))/9;c.beginPath();
       c.arc(x+dx*a*s*1.6,y-a*s*(.6-wx.wind*.03)+Math.sin(a*6+simT*.1)*s*.03,s*(.04+a*.16),0,6.283);c.fill();}c.restore();},
-  rowboat(c,s){const L=s*.35;poly(c,[-L*.5,-s*.04,L*.5,-s*.05,L*.35,s*.03,-L*.35,s*.03]);c.fillRect(-L*.12,-s*.16,s*.035,s*.12);c.fillRect(L*.12,-s*.15,s*.035,s*.11);},
-  gondola(c,s){const L=s*.75;c.beginPath();c.moveTo(-L*.5,-s*.12);c.quadraticCurveTo(0,s*.06,L*.5,-s*.16);c.lineTo(L*.46,-s*.1);c.quadraticCurveTo(0,s*.1,-L*.46,-s*.05);c.fill();
-    c.fillRect(-L*.33,-s*.38,s*.035,s*.3);c.fillRect(-L*.36,-s*.42,s*.06,s*.05);c.save();c.lineWidth=Math.max(.6,s*.012);c.beginPath();c.moveTo(-L*.3,-s*.3);c.lineTo(-L*.12,s*.06);c.stroke();c.restore();},
-  sandolo(c,s){SHAPES.gondola(c,s*.75);},
-  buoy(c,s){const b=s*.55;poly(c,[-b*.25,0,b*.25,0,b*.18,-b*.12,-b*.18,-b*.12]);c.fillRect(-b*.03,-b*.55,b*.06,b*.45);
-    c.fillRect(-b*.14,-b*.45,b*.28,b*.04);c.fillRect(-b*.12,-b*.45,b*.03,b*.3);c.fillRect(b*.09,-b*.45,b*.03,b*.3);},
+  buoy(c,s){const b=s*.5;poly(c,[-b*.2,b*.02,b*.2,b*.02,b*.03,-b*.5,-b*.03,-b*.5]);c.fillRect(-b*.01,-b*.62,Math.max(.8,b*.03),b*.14);}, // wooden nun buoy
+  jetty(c,s,o){const L=o.len*H;c.fillRect(0,-s*.16,L,Math.max(1,s*.035));for(let k=0;k<=16;k++)c.fillRect(k/16*L,-s*.16,Math.max(.7,s*.014),s*.2);}, // Jarvis's Landing Place: a long, low timber jetty
   bricola(c,s,o){const b=s*.5;c.fillRect(-b*.05,-b*.7,b*.03,b*.72);c.fillRect(b*.02,-b*.62,b*.03,b*.64);c.fillRect(-b*.07,-b*.5,b*.14,b*.025);},
-  pier(c,s,o){const L=o.len*H;c.fillRect(0,-s*.18,L,s*.05);for(let k=0;k<=12;k++){c.fillRect(k/12*L,-s*.18,Math.max(.7,s*.02),s*.24);}
-    c.fillRect(L-s*.06,-s*.5,s*.07,s*.32);c.fillRect(L-s*.1,-s*.54,s*.15,s*.05);poly(c,[L-s*.07,-s*.54,L-s*.025,-s*.62,L+s*.02,-s*.54]);
-    c.fillRect(-s*.3,-s*.3,s*.36,s*.32);c.fillRect(-s*.6,-s*.22,s*.32,s*.25);},
+  pier(c,s,o){const L=o.len*H;poly(c,[0,-s*.2,L,-s*.2,L+s*.05,s*.04,0,s*.04]);c.fillRect(0,-s*.25,L*.9,s*.05);               // the stone pier, solid, with its parapet
+    c.fillRect(L-s*.07,-s*.74,Math.max(1,s*.05),s*.54);c.fillRect(L-s*.1,-s*.8,s*.11,s*.06);c.fillRect(L-s*.085,-s*.28,s*.08,s*.08); // column lighthouse at the head
+    c.fillRect(-s*.2,-s*.42,s*.3,s*.44);poly(c,[-s*.22,-s*.42,-s*.05,-s*.52,s*.12,-s*.42]);c.fillRect(-s*.07,-s*.6,s*.04,s*.1);},  // Droit House at the root
   wharf(c,s,o){const L=o.len*H;c.fillRect(0,-s*.22,L,s*.08);for(let k=0;k<=9;k++)c.fillRect(k/9*L,-s*.22,Math.max(.8,s*.025),s*.26);
     for(const fx of[.2,.62]){const cx=fx*L;c.fillRect(cx,-s*.8,s*.04,s*.6);poly(c,[cx,-s*.8,cx+s*.45,-s*.62,cx+s*.44,-s*.6,cx,-s*.74]);}
     c.fillRect(L*.3,-s*.45,L*.25,s*.24);poly(c,[L*.3,-s*.45,L*.425,-s*.56,L*.55,-s*.45]);},
@@ -412,7 +486,6 @@ const SHAPES={
     const cp=ax+L*.22;c.fillRect(cp,-s*1.9,s*.17,s*1.9);poly(c,[cp-s*.03,-s*1.9,cp+s*.085,-s*2.35,cp+s*.2,-s*1.9]);
     const cp2=ax-L*.28;c.fillRect(cp2,-s*1.3,s*.12,s*1.3);}
 };
-SHAPES.ghost=function(c,s,o,refl,si,wx){c.save();c.fillStyle=`rgba(222,${Math.round(clamp(o.d,0,1)*255)},0,1)`;c.strokeStyle=c.fillStyle;SHAPES.ship(c,s*1.08,o,refl,si,wx);c.restore();};
 
 /* ---------- soft focus: chained box blurs, picked per pixel ---------- */
 function boxBlur(src,dst,r){
@@ -686,7 +759,7 @@ function updateInfo(wx){
   L.push(`${s.name}  ·  ${LOC.name?LOC.name+' sky':'local sky'} ${hh}  ·  ${moodName}  ·  ${ERA.name}`);
   L.push(`<span class="d">wind ${wx.wind.toFixed(1)} m/s ${dirName(wx.dir)} → clouds drift ${dirName(wx.dir+180)}, sails fill</span>`);
   L.push(`<span class="d">cloud ${wx.cloud|0}% → veils the sun · humidity ${wx.hum|0}% → far ships dissolve</span>`);
-  L.push(`<span class="d">${WX[0].sea===false?'wind on the water':'swell'} ${wx.wave.toFixed(1)} m / ${wx.period.toFixed(0)} s → boats roll ${roll}°, the sea and the bell</span>`);
+  L.push(`<span class="d">${WX[0].sea===false?'wind on the water':'swell'} ${wx.wave.toFixed(1)} m / ${wx.period.toFixed(0)} s → boats roll ${roll}°, the sea and a ship's bell</span>`);
   const fl=FOC.left;L.push(`<span class="d">focus ${FOC.from===FOC.to||fl<=0?FOC.to+' (held)':FOC.from+' → '+FOC.to+' · '+Math.floor(fl/60)+':'+String(Math.floor(fl%60)).padStart(2,'0')} → the sound softens with it</span>`);
   L.push(`<span class="d">sun height → the inks · memory ${MEM.hours.toFixed(1)} h${OPT.site?'':` · ${nextName} in ${Math.floor(leftH)}:${String(Math.floor(leftH%1*60)).padStart(2,'0')}`}</span>`);
   const lg=MEM.log.slice(-2);for(const l of lg)L.push(`<span class="d">${l}</span>`);
