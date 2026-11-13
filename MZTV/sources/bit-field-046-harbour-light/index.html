@@ -15,10 +15,10 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1a1530}
 'use strict';
 /* =====================================================================
    MZTV · BIT FIELD 046 · HARBOUR LIGHT — after J.M.W. Turner
-   A low sun over a working harbour, printed in six inks of dithered
-   pixels. Live weather at three places Turner painted (Margate, the
-   Thames at Rotherhithe, Venice) moves the clouds, the haze, the swell
-   and the boats. Built to run for days on one screen or wrapped
+   v2. A low sun over a working harbour, printed in six inks of dithered
+   pixels. Three harbours Turner painted (Margate, the Thames at
+   Rotherhithe, Venice) under the sky of wherever this screen is: its
+   own sun, clock and live weather. Focus drifts in and out. Built to run for days on one screen or wrapped
    round a room (?walls=N&wall=i).
    ===================================================================== */
 const Q=new URLSearchParams(location.search);
@@ -30,6 +30,7 @@ const OPT={
   ff:Math.max(0,Math.min(96,qn('ff',0))), capture:Q.get('capture')==='1', live:Q.get('live')!=='0',
   walls:Math.max(1,Math.min(12,qn('walls',1)|0)), wall:Q.has('wall')?Math.max(0,qn('wall',0)|0):-1,
   site:(Q.get('site')||'').toLowerCase(), hour:Q.has('hour')?qn('hour',17):null, held:(Q.get('held')||'').toLowerCase(),
+  lat:Q.has('lat')?qn('lat',NaN):NaN, lon:Q.has('lon')?qn('lon',NaN):NaN, place:Q.get('place')||'', focus:(Q.get('focus')||'').toLowerCase(),
   sun:Math.max(.05,Math.min(.95,qn('sun',.62))), fps:Math.max(8,Math.min(60,qn('fps',30)))
 };
 const SYNC=OPT.walls>1&&OPT.wall>=0;        // wall-slice mode: everything derived from the clock so separate machines agree
@@ -82,15 +83,19 @@ function solar(lat,lon,ms){
 const cv=$('screen'),g=cv.getContext('2d',{alpha:false});
 const mk=document.createElement('canvas'),mg=mk.getContext('2d',{willReadFrequently:true}); // silhouettes
 const rk=document.createElement('canvas'),rg=rk.getContext('2d',{willReadFrequently:true}); // reflections
-let W=320,H=180,SCALE=6,HY=108,img=null,px32=null,skyL=null,TOTALX=1,OX=0;
+let W=320,H=180,SCALE=6,HY=108,img=null,px32=null,skyL=null,TOTALX=1,OX=0,PAD=0;
+let bMap=null,B1=null,B2=null,B3=null,B4=null,BT=null,rowDepth=null;
 function resize(){
   const vw=Math.max(1,innerWidth),vh=Math.max(1,innerHeight);
-  SCALE=Math.max(1,Math.round(vh/OPT.lines));H=Math.ceil(vh/SCALE);W=Math.ceil(vw/SCALE);
+  SCALE=Math.max(1,Math.round(vh/OPT.lines));H=Math.ceil(vh/SCALE);const Wv=Math.ceil(vw/SCALE);
+  PAD=SYNC?Math.round(H*.2):0;W=Wv+2*PAD; // wall slices render a hidden margin so soft focus meets across the seams
   HY=Math.round(H*.6);
-  cv.width=W;cv.height=H;cv.style.width=W*SCALE+'px';cv.style.height=H*SCALE+'px';
+  cv.width=W;cv.height=H;cv.style.width=W*SCALE+'px';cv.style.height=H*SCALE+'px';cv.style.left=(-PAD*SCALE)+'px';
   mk.width=rk.width=W;mk.height=rk.height=H;
   img=g.createImageData(W,H);px32=new Uint32Array(img.data.buffer);skyL=new Float32Array(W*H);
-  TOTALX=W*OPT.walls/H; OX=SYNC?OPT.wall*W:0;
+  TOTALX=Wv*OPT.walls/H; OX=SYNC?OPT.wall*Wv-PAD:0;
+  bMap=new Float32Array(W*H);B1=new Float32Array(W*H);B2=new Float32Array(W*H);B3=new Float32Array(W*H);B4=new Float32Array(W*H);BT=new Float32Array(W*H);
+  rowDepth=new Float32Array(H);for(let y=0;y<H;y++)rowDepth[y]=y<=HY?1:clamp(1-Math.pow(clamp((y-HY-1)/((H-HY)*.95),0,1),1/2.1),0,1);
   buildHarbours();
 }
 
@@ -122,26 +127,43 @@ function buildHarbours(){
   });
 }
 
+/* ---------- where this screen is: its own sky ---------- */
+const LOCKEY='mztv-harbour-light-loc-v1',DEVTZ=-new Date().getTimezoneOffset()*60;
+const tzCity=()=>{try{return(Intl.DateTimeFormat().resolvedOptions().timeZone||'').split('/').pop().replace(/_/g,' ');}catch(e){return'';}};
+const LOC={lat:42,lon:clamp(DEVTZ/240,-180,180),name:'',src:'clock',ok:false}; // until located: the device clock's meridian
+async function locate(){
+  if(Number.isFinite(OPT.lat)&&Number.isFinite(OPT.lon)){Object.assign(LOC,{lat:clamp(OPT.lat,-85,85),lon:clamp(OPT.lon,-180,180),name:OPT.place.toUpperCase(),src:'url',ok:true});return;}
+  if(!OPT.fresh){try{const v=JSON.parse(localStorage.getItem(LOCKEY)||'null');if(v&&Number.isFinite(v.lat)&&Number.isFinite(v.lon)&&Date.now()-v.at<7*864e5){Object.assign(LOC,{lat:v.lat,lon:v.lon,name:(OPT.place||v.name||'').toUpperCase(),src:'saved',ok:true});return;}}catch(e){}}
+  const tries=[
+    async()=>{const j=await(await fetch('https://get.geojs.io/v1/ip/geo.json',{cache:'no-store'})).json();return{lat:Number(j.latitude),lon:Number(j.longitude),name:j.city||tzCity()};},
+    async()=>{const j=await(await fetch('https://ipapi.co/json/',{cache:'no-store'})).json();return{lat:Number(j.latitude),lon:Number(j.longitude),name:j.city||tzCity()};},
+    async()=>{const c=tzCity();if(!c)throw 0;const j=await(await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name='+encodeURIComponent(c))).json();const r=j.results[0];return{lat:Number(r.latitude),lon:Number(r.longitude),name:r.name};}
+  ];
+  for(const t of tries){try{const r=await t();if(Number.isFinite(r.lat)&&Number.isFinite(r.lon)&&(r.lat||r.lon)){
+      Object.assign(LOC,{lat:clamp(r.lat,-85,85),lon:r.lon,name:(OPT.place||r.name||'').toUpperCase(),src:'net',ok:true});
+      try{localStorage.setItem(LOCKEY,JSON.stringify({lat:LOC.lat,lon:LOC.lon,name:LOC.name,at:Date.now()}));}catch(e){}return;}}catch(e){}}
+}
+
 /* ---------- live weather ---------- */
-const WX=SITES.map((s,i)=>({wind:4,dir:250,gust:7,cloud:55,low:30,hum:80,rain:0,temp:10,vis:20000,wave:.5,period:6,ok:false,tz:s.tz*3600,at:0}));
+const WX=SITES.map((s,i)=>({wind:4,dir:250,gust:7,cloud:55,low:30,hum:80,rain:0,temp:10,vis:20000,wave:.5,period:6,ok:false,tz:DEVTZ,at:0}));
 const WXS=SITES.map(()=>({wind:4,dir:250,gust:7,cloud:55,low:30,hum:80,rain:0,temp:10,wave:.5,period:6,vis:20000})); // eased
 function synthWX(i,t){ // fallback weather if the network is not there: slow, plausible
   const h=t/3600;return{wind:3+5*vn(h*.3,i*9),dir:200+120*vn(h*.1,i*9+4),gust:6+8*vn(h*.4,i*7),cloud:100*vn(h*.15,i*5+2),low:60*vn(h*.2,i*5+8),
     hum:65+30*vn(h*.2,i*3),rain:Math.max(0,vn(h*.25,i*11)-.75)*6,temp:9,vis:8000+20000*vn(h*.2,i),wave:.2+1.1*vn(h*.2,i*13),period:5+4*vn(h*.1,i)};}
 async function fetchWX(){
   if(!OPT.live)return;
-  await Promise.all(SITES.map(async(s,i)=>{
-    try{
-      const u=`https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lon}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,cloud_cover_low,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&wind_speed_unit=ms&timezone=auto`;
-      const r=await fetch(u,{cache:'no-store'});const j=await r.json();const c=j.current;
-      Object.assign(WX[i],{wind:fin(c.wind_speed_10m,4),dir:fin(c.wind_direction_10m,250),gust:fin(c.wind_gusts_10m,7),cloud:fin(c.cloud_cover,55),low:fin(c.cloud_cover_low,30),
-        hum:fin(c.relative_humidity_2m,80),rain:fin(c.precipitation,0),temp:fin(c.temperature_2m,10),vis:fin(c.visibility,20000),tz:fin(j.utc_offset_seconds,s.tz*3600),ok:true,at:Date.now()});
-      if(s.mlat!=null){
-        const m=await (await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${s.mlat}&longitude=${s.mlon}&current=wave_height,wave_period`,{cache:'no-store'})).json();
-        WX[i].wave=fin(m.current&&m.current.wave_height,WX[i].wave);WX[i].period=fin(m.current&&m.current.wave_period,WX[i].period);
-      }else{WX[i].wave=.05+WX[i].wind*.035;WX[i].period=2.5;} // river chop
-    }catch(e){/* keep last values */}
-  }));
+  if(!LOC.ok)await locate();
+  try{
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${LOC.lat}&longitude=${LOC.lon}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,cloud_cover_low,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&wind_speed_unit=ms&timezone=auto`;
+    const j=await(await fetch(u,{cache:'no-store'})).json(),c=j.current;
+    const o={wind:fin(c.wind_speed_10m,4),dir:fin(c.wind_direction_10m,250),gust:fin(c.wind_gusts_10m,7),cloud:fin(c.cloud_cover,55),low:fin(c.cloud_cover_low,30),
+      hum:fin(c.relative_humidity_2m,80),rain:fin(c.precipitation,0),temp:fin(c.temperature_2m,10),vis:fin(c.visibility,20000),tz:fin(j.utc_offset_seconds,DEVTZ),ok:true,at:Date.now()};
+    o.wave=.05+o.wind*.035;o.period=3;o.sea=false; // inland: the wind makes the water
+    try{const m=await(await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${LOC.lat}&longitude=${LOC.lon}&current=wave_height,wave_period`,{cache:'no-store'})).json();
+      const wh=m.current&&m.current.wave_height,wp=m.current&&m.current.wave_period;
+      if(Number.isFinite(wh)&&wh!==null){o.wave=Math.max(wh,.05+o.wind*.02);o.period=Number.isFinite(wp)&&wp?wp:5;o.sea=true;}}catch(e){}
+    for(const w of WX)Object.assign(w,o);
+  }catch(e){/* keep last values */}
 }
 
 /* ---------- clock ---------- */
@@ -171,7 +193,7 @@ function save(){
   if(!MEMORY_ON)return;
   try{MEM.log=MEM.log.slice(-40);localStorage.setItem(STORE,JSON.stringify({v:1,mem:MEM,st:ST,era:{name:ERA.name,pressure:ERA.pressure,amt:ERA.amt,target:ERA.target,until:ERA.until-simT>0?ERA.until:0,age:simT-ERA.since}}));}catch(e){}
 }
-function logEv(s){const d=new Date(simT*1000);const hh=String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');MEM.log.push(hh+' '+s);if(MEM.log.length>60)MEM.log.shift();}
+function logEv(s){const d=new Date(simT*1000+(typeof WX!=='undefined'&&WX[0].ok?WX[0].tz:DEVTZ)*1000);const hh=String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');MEM.log.push(hh+' '+s);if(MEM.log.length>60)MEM.log.shift();}
 function unlocked(what){
   if(SYNC||OPT.capture){const days=(simT-Date.UTC(2026,10,12)/1000)/86400;return days>({tug:0,lanterns:0,vortex:.5,ghost:2,glass:.2}[what]||0);}
   if(what==='tug')return MEM.hours>=.75;
@@ -189,7 +211,7 @@ function blendWX(){const {a,b,f}=SITE,A=WXS[a],B=WXS[b],o={};for(const k in A)o[
   const ax=Math.sin(A.dir*Math.PI/180),ay=Math.cos(A.dir*Math.PI/180),bx=Math.sin(B.dir*Math.PI/180),by=Math.cos(B.dir*Math.PI/180);
   o.dir=Math.atan2(lerp(ax,bx,f),lerp(ay,by,f))*180/Math.PI;return o;}
 function moodAt(si,t){
-  const s=SITES[si],sol=solar(s.lat,s.lon,t*1000);let e=sol.elev,ha=sol.ha;
+  const s=LOC,sol=solar(LOC.lat,LOC.lon,t*1000);let e=sol.elev,ha=sol.ha;
   if(OPT.hour!=null){const loc=OPT.hour;ha=loc-12;e=Math.cos((loc-12)/12*Math.PI)*30+(s.lat<48?14:6)-12;}
   if(OPT.held==='evening'){e=4;ha=3;} else if(OPT.held==='dawn'){e=3;ha=-3;} else if(OPT.held==='night'){e=-20;ha=6;} else if(OPT.held==='day'){e=30;ha=1;}
   const aw=sstep(-1.5,1.5,ha);
@@ -244,6 +266,27 @@ function integrate(dt,wx){
     vort:.012+ERA.amt.vortex*.05,evolve:.002+wx.wind*.0004};
   const tE=simT-EPOCH;
   for(const k in ST){ST[k]=SYNC?DEF[k]*tE:fin(ST[k]+rates[k]*dt*(k==='driftA'||k==='driftB'?(1-ERA.amt.glass*.7):1),0);}
+}
+
+/* ---------- focus: the picture drifts in and out, pulled over 2–3 minutes ---------- */
+const FOCUS_BLOCK=210,FKINDS=['sharp','soft','near','far','tilt','patch'];
+function focusRaw(b){const r=hash3(b,17,71);return r<.2?'sharp':r<.46?'soft':r<.62?'near':r<.78?'far':r<.9?'tilt':'patch';}
+function focusKind(b){if(FKINDS.includes(OPT.focus))return OPT.focus;let k=focusRaw(b);if(k===focusRaw(b-1))k=FKINDS[(FKINDS.indexOf(k)+1+((hash3(b,5,9)*4)|0))%6];return k;}
+function focusParams(b){const k=focusKind(b),j=hash3(b,3,29),j2=hash3(b,8,41);
+  if(k==='soft')return{G:.78+j*.22,A:0,fd:.5,T:0,by:.6,R:.3};
+  if(k==='near')return{G:.03,A:1.5,fd:.08+j*.14,T:0,by:.6,R:0};
+  if(k==='far')return{G:.03,A:1.5,fd:.72+j*.26,T:0,by:.6,R:0};
+  if(k==='tilt')return{G:0,A:0,fd:.5,T:.85+j*.15,by:.46+j2*.34,R:0};
+  if(k==='patch')return{G:.1,A:0,fd:.5,T:0,by:.6,R:1};
+  return{G:0,A:0,fd:.3,T:0,by:.6,R:0};}
+const FOC={G:0,A:0,fd:.5,T:0,by:.6,R:0,from:'sharp',to:'sharp',left:0,soft:0};
+function updateFocus(){
+  if(OPT.focus==='0'||OPT.focus==='off'){FOC.G=FOC.A=FOC.T=FOC.R=FOC.soft=0;FOC.from=FOC.to='off';FOC.left=0;return;}
+  const t=simT-EPOCH,b=Math.floor(t/FOCUS_BLOCK),fr=t-b*FOCUS_BLOCK,dur=120+hash3(b,2,53)*60;
+  let e=clamp(fr/dur,0,1);e=e*e*e*(e*(e*6-15)+10);
+  const p=focusParams(b-1),q=focusParams(b);
+  for(const k of['G','A','fd','T','by','R'])FOC[k]=lerp(p[k],q[k],e);
+  FOC.from=focusKind(b-1);FOC.to=focusKind(b);FOC.left=Math.max(0,dur-fr);
 }
 
 /* ---------- silhouettes ---------- */
@@ -301,7 +344,7 @@ function drawItem(o,si,fade,sw,wx){
   if(!o.fixed||o.kind==='buoy'||o.kind==='bricola'){if(x<-sc*3||x>W+sc*3)return;}
   const pose=o.fixed&&o.kind!=='buoy'&&o.kind!=='bricola'?{roll:0,heave:0}:vesselPose(o,sw,wx);
   const red=Math.round(H0*255);
-  const col=`rgba(${red},0,0,1)`;
+  const col=`rgba(${red},${Math.round(clamp(o.d,0,1)*255)},0,1)`;
   if(!o.fixed)VISIBLE.push({u,d:o.d,kind:o.kind,roll:pose.roll});
   if(o.kind==='tug'||o.kind==='steamer')TUGVIS=Math.max(TUGVIS,1-H0);
   for(const [c,refl] of [[mg,false],[rg,true]]){
@@ -369,9 +412,18 @@ const SHAPES={
     const cp=ax+L*.22;c.fillRect(cp,-s*1.9,s*.17,s*1.9);poly(c,[cp-s*.03,-s*1.9,cp+s*.085,-s*2.35,cp+s*.2,-s*1.9]);
     const cp2=ax-L*.28;c.fillRect(cp2,-s*1.3,s*.12,s*1.3);}
 };
-SHAPES.ghost=function(c,s,o,refl,si,wx){c.save();c.fillStyle='rgba(222,0,0,1)';c.strokeStyle=c.fillStyle;SHAPES.ship(c,s*1.08,o,refl,si,wx);c.restore();};
+SHAPES.ghost=function(c,s,o,refl,si,wx){c.save();c.fillStyle=`rgba(222,${Math.round(clamp(o.d,0,1)*255)},0,1)`;c.strokeStyle=c.fillStyle;SHAPES.ship(c,s*1.08,o,refl,si,wx);c.restore();};
 
-/* ---------- render: sky → water → silhouettes → inks ---------- */
+/* ---------- soft focus: chained box blurs, picked per pixel ---------- */
+function boxBlur(src,dst,r){
+  const n=2*r+1,inv=1/n,Wm=W-1,Hm=H-1;
+  for(let y=0;y<H;y++){const o=y*W;let a=0;for(let k=-r;k<=r;k++)a+=src[o+(k<0?0:k>Wm?Wm:k)];
+    for(let x=0;x<W;x++){BT[o+x]=a*inv;const i0=x-r,i1=x+r+1;a+=src[o+(i1>Wm?Wm:i1)]-src[o+(i0<0?0:i0)];}}
+  for(let x=0;x<W;x++){let a=0;for(let k=-r;k<=r;k++)a+=BT[(k<0?0:k>Hm?Hm:k)*W+x];
+    for(let y=0;y<H;y++){dst[y*W+x]=a*inv;const i0=y-r,i1=y+r+1;a+=BT[(i1>Hm?Hm:i1)*W+x]-BT[(i0<0?0:i0)*W+x];}}
+}
+
+/* ---------- render: sky → water → silhouettes → focus → inks ---------- */
 let mData=null,rData=null;
 function render(wx){
   computePalette(wx);
@@ -430,15 +482,31 @@ function render(wx){
       skyL[row+x]=clamp(L,0,1);
     }
   }
-  // --- silhouettes and inks
-  for(let y=0;y<H;y++){const row=y*W,by=(y&3)*4;
+  // --- silhouettes, and how far out of focus each pixel is
+  updateFocus();
+  const fG=clamp(FOC.G*(1-glass*.4)+haze*.16+ERA.amt.veil*.18,0,1),fA=FOC.A,fT=FOC.T,fR=FOC.R,ffd=FOC.fd,fby=FOC.by;
+  const focusing=fG+fA+fT+fR>.012;FOC.soft=fG;
+  for(let y=0;y<H;y++){const row=y*W,by=(y&3)*4,rd=rowDepth[y],yn=y*invH,tl=fT>0?fT*sstep(.03,.34,Math.abs(yn-fby)):0;
     for(let x=0;x<W;x++){
-      let L=skyL[row+x];const i4=(row+x)*4,a=mData[i4+3];
+      let d=rd;const i4=(row+x)*4,a=mData[i4+3];
       if(a>0){const hz=mData[i4]/255;const tgt=lerp(.015,skyL[(HY-2)*W+x]*.94,hz);
-        const cov=a/255;if(cov>=.99||cov>BAYER[by+(x&3)])L=tgt;}
+        const cov=a/255;if(cov>=.99||cov>BAYER[by+(x&3)]){skyL[row+x]=tgt;d=mData[i4+1]/255;}}
+      if(focusing){let bb=fG+fA*Math.abs(d-ffd)*.9+tl;
+        if(fR>.01)bb+=fR*sstep(.42,.68,fbm3((x+OX)*invH*.8+ev*3,yn*1.5+ev*2+31))*.95;
+        bMap[row+x]=bb>1?1:bb;}
+    }
+  }
+  if(focusing){const u=H/180;boxBlur(skyL,B1,Math.max(1,Math.round(u)));boxBlur(B1,B2,Math.max(1,Math.round(3*u)));boxBlur(B2,B3,Math.max(2,Math.round(6*u)));boxBlur(B3,B4,Math.max(3,Math.round(12*u)));}
+  // --- inks
+  for(let y=0;y<H;y++){const row=y*W,by=(y&3)*4;
+    for(let x=0;x<W;x++){const idx=row+x;
+      let L=skyL[idx];
+      if(focusing){const bb=bMap[idx];if(bb>.004){const lv=bb*4,li=lv|0,lf=lv-li;
+          const lo=li===0?L:li===1?B1[idx]:li===2?B2[idx]:li===3?B3[idx]:B4[idx],hi=li===0?B1[idx]:li===1?B2[idx]:li===2?B3[idx]:B4[idx];
+          L=lo+(hi-lo)*lf;const gl=B3[idx]-.5;if(gl>0)L+=gl*.45*bb;if(L>1)L=1;}} // soft sections glow
       if(!(L>=0))L=0; // NaN guard
       const v=L*5,i=v|0,f=v-i,ink=f>BAYER[by+(x&3)]?i+1:i;
-      px32[row+x]=PALr[ink>5?5:ink];
+      px32[idx]=PALr[ink>5?5:ink];
     }
   }
   // lanterns and their long reflections
@@ -546,7 +614,8 @@ function audioParams(){ // ≤10 Hz
   G.oscs.forEach((o,i)=>{const r=i===3?third:o.r;setP(o.o.frequency,'of'+i,root*r,6);
     setP(o.g.gain,'og'+i,lv[i]*(.35+glow*.65)*(1-ERA.amt.vortex*(i>2?.2:-.3)),3);});
   setP(G.glowLP.frequency,'glf',260+glow*320+ERA.amt.vortex*240,3);
-  setP(G.fb.gain,'fb',clamp(.34+haze*.18+ERA.amt.vortex*.1,0,.62),3);
+  setP(G.fb.gain,'fb',clamp(.34+haze*.18+ERA.amt.vortex*.1+FOC.soft*.1,0,.62),3);
+  setP(G.lp.frequency,'mlp',3200-FOC.soft*2100,4); // out of focus, the sound loses its edges too
 }
 function bell(t,f,amp,pan){const c=AU.ctx,G=AU.g;if(!c||!G)return;
   const p=c.createStereoPanner?c.createStereoPanner():c.createGain();if(p.pan)p.pan.value=clamp(pan,-.8,.8);
@@ -606,7 +675,7 @@ const dirName=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round((((d%360)+360)
 function updateInfo(wx){
   if(info.classList.contains('off'))return;
   const s=SITES[SITE.f>.5?SITE.b:SITE.a];
-  const loc=new Date(simT*1000+(WX[SITES.indexOf(s)].tz||0)*1000);
+  const loc=new Date(simT*1000+(WX[0].ok?WX[0].tz:DEVTZ)*1000);
   const hh=OPT.hour!=null?String(Math.floor(OPT.hour)).padStart(2,'0')+':'+String(Math.round(OPT.hour%1*60)).padStart(2,'0'):String(loc.getUTCHours()).padStart(2,'0')+':'+String(loc.getUTCMinutes()).padStart(2,'0');
   const moodName=MOOD.wN>.5?'MOONLIGHT':MOOD.wD>.5?'HIGH HAZE':MOOD.aw>.5?'LOW SUN · EVENING':'LOW SUN · MORNING';
   const sa=siteAt(simT);const leftH=SITE_HOURS-((simT/3600/SITE_HOURS)%1)*SITE_HOURS;
@@ -614,10 +683,11 @@ function updateInfo(wx){
   const roll=(rollOf(simT,wx).amp*180/Math.PI).toFixed(1);
   const L=[];
   L.push(`<b>HARBOUR LIGHT</b>  <span class="d">BIT FIELD 046 · after J.M.W. Turner${LINKED?' · PLAY (mixer-linked)':''}</span>`);
-  L.push(`${s.name}  ${hh}  ·  ${moodName}  ·  ${ERA.name}`);
+  L.push(`${s.name}  ·  ${LOC.name?LOC.name+' sky':'local sky'} ${hh}  ·  ${moodName}  ·  ${ERA.name}`);
   L.push(`<span class="d">wind ${wx.wind.toFixed(1)} m/s ${dirName(wx.dir)} → clouds drift ${dirName(wx.dir+180)}, sails fill</span>`);
   L.push(`<span class="d">cloud ${wx.cloud|0}% → veils the sun · humidity ${wx.hum|0}% → far ships dissolve</span>`);
-  L.push(`<span class="d">swell ${wx.wave.toFixed(1)} m / ${wx.period.toFixed(0)} s → boats roll ${roll}°, the sea and the bell</span>`);
+  L.push(`<span class="d">${WX[0].sea===false?'wind on the water':'swell'} ${wx.wave.toFixed(1)} m / ${wx.period.toFixed(0)} s → boats roll ${roll}°, the sea and the bell</span>`);
+  const fl=FOC.left;L.push(`<span class="d">focus ${FOC.from===FOC.to||fl<=0?FOC.to+' (held)':FOC.from+' → '+FOC.to+' · '+Math.floor(fl/60)+':'+String(Math.floor(fl%60)).padStart(2,'0')} → the sound softens with it</span>`);
   L.push(`<span class="d">sun height → the inks · memory ${MEM.hours.toFixed(1)} h${OPT.site?'':` · ${nextName} in ${Math.floor(leftH)}:${String(Math.floor(leftH%1*60)).padStart(2,'0')}`}</span>`);
   const lg=MEM.log.slice(-2);for(const l of lg)L.push(`<span class="d">${l}</span>`);
   if(OPT.audio&&!(AU.ctx&&AU.ctx.state==='running'))L.push(`<span class="d">click or press any key for sound · i hides this</span>`);
@@ -631,7 +701,7 @@ function step(dt){
   if(MEMORY_ON&&prevF<.5&&SITE.f>=.5)logEv('through the veil to '+SITES[SITE.b].name);
   // ease live weather
   const k=SYNC?1:1-Math.exp(-dt/300);
-  for(let i=0;i<3;i++){const src=(WX[i].ok)?WX[i]:synthWX(i,simT);
+  for(let i=0;i<3;i++){const src=(WX[i].ok)?WX[i]:synthWX(0,simT);
     for(const key in WXS[i]){if(key==='dir'){let d=((src.dir-WXS[i].dir+540)%360)-180;WXS[i].dir=(WXS[i].dir+d*k+360)%360;}else WXS[i][key]=fin(lerp(WXS[i][key],src[key],k),src[key]);}}
   const wx=blendWX();W_cache=wx;
   updateEra(dt,wx);integrate(dt,wx);
@@ -668,13 +738,14 @@ cv.addEventListener('webglcontextlost',e=>e.preventDefault()); // (2D canvas; ke
 
 /* ---------- test / capture handles ---------- */
 window.MZ={
-  get state(){return{simT,site:SITES[SITE.a].id,siteF:SITE.f,era:ERA.name,amt:{...ERA.amt},pressure:ERA.pressure,mem:JSON.parse(JSON.stringify(MEM)),st:{...ST},wx:W_cache,mood:MOOD,W,H,lamps:LAMPS.length,visible:VISIBLE.length,audio:AU.ctx&&AU.ctx.state};},
+  get state(){return{simT,site:SITES[SITE.a].id,siteF:SITE.f,era:ERA.name,amt:{...ERA.amt},pressure:ERA.pressure,mem:JSON.parse(JSON.stringify(MEM)),st:{...ST},wx:W_cache,mood:MOOD,W,H,lamps:LAMPS.length,visible:VISIBLE.length,focus:{...FOC},loc:{...LOC},audio:AU.ctx&&AU.ctx.state};},
   force(op){ // bypasses gates
     if(op==='vortex'){setEra('VORTEX');ERA.until=simT+1500;ERA.amt.vortex=1;}
     else if(op==='glass'){setEra('GLASS');ERA.amt.glass=1;}
     else if(op==='veil'){setEra('VEIL');ERA.amt.veil=1;}
     else if(op==='glow'){setEra('GLOW');for(const k in ERA.amt)ERA.amt[k]=0;}
     else if(op.startsWith('site:')){OPT.site=op.slice(5);}
+    else if(op.startsWith('focus:')){OPT.focus=op.slice(6);}
     else if(op==='storm'){for(const w of WX){Object.assign(w,{wind:16,gust:24,wave:2.6,cloud:95,low:80,rain:2,ok:true});}}
     else if(op==='calm'){for(const w of WX){Object.assign(w,{wind:1,gust:2,wave:.1,cloud:15,low:0,rain:0,hum:60,vis:30000,ok:true});}}
     else if(op==='unlock'){MEM.hours=Math.max(MEM.hours,12);MEM.vortices=Math.max(1,MEM.vortices);MEM.storm=1;MEM.calm=2;}
@@ -685,6 +756,7 @@ window.MZ={
   audio:AU, rebuild, save, captureHold:false
 };
 
+if(Number.isFinite(OPT.lat)&&Number.isFinite(OPT.lon))Object.assign(LOC,{lat:clamp(OPT.lat,-85,85),lon:clamp(OPT.lon,-180,180),name:OPT.place.toUpperCase(),src:'url',ok:true});
 resize();load();prewarm();
 if(MEMORY_ON&&!MEM.log.length)logEv('the harbour opened');
 fetchWX();setInterval(fetchWX,10*60*1000);
