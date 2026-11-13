@@ -1038,6 +1038,8 @@ window.MZ={
     else if(op==='next')SHOT=null;
   },
   hour(h){OPT.hour=h;SHOT=null;}, held(m){OPT.held=m;},
+  wx(o){Object.assign(WX,o,{ok:true});Object.assign(WXS,WX);},
+  tick(dt=1/30){step(dt);render();}, // capture mode: exactly one frame
   step(sec,n=1){for(let i=0;i<n;i++)step(sec);render();updateInfo();},
   audio:AU, rebuild, save, captureHold:false
 };
@@ -1047,6 +1049,6 @@ if(MEMORY_ON&&!MEM.log.length)logEv('the cranes went up on the piers');
 fetchWX();setInterval(fetchWX,10*60*1000);
 if(OPT.audio&&!OPT.capture){startAudio().then(()=>{if(AU.ctx&&AU.ctx.state!=='running')AU.ctx.resume().catch(()=>{});});}
 {step(.01);render();updateInfo();}
-requestAnimationFrame(loop);
+if(!OPT.capture)requestAnimationFrame(loop); // ?capture=1: frames come only from MZ.tick(dt)
 </script>
 </body></html>

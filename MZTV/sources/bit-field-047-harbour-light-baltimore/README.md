@@ -91,6 +91,8 @@ By the mid-60s the Pratt Street piers were derelict.
 - Click or any key starts the sound (OBS autoplays).
 - Test-only: `?ships=1` lines up one of each vessel type in front of the barge.
 
+Capture: `?capture=1` stops the frame loop; `MZ.tick(dt)` renders exactly one frame and `MZ.wx({...})` sets the weather (used for the promo).
+
 Handles: `MZ.force('take'|'glass'|'veil'|'working'|'storm'|'calm'|'fog'|'unlock'|'poison'|'next'|'cam:N'|'shot:NAME'|'focus:KIND')`, `MZ.state`, `MZ.step(sec,n)`, `MZ.lock={x,y,z,yaw,pitch,fov}`.
 
 ## Accuracy and limits
