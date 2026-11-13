@@ -412,6 +412,15 @@ Path:
 Live:
 `https://matchzimmerman.github.io/MZTV/sources/bit-field-046-harbour-light/`
 
+### BIT FIELD 047 — HARBOUR LIGHT · BALTIMORE 1957
+The immersive branch of HARBOUR LIGHT: Baltimore's working harbour around 1957, built as a 3D place in real metres and filmed by slow crane cameras on the Pratt Street piers, Broadway Pier and a crane barge in the Northwest Branch. Every view faces into one 120° arc (SE → SW): the Domino Sugars refinery and its 1951 neon ("Domino" over "Sugars"), the Bethlehem Key Highway yard under Federal Hill, the B&O Locust Point grain elevator and Fort McHenry. Shots are static, orbiting, booming, panning or pushing in, with the crane arms swaying in the live wind. Baltimore's real sun and live weather set the light, the smoke and the chop; at night the sign lies in the water, broken into shimmer by the wind or whole when the branch goes to GLASS. The harbour keeps Baltimore's clock: the Old Bay Line steamer sails at 18:30 with a whistle heard at its distance, banana boats at Pier 1, a raw-sugar ship under the sign, freighters with tugs at Locust Point, drydock ships, harbour tugs, B&O car floats and skipjacks in oyster season. Sound on the harmonics of 60 Hz mains, with the neon's transformer hum as loud as the sign is large in frame. Eras: WORKING, VEIL, GLASS and the LONG TAKE rupture (one crane makes one continuous 18–30 minute move). Memory raises new crane stations over hours, favours stations where things happened, and learns the steamer's timetable. Params: ?info=0 ?fresh=1 ?audio=0 ?seed=N ?rate=N ?lines=N ?ff=H ?capture=1 ?live=0 ?hour=H ?held=evening ?focus=KIND ?cam=N ?shot=NAME
+
+Path:
+`sources/bit-field-047-harbour-light-baltimore/index.html`
+
+Live:
+`https://matchzimmerman.github.io/MZTV/sources/bit-field-047-harbour-light-baltimore/`
+
 ### 48 PLANT · SPECIMEN 001 — MZ.Claude candidate
 One independent build for the HARIL 48 PLANT multi-agent brief. A painted, fabricated botanical specimen grows for 48 hours inside the weather made by the practice that built it. Site and archive commits plus HARIL timeline metadata since 2022 are lived inside 48 phenological hours, and live commits and intake arrive as present weather. Activity becomes water, project branches become light from their own sides, corrections become stress, new and returning projects break buds, and breakthroughs flower. Growth is irreversible: kinks, dormancy rings, scars, fallen leaves and leaf generations stay. The life is event-sourced (seed + ledger + live log), so it survives restarts and can be reconstructed at any hour. v2 grows it out of the floor of an all-white cyclorama, filmed by four cube camera-drones and cut like a nature documentary. It includes event shots, time-lapse passages, a surveillance bay of every drone's feed with a studio plan, and a final composed portrait that holds at hour 48. v1 (potted, turntable) is kept as `v1.html`.
 

@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZTV — HARBOUR LIGHT · BALTIMORE 1957 · BIT FIELD 047</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0e1430}
+#screen{position:absolute;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges}
+#info{position:absolute;left:18px;bottom:16px;max-width:min(600px,48vw);padding:9px 11px 8px;font:11px/1.5 "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.02em;white-space:pre-wrap;pointer-events:none;border-left:3px solid;transition:opacity .6s}
+#info b{font-weight:700;letter-spacing:.12em}
+#info .d{opacity:.72}
+#info.off{opacity:0}
+</style></head><body>
+<canvas id="screen" aria-label="Generative Baltimore harbour, c.1957, seen by slow crane cameras, with the Domino Sugars sign reflected in the water"></canvas>
+<div id="info"></div>
+<script>
+'use strict';
+/* =====================================================================
+   MZTV · BIT FIELD 047 · HARBOUR LIGHT · BALTIMORE 1957
+   The working harbour of Baltimore in its last peak years, c.1957,
+   built as a 3D place in real metres and filmed by slow crane cameras
+   on the Pratt Street piers, Fells Point and a crane barge in the
+   Northwest Branch. Every camera faces into one 120° arc (SE → SW):
+   across the water to the Domino Sugars refinery and its neon sign
+   (lit since April 1951), the Bethlehem Key Highway yard under Federal
+   Hill, the B&O grain elevator on Locust Point and Fort McHenry.
+   The sun is Baltimore's real sun; the weather is Baltimore's live
+   weather. At night the sign lies in the water.
+   ===================================================================== */
+const Q=new URLSearchParams(location.search);
+const qn=(k,d)=>{const v=Number(Q.get(k));return Q.has(k)&&Number.isFinite(v)?v:d;};
+const LINKED=window.MZTV_LINKED===true;
+const OPT={
+  info:Q.get('info')!=='0', fresh:Q.get('fresh')==='1', audio:Q.get('audio')!=='0',
+  seed:qn('seed',47)|0, rate:Math.max(.05,Math.min(240,qn('rate',1))), lines:Math.max(90,Math.min(400,qn('lines',216)|0)),
+  ff:Math.max(0,Math.min(96,qn('ff',0))), capture:Q.get('capture')==='1', live:Q.get('live')!=='0',
+  hour:Q.has('hour')?qn('hour',20):null, held:(Q.get('held')||'').toLowerCase(), focus:(Q.get('focus')||'').toLowerCase(),
+  cam:Q.has('cam')?qn('cam',0)|0:-1, ships:Q.get('ships')==='1', fps:Math.max(8,Math.min(60,qn('fps',30))), shot:(Q.get('shot')||'').toLowerCase()
+};
+const MEMORY_ON=!OPT.capture;
+const STORE=LINKED?'mztv-harbour-light-baltimore-play-v1':'mztv-harbour-light-baltimore-v1';
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t, sstep=(a,b,v)=>{const t=clamp((v-a)/(b-a),0,1);return t*t*(3-2*t);};
+const fin=(v,d)=>Number.isFinite(v)?v:d, D2R=Math.PI/180;
+const ease5=e=>{e=clamp(e,0,1);return e*e*e*(e*(e*6-15)+10);};
+const angDiff=(a,b)=>((a-b+540)%360)-180;
+
+/* ---------- deterministic randomness ---------- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hash3(a,b,c){let h=Math.imul(a|0,374761393)+Math.imul(b|0,668265263)+Math.imul(c|0,2147483647)+OPT.seed*97;h=Math.imul(h^h>>>13,1274126177);h^=h>>>16;return(h>>>0)/4294967296;}
+const PERM=new Uint8Array(512);{const r=mulberry(OPT.seed*7919+11),p=[...Array(256).keys()];for(let i=255;i>0;i--){const j=r()*(i+1)|0;[p[i],p[j]]=[p[j],p[i]];}for(let i=0;i<512;i++)PERM[i]=p[i&255];}
+function vn(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,X=xi&255,Y=yi&255;
+  const a=PERM[PERM[X]+Y],b=PERM[PERM[X+1]+Y],c=PERM[PERM[X]+Y+1],d=PERM[PERM[X+1]+Y+1];
+  const u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);return((a+(b-a)*u)+((c+(d-c)*u)-(a+(b-a)*u))*v)/255;}
+function fbm3(x,y){return vn(x,y)*.55+vn(x*2.03+17.1,y*2.03+3.7)*.3+vn(x*4.1+5.3,y*4.1+41.9)*.15;}
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v=>(v+.5)/16);
+
+/* ---------- the place: metres east (x) and north (z) of the Domino Sugars sign ---------- */
+const ORIGIN={lat:39.2748,lon:-76.6003};
+const LL=(lat,lon)=>[(lon-ORIGIN.lon)*86190,(lat-ORIGIN.lat)*111000];
+const BALT={lat:39.2848,lon:-76.6100};          // weather point: the Inner Harbor
+// open water of the Inner Harbor, the Northwest Branch and the Patapsco (approximate 1957 shoreline)
+const WATER=[[-1100,1300],[-164,1290],[-100,1150],[150,1000],[400,880],[612,800],[900,700],[1300,560],[1750,400],[2400,200],[3000,-100],[3600,-400],[4500,-900],
+  [6000,-2000],[9000,-3400],[16000,-3200],[16000,-9500],[7000,-6100],[3500,-4500],[2200,-2600],[1850,-1330],[1700,-1100],[1400,-700],[1100,-350],[800,-120],[700,40],
+  [400,120],[150,205],[-100,262],[-300,385],[-600,525],[-800,705],[-1100,745]];
+const MASK={x0:-2400,z0:-10000,res:25,nx:0,nz:0,d:null};
+function buildMask(){
+  MASK.nx=Math.ceil((16500-MASK.x0)/MASK.res);MASK.nz=Math.ceil((2400-MASK.z0)/MASK.res);MASK.d=new Uint8Array(MASK.nx*MASK.nz);
+  const P=WATER,n=P.length;
+  for(let j=0;j<MASK.nz;j++){const z=MASK.z0+(j+.5)*MASK.res;const xs=[];
+    for(let i=0,k=n-1;i<n;k=i++){const [xi,zi]=P[i],[xk,zk]=P[k];if((zi>z)!==(zk>z))xs.push(xi+(z-zi)/(zk-zi)*(xk-xi));}
+    xs.sort((a,b)=>a-b);
+    for(let q=0;q+1<xs.length;q+=2){const a=Math.max(0,Math.floor((xs[q]-MASK.x0)/MASK.res)),b=Math.min(MASK.nx-1,Math.floor((xs[q+1]-MASK.x0)/MASK.res));for(let i=a;i<=b;i++)MASK.d[j*MASK.nx+i]=1;}
+  }
+}
+function isWater(x,z){const i=((x-MASK.x0)*.04)|0,j=((z-MASK.z0)*.04)|0;if(i<0||j<0||i>=MASK.nx||j>=MASK.nz)return z<-3000; return MASK.d[j*MASK.nx+i]===1;}
+
+/* ---------- inks: four light moods, six inks each (dark → light), plus the neon ---------- */
+const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const MOODS={
+  night:  ['#0b1230','#1b2a5e','#334f8f','#6a86b4','#bcc2b4','#f1e8cf'].map(hex),
+  dawn:   ['#221f4f','#4f5d9c','#9eacc6','#e6c98c','#f5e09c','#fffae2'].map(hex),
+  evening:['#24123a','#5e2458','#b4404a','#ea8338','#fbc74e','#fff2c6'].map(hex),
+  day:    ['#2a2e5c','#5f6b9e','#a9b2b8','#e9c886','#f6e5ad','#fffbee'].map(hex)
+};
+const NEON=hex('#ff4326'),NEON2=hex('#ffa06a'),NEONDEEP=hex('#9a1832'),LAMPC=hex('#ffbf63'),WINC=hex('#ffe09a');
+const rgba32=c=>(255<<24)|(c[2]<<16)|(c[1]<<8)|c[0];
+const NEON32=rgba32(NEON),NEON2_32=rgba32(NEON2),DEEP32=rgba32(NEONDEEP),LAMP32=rgba32(LAMPC),WIN32=rgba32(WINC);
+
+/* ---------- solar position (NOAA, simplified) ---------- */
+function solar(lat,lon,ms){
+  const d=ms/86400000+2440587.5-2451545,g=(357.529+.98560028*d)*D2R,q=280.459+.98564736*d;
+  const L=(q+1.915*Math.sin(g)+.02*Math.sin(2*g))*D2R,e=(23.439-3.6e-7*d)*D2R;
+  const ra=Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)),dec=Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst=(18.697374558+24.06570982441908*d)%24,lst=(gmst*15+lon)*D2R;
+  let ha=lst-ra;ha=Math.atan2(Math.sin(ha),Math.cos(ha));
+  const la=lat*D2R,el=Math.asin(Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(ha));
+  const az=(Math.atan2(Math.sin(ha),Math.cos(ha)*Math.sin(la)-Math.tan(dec)*Math.cos(la))/D2R+180+360)%360;
+  return{elev:el/D2R,az,ha:ha*12/Math.PI};
+}
+/* Baltimore clock (America/New_York), cached */
+let tzCache={at:-1e12,off:-18000};
+function nyOffset(ms){
+  if(Math.abs(ms-tzCache.at)<600000)return tzCache.off;
+  let off=-18000;try{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hourCycle:'h23',year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric'}).formatToParts(new Date(ms));
+    const o={};for(const x of p)o[x.type]=+x.value;const asUTC=Date.UTC(o.year,o.month-1,o.day,o.hour,o.minute);off=Math.round((asUTC-Math.floor(ms/60000)*60000)/60000)*60;}catch(e){}
+  tzCache={at:ms,off};return off;
+}
+let LOCAL={h:12,day:0,off:-18000};
+function updateClock(){
+  let ms=simT*1000;const off=nyOffset(ms);LOCAL.off=off;
+  let loc=ms/1000+off;
+  if(OPT.hour!=null){const dayStart=Math.floor(loc/86400)*86400;loc=dayStart+clamp(OPT.hour,0,23.99)*3600+((simT-T0/1000)%86400);ms=(loc-off)*1000;}
+  LOCAL.h=((loc%86400)+86400)%86400/3600;LOCAL.day=Math.floor(loc/86400);LOCAL.ms=ms;
+}
+
+/* ---------- canvases ---------- */
+const cv=$('screen'),g=cv.getContext('2d',{alpha:false});
+function mkC(){const c=document.createElement('canvas');return[c,c.getContext('2d',{willReadFrequently:true})];}
+const [mk,mg]=mkC(),[rk,rg]=mkC(),[ek,eg]=mkC(),[erk,erg]=mkC(); // silhouettes / reflected silhouettes / lights / reflected lights
+let W=384,H=216,SCALE=5,img=null,px32=null,LB=null,DB=null,HZ=null;
+const GS=3;let SG=null,RG=null,GW=0,GH=0,bMap=null,B1=null,B2=null,B3=null,B4=null,BT=null,EA=null,EB=null,EC=null,NA=null,horizL=null;
+const ecls=(r,g,b)=>r>g*1.6?(r>200?1:4):(r>200&&b<120?2:3);
+function resize(){
+  const vw=Math.max(1,innerWidth),vh=Math.max(1,innerHeight);
+  SCALE=Math.max(1,Math.round(vh/OPT.lines));H=Math.ceil(vh/SCALE);W=Math.ceil(vw/SCALE);
+  cv.width=W;cv.height=H;cv.style.width=W*SCALE+'px';cv.style.height=H*SCALE+'px';
+  for(const c of[mk,rk,ek,erk]){c.width=W;c.height=H;}
+  img=g.createImageData(W,H);px32=new Uint32Array(img.data.buffer);
+  const N=W*H;LB=new Float32Array(N);DB=new Float32Array(N);HZ=new Float32Array(N);
+  bMap=new Float32Array(N);B1=new Float32Array(N);B2=new Float32Array(N);B3=new Float32Array(N);B4=new Float32Array(N);BT=new Float32Array(N);
+  EA=new Float32Array(N);EB=new Float32Array(N);EC=new Uint8Array(N);NA=new Float32Array(N);
+  GW=Math.ceil(W/GS)+2;GH=Math.ceil(H/GS)+2;SG=new Float32Array(GW*GH);RG=new Float32Array(GW*GH);horizL=new Float32Array(W);
+}
+
+/* ---------- camera ---------- */
+const CAM={x:0,y:20,z:1000,yaw:180,pitch:0,fov:40,F:300,f:[0,0,1],r:[1,0,0],u:[0,1,0],mir:false};
+function setBasis(c){
+  const cy=Math.cos(c.yaw*D2R),sy=Math.sin(c.yaw*D2R),cp=Math.cos(c.pitch*D2R),sp=Math.sin(c.pitch*D2R);
+  c.f=[sy*cp,sp,cy*cp];c.r=[cy,0,-sy];c.u=[-sy*sp,cp,-cy*sp];c.F=(W/2)/Math.tan(c.fov*D2R/2);
+}
+function mirrorOf(c){const m={...c,y:-c.y,pitch:-c.pitch,mir:true};setBasis(m);return m;}
+// project to camera space; returns [sx,sy,cz]
+const NEAR=2;
+function toCam(c,x,y,z,o){const dx=x-c.x,dy=y-c.y,dz=z-c.z;
+  o[0]=dx*c.r[0]+dz*c.r[2];o[1]=dx*c.u[0]+dy*c.u[1]+dz*c.u[2];o[2]=dx*c.f[0]+dy*c.f[1]+dz*c.f[2];return o;}
+function scr(c,cx,cy,cz,o,i){const k=c.F/cz;o[i]=W/2+cx*k;o[i+1]=H/2-(c.mir?-1:1)*cy*k;}
+const TMP=[0,0,0],CL=[],CLo=[];
+// fill a 3D polygon (flat array x,y,z,...) with near-plane clipping
+function poly3(ctx,c,P){
+  const n=P.length/3;CL.length=0;let behind=0;
+  for(let i=0;i<n;i++){toCam(c,P[i*3],P[i*3+1],P[i*3+2],TMP);CL.push(TMP[0],TMP[1],TMP[2]);if(TMP[2]<NEAR)behind++;}
+  if(behind===n)return false;
+  let pts=CL;
+  if(behind){CLo.length=0;for(let i=0;i<n;i++){const j=(i+1)%n,az=CL[i*3+2],bz=CL[j*3+2];
+      if(az>=NEAR)CLo.push(CL[i*3],CL[i*3+1],az);
+      if((az>=NEAR)!==(bz>=NEAR)){const t=(NEAR-az)/(bz-az);CLo.push(lerp(CL[i*3],CL[j*3],t),lerp(CL[i*3+1],CL[j*3+1],t),NEAR);}}
+    pts=CLo;}
+  const m=pts.length/3;if(m<3)return false;
+  ctx.beginPath();const k0=c.F/pts[2];ctx.moveTo(W/2+pts[0]*k0,H/2-(c.mir?-1:1)*pts[1]*k0);
+  for(let i=1;i<m;i++){const k=c.F/pts[i*3+2];ctx.lineTo(W/2+pts[i*3]*k,H/2-(c.mir?-1:1)*pts[i*3+1]*k);}
+  ctx.closePath();return true;
+}
+function line3(ctx,c,x1,y1,z1,x2,y2,z2,wm){
+  toCam(c,x1,y1,z1,TMP);let a0=TMP[0],a1=TMP[1],a2=TMP[2];toCam(c,x2,y2,z2,TMP);let b0=TMP[0],b1=TMP[1],b2=TMP[2];
+  if(a2<NEAR&&b2<NEAR)return;
+  if(a2<NEAR){const t=(NEAR-a2)/(b2-a2);a0=lerp(a0,b0,t);a1=lerp(a1,b1,t);a2=NEAR;}
+  if(b2<NEAR){const t=(NEAR-b2)/(a2-b2);b0=lerp(b0,a0,t);b1=lerp(b1,a1,t);b2=NEAR;}
+  const s=c.mir?-1:1,ka=c.F/a2,kb=c.F/b2;
+  ctx.lineWidth=clamp(wm*c.F/((a2+b2)/2),.7,4);
+  ctx.beginPath();ctx.moveTo(W/2+a0*ka,H/2-s*a1*ka);ctx.lineTo(W/2+b0*kb,H/2-s*b1*kb);ctx.stroke();
+}
+function point3(ctx,c,x,y,z,sizeM,o){toCam(c,x,y,z,TMP);if(TMP[2]<NEAR)return false;const k=c.F/TMP[2];
+  o[0]=W/2+TMP[0]*k;o[1]=H/2-(c.mir?-1:1)*TMP[1]*k;o[2]=Math.max(.6,sizeM*k);o[3]=TMP[2];return o[0]>-8&&o[0]<W+8&&o[1]>-8&&o[1]<H+8;}
+const PT=[0,0,0,0];
+
+/* ---------- light and air (set each frame) ---------- */
+const AIR={sky:0,vis:9000,sunUp:0,amb:.3,dif:.5,sunH:[0,-1],light:.6,night:0};
+function hazeAt(d){return clamp(1-Math.exp(-d/AIR.vis),0,1);}
+function depth01(d){return clamp(Math.log(Math.max(d,30)/30)/Math.log(300),0,1);} // 30 m → 0, 9 km → 1
+// silhouette colour: R = haze, G = depth, B = tone (paint × light)
+function sil(d,tone){return`rgb(${(hazeAt(d)*255)|0},${(depth01(d)*255)|0},${(clamp(tone,0,1)*255)|0})`;}
+function faceTone(tone,nx,nz){const s=nx*AIR.sunH[0]+nz*AIR.sunH[1];return tone*(AIR.amb+AIR.sky+AIR.dif*Math.max(0,s));}
+
+/* ---------- the drawing passes ---------- */
+// pass = {c: camera, m: silhouette ctx, e: lights ctx}
+function occlude(p){p.e.globalCompositeOperation='destination-out';p.e.fillStyle='#000';p.e.fill();p.e.globalCompositeOperation='source-over';}
+function drawPoly(p,P,d,tone){if(!poly3(p.m,p.c,P))return;p.m.fillStyle=sil(d,tone);p.m.fill();occlude(p);}
+let LIGHTS_N=0;
+const rgbaS=(col,a)=>`rgba(${col[0]},${col[1]},${col[2]},${a.toFixed(3)})`;
+function light(p,x,y,z,sz,col,a){if(typeof col!=='string')col=rgbaS(col,a);if(!point3(p.e,p.c,x,y,z,sz,PT))return;LIGHTS_N++;p.e.fillStyle=col;const s=Math.min(PT[2],2.2);p.e.fillRect(PT[0]-s/2,PT[1]-s/2,s,s);}
+
+/* oriented box: centre (x,z), half-length hx along heading yaw, half-width hz, from y0 to y1 */
+function boxFaces(b){
+  const ca=Math.sin(b.yaw*D2R),cb=Math.cos(b.yaw*D2R); // along = (sin,cos) in (x,z)
+  const ax=ca*b.hx,az=cb*b.hx,bx=cb*b.hz,bz=-ca*b.hz;
+  const C=[[b.x-ax-bx,b.z-az-bz],[b.x+ax-bx,b.z+az-bz],[b.x+ax+bx,b.z+az+bz],[b.x-ax+bx,b.z-az+bz]];
+  b.C=C;b.N=[[-cb,ca],[ca,cb],[cb,-ca],[-ca,-cb]];// normals of edges C0-C1 (−b side), C1-C2 (+a), C2-C3 (+b), C3-C0 (−a)
+}
+function drawBox(p,b,d){
+  const c=p.c,C=b.C;
+  for(let i=0;i<4;i++){const j=(i+1)%4,n=b.N[i],mx=(C[i][0]+C[j][0])/2,mz=(C[i][1]+C[j][1])/2;
+    if(n[0]*(c.x-mx)+n[1]*(c.z-mz)<=0)continue;
+    drawPoly(p,[C[i][0],b.y0,C[i][1],C[j][0],b.y0,C[j][1],C[j][0],b.y1,C[j][1],C[i][0],b.y1,C[i][1]],d,faceTone(b.tone,n[0],n[1]));
+    if(b.win&&AIR.night>.2)windows(p,b,C[i],C[j],n,d,i);}
+  if(b.gable){const a=b.gable;// ridge along heading at height y1+a
+    const ca=Math.sin(b.yaw*D2R),cb=Math.cos(b.yaw*D2R),r0=[b.x-ca*b.hx,b.z-cb*b.hx],r1=[b.x+ca*b.hx,b.z+cb*b.hx],yr=b.y1+a;
+    for(const s of[-1,1]){const n=[cb*s,-ca*s];const e0=s<0?C[0]:C[3],e1=s<0?C[1]:C[2];
+      if(n[0]*(c.x-b.x)+n[1]*(c.z-b.z)>0||c.y>yr)drawPoly(p,[e0[0],b.y1,e0[1],e1[0],b.y1,e1[1],r1[0],yr,r1[1],r0[0],yr,r0[1]],d,faceTone(b.tone*1.1,n[0]*.6,n[1]*.6)+.04);}
+    for(const s of[-1,1]){const n=[ca*s,cb*s],e0=s<0?C[0]:C[1],e1=s<0?C[3]:C[2],r=s<0?r0:r1;
+      if(n[0]*(c.x-r[0])+n[1]*(c.z-r[1])>0)drawPoly(p,[e0[0],b.y1,e0[1],e1[0],b.y1,e1[1],r[0],yr,r[1]],d,faceTone(b.tone,n[0],n[1]));}
+  }else if(c.y>b.y1&&!p.c.mir)drawPoly(p,[C[0][0],b.y1,C[0][1],C[1][0],b.y1,C[1][1],C[2][0],b.y1,C[2][1],C[3][0],b.y1,C[3][1]],d,b.tone*(AIR.amb*.8+AIR.dif*.5*AIR.sunUp)+.03);
+}
+function windows(p,b,A,B,n,d,face){
+  const len=Math.hypot(B[0]-A[0],B[1]-A[1]),nx=Math.max(1,Math.floor(len/b.win)),ny=Math.max(1,Math.floor((b.y1-b.y0-2)/3.6));
+  if(d/len>60)return;
+  const lit=b.lit*AIR.night*.5,sz=.9,seed=b.id*31+face*7,cs=rgbaS(WINC,.75);if(LIGHTS_N>4000)return;
+  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){const h=hash3(seed+i,j,LOCAL.day+Math.floor(LOCAL.h*2+hash3(i,j,seed)*6));if(h>lit)continue;
+    const t=(i+.5)/nx;light(p,lerp(A[0],B[0],t)+n[0]*.3,b.y0+2.2+j*3.6,lerp(A[1],B[1],t)+n[1]*.3,sz,cs);}
+}
+
+/* ---------- vessels of 1957, drawn as two crossed profiles ----------
+   bayline   Old Bay Line night steamer (City of Norfolk / City of Richmond), white, one tall stack
+   reefer    a United Fruit banana boat, white hull
+   freighter Liberty/Victory-type cargo ship, dark hull, midship house, kingposts and booms
+   sugarship a raw-sugar freighter at the Domino wharf
+   tug       Baker-Whiteley / Curtis Bay harbour tug, tall stack
+   carfloat  B&O car float with boxcars (towed on the hip by a tug)
+   skipjack  Chesapeake oyster dredger, sails down; deadrise, buyboat: bay workboats         */
+const SHIPS={};
+function defShip(k,L,B,prof,end,lines,lights,stack,tone){SHIPS[k]={L,B,prof,end,lines,lights,stack,tone};}
+(function(){
+  // u from stern (−L/2) to bow (+L/2); v up from the waterline
+  const hullP=(L,fb,sheerB,sheerS,rake)=>[-L/2,0, L/2-rake,0, L/2,fb+sheerB, -L/2+L*.02,fb+sheerS];
+  const box=(u0,u1,v0,v1)=>[u0,v0,u1,v0,u1,v1,u0,v1];
+  const win=(u0,u1,v,step)=>{const o=[];for(let u=u0;u<=u1;u+=step)o.push([u,v,'w']);return o;};
+  // Old Bay Line steamer ~90 m
+  defShip('bayline',90,16,[
+    {p:hullP(90,4.2,1.6,.8,5),t:.92},{p:box(-40,36,4.2,8.4),t:.95},{p:box(-36,31,8.4,11.6),t:.96},{p:box(18,27,11.6,14.4),t:.9},{p:box(-3,3,11.6,23),t:.18}],
+    [{p:[-8,0,8,0,8,4.2,-8,4.2],t:.9},{p:[-8,4.2,8,4.2,7.5,11.6,-7.5,11.6],t:.95},{p:[-2.5,11.6,2.5,11.6,2.5,23,-2.5,23],t:.18}],
+    [[36,4,37,26,.35],[-37,4,-37,21,.3],[37,26,45,4.6,.08],[-37,21,-45,3.8,.08]],
+    [...win(-36,32,6.2,2.6),...win(-33,28,10,2.4),[37,26.2,'m'],[-37,21.2,'m'],[44,4,'g']],[0,23],.95);
+  // banana boat ~137 m
+  defShip('reefer',137,18,[
+    {p:hullP(137,8,3.5,1.6,9),t:.9},{p:box(-12,16,8,15),t:.93},{p:box(-8,12,15,18.5),t:.94},{p:box(-50,-28,8,12.5),t:.92},{p:box(-4,4,15,26),t:.32}],
+    [{p:[-9,0,9,0,9,8,-9,8],t:.9},{p:[-7,8,7,8,6.5,18.5,-6.5,18.5],t:.94},{p:[-2.4,15,2.4,15,2.4,26,-2.4,26],t:.32}],
+    [[45,8,45,24,.4],[30,8,30,22,.4],[-35,12.5,-35,24,.4],[45,22,33,10,.1],[-35,22,-24,12,.1]],
+    [...win(-10,14,10.5,2.2),...win(-7,10,16.5,2),[45,24.2,'m'],[-35,24.2,'m']],[0,26],.9);
+  // Liberty-type freighter ~135 m
+  defShip('freighter',135,17,[
+    {p:hullP(135,7,3,1.2,6),t:.14},{p:box(-10,14,7,13),t:.72},{p:box(-6,10,13,16.5),t:.74},{p:box(-2,3,13,22),t:.22},{p:box(-62,-54,7,10.5),t:.7}],
+    [{p:[-8.5,0,8.5,0,8.5,7,-8.5,7],t:.14},{p:[-7,7,7,7,6.5,16.5,-6.5,16.5],t:.73},{p:[-2,13,2,13,2,22,-2,22],t:.22}],
+    [[52,7,52,24,.45],[34,7,34,22,.4],[-30,7,-30,22,.4],[-46,7,-46,20,.4],[52,21,40,9,.12],[34,20,22,9,.12],[-30,20,-18,9,.12],[-46,18,-58,9,.12]],
+    [...win(-8,12,10,2.4),[52,24.2,'m'],[-46,20.2,'m'],[-60,9.5,'g']],[1,22],.14);
+  defShip('sugarship',128,17,SHIPS.freighter.prof.map(o=>({...o,t:o.t===.14?.2:o.t})),SHIPS.freighter.end,SHIPS.freighter.lines,SHIPS.freighter.lights,[1,22],.2);
+  // harbour tug ~30 m
+  defShip('tug',30,8,[
+    {p:hullP(30,2.6,1.4,.5,3),t:.13},{p:box(-7,6,2.6,5.6),t:.75},{p:box(2,6,5.6,7.6),t:.8},{p:box(-2.4,.4,5.6,11.5),t:.16}],
+    [{p:[-4,0,4,0,4,2.8,-4,2.8],t:.13},{p:[-3,2.8,3,2.8,3,7.6,-3,7.6],t:.78},{p:[-1.2,5.6,1.2,5.6,1.2,11.5,-1.2,11.5],t:.16}],
+    [[7,7.6,7,13,.25]],
+    [[5,6.6,'w'],[3,6.6,'w'],[7,13.2,'m'],[-12,3.2,'g']],[-1,11.5],.13);
+  // B&O car float ~90 m with three tracks of boxcars
+  const cars=[];for(let i=0;i<7;i++){const u0=-42+i*12;cars.push({p:box(u0,u0+10.5,2,5.8),t:.3+((i*37)%5)*.03});}
+  defShip('carfloat',90,11,[{p:box(-45,45,0,2),t:.2},...cars],
+    [{p:[-5.5,0,5.5,0,5.5,2,-5.5,2],t:.2},{p:[-5,2,-1.6,2,-1.6,5.8,-5,5.8],t:.32},{p:[-1.6,2,1.6,2,1.6,5.8,-1.6,5.8],t:.3},{p:[1.6,2,5,2,5,5.8,1.6,5.8],t:.34}],[],[],null,.2);
+  // skipjack ~16 m, sails down, raked mast, long bowsprit
+  defShip('skipjack',16,5,[{p:hullP(16,1.3,.7,.3,1.5),t:.86},{p:box(-6,-3,1.3,2.3),t:.82}],
+    [{p:[-2.5,0,2.5,0,2.4,1.4,-2.4,1.4],t:.86}],
+    [[3,1.3,1.4,21,.22],[8,1.8,14,2.5,.14],[1.4,4,-8,2.2,.2]],[[1.4,21.2,'m']],null,.86);
+  defShip('deadrise',12,3.6,[{p:hullP(12,1.2,.6,.2,1.2),t:.9},{p:box(-1,3.5,1.2,3),t:.88}],[{p:[-1.8,0,1.8,0,1.7,1.2,-1.7,1.2],t:.9},{p:[-1.3,1.2,1.3,1.2,1.3,3,-1.3,3],t:.88}],[[3,3,3,5,.08]],[[3,5.1,'m']],null,.9);
+  defShip('buyboat',20,5.5,[{p:hullP(20,1.6,.9,.3,1.8),t:.88},{p:box(-8,-1,1.6,4.4),t:.9}],[{p:[-2.7,0,2.7,0,2.6,1.6,-2.6,1.6],t:.88},{p:[-2,1.6,2,1.6,2,4.4,-2,4.4],t:.9}],[[3,1.6,3,10,.15],[3,8,9,2.4,.1]],[[3,10.2,'m'],[-4,4,'w']],null,.88);
+})();
+const SHIPNAME={bayline:'OLD BAY LINE STEAMER',reefer:'BANANA BOAT',freighter:'FREIGHTER',sugarship:'RAW-SUGAR SHIP',tug:'TUG',carfloat:'B&O CAR FLOAT',skipjack:'SKIPJACK',deadrise:'DEADRISE',buyboat:'BUY BOAT'};
+
+function drawShip(p,o,d){
+  const S=SHIPS[o.k],c=p.c,hd=o.hd*D2R,fx=Math.sin(hd),fz=Math.cos(hd),sx=fz,sz=-fx; // forward, starboard
+  const r=o.roll||0,cu=Math.cos(r),su=Math.sin(r),y0=o.lift||0;
+  // the side of the hull facing the camera decides where the end profile sits
+  const side=(c.x-o.x)*sx+(c.z-o.z)*sz>0?1:-1;
+  const vv=(u,v,w,P)=>{P.push(o.x+fx*u+sx*(w+v*su),y0+v*cu,o.z+fz*u+sz*(w+v*su));};
+  const toward=(c.x-o.x)*fx+(c.z-o.z)*fz>0?1:-1; // camera ahead (+) or astern (−)
+  const sunS=(sx*AIR.sunH[0]+sz*AIR.sunH[1])*side,sunF=(fx*AIR.sunH[0]+fz*AIR.sunH[1])*toward;
+  const dist=d;
+  // end profile (at mid-length), then the long profile
+  const ends=()=>{for(const q of S.end){const P=[];for(let i=0;i<q.p.length;i+=2)vv(0,q.p[i+1],q.p[i],P);drawPoly(p,P,dist,q.t*(AIR.amb+AIR.sky+AIR.dif*Math.max(0,sunF)));}};
+  const prof=()=>{for(const q of S.prof){const P=[];for(let i=0;i<q.p.length;i+=2)vv(q.p[i],q.p[i+1],0,P);drawPoly(p,P,dist,q.t*(AIR.amb+AIR.sky+AIR.dif*Math.max(0,sunS)));}};
+  if(Math.abs((c.x-o.x)*fx+(c.z-o.z)*fz)>Math.abs((c.x-o.x)*sx+(c.z-o.z)*sz)*1.6){prof();ends();}else{ends();prof();}
+  p.m.strokeStyle=sil(d,.12*AIR.amb+.05);
+  for(const l of S.lines){const a=[],b=[];vv(l[0],l[1],0,a);vv(l[2],l[3],0,b);line3(p.m,c,a[0],a[1],a[2],b[0],b[1],b[2],l[4]);}
+  if(AIR.night>.15){for(const L of S.lights){const P=[];vv(L[0],L[1],L[2]==='w'?side*S.B*.42:0,P);
+    const col=L[2]==='w'?WINC:L[2]==='g'?[120,255,160]:LAMPC;light(p,P[0],P[1],P[2],L[2]==='w'?.8:1.1,col,L[2]==='w'?.75*AIR.night*(o.dark?0:1):.95*AIR.night);}}
+}
+
+/* ---------- the fixed harbour, built once ---------- */
+let STATIC=[];
+let NEXTID=1;
+function addBox(x,z,hx,hz,y0,y1,tone,o={}){const b={k:'box',x,z,hx,hz,yaw:o.yaw||0,y0,y1,tone,id:NEXTID++,win:o.win||0,lit:o.lit||.4,gable:o.gable||0,name:o.name};boxFaces(b);b.R=Math.hypot(hx,hz,y1);STATIC.push(b);return b;}
+function buildWorld(){
+  STATIC=[];NEXTID=1;const R=mulberry(OPT.seed*131+7);
+  // DOMINO SUGARS refinery (1922) on the south shore; the sign (1951) on its roof, facing the harbour
+  addBox(0,140,62,34,0,40,.55,{win:4.5,lit:.55,name:'refinery'});         // main refinery house, sign on top
+  addBox(96,130,34,30,0,34,.5,{win:4.5,lit:.5});                         // char house
+  addBox(-110,140,50,30,0,22,.48,{win:5,lit:.35,gable:4});              // raw sugar shed
+  addBox(-190,150,30,28,0,16,.46,{gable:3});
+  addBox(150,95,20,16,0,26,.45,{win:4,lit:.4});
+  addBox(0,104,30,14,40,45,.5);                                         // roof house behind the sign
+  STATIC.push({k:'stack',x:112,z:108,y0:34,y1:70,r:2.6,tone:.3,smoke:{rate:.5,tone:.42}},{k:'stack',x:122,z:104,y0:34,y1:66,r:2.4,tone:.3,smoke:{rate:.4,tone:.42}});
+  addBox(0,196,150,7,0,3,.4);                                            // the Domino wharf
+  STATIC.push({k:'sign',x:0,z:172,y0:41,y1:62.3,w:36.6});
+  // BETHLEHEM STEEL KEY HIGHWAY YARD under Federal Hill: shops, floating drydocks, whirley cranes
+  for(let i=0;i<7;i++)addBox(-260-i*64,330+i*36,28,18,0,10+R()*14,.42+R()*.1,{win:5,lit:.25,gable:R()<.5?4:0});
+  [[-350,470,24],[-520,560,26]].forEach(([x,z,yaw],i)=>{STATIC.push({k:'drydock',x,z,yaw,hx:105,hz:22,ship:i});});
+  [[-430,520,0],[-610,640,1],[-270,420,2]].forEach(([x,z],i)=>STATIC.push({k:'crane',x,z,i,h:30}));
+  addBox(-430,500,6,70,0,2.6,.4,{yaw:24});addBox(-270,400,6,60,0,2.6,.4,{yaw:24});       // repair piers
+  // FEDERAL HILL: the hill, its trees and rowhouses
+  STATIC.push({k:'hill',x:-760,z:560,rx:190,rz:110,h:26});
+  for(let i=0;i<46;i++){const x=-1040+R()*420,z=470+R()*120;if(Math.hypot((x+760)/190,(z-560)/110)<1.05)continue;addBox(x,z,4+R()*5,7,0,9+R()*3,.5+R()*.15,{win:3.5,lit:.35});}
+  for(let i=0;i<40;i++){const u=(R()-.5)*1.7,v=(R()-.5)*1.7,rr=u*u+v*v;if(rr>1)continue;const lay=rr<.09?3:rr<.49?2:1;STATIC.push({k:'tree',x:-760+u*190,z:560+v*110,s:4+R()*3,y:26*lay/3});}
+  // LOCUST POINT: the B&O grain elevator (1922), its pier, the B&O piers and sheds, rowhouses
+  addBox(604,-370,70,52,0,58,.6,{name:'elevator'});addBox(604,-370,16,40,58,72,.62,{win:4,lit:.4});
+  addBox(660,-40,8,150,0,6,.42);STATIC.push({k:'gallery',x0:604,z0:-330,x1:660,z1:60,y:30});
+  for(let i=0;i<5;i++){const x=880+i*150,z=-180-i*120;addBox(x,z,26,150,0,3,.4,{yaw:28});addBox(x,z,18,130,3,14,.5,{yaw:28,gable:3,win:6,lit:.2});}
+  for(let i=0;i<80;i++){const x=150+R()*1300,z=-650-R()*600+x*.15;if(isWater(x,z))continue;addBox(x,z,8+R()*12,7,0,8+R()*4,.5+R()*.15,{win:3.5,lit:.32});}
+  for(let i=0;i<24;i++){const x=200+R()*500,z=-40-R()*200;addBox(x,z,14+R()*20,10+R()*14,0,7+R()*14,.46+R()*.1,{win:5,lit:.25});}
+  // FORT McHENRY at the point: low star fort, flagpole
+  STATIC.push({k:'fort',x:1776,z:-1276,r:85});
+  // far shore: South Baltimore beyond, Fairfield and Curtis Bay, Sparrows Point on the far left
+  for(let i=0;i<90;i++){const a=R(),x=-900+a*3600,z=-1500-R()*2500;if(isWater(x,z))continue;addBox(x,z,10+R()*30,8+R()*20,0,6+R()*18,.5,{win:6,lit:.3});}
+  for(let i=0;i<26;i++){const x=900+R()*2600,z=-6600-R()*1400;if(isWater(x,z))continue;
+    if(R()<.4)STATIC.push({k:'tank',x,z,r:10+R()*12,h:9+R()*6});else addBox(x,z,15+R()*30,12+R()*20,0,8+R()*25,.5,{win:8,lit:.2});}
+  for(let i=0;i<6;i++)STATIC.push({k:'stack',x:1300+R()*2000,z:-6900-R()*900,y0:0,y1:40+R()*30,r:3,tone:.4,smoke:{rate:.12,tone:.6,big:2}});
+  addBox(10400,-6150,420,320,0,22,.45,{win:12,lit:.3,name:'sparrows point'});
+  for(let i=0;i<8;i++)STATIC.push({k:'stack',x:10100+R()*700,z:-5900-R()*500,y0:20,y1:62+R()*25,r:4,tone:.4,smoke:{rate:.12,tone:.62,big:2.6},furnace:i<3});
+  // the Pratt Street piers and the crane stations' near water: pilings, dolphins
+  [[-900,40],[-690,36],[-586,36],[-448,34],[-330,34]].forEach(([x,w],i)=>{addBox(x,1150,w/2,140,0,3,.38);if(i!==2)addBox(x,1170,w/2-6,110,3,13,.45,{gable:3,win:6,lit:.15});});
+  addBox(612,800,22,60,0,3,.4);addBox(612,820,16,40,3,11,.5,{win:5,lit:.3,name:'recreation pier'});
+  for(let i=0;i<20;i++){const s=STATIONS[i%STATIONS.length];const a=(145+R()*70)*D2R,d=22+R()*60;
+    const x=s.x+Math.sin(a)*d,z=s.z+Math.cos(a)*d;if(!isWater(x,z))continue;
+    const n=R()<.5?5:3,hh=2+R()*1.6;for(let k=0;k<n;k++)addBox(x+Math.cos(k*1.3)*.7,z+Math.sin(k*1.3)*.7,.22,.22,-0.5,hh-(k===0?-.4:0),.28,{});}
+  // street lamps along Key Highway and Locust Point
+  for(let i=0;i<34;i++){const t=i/33;STATIC.push({k:'lamp',x:lerp(-760,560,t),z:lerp(640,60,Math.pow(t,.8))-30,y:7});}
+  for(const b of STATIC){b.R=b.R||Math.max(b.hx||b.r||b.w||30,40);}
+}
+let BOATS_NEAR=[];
+function buildNearBoats(){ // bay workboats moored by the camera piers (they change with the season: skipjacks in oyster season)
+  const R=mulberry(OPT.seed*17+3);BOATS_NEAR=[];
+  for(const s of STATIONS){for(let i=0;i<4;i++){const a=(150+R()*60)*D2R,d=40+R()*110,x=s.x+Math.sin(a)*d,z=s.z+Math.cos(a)*d;if(!isWater(x,z))continue;
+    BOATS_NEAR.push({x,z,hd:R()*360,k:['skipjack','deadrise','buyboat','deadrise'][i],ph:R()*6.28,slot:BOATS_NEAR.length});}}
+}
+
+/* ---------- crane camera stations (all on the north side, all looking into one arc) ---------- */
+const ARC=[125,245];
+const STATIONS=[
+  {id:'pier5',name:'PIER 5 · PRATT STREET',x:-448,z:1010,h:[16,36],arm:14,unlock:0},
+  {id:'pier1',name:'PIER 1 · THE BANANA PIER',x:-900,z:1015,h:[12,30],arm:12,unlock:0},
+  {id:'pier6',name:'PIER 6 · PRESIDENT STREET',x:-330,z:1010,h:[14,32],arm:14,unlock:0},
+  {id:'fells',name:'BROADWAY PIER · FELLS POINT',x:612,z:735,h:[12,30],arm:12,unlock:.75},
+  {id:'barge',name:'CRANE BARGE · NORTHWEST BRANCH',x:-120,z:640,h:[3.5,22],arm:16,unlock:2.5}
+];
+const TARGETS={
+  sign:{name:'DOMINO SUGARS',x:0,y:52,z:172,r:30},
+  water:{name:'THE SIGN IN THE WATER',x:0,y:-48,z:172,r:60},
+  refinery:{name:'THE REFINERY',x:20,y:28,z:150,r:90},
+  yard:{name:'KEY HIGHWAY YARD',x:-420,y:18,z:500,r:140},
+  hill:{name:'FEDERAL HILL',x:-760,y:16,z:560,r:150},
+  elevator:{name:'B&O GRAIN ELEVATOR',x:604,y:40,z:-370,r:90},
+  fort:{name:'FORT McHENRY',x:1776,y:8,z:-1276,r:120},
+  channel:{name:'THE CHANNEL',x:900,y:5,z:-300,r:400}
+};
+
+/* ---------- live weather (Baltimore) ---------- */
+const WX={wind:4,dir:250,gust:7,cloud:55,low:30,hum:70,rain:0,temp:10,vis:20000,ok:false,at:0};
+const WXS={wind:4,dir:250,gust:7,cloud:55,low:30,hum:70,rain:0,temp:10,vis:20000};
+function synthWX(t){const h=t/3600;return{wind:2+6*vn(h*.3,9),dir:180+140*vn(h*.1,4),gust:5+9*vn(h*.4,7),cloud:100*vn(h*.15,2),low:60*vn(h*.2,8),
+  hum:55+40*vn(h*.2,3),rain:Math.max(0,vn(h*.25,11)-.76)*6,temp:10,vis:6000+22000*vn(h*.2,1)};}
+async function fetchWX(){
+  if(!OPT.live)return;
+  try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${BALT.lat}&longitude=${BALT.lon}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,cloud_cover_low,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&wind_speed_unit=ms&timezone=America%2FNew_York`;
+    const j=await(await fetch(u,{cache:'no-store'})).json(),c=j.current;
+    Object.assign(WX,{wind:fin(c.wind_speed_10m,4),dir:fin(c.wind_direction_10m,250),gust:fin(c.wind_gusts_10m,7),cloud:fin(c.cloud_cover,55),low:fin(c.cloud_cover_low,30),
+      hum:fin(c.relative_humidity_2m,70),rain:fin(c.precipitation,0),temp:fin(c.temperature_2m,10),vis:fin(c.visibility,20000),ok:true,at:Date.now()});
+  }catch(e){/* keep last values */}
+}
+
+/* ---------- clock ---------- */
+const T0=Date.now();let simT=T0/1000+OPT.ff*3600;
+const EPOCH=Date.UTC(2026,0,1)/1000;
+const ST={chop:0,drift:0,shotN:0,shotT0:0,shotDur:0,cloudX:0,cloudZ:0};
+
+/* ---------- memory: what the cameras have lived through ---------- */
+let MEM={v:1,hours:0,calm:0,fog:0,storm:0,nights:0,departures:0,arrivals:0,takes:0,lastTake:-1e9,attn:{},pigment:0,log:[],learned:0};
+let ERA={name:'WORKING',since:simT,pressure:0,amt:{veil:0,glass:0,take:0},until:0};
+function load(){
+  if(!MEMORY_ON||OPT.fresh)return;
+  try{const s=JSON.parse(localStorage.getItem(STORE)||'null');
+    if(s&&s.v===1){Object.assign(MEM,s.mem||{});Object.assign(ST,s.st||{});if(s.era)ERA={...ERA,...s.era,since:simT-(s.era.age||0)};if(s.shot)SHOT=s.shot;}}catch(e){}
+  for(const k in ST)ST[k]=fin(ST[k],0);
+}
+function save(){
+  if(!MEMORY_ON)return;
+  try{MEM.log=MEM.log.slice(-40);localStorage.setItem(STORE,JSON.stringify({v:1,mem:MEM,st:ST,shot:SHOT,era:{name:ERA.name,pressure:ERA.pressure,amt:ERA.amt,until:ERA.until-simT>0?ERA.until:0,age:simT-ERA.since}}));}catch(e){}
+}
+function hhmm(h){h=((h%24)+24)%24;return String(Math.floor(h)).padStart(2,'0')+':'+String(Math.floor(h%1*60)).padStart(2,'0');}
+function logEv(s){MEM.log.push(hhmm(LOCAL.h)+' '+s);if(MEM.log.length>60)MEM.log.shift();}
+function unlocked(st){return OPT.capture||MEM.hours>=st.unlock;}
+
+/* ---------- the working harbour: schedules from Baltimore's clock ---------- */
+// routes in metres; poses interpolate along polylines
+const R_BAYLINE=[[-640,1120],[-640,960],[-560,830],[-360,720],[-120,600],[200,470],[600,300],[1000,60],[1400,-420],[1950,-1050],[2500,-1900],[3400,-3000]];
+const R_IN=[[3400,-3000],[2500,-1900],[1950,-1050],[1400,-420],[1050,-150]];
+function along(P,s){ // s in metres from start
+  for(let i=0;i<P.length-1;i++){const dx=P[i+1][0]-P[i][0],dz=P[i+1][1]-P[i][1],L=Math.hypot(dx,dz);
+    if(s<=L||i===P.length-2){const t=clamp(s/L,0,1);return{x:P[i][0]+dx*t,z:P[i][1]+dz*t,hd:Math.atan2(dx,dz)/D2R,end:s>L&&i===P.length-2};}s-=L;}
+}
+function lenOf(P){let L=0;for(let i=0;i<P.length-1;i++)L+=Math.hypot(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]);return L;}
+function smoothAlong(P,s){const a=along(P,s-25),b=along(P,s+25),m=along(P,s);m.hd=Math.atan2(b.x-a.x,b.z-a.z)/D2R;return m;}
+const BERTHS_LP=[{x:880,z:-60,hd:28},{x:1030,z:-180,hd:28},{x:1180,z:-300,hd:28},{x:1330,z:-420,hd:208},{x:742,z:-130,hd:208}];
+let LIVE=[];  // vessels this frame
+const FIRED=new Set();function once(key){if(FIRED.has(key))return false;FIRED.add(key);if(FIRED.size>400)FIRED.delete(FIRED.values().next().value);return true;}
+const lerpAng=(a,b,t)=>(a+angDiff(b,a)*t+360)%360;
+let EVENTS=[];// sound events this frame (whistles etc.)
+function vessels(){
+  LIVE=[];const h=LOCAL.h,day=LOCAL.day,tday=h*3600;
+  // the Old Bay Line: one boat lies at Pratt Street through the day; sails 18:30 for Norfolk, the other arrives 07:00
+  const nm=day%2?'CITY OF NORFOLK':'CITY OF RICHMOND',nmPrev=day%2?'CITY OF RICHMOND':'CITY OF NORFOLK';
+  const Lb=lenOf(R_BAYLINE);
+  const dep=18.5*3600,arr=7*3600,v=2.6;
+  if(tday>=dep&&tday<dep+Lb/v+600){const tt=tday-dep;let s,hd=null;
+    if(tt<240){s=tt*.7;hd=0;}else if(tt<600){s=168+(tt-240)*1.2;}else s=600+(tt-600)*v;
+    const m=smoothAlong(R_BAYLINE,s);if(hd!==null)m.hd=0;else if(tt<600)m.hd=lerpAng(0,m.hd,ease5((tt-240)/360));
+    if(!m.end)LIVE.push({k:'bayline',...m,name:nm,mv:1,id:'bayline'});
+    if(tt<30&&once('dep'+day))EVENTS.push({k:'whistle',x:m.x,z:m.z,at:simT+1,big:1});}
+  else if(tday>=arr-(Lb/v)&&tday<arr){const s=(arr-tday)*v;const m=smoothAlong(R_BAYLINE,clamp(s,0,Lb));
+    m.hd=(m.hd+180)%360;LIVE.push({k:'bayline',...m,name:nmPrev,mv:1,id:'bayline'});
+    if(s<500&&once('arr'+day))EVENTS.push({k:'whistle',x:m.x,z:m.z,at:simT+1,big:1});}
+  else if(tday>=arr&&tday<dep)LIVE.push({k:'bayline',x:-640,z:1120,hd:0,name:nm+' · PRATT STREET',id:'baylineB'});
+  // banana boat at Pier 1 on its days (two or three a week)
+  if(hash3(day,1,3)<.4)LIVE.push({k:'reefer',x:-865,z:1130,hd:0,name:'BANANA BOAT · PIER 1',dark:true});
+  // raw-sugar ship at the Domino wharf on some days, lying under the sign
+  if(hash3(day,2,5)<.55)LIVE.push({k:'sugarship',x:-10+hash3(day,2,6)*40,z:215,hd:hash3(day,2,7)<.5?90:270,name:'RAW-SUGAR SHIP · DOMINO WHARF'});
+  // Locust Point berths: cargo ships come and go on long cycles; arrivals and departures with two tugs
+  BERTHS_LP.forEach((b,i)=>{
+    const cyc=(26+i*5)*3600,ph=hash3(i,9,9)*cyc,tt=simT+ph,k=Math.floor(tt/cyc),f=(tt-k*cyc)/cyc;
+    const kind=hash3(k,i,4)<.2?'reefer':'freighter';
+    const stay=.62+hash3(k,i,6)*.2,mv=.035;
+    const route=[...R_IN,[b.x+Math.sin(b.hd*D2R)*-200,b.z+Math.cos(b.hd*D2R)*-200],[b.x,b.z]];const Lr=lenOf(route);
+    let s=null;
+    if(f<mv)s=Lr*ease5(f/mv);else if(f<stay)s=Lr;else if(f<stay+mv)s=Lr*(1-ease5((f-stay)/mv));
+    if(s!==null&&s>30){const m=smoothAlong(route,s);if(s>=Lr-1){m.hd=b.hd;}const moving=s<Lr-1;
+      if(moving&&f>=stay){const back=Lr-s;m.hd=back<250?(m.hd+0)%360:lerpAng(m.hd,(m.hd+180)%360,ease5((back-250)/250));}
+      LIVE.push({k:kind,...m,name:SHIPNAME[kind]+' · LOCUST POINT',mv:moving?1:0,id:'lp'+i});
+      if(moving){for(const sd of[-1,1]){const a=(m.hd+sd*70)*D2R;LIVE.push({k:'tug',x:m.x+Math.sin(a)*48+Math.sin(m.hd*D2R)*sd*30,z:m.z+Math.cos(a)*48+Math.cos(m.hd*D2R)*sd*30,hd:m.hd+sd*8,mv:1,name:'TUG',id:'esc'+i+sd});}
+        if(s<Lr*.5&&once('lp'+i+'_'+k+(f>=stay?'o':'i')))EVENTS.push({k:'horn',x:m.x,z:m.z,at:simT+1});}}
+  });
+  // the grain ship under the elevator spouts
+  if(hash3(day,4,1)<.7)LIVE.push({k:'freighter',x:692,z:110,hd:0,name:'GRAIN SHIP · B&O ELEVATOR'});
+  // ships in the Key Highway floating drydocks (lifted out of the water)
+  STATIC.forEach(o=>{if(o.k==='drydock'){const wk=Math.floor((day+o.ship*3)/6);if(hash3(wk,o.ship,8)<.8)LIVE.push({k:'freighter',x:o.x,z:o.z,hd:o.yaw,lift:5.5,name:'IN DRYDOCK · KEY HIGHWAY',dry:1});}});
+  // harbour tugs on their errands (20-minute slots between Recreation Pier, the berths, the wharf and the yard)
+  const NODES=[[575,790],[700,-60],[-40,240],[-380,430],[1100,-260],[150,560],[-560,820],[400,350]];
+  for(let i=0;i<4;i++){const slot=1200+i*170,k=Math.floor((simT+i*333)/slot),f=((simT+i*333)/slot)%1;
+    const a=NODES[(hash3(k,i,1)*NODES.length)|0],b=NODES[(hash3(k+1,i,1)*NODES.length)|0];
+    const go=sstep(.15,.7,f),mid=[(a[0]+b[0])/2+(hash3(k,i,3)-.5)*300,(a[1]+b[1])/2+(hash3(k,i,4)-.5)*300];
+    const P=[a,mid,b],m=smoothAlong(P,go*lenOf(P));if(go<=0||go>=1)m.hd=hash3(k,i,9)*360;
+    LIVE.push({k:'tug',...m,mv:go>0&&go<1?1:0,name:'TUG · '+(i%2?'CURTIS BAY TOWING':'BAKER-WHITELEY'),id:'tug'+i});
+    if(go>0&&go<1&&once('tug'+i+'_'+k))EVENTS.push({k:'toot',x:m.x,z:m.z,at:simT});}
+  // B&O car float, Locust Point → Canton and back, every 90 minutes, a tug on the hip
+  {const per=5400,k=Math.floor(simT/per),f=(simT/per)%1;const out=k%2===0;const P=out?[[760,-90],[1100,120],[1700,380],[2300,240]]:[[2300,240],[1700,380],[1100,120],[760,-90]];
+    const go=sstep(.05,.55,f);if(go>0&&go<1){const m=smoothAlong(P,go*lenOf(P));LIVE.push({k:'carfloat',...m,mv:1,name:'B&O CAR FLOAT',id:'float'});
+      const a=(m.hd+90)*D2R;LIVE.push({k:'tug',x:m.x+Math.sin(a)*10-Math.sin(m.hd*D2R)*30,z:m.z+Math.cos(a)*10-Math.cos(m.hd*D2R)*30,hd:m.hd,mv:1,name:'TUG',id:'floattug'});}}
+  // the near workboats (skipjacks in oyster season, Nov–Apr)
+  const month=new Date(LOCAL.ms).getUTCMonth(),oyster=month>=10||month<=3;
+  for(const b of BOATS_NEAR){const k=b.k==='skipjack'&&!oyster?'deadrise':b.k;if(hash3(b.slot,day,2)<.2)continue;LIVE.push({k,x:b.x,z:b.z,hd:b.hd,ph:b.ph,name:SHIPNAME[k],near:1});}
+  if(OPT.ships){LIVE=[];const ks=['bayline','tug','reefer','skipjack','freighter','deadrise','carfloat','buyboat'];let x=-330;
+    ks.forEach((k,i)=>{const L=SHIPS[k].L;x+=L/2+8;LIVE.push({k,x:x*.55-60,z:i%2?470:440,hd:i%2?90:270,name:k,id:k});x+=L/2;});}
+  // motion: roll and heave from the wind chop; moving vessels leave wakes
+  const chop=clamp(WXS.wind/12,0,1.5)*(1-ERA.amt.glass*.8);
+  for(const o of LIVE){const S=SHIPS[o.k],mass=Math.sqrt(S.L/12);o.roll=o.dry?0:Math.sin(ST.chop*.8/mass+(o.ph||o.x*.01))*chop*.05/mass;o.lift=(o.lift||0)+(o.dry?0:Math.cos(ST.chop*.7/mass+(o.ph||0))*chop*.15);}
+}
+
+/* ---------- smoke and steam: carried by the live wind ---------- */
+let SMOKE=[];
+function windVec(){const a=(WXS.dir+180)*D2R;return[Math.sin(a)*WXS.wind,Math.cos(a)*WXS.wind];}// toward
+function stepSmoke(dt){
+  const [wx,wz]=windVec();
+  const emit=(x,y,z,rate,tone,big)=>{const n=rate*dt;let k=Math.floor(n);if(Math.random()<n-k)k++;
+    for(let i=0;i<k;i++)SMOKE.push({x:x+(Math.random()-.5)*2,y,z:z+(Math.random()-.5)*2,r:(big||1)*2.2,age:0,life:(60+Math.random()*60)*(big?1.6:1),tone,big:big||1,vy:2.2*(big||1)});};
+  for(const s of STATIC)if(s.smoke)emit(s.x,s.y1,s.z,s.smoke.rate,s.smoke.tone,s.smoke.big);
+  for(const o of LIVE){const S=SHIPS[o.k];if(!S.stack||o.dry)continue;const hd=o.hd*D2R;
+    emit(o.x+Math.sin(hd)*S.stack[0],S.stack[1]+(o.lift||0),o.z+Math.cos(hd)*S.stack[0],o.mv?.45:.1,o.k==='tug'?.3:.45,1);}
+  for(const e of EVENTS)if(e.k==='whistle'&&!e.puffed){e.puffed=1;for(let i=0;i<6;i++)SMOKE.push({x:e.x,y:26,z:e.z,r:1.5,age:0,life:12,tone:.95,big:.7,vy:1.5});}
+  const sp=1+WXS.gust*.02;
+  for(const p of SMOKE){p.age+=dt;const hf=.4+Math.min(1,p.y/120);p.x+=wx*hf*sp*dt;p.z+=wz*hf*sp*dt;p.y+=p.vy*dt;p.vy*=Math.exp(-dt/25);p.r=Math.min(p.r+dt*(.3+WXS.wind*.04)*p.big,14*p.big);}
+  SMOKE=SMOKE.filter(p=>p.age<p.life);if(SMOKE.length>900)SMOKE.splice(0,SMOKE.length-900);
+}
+
+/* ---------- the camera: shots on cranes ---------- */
+let SHOT=null;
+function bearing(ax,az,bx,bz){return(Math.atan2(bx-ax,bz-az)/D2R+360)%360;}
+function inArc(y){const lo=ARC[0],hi=ARC[1];return clamp(y,lo,hi);}
+function pickShot(n,t0){
+  const R=mulberry(OPT.seed*1009+n*7919);
+  const avail=STATIONS.filter(s=>unlocked(s));
+  // memory: stations where things happened get chosen more
+  const wts=avail.map(s=>1+clamp(MEM.attn[s.id]||0,0,4));
+  let st=OPT.cam>=0?STATIONS[OPT.cam%STATIONS.length]:null;
+  if(!st){let r=R()*wts.reduce((a,b)=>a+b,0);for(let i=0;i<avail.length;i++){r-=wts[i];if(r<=0){st=avail[i];break;}}st=st||avail[0];}
+  // what to look at: the sign most often; a vessel that is moving; the water at night
+  const night=AIR.night>.5,cands=[['sign',3.4],['water',night?3:.6],['refinery',1],['yard',1.1],['hill',.7],['elevator',1.1],['fort',.8],['channel',.6]];
+  for(const o of LIVE)if(o.mv&&o.id){const b=bearing(st.x,st.z,o.x,o.z);if(b>ARC[0]+8&&b<ARC[1]-8)cands.push(['v:'+o.id,o.k==='bayline'?6:1.6]);}
+  // learned timetable: once a departure has been seen, the cameras are waiting for the steamer
+  if(MEM.learned&&LOCAL.h>18.3&&LOCAL.h<18.9){cands.push(['v:bayline',12]);}
+  let tg=null,tot=cands.reduce((a,c)=>a+c[1],0),r=R()*tot;for(const c of cands){r-=c[1];if(r<=0){tg=c[0];break;}}tg=tg||'sign';
+  if(OPT.shot&&(TARGETS[OPT.shot]||targetPos(OPT.shot)))tg=OPT.shot;
+  const types=['static','static','orbit','orbit','boom','pan','push'];let type=types[(R()*types.length)|0];
+  const long=ERA.name==='LONG TAKE';
+  const dur=long?Math.max(60,ERA.until-t0):45+R()*70;
+  if(long)type='long';
+  const h0=lerp(st.h[0],st.h[1],R()),h1=type==='boom'||type==='long'?lerp(st.h[0],st.h[1],R()):h0;
+  const tgp=targetPos(tg)||TARGETS.sign;
+  const dist=Math.hypot(tgp.x-st.x,tgp.z-st.z);
+  // lens: fit the subject, with variety; the sign gets long lenses
+  const rr=R();const want=clamp(2*Math.atan((tgp.r||40)*(1.8+rr*rr*13)/dist)/D2R,9,60);
+  const fov0=want,fov1=type==='push'?want*(.55+R()*.2):type==='long'?want*(.6+R()*.8):want;
+  const a0=R()*360,a1=a0+(type==='orbit'||type==='long'?(R()<.5?-1:1)*(25+R()*45):0);
+  const pan=type==='pan'?(R()<.5?-1:1)*(8+R()*14):0;
+  return{n,t0,dur,st:STATIONS.indexOf(st),tg,type,h0,h1,fov0,fov1,a0,a1,pan,pOff:(R()-.5)*1.5,yOff:(R()-.5)*6};
+}
+function targetPos(tg){
+  if(tg.startsWith('v:')){const id=tg.slice(2);const o=LIVE.find(v=>v.id===id);return o?{x:o.x,y:o.k==='tug'?5:10,z:o.z,r:SHIPS[o.k].L*.6,name:o.name||SHIPNAME[o.k]}:null;}
+  return TARGETS[tg];
+}
+let SHOTLOG=[];
+function updateShot(){
+  if(!SHOT||simT>=SHOT.t0+SHOT.dur||simT<SHOT.t0-5||(ERA.name==='LONG TAKE'&&SHOT.type!=='long')||(ERA.name!=='LONG TAKE'&&SHOT.type==='long')){
+    const n=(SHOT?SHOT.n:Math.floor((simT-EPOCH)/90))+1;
+    const prev=SHOT;SHOT=pickShot(n,simT);
+    if(prev&&prev.events&&MEMORY_ON){const id=STATIONS[prev.st].id;MEM.attn[id]=(MEM.attn[id]||0)+prev.events*.5;}
+    SHOT.events=0;
+  }
+  for(const k in MEM.attn)MEM.attn[k]*=Math.exp(-1/(30*60*OPT.fps)); // attention fades over hours
+  const s=SHOT,st=STATIONS[s.st],e=ease5((simT-s.t0)/s.dur);
+  const tgp=targetPos(s.tg)||(s.lastTg)||TARGETS.sign;s.lastTg={...tgp};
+  const a=lerp(s.a0,s.a1,e)*D2R;
+  const x=st.x+Math.sin(a)*st.arm,z=st.z+Math.cos(a)*st.arm,y=lerp(s.h0,s.h1,s.type==='long'?.5-.5*Math.cos(e*Math.PI*3):e);
+  // wind works the crane arm: a slow sway, larger in gusts
+  const sw=(.015+WXS.wind*.012+WXS.gust*.004)*(1-ERA.amt.glass*.5),t=simT;
+  const swY=sw*(Math.sin(t*.37)+.6*Math.sin(t*.13+1.7)),swP=sw*.6*(Math.sin(t*.29+.4)+.5*Math.sin(t*.11));
+  let yaw=bearing(x,z,tgp.x,tgp.z)+s.yOff*(1-e*.3);
+  if(s.type==='pan')yaw+=lerp(-s.pan,s.pan,e);
+  yaw=inArc(yaw);
+  const dist=Math.hypot(tgp.x-x,tgp.z-z);
+  let pitch=Math.atan2(tgp.y-y,dist)/D2R+s.pOff;
+  const fov=lerp(s.fov0,s.fov1,s.type==='long'?.5-.5*Math.cos(e*Math.PI*2):e);
+  Object.assign(CAM,{x,y,z,yaw:yaw+swY,pitch:clamp(pitch+swP,-24,18),fov});if(window.MZ&&MZ.lock)Object.assign(CAM,MZ.lock);setBasis(CAM);
+}
+
+/* ---------- eras: WORKING · VEIL · GLASS · LONG TAKE ---------- */
+function setEra(n){ERA.name=n;ERA.since=simT;}
+function updateEra(dt){
+  const fogish=sstep(85,98,WXS.hum)*.6+sstep(9000,1500,WXS.vis)*.9;
+  const age=simT-ERA.since;
+  ERA.pressure=clamp(fin(ERA.pressure,0)+dt/3600*(.1+(AIR.night>.5?.12:0)+sstep(3,0,WXS.wind)*.2),0,1.5);
+  if(ERA.name==='LONG TAKE'){if(simT>ERA.until){setEra('WORKING');ERA.pressure=0;MEM.takes++;MEM.lastTake=simT;logEv('the long take ended; cutting again');}}
+  else if(ERA.pressure>1&&(MEM.hours>3||OPT.capture)&&age>900&&simT-MEM.lastTake>3*3600){setEra('LONG TAKE');ERA.until=simT+1100+hash3(MEM.takes,3,3)*700;SHOT=null;logEv('a crane began one long take');}
+  else if(age>900){let tgt='WORKING';if(fogish>.45)tgt='VEIL';else if(WXS.wind<2.5&&WXS.gust<5)tgt='GLASS';
+    if(tgt!==ERA.name){setEra(tgt);logEv(tgt==='VEIL'?'haze came off the water; the neon blooms':tgt==='GLASS'?'the branch went to glass; the sign lies whole':'the harbour is working again');}}
+  const k=1-Math.exp(-dt/240);ERA.amt.veil=fin(lerp(ERA.amt.veil,ERA.name==='VEIL'?1:0,k),0);ERA.amt.glass=fin(lerp(ERA.amt.glass,ERA.name==='GLASS'?1:0,k),0);ERA.amt.take=fin(lerp(ERA.amt.take,ERA.name==='LONG TAKE'?1:0,k),0);
+}
+
+/* ---------- focus: Turner's soft light, pulled over 2–3 minutes ---------- */
+const FOCUS_BLOCK=210,FKINDS=['sharp','soft','near','far','tilt','patch'];
+function focusRaw(b){const r=hash3(b,17,71);return r<.26?'sharp':r<.44?'soft':r<.6?'near':r<.8?'far':r<.9?'tilt':'patch';}
+function focusKind(b){if(FKINDS.includes(OPT.focus))return OPT.focus;let k=focusRaw(b);if(k===focusRaw(b-1))k=FKINDS[(FKINDS.indexOf(k)+1+((hash3(b,5,9)*4)|0))%6];return k;}
+function focusParams(b){const k=focusKind(b),j=hash3(b,3,29),j2=hash3(b,8,41);
+  if(k==='soft')return{G:.7+j*.25,A:0,fd:.5,T:0,by:.6,R:.3};
+  if(k==='near')return{G:.03,A:1.6,fd:.05+j*.12,T:0,by:.6,R:0};
+  if(k==='far')return{G:.03,A:1.6,fd:.66+j*.2,T:0,by:.6,R:0};
+  if(k==='tilt')return{G:0,A:0,fd:.5,T:.85+j*.15,by:.44+j2*.3,R:0};
+  if(k==='patch')return{G:.1,A:0,fd:.5,T:0,by:.6,R:1};
+  return{G:0,A:0,fd:.3,T:0,by:.6,R:0};}
+const FOC={G:0,A:0,fd:.5,T:0,by:.6,R:0,from:'sharp',to:'sharp',left:0,soft:0};
+function updateFocus(){
+  if(OPT.focus==='0'||OPT.focus==='off'){FOC.G=FOC.A=FOC.T=FOC.R=FOC.soft=0;FOC.from=FOC.to='off';FOC.left=0;return;}
+  const t=simT-EPOCH,b=Math.floor(t/FOCUS_BLOCK),fr=t-b*FOCUS_BLOCK,dur=120+hash3(b,2,53)*60;
+  const e=ease5(fr/dur),p=focusParams(b-1),q=focusParams(b);
+  for(const k of['G','A','fd','T','by','R'])FOC[k]=lerp(p[k],q[k],e);
+  FOC.from=focusKind(b-1);FOC.to=focusKind(b);FOC.left=Math.max(0,dur-fr);
+}
+
+/* ---------- palette ---------- */
+let MOOD=null,PAL=[],PALr=[],SUN=null,NEON_ON=0;
+function computeLight(){
+  const sol=OPT.held==='evening'?{elev:3,az:238}:OPT.held==='night'?{elev:-25,az:300}:OPT.held==='dawn'?{elev:2,az:118}:OPT.held==='day'?{elev:30,az:190}:solar(39.285,-76.61,LOCAL.ms);
+  SUN=sol;const e=sol.elev,aw=sol.az>180?1:0;
+  const wN=1-sstep(-11,-3.5,e),wD=sstep(12,24,e)*(1-wN),wL=1-wN-wD;MOOD={e,aw:sstep(150,210,sol.az),wN,wD,wL};
+  const over=sstep(55,100,WXS.cloud)*.4+sstep(0,2,WXS.rain)*.2;
+  const drift=Math.sin(simT/5400)*.03+MEM.pigment;
+  PAL=[];for(let i=0;i<6;i++){const c=[0,0,0];for(let k=0;k<3;k++){const low=lerp(MOODS.dawn[i][k],MOODS.evening[i][k],MOOD.aw);c[k]=MOODS.night[i][k]*wN+MOODS.day[i][k]*wD+low*wL;}
+    const Y=c[0]*.3+c[1]*.59+c[2]*.11;let o=c.map((v,k)=>lerp(v,Y*[1.02,.98,1.08][k],i>0&&i<5?over:over*.3));
+    if(i>=2&&i<=4){o[0]*=1+drift;o[2]*=1-drift*.8;}PAL.push(o.map(v=>clamp(v|0,0,255)));}
+  PALr=PAL.map(rgba32);
+  // light on things
+  const sunUp=sstep(-2,10,e)*(1-sstep(60,100,WXS.cloud)*.6);
+  AIR.sunUp=sunUp;AIR.sunH=[Math.sin(sol.az*D2R),Math.cos(sol.az*D2R)];
+  AIR.amb=lerp(.14,.36,sstep(-8,15,e))*(1-wN*.4);AIR.dif=.5*sunUp;AIR.sky=.2*sstep(-4,12,e);AIR.night=1-sstep(-7,1,e);
+  // the air of 1957: soft-coal haze from a working city, then fog
+  const vis=Math.min(WXS.vis,30000);AIR.vis=clamp(vis*.42,1800,11000)*(1-sstep(80,100,WXS.hum)*.45)*(1-ERA.amt.veil*.6);
+  // the sign: lit from dusk to dawn
+  const on=e<1.5?1:0;NEON_ON=lerp(NEON_ON,on,on>NEON_ON?.06:.02);if(OPT.held==='night'||OPT.held==='evening')NEON_ON=1;
+}
+
+/* ---------- drawing one pass ---------- */
+function drawScene(p){
+  LIGHTS_N=0;const c=p.c;p.m.setTransform(1,0,0,1,0,0);p.e.setTransform(1,0,0,1,0,0);p.m.clearRect(0,0,W,H);p.e.clearRect(0,0,W,H);
+  p.m.lineCap='butt';
+  const list=[];
+  const vis=(x,z,R)=>{const dx=x-c.x,dz=z-c.z,d=Math.hypot(dx,dz);if(d<R+5)return d;const b=Math.atan2(dx,dz)/D2R,off=Math.abs(angDiff(b,c.yaw));return off-Math.asin(Math.min(1,R/d))/D2R<c.fov*.5+6?d:-1;};
+  for(const o of STATIC){if(o.k==='lamp'&&AIR.night<.1)continue;const d=vis(o.x,o.z,o.R||40);if(d>=0)list.push([d,o]);}
+  for(const o of LIVE){if(o.dry)continue;const d=vis(o.x,o.z,SHIPS[o.k].L*.6);if(d>=0)list.push([d,{k:'ship',o}]);}
+  for(const s of SMOKE){const d=vis(s.x,s.z,s.r*2);if(d>=0)list.push([d,{k:'smoke',s}]);}
+  list.sort((a,b)=>b[0]-a[0]);
+  for(const [d,o] of list)drawThing(p,o,d);
+}
+function drawThing(p,o,d){
+  const c=p.c;
+  switch(o.k){
+    case 'box':drawBox(p,o,d);break;
+    case 'ship':drawShip(p,o.o,d);break;
+    case 'stack':{const P=[o.x-o.r,o.y0,o.z,o.x+o.r,o.y0,o.z,o.x+o.r*.8,o.y1,o.z,o.x-o.r*.8,o.y1,o.z];
+      // face the camera
+      const b=Math.atan2(c.x-o.x,c.z-o.z),cx=Math.cos(b),cz=-Math.sin(b);for(let i=0;i<4;i++){const s=i===0||i===3?-1:1,r=i<2?o.r:o.r*.8;P[i*3]=o.x+cx*s*r;P[i*3+2]=o.z+cz*s*r;}
+      drawPoly(p,P,d,o.tone*(AIR.amb+.2*AIR.sunUp));
+      if(o.furnace&&AIR.night>.3){light(p,o.x,6,o.z,30,[255,120,60],.35*AIR.night);}break;}
+    case 'smoke':{const s=o.s;if(!point3(p.m,c,s.x,s.y,s.z,s.r*2,PT))break;const a=.55*(1-s.age/s.life)*Math.min(1,s.age*.8)*(1-ERA.amt.veil*.3)*sstep(25,90,d);if(a<.01)break;
+      p.m.fillStyle=sil(d,s.tone*(AIR.amb+.45*AIR.sunUp)+.06);p.m.globalAlpha=a*.45;p.m.beginPath();p.m.arc(PT[0],PT[1],PT[2]/2,0,6.283);p.m.fill();p.m.globalAlpha=a*.55;p.m.beginPath();p.m.arc(PT[0]+PT[2]*.05,PT[1]+PT[2]*.04,PT[2]*.3,0,6.283);p.m.fill();p.m.globalAlpha=1;
+      if(a>.3){p.e.globalAlpha=a*.6;p.e.globalCompositeOperation='destination-out';p.e.fill();p.e.globalCompositeOperation='source-over';p.e.globalAlpha=1;}break;}
+    case 'sign':drawSign(p,o,d);break;
+    case 'drydock':{const hd=o.yaw*D2R,fx=Math.sin(hd),fz=Math.cos(hd),sx=fz,sz=-fx;
+      const s2=((c.x-o.x)*sx+(c.z-o.z)*sz)>0?1:-1;
+      const wall=(s,id)=>{const b={x:o.x+sx*s*o.hz,z:o.z+sz*s*o.hz,hx:o.hx,hz:3,yaw:o.yaw,y0:0,y1:14,tone:.4,id};boxFaces(b);drawBox(p,b,d);};
+      wall(-s2,900+o.ship*2);
+      const fl={x:o.x,z:o.z,hx:o.hx,hz:o.hz,yaw:o.yaw,y0:0,y1:5.5,tone:.32,id:950+o.ship};boxFaces(fl);drawBox(p,fl,d);
+      const sh=LIVE.find(v=>v.dry&&Math.abs(v.x-o.x)<1&&Math.abs(v.z-o.z)<1);if(sh)drawShip(p,sh,d);
+      wall(s2,901+o.ship*2);break;}
+    case 'crane':{const t=simT/600+o.i*3.1,k=Math.floor(t),f=ease5(clamp((t-k)*3,0,1));const sl=lerp(hash3(k,o.i,1),hash3(k+1,o.i,1),f)*300+o.i*40;
+      const b={x:o.x,z:o.z,hx:4,hz:4,yaw:20,y0:0,y1:o.h*.62,tone:.3,id:700+o.i};boxFaces(b);drawBox(p,b,d);
+      const cab={x:o.x,z:o.z,hx:5,hz:4,yaw:sl,y0:o.h*.62,y1:o.h*.82,tone:.42,id:720+o.i};boxFaces(cab);drawBox(p,cab,d);
+      const a=sl*D2R,bx=o.x+Math.sin(a)*34,bz=o.z+Math.cos(a)*34,by=o.h*1.35;p.m.strokeStyle=sil(d,.15);
+      line3(p.m,c,o.x,o.h*.7,o.z,bx,by,bz,.8);line3(p.m,c,o.x-Math.sin(a)*4,o.h*.84,o.z-Math.cos(a)*4,bx,by,bz,.25);line3(p.m,c,bx,by,bz,bx,by-14-6*Math.sin(simT/80+o.i),bz,.1);
+      if(AIR.night>.3)light(p,bx,by,bz,1,[255,80,60],.9);break;}
+    case 'hill':{const n=14;for(let lay=0;lay<3;lay++){const s=1-lay*.3,h=o.h*(lay+1)/3;const b={x:o.x,z:o.z,hx:o.rx*s,hz:o.rz*s,yaw:12,y0:0,y1:h,tone:.24+lay*.03,id:600+lay};boxFaces(b);drawBox(p,b,d);}break;}
+    case 'tree':{if(!point3(p.m,c,o.x,o.y+o.s*1.1,o.z,o.s*2,PT))break;p.m.fillStyle=sil(d,.16*AIR.amb+.03);p.m.beginPath();p.m.arc(PT[0],PT[1],PT[2]/2,0,6.283);p.m.fill();occlude(p);break;}
+    case 'gallery':{p.m.strokeStyle=sil(d,.25);line3(p.m,c,o.x0,o.y+30,o.z0,o.x1,o.y,o.z1,3);line3(p.m,c,o.x1,o.y,o.z1,o.x1,0,o.z1,1.2);break;}
+    case 'tank':{const b={x:o.x,z:o.z,hx:o.r*.8,hz:o.r*.8,yaw:45,y0:0,y1:o.h,tone:.6,id:800+(o.x|0)};boxFaces(b);drawBox(p,b,d);break;}
+    case 'fort':{for(let i=0;i<5;i++){const a=i/5*6.283,b2=(i+1)/5*6.283;const P=[o.x+Math.sin(a)*o.r,0,o.z+Math.cos(a)*o.r,o.x+Math.sin(b2)*o.r,0,o.z+Math.cos(b2)*o.r,o.x+Math.sin(b2)*o.r,7,o.z+Math.cos(b2)*o.r,o.x+Math.sin(a)*o.r,7,o.z+Math.cos(a)*o.r];
+        const nx=Math.sin((a+b2)/2),nz=Math.cos((a+b2)/2);if(nx*(c.x-o.x)+nz*(c.z-o.z)>0)drawPoly(p,P,d,faceTone(.45,nx,nz));}
+      p.m.strokeStyle=sil(d,.2);line3(p.m,c,o.x,7,o.z,o.x,34,o.z,.5);
+      const [wx,wz]=windVec(),wl=Math.hypot(wx,wz)||1,fl=10,fh=6,ph=Math.sin(simT*1.7)*.6;
+      const ux=wx/wl,uz=wz/wl;drawPoly(p,[o.x,34,o.z,o.x+ux*fl,34-fh*.15+ph,o.z+uz*fl+ph,o.x+ux*fl,34-fh+ph*.5,o.z+uz*fl,o.x,34-fh,o.z],d,.7*(AIR.amb+.3*AIR.sunUp));break;}
+    case 'lamp':light(p,o.x,o.y,o.z,1.2,LAMPC,.9*AIR.night);break;
+  }
+}
+// the sign: steel framework on the roof, two lines of neon, "Domino" above "Sugars"
+function drawSign(p,o,d){
+  const c=p.c,hw=o.w/2,z=o.z;
+  p.m.strokeStyle=sil(d,.16+.1*AIR.sunUp);
+  for(let i=0;i<=8;i++){const x=-hw+i*o.w/8;line3(p.m,c,x,o.y0,z,x,o.y1,z,.35);}
+  for(const y of[o.y0+.5,o.y0+(o.y1-o.y0)*.5,o.y1])line3(p.m,c,-hw,y,z,hw,y,z,.3);
+  for(let i=0;i<8;i++){const x=-hw+i*o.w/8;line3(p.m,c,x,o.y0,z,x+o.w/8,o.y0+(o.y1-o.y0)*.5,z,.18);}
+  // project the sign plane and draw the letters there
+  const P=[[hw,o.y1],[-hw,o.y1],[hw,o.y0]].map(([x,y])=>{toCam(c,x,y,z,TMP);if(TMP[2]<NEAR)return null;const k=c.F/TMP[2];return[W/2+TMP[0]*k,H/2-(c.mir?-1:1)*TMP[1]*k];});
+  if(P.some(q=>!q))return;
+  const pxw=Math.hypot(P[1][0]-P[0][0],P[1][1]-P[0][1]);if(pxw<2)return;
+  const ctx=p.e;ctx.save();ctx.setTransform((P[1][0]-P[0][0])/1000,(P[1][1]-P[0][1])/1000,(P[2][0]-P[0][0])/580,(P[2][1]-P[0][1])/580,P[0][0],P[0][1]);
+  const on=NEON_ON,a=lerp(.32*(1-AIR.night*.7),1,on);
+  if(a>.02){
+    ctx.font='italic 700 300px "Bodoni MT","Didot","Times New Roman",Georgia,serif';ctx.textBaseline='alphabetic';
+    const line=(txt,y,hgt)=>{const m=ctx.measureText(txt),sx=960/m.width;ctx.save();ctx.translate(20,y);ctx.scale(sx,hgt/210);ctx.fillText(txt,0,0);ctx.restore();};
+    ctx.fillStyle=on>.5?`rgba(${NEON[0]},${NEON[1]},${NEON[2]},${a})`:`rgba(${NEONDEEP[0]},${NEONDEEP[1]},${NEONDEEP[2]},${a})`;
+    line('Domino',250,230);line('Sugars',530,230);
+    if(on>.5&&pxw>40){ctx.strokeStyle=`rgba(${NEON2[0]},${NEON2[1]},${NEON2[2]},${a*.8})`;ctx.lineWidth=7;
+      const ls=(txt,y,hgt)=>{const m=ctx.measureText(txt),sx=960/m.width;ctx.save();ctx.translate(20,y);ctx.scale(sx,hgt/210);ctx.lineWidth=7/sx;ctx.strokeText(txt,0,0);ctx.restore();};ls('Domino',250,230);ls('Sugars',530,230);}
+  }
+  ctx.restore();
+  SIGNPX=Math.max(SIGNPX,c.mir?0:pxw);
+}
+let SIGNPX=0;
+
+/* ---------- soft focus: chained box blurs ---------- */
+function boxBlur(src,dst,r){
+  const n=2*r+1,inv=1/n,Wm=W-1,Hm=H-1;
+  for(let y=0;y<H;y++){const o=y*W;let a=0;for(let k=-r;k<=r;k++)a+=src[o+(k<0?0:k>Wm?Wm:k)];
+    for(let x=0;x<W;x++){BT[o+x]=a*inv;const i0=x-r,i1=x+r+1;a+=src[o+(i1>Wm?Wm:i1)]-src[o+(i0<0?0:i0)];}}
+  for(let x=0;x<W;x++){let a=0;for(let k=-r;k<=r;k++)a+=BT[(k<0?0:k>Hm?Hm:k)*W+x];
+    for(let y=0;y<H;y++){dst[y*W+x]=a*inv;const i0=y-r,i1=y+r+1;a+=BT[(i1>Hm?Hm:i1)*W+x]-BT[(i0<0?0:i0)*W+x];}}
+}
+
+/* ---------- the sky, evaluated along a view ray ---------- */
+const SK={sx:0,sy:-1,sz:0,glowA:.7,base:.4,thr:.6,lowc:.3,haze:.3,night:0,cx:0,cz:0,rain:0};
+function skyAt(dx,dy,dz,cx,cz){
+  const len=Math.sqrt(dx*dx+dy*dy+dz*dz),ny=dy/len;
+  const cs=(dx*SK.sx+dy*SK.sy+dz*SK.sz)/len,ang=Math.sqrt(Math.max(0,2*(1-cs)));
+  const up=ny>0?ny:0;
+  let L=SK.base+.16-Math.sqrt(up)*.42+SK.glowA*(Math.exp(-ang/.07)*.5+Math.exp(-ang/.36)*.42)+Math.exp(-up/.05)*.12*(1-SK.night*.4);
+  // city glow low in the south at night (and the refinery)
+  if(SK.night>0)L+=SK.night*Math.exp(-up/.06)*.12;
+  if(ny>.004){
+    // clouds: two decks, hit at their real heights, carried by the wind
+    const tH=2600/ny,hx=cx+dx/len*tH+SK.cx,hz=cz+dz/len*tH+SK.cz,fadeH=Math.exp(-tH/38000);
+    const pA=fbm3(hx/5200,hz/1900);
+    const tL=850/ny,lx=cx+dx/len*tL+SK.cx*1.6,lz=cz+dz/len*tL+SK.cz*1.6,fadeL=Math.exp(-tL/16000);
+    const pB=fbm3(lx/1500+7,lz/1500+3);
+    const dHi=sstep(SK.thr,SK.thr+.22,pA*1.06)*fadeH,dLo=sstep(SK.thr+.04-SK.lowc*.14,SK.thr+.3,pB)*(.4+SK.lowc*.8)*fadeL;
+    const near=Math.exp(-ang/.34);
+    L+=dHi*(near*.46-(1-near)*.18)+dLo*(near*.36-(1-near)*.34);
+    const disc=sstep(.013,.007,ang)*(1-dLo*.9)*(1-SK.haze*.6)*sstep(-1.5,1,SUN.elev);L+=disc*.4;
+    if(SK.rain>0){const st=vn(hx/90+SK.cx*.02,ny*30);L-=SK.rain*sstep(.5,.8,st)*.18*(1-near);}
+  }
+  return L;
+}
+
+/* ---------- render ---------- */
+function render(){
+  updateFocus();
+  SIGNPX=0;
+  const c=CAM,cm=mirrorOf(CAM);
+  drawScene({c,m:mg,e:eg});drawScene({c:cm,m:rg,e:erg});
+  const mD=mg.getImageData(0,0,W,H).data,rD=rg.getImageData(0,0,W,H).data,eD=eg.getImageData(0,0,W,H).data,erD=erg.getImageData(0,0,W,H).data;
+  // sky parameters
+  const se=SUN.elev*D2R,sa=SUN.az*D2R;SK.sx=Math.sin(sa)*Math.cos(se);SK.sy=Math.sin(se);SK.sz=Math.cos(sa)*Math.cos(se);
+  const m=MOOD;SK.glowA=lerp(lerp(.78,.86,m.aw),.6,m.wD)*(1-m.wN*.6)*(1-sstep(80,100,WXS.cloud)*.35);
+  SK.base=lerp(lerp(.32,.3,m.aw),.5,m.wD)*(1-m.wN*.68);SK.thr=lerp(.82,.36,WXS.cloud/100);SK.lowc=WXS.low/100;
+  SK.haze=clamp(sstep(60,100,WXS.hum)*.35+sstep(15000,2000,WXS.vis)*.4+ERA.amt.veil*.45,0,.9);SK.night=m.wN;SK.rain=sstep(0,3,WXS.rain);
+  SK.cx=ST.cloudX;SK.cz=ST.cloudZ;
+  const f=c.f,r=c.r,u=c.u,F=c.F,invF=1/F,hw=W/2,hh=H/2;
+  // horizon tone per column (what far things dissolve into)
+  for(let x=0;x<W;x++){const px=(x+.5-hw)*invF;const dx=f[0]+px*r[0],dz=f[2]+px*r[2];horizL[x]=clamp(skyAt(dx,.004,dz,c.x,c.z),0,1);}
+  // the sky at half resolution (direct and reflected), read back with bilinear filtering
+  for(let gy=0;gy<GH;gy++){const py=-(gy*GS+.5-hh)*invF;for(let gx=0;gx<GW;gx++){const px=(gx*GS+.5-hw)*invF,gi=gy*GW+gx;
+    const dx=f[0]+px*r[0]+py*u[0],dy=f[1]+py*u[1],dz=f[2]+px*r[2]+py*u[2];
+    SG[gi]=dy>-.05?skyAt(dx,dy,dz,c.x,c.z):0;RG[gi]=dy<.05?skyAt(dx,-dy,dz,c.x,c.z):0;}}
+  const bil=(G,fx,fy)=>{fx=fx<0?0:fx>GW-1.001?GW-1.001:fx;fy=fy<0?0:fy>GH-1.001?GH-1.001:fy;const x0=fx|0,y0=fy|0,tx=fx-x0,ty=fy-y0,i0=y0*GW+x0;
+    return(G[i0]*(1-tx)+G[i0+1]*tx)*(1-ty)+(G[i0+GW]*(1-tx)+G[i0+GW+1]*tx)*ty;};
+  const glass=ERA.amt.glass,wind=WXS.wind,chop=(.25+wind*.16+WXS.gust*.03)*(1-glass*.85),tt=ST.chop;
+  const fresK=.08;
+  // which rows hold reflected light (skip the shimmer search elsewhere)
+  const rowE=new Uint8Array(H);for(let y=0;y<H;y++){const o=y*W*4+3;for(let x=0;x<W;x++)if(erD[o+x*4]){rowE[y]=1;break;}}
+  const rowNear=new Uint8Array(H);for(let y=0;y<H;y++){let a=0;for(let k=0;k<14&&y-k>=0;k++)a|=rowE[y-k];for(let k=1;k<4&&y+k<H;k++)a|=rowE[y+k];rowNear[y]=a;}
+  const amb=AIR.amb,objDark=.01,objLit=.66,fogL=SK.haze;
+  for(let y=0;y<H;y++){const py=-(y+.5-hh)*invF,row=y*W,by=(y&3)*4;
+    for(let x=0;x<W;x++){const i=row+x,i4=i*4,px=(x+.5-hw)*invF;
+      const dx=f[0]+px*r[0]+py*u[0],dy=f[1]+py*u[1],dz=f[2]+px*r[2]+py*u[2];
+      let L,dep=1;
+      if(dy>=-.0005){L=bil(SG,x/GS,y/GS);}
+      else{const len=Math.sqrt(dx*dx+dz*dz+dy*dy),t=-c.y/dy,hx=c.x+dx*t,hz=c.z+dz*t,dist=t*len;dep=depth01(dist);
+        if(isWater(hx,hz)){
+          // the water: the sky and the harbour again, broken by the chop
+          const fade=1/(1+dist/350),amp=chop*fade;
+          const s1=Math.sin(hx*.13+tt*1.3+Math.sin(hz*.041+tt*.2)*2),s2=Math.sin(hx*.41-hz*.23+tt*2.3),s3=Math.sin(hz*.29+hx*.07-tt*1.7);
+          const nx=(s1*.6+s2*.4)*amp,nz=(s3*.7+s2*.3)*amp;
+          const band=Math.sin(hz*1.31+tt*1.7+s2*.8)+.55*Math.sin(hz*2.93-tt*2.6+hx*.05),pxs=F/300;
+          const ox=(nx*1.4+band*amp*1.6)*pxs,oy=Math.abs(nz)*2.4*pxs+nz;
+          const gap=glass>.6?1:.25+.75*sstep(-.35,.45,band*(.6+amp)+.3-amp*.4);
+          const rx=(x+ox+.5)|0,ry=(y+oy+.5)|0,ri=(ry<0?0:ry>=H?H-1:ry)*W+(rx<0?0:rx>=W?W-1:rx);
+          const om=1+dy/len,om2=om*om,fres=fresK+(1-fresK)*om2*om2*om*(1-AIR.night*.15);
+          let R=bil(RG,(x+ox)/GS,(y+oy)/GS)*.78;
+          const ra=rD[ri*4+3];
+          if(ra>0){const hz2=rD[ri*4]/255,tn=rD[ri*4+2]/255;const ob=lerp(objDark+tn*objLit,horizL[rx<0?0:rx>=W?W-1:rx],hz2);R=lerp(R,ob*.9,ra/255);}
+          L=lerp(.04+amb*.12,R,fres);
+          // light falls on the water under the sun
+          const cs=(dx*SK.sx-dy*SK.sy+dz*SK.sz)/len;
+          if(cs>.93&&SUN.elev>-2){const sp=vn(hx*.08+tt*.3,hz*.08);L+=sstep(.93,1,cs)*(.12+sstep(.5,.85,sp)*.28)*SK.glowA;}
+          // the reflected lights: the sign breaks into vertical shimmer
+          let ea=0,er=0,eg2=0,eb=0;
+          if(rowNear[ry<0?0:ry>=H?H-1:ry])for(let k=0;k<4;k++){const yy=ry-k*(1+(amp*4|0)),xx=(x+Math.round(Math.sin(hz*.9+tt*1.9+k*1.7)*amp*3*pxs)),q=((yy<0?0:yy>=H?H-1:yy)*W+(xx<0?0:xx>=W?W-1:xx))*4;
+            const a=erD[q+3]/255*(1-k*.22);if(a>ea){ea=a;er=erD[q];eg2=erD[q+1];eb=erD[q+2];}}
+          EA[i]=ea*(.6+.4*fres)*gap;EC[i]=ecls(er,eg2,eb);
+          HZ[i]=-1; // water
+        }else{
+          // ground beyond the shore
+          L=lerp(objDark+.16*amb,horizL[x],hazeAt(dist));HZ[i]=0;EA[i]=0;EC[i]=0;
+        }
+      }
+      if(dy>=-.0005){HZ[i]=0;EA[i]=0;EC[i]=0;}
+      // things drawn: harbour, ships, buildings, smoke
+      const a=mD[i4+3];
+      if(a>0){const hz2=mD[i4]/255,tn=mD[i4+2]/255;const ob=lerp(objDark+tn*objLit,horizL[x],hz2);const cov=a/255;
+        if(cov>=.99||cov>BAYER[by+(x&3)]){L=ob;dep=mD[i4+1]/255;EA[i]=0;EC[i]=0;}}
+      // lights in the scene (direct)
+      const ea=eD[i4+3];if(ea>0&&ea/255>=EA[i]){EA[i]=ea/255;EC[i]=ecls(eD[i4],eD[i4+1],eD[i4+2]);}
+      NA[i]=EC[i]===1?EA[i]:0;
+      L=lerp(L,horizL[x]*.9+.06,fogL*.28*(1-dep*0));
+      if(EC[i]>1&&EC[i]<4)L+=EA[i]*.35; // windows and lamps feed the soft focus, so blurred lights glow
+      LB[i]=L;DB[i]=dep;
+    }
+  }
+  // focus
+  const fG=clamp(FOC.G*(1-glass*.4)+SK.haze*.14+ERA.amt.veil*.18,0,1),fA=FOC.A,fT=FOC.T,fR=FOC.R,ffd=FOC.fd,fby=FOC.by,invH=1/H;
+  const focusing=fG+fA+fT+fR>.012;FOC.soft=fG;
+  if(focusing){for(let y=0;y<H;y++){const yn=y*invH,tl=fT>0?fT*sstep(.03,.34,Math.abs(yn-fby)):0;for(let x=0;x<W;x++){const i=y*W+x;let bb=fG+fA*Math.abs(DB[i]-ffd)*.9+tl;
+      if(fR>.01)bb+=fR*sstep(.42,.68,fbm3(x*invH*.8+simT*.0004,yn*1.5+31))*.95;bMap[i]=bb>1?1:bb;}}
+    const u2=H/180;boxBlur(LB,B1,Math.max(1,Math.round(u2)));boxBlur(B1,B2,Math.max(1,Math.round(3*u2)));boxBlur(B2,B3,Math.max(2,Math.round(6*u2)));boxBlur(B3,B4,Math.max(3,Math.round(12*u2)));}
+  // neon halo: lights bloom, more in fog and soft focus
+  const haloR=Math.max(1,Math.round((1.5+SK.haze*4+ERA.amt.veil*5+fG*5)*H/216));
+  boxBlur(NA,EB,haloR);
+  // inks
+  for(let y=0;y<H;y++){const row=y*W,by=(y&3)*4;
+    for(let x=0;x<W;x++){const i=row+x;let L=LB[i];
+      if(focusing){const bb=bMap[i];if(bb>.004){const lv=bb*4,li=lv|0,lf=lv-li;
+          const lo=li===0?L:li===1?B1[i]:li===2?B2[i]:li===3?B3[i]:B4[i],hi=li===0?B1[i]:li===1?B2[i]:li===2?B3[i]:B4[i];
+          L=lo+(hi-lo)*lf;const gl=B3[i]-.5;if(gl>0)L+=gl*.45*bb;}}
+      if(!(L>=0))L=0;if(L>1)L=1;
+      const v=L*5,iv=v|0,fr=v-iv,ink=fr>BAYER[by+(x&3)]?iv+1:iv;let col=PALr[ink>5?5:ink];
+      const th=BAYER[by+(x&3)];
+      const ea=EA[i],eb=EB[i]*(1.6+SK.haze*1.5+ERA.amt.veil*1.4)*(1-AIR.sunUp*.7);
+      const k=EC[i];
+      const bbk=focusing&&k>1&&k<4?bMap[i]:0;
+      if(k&&ea*(1-bbk*.95)>th*.85+.08){col=k===1?(ea>.92&&th<.3?NEON2_32:NEON32):k===2?LAMP32:k===4?DEEP32:WIN32;}
+      else if(eb>.08+th*.9)col=eb>.55+th*.4?NEON32:DEEP32;
+      px32[i]=col;
+    }
+  }
+  g.putImageData(img,0,0);
+}
+
+/* ---------- audio: low, slow, the harbour at mains hum ---------- */
+const AU={ctx:null,g:null,started:false,silentSince:0,graphAt:0,lastCT:0,lastCTAt:0,next:0,lastHorn:-1e9,queue:[]};
+const NOISE_WORKLET="class N extends AudioWorkletProcessor{constructor(){super();this.b=0;}process(i,o){const c=o[0];for(let ch=0;ch<c.length;ch++){const d=c[ch];for(let k=0;k<d.length;k++){const w=Math.random()*2-1;this.b=this.b*.97+w*.03;d[k]=w*.5+this.b*2.5;}}return true;}}registerProcessor('mz-noise',N);";
+async function noiseSource(ctx){
+  if(ctx._mzNoise)return new AudioWorkletNode(ctx,'mz-noise',{outputChannelCount:[2]});
+  try{await ctx.audioWorklet.addModule('data:application/javascript,'+encodeURIComponent(NOISE_WORKLET));ctx._mzNoise=1;return new AudioWorkletNode(ctx,'mz-noise',{outputChannelCount:[2]});}catch(e){}
+  try{const u=URL.createObjectURL(new Blob([NOISE_WORKLET],{type:'application/javascript'}));await ctx.audioWorklet.addModule(u);ctx._mzNoise=1;return new AudioWorkletNode(ctx,'mz-noise',{outputChannelCount:[2]});}catch(e){}
+  const out=ctx.createGain();const seg=()=>{if(ctx.state==='closed')return;const len=ctx.sampleRate*6,b=ctx.createBuffer(2,len,ctx.sampleRate);
+    for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);let br=0;for(let i=0;i<len;i++){const w=Math.random()*2-1;br=br*.97+w*.03;d[i]=w*.5+br*2.5;}}
+    const s=ctx.createBufferSource(),e=ctx.createGain();s.buffer=b;s.connect(e);e.connect(out);const t=ctx.currentTime;
+    e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(1,t+1);e.gain.setValueAtTime(1,t+5);e.gain.linearRampToValueAtTime(0,t+6);s.start(t);s.stop(t+6.05);
+    s.onended=()=>{s.disconnect();e.disconnect();};setTimeout(seg,5000);};seg();return out;
+}
+const MAINS=60; // American mains: the neon transformers, the harbour lamps, the whole place hums at 60 Hz
+async function buildGraph(){
+  const ctx=AU.ctx,G={};
+  const out=ctx.createGain();out.gain.value=0;
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2600;lp.Q.value=.5;
+  const comp=ctx.createDynamicsCompressor();comp.threshold.value=-20;comp.ratio.value=3;comp.attack.value=.05;comp.release.value=.6;
+  const an=ctx.createAnalyser();an.fftSize=1024;
+  out.connect(lp);lp.connect(comp);comp.connect(an);comp.connect(ctx.destination);
+  const dIn=ctx.createGain(),dl=ctx.createDelay(4),fb=ctx.createGain(),sh=ctx.createWaveShaper(),dhp=ctx.createBiquadFilter(),dlp=ctx.createBiquadFilter();
+  const curve=new Float32Array(1024);for(let i=0;i<1024;i++){const x=i/511.5-1;curve[i]=Math.tanh(x*1.6);}sh.curve=curve;
+  dl.delayTime.value=1/MAINS*50;fb.gain.value=.4;dhp.type='highpass';dhp.frequency.value=90;dlp.type='lowpass';dlp.frequency.value=800;
+  dIn.connect(dl);dl.connect(dlp);dlp.connect(dhp);dhp.connect(sh);sh.connect(fb);fb.connect(dl);sh.connect(out);
+  const nz=await noiseSource(ctx);
+  const band=(type,fq,q)=>{const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=fq;f.Q.value=q;const gg=ctx.createGain();gg.gain.value=0;nz.connect(f);f.connect(gg);gg.connect(out);return[f,gg];};
+  const [lapF,lapG]=band('lowpass',240,.4),[deepF,deepG]=band('bandpass',75,.9),[windF,windG]=band('bandpass',260,.9),[rainF,rainG]=band('lowpass',420,.3),[rumF,rumG]=band('bandpass',48,1.4);
+  // the held chord, on the harmonics of the mains
+  const glowLP=ctx.createBiquadFilter();glowLP.type='lowpass';glowLP.frequency.value=380;glowLP.Q.value=.7;
+  const glowG=ctx.createGain();glowG.gain.value=0;glowLP.connect(glowG);glowG.connect(out);glowG.connect(dIn);
+  const oscs=[];[[1,'sine'],[1.5,'triangle'],[2,'sine'],[2.5,'triangle'],[3,'sine']].forEach(([r,ty],i)=>{
+    const o=ctx.createOscillator();o.type=ty;o.frequency.value=MAINS*r;o.detune.value=(i-2)*2.5;const gg=ctx.createGain();gg.gain.value=0;o.connect(gg);gg.connect(glowLP);o.start();oscs.push({o,g:gg,r});});
+  // the neon: transformer hum at 120 Hz with its 60 and 180, through a soft saturator
+  const humIn=ctx.createGain(),humSh=ctx.createWaveShaper(),humLP=ctx.createBiquadFilter(),humG=ctx.createGain();humG.gain.value=0;
+  const hc=new Float32Array(1024);for(let i=0;i<1024;i++){const x=i/511.5-1;hc[i]=Math.tanh(x*2.2)*.8;}humSh.curve=hc;humLP.type='lowpass';humLP.frequency.value=420;
+  humIn.connect(humSh);humSh.connect(humLP);humLP.connect(humG);humG.connect(out);const hs=ctx.createGain();hs.gain.value=.25;humG.connect(hs);hs.connect(dIn);
+  const hums=[[MAINS,.5],[MAINS*2,1],[MAINS*2+.35,.6],[MAINS*3,.25]].map(([fq,a])=>{const o=ctx.createOscillator();o.frequency.value=fq;const gg=ctx.createGain();gg.gain.value=a*.4;o.connect(gg);gg.connect(humIn);o.start();return[o,gg];});
+  const sub=ctx.createOscillator();sub.type='sine';sub.frequency.value=MAINS/2;const subG=ctx.createGain();subG.gain.value=0;sub.connect(subG);subG.connect(out);sub.start();
+  Object.assign(G,{ctx,out,an,dIn,fb,lapF,lapG,deepG,windF,windG,rainG,rumG,glowLP,glowG,oscs,humG,humLP,sub,subG,lp});
+  G.nodes=[out,lp,comp,an,dIn,dl,fb,sh,dhp,dlp,nz,lapF,lapG,deepF,deepG,windF,windG,rainF,rainG,rumF,rumG,glowLP,glowG,humIn,humSh,humLP,humG,hs,sub,subG,...oscs.flatMap(o=>[o.o,o.g]),...hums.flat()];
+  out.gain.setTargetAtTime(1.35,ctx.currentTime+.05,1.3);
+  AU.graphAt=performance.now();lastParams={};
+  return G;
+}
+function killGraph(G){if(!G)return;try{G.out.gain.setTargetAtTime(0,G.ctx.currentTime,1.2);}catch(e){}
+  setTimeout(()=>{for(const n of G.nodes){try{n.stop&&n.stop();}catch(e){}try{n.disconnect();}catch(e){}}},4500);}
+async function startAudio(){
+  if(!OPT.audio||AU.started)return;AU.started=true;
+  try{AU.ctx=new (window.AudioContext||window.webkitAudioContext)();AU.g=await buildGraph();}catch(e){AU.started=false;return;}
+  AU.lastCT=AU.ctx.currentTime;AU.lastCTAt=performance.now();
+  setInterval(scheduler,40);setInterval(watchdog,1000);
+}
+async function rebuild(reason){if(!AU.ctx||AU.rebuilding)return;AU.rebuilding=true;const old=AU.g;try{AU.g=await buildGraph();killGraph(old);logEv('sound rebuilt ('+reason+')');}catch(e){}AU.rebuilding=false;}
+async function recreate(){try{AU.ctx&&AU.ctx.state!=='closed'&&AU.ctx.close();}catch(e){}AU.ctx=new (window.AudioContext||window.webkitAudioContext)();AU.g=await buildGraph();AU.lastCT=AU.ctx.currentTime;AU.lastCTAt=performance.now();}
+const abuf=new Float32Array(1024);
+function watchdog(){
+  const c=AU.ctx;if(!c)return;
+  if(c.state==='suspended')c.resume().catch(()=>{});
+  if(c.state==='closed'){recreate();return;}
+  const now=performance.now();
+  if(c.currentTime!==AU.lastCT){AU.lastCT=c.currentTime;AU.lastCTAt=now;}else if(now-AU.lastCTAt>6000&&c.state==='running'){recreate();return;}
+  if(AU.g){AU.g.an.getFloatTimeDomainData(abuf);let s=0;for(let i=0;i<abuf.length;i++)s+=abuf[i]*abuf[i];
+    if(!Number.isFinite(s)){rebuild('nan');return;}
+    if(s<1e-9){if(!AU.silentSince)AU.silentSince=now;else if(now-AU.silentSince>20000){AU.silentSince=0;rebuild('silence');return;}}else AU.silentSince=0;}
+  if(now-AU.graphAt>3*3600*1000)rebuild('refresh');
+}
+var lastParams={};
+function setP(p,key,v,tc){if(!Number.isFinite(v))return;const o=lastParams[key];if(o!==undefined&&Math.abs(o-v)<1e-4*Math.max(1,Math.abs(v)))return;lastParams[key]=v;p.setTargetAtTime(v,AU.ctx.currentTime,tc||.4);}
+let audioTick=0,TUGNEAR=0,INDUST=0;
+function audioParams(){
+  const G=AU.g;if(!G||!MOOD)return;
+  const chop=clamp(WXS.wind/12,0,1.5)*(1-ERA.amt.glass*.8),glow=clamp(MOOD.wL+MOOD.wD*.7+MOOD.wN*.5,0,1);
+  const cy=clamp(CAM.y/30,0,1),sl=Math.sin(ST.chop*.8);
+  setP(G.lapG.gain,'lap',(.035+chop*.08)*(.6+.4*sl)*(1.2-cy*.6),.25);setP(G.lapF.frequency,'lapf',170+chop*120+(sl+1)*30,.4);
+  setP(G.deepG.gain,'deep',.05+chop*.03,.8);
+  setP(G.subG.gain,'sub',.03+.02*Math.sin(ST.chop*.3),.6);
+  setP(G.windG.gain,'wind',sstep(2,16,WXS.wind)*.045*(.6+cy*.6),1.5);setP(G.windF.frequency,'windf',200+WXS.wind*10,2);
+  setP(G.rainG.gain,'rain',sstep(0,3,WXS.rain)*.07,3);
+  setP(G.rumG.gain,'rum',.02+INDUST*.06,2);
+  const third=lerp(2.5,2.4,MOOD.wN);const lv=[.07,.045,.04,.03,.022];
+  G.oscs.forEach((o,i)=>{const r=i===3?third:o.r;setP(o.o.frequency,'of'+i,MAINS*r,6);setP(o.g.gain,'og'+i,lv[i]*(.35+glow*.65)*(1-ERA.amt.take*(i>2?-.4:0)),3);});
+  setP(G.glowLP.frequency,'glf',240+glow*300+ERA.amt.take*200,3);
+  // the neon hum: as loud as the sign is large in the frame, only while lit
+  const signK=NEON_ON*sstep(4,W*.3,SIGNPX);setP(G.humG.gain,'hum',.004+signK*.055,1.2);setP(G.humLP.frequency,'humlp',300+signK*200,2);
+  setP(G.fb.gain,'fb',clamp(.32+SK.haze*.18+ERA.amt.veil*.12+FOC.soft*.1+NEON_ON*.04,0,.62),3);
+  setP(G.lp.frequency,'mlp',2600-FOC.soft*1700,4);
+}
+function steamWhistle(t,amp,pan,big){const c=AU.ctx,G=AU.g;if(!c||!G)return;const f0=big?MAINS*1.5:MAINS*3,parts=[[1,1],[1.26,.7],[1.5,.6]],os=[];
+  const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=big?520:700;const e=c.createGain();const len=big?4.5:.55;
+  e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(amp,t+.25);e.gain.setValueAtTime(amp,t+len);e.gain.linearRampToValueAtTime(0,t+len+.9);
+  const p=c.createStereoPanner?c.createStereoPanner():c.createGain();if(p.pan)p.pan.value=clamp(pan,-.85,.85);
+  for(const [r,a] of parts){const o=c.createOscillator(),gg=c.createGain();o.type='sawtooth';o.frequency.value=f0*r;gg.gain.value=a*.33;o.connect(gg);gg.connect(lp);o.start(t);o.stop(t+len+1);os.push(o,gg);}
+  lp.connect(e);e.connect(p);p.connect(G.out);const s=c.createGain();s.gain.value=.7;p.connect(s);s.connect(G.dIn);
+  os[0].onended=()=>{for(const n of[...os,lp,e,p,s])try{n.disconnect();}catch(x){}};}
+function chug(t,amp,pan){const c=AU.ctx,G=AU.g;if(!c||!G)return;const o=c.createOscillator(),e=c.createGain();o.type='sine';o.frequency.setValueAtTime(MAINS*.85,t);o.frequency.exponentialRampToValueAtTime(MAINS*.6,t+.25);
+  const p=c.createStereoPanner?c.createStereoPanner():c.createGain();if(p.pan)p.pan.value=clamp(pan,-.8,.8);
+  e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(amp,t+.02);e.gain.linearRampToValueAtTime(0,t+.3);o.connect(e);e.connect(p);p.connect(G.out);o.start(t);o.stop(t+.32);o.onended=()=>{o.disconnect();e.disconnect();p.disconnect();};}
+let creakBuf=null;
+function creak(t,amp,fq,pan){const c=AU.ctx,G=AU.g;if(!c||!G)return;
+  if(!creakBuf){const len=c.sampleRate*.7|0;creakBuf=c.createBuffer(1,len,c.sampleRate);const d=creakBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);}
+  const s=c.createBufferSource();s.buffer=creakBuf;s.playbackRate.value=.6+Math.random()*.3;
+  const bp=c.createBiquadFilter();bp.type='bandpass';bp.Q.value=9;bp.frequency.setValueAtTime(fq,t);bp.frequency.linearRampToValueAtTime(fq*1.3,t+.45);
+  const e=c.createGain();e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(amp,t+.12);e.gain.linearRampToValueAtTime(0,t+.55);
+  const p=c.createStereoPanner?c.createStereoPanner():c.createGain();if(p.pan)p.pan.value=clamp(pan,-.9,.9);
+  s.connect(bp);bp.connect(e);e.connect(p);p.connect(G.out);s.start(t);s.stop(t+.6);s.onended=()=>{for(const n of[s,bp,e,p])try{n.disconnect();}catch(x){}};}
+function screenPan(x,z){const b=bearing(CAM.x,CAM.z,x,z);return clamp(angDiff(b,CAM.yaw)/(CAM.fov*.5),-1,1);}
+let chugNext=0;
+function scheduler(){
+  const c=AU.ctx;if(!c||!AU.g||c.state!=='running')return;
+  if(++audioTick%3===0)audioParams();
+  const now=c.currentTime,ahead=now+.4;
+  // sound travels: events are heard at their distance (343 m/s)
+  for(const e of AU.queue){if(e.done)continue;const tt=e.ctxAt;if(tt<ahead){e.done=1;if(tt<now-1)continue;const t=Math.max(now,tt);
+    if(e.k==='whistle'||e.k==='horn')steamWhistle(t,e.amp,e.pan,1);else if(e.k==='toot'){steamWhistle(t,e.amp,e.pan,0);steamWhistle(t+.8,e.amp,e.pan,0);}}}
+  AU.queue=AU.queue.filter(e=>!e.done);
+  // the nearest tug's engine, in time with its distance
+  if(TUGNEAR>.03){if(chugNext<now)chugNext=now;while(chugNext<ahead){chug(chugNext,.05*TUGNEAR,TUGPAN);chugNext+=.7;}}
+  // near workboats creak as the chop rolls them
+  if(Math.random()<.02*(.4+WXS.wind*.08)&&CAM.y<24){creak(now+.1+Math.random()*.2,.03,170+Math.random()*150,(Math.random()-.5)*1.4);}
+  if(ERA.amt.veil>.5&&now-AU.lastHorn>90&&Math.random()<.015){steamWhistle(now+.2,.04*ERA.amt.veil,-.4,1);AU.lastHorn=now;}
+}
+let TUGPAN=0;
+function queueEvent(e){ // from the world to the ear: distance attenuates and delays
+  if(!AU.ctx||AU.ctx.state!=='running')return;const d=Math.hypot(e.x-CAM.x,e.z-CAM.z);
+  AU.queue.push({k:e.k,ctxAt:AU.ctx.currentTime+(e.at-simT)+d/343,amp:clamp((e.k==='toot'?.05:.08)*600/(d+300),0,.1),pan:screenPan(e.x,e.z)});
+}
+
+/* ---------- info box ---------- */
+const info=$('info');if(!OPT.info||OPT.capture)info.classList.add('off');
+const css=c=>`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`;
+const dirName=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round((((d%360)+360)%360)/45)%8];
+function updateInfo(){
+  if(info.classList.contains('off'))return;
+  const st=STATIONS[SHOT.st],tg=targetPos(SHOT.tg)||SHOT.lastTg||{};
+  const moodName=MOOD.wN>.5?'NIGHT':MOOD.wD>.5?'DAY':MOOD.aw>.5?'LOW SUN · EVENING':'LOW SUN · MORNING';
+  const L=[];
+  L.push(`<b>HARBOUR LIGHT · BALTIMORE 1957</b>  <span class="d">BIT FIELD 047${LINKED?' · PLAY (mixer-linked)':''}</span>`);
+  L.push(`CAM · ${st.name} · crane ${CAM.y.toFixed(0)} m · ${SHOT.type.toUpperCase()} on ${(tg.name||'').toUpperCase()} · facing ${Math.round(((CAM.yaw%360)+360)%360)}° · ${CAM.fov.toFixed(0)}° lens`);
+  L.push(`Baltimore ${hhmm(LOCAL.h)} · ${moodName} · ${NEON_ON>.5?'DOMINO SUGARS LIT':'SIGN DARK'} · ${ERA.name}`);
+  L.push(`<span class="d">wind ${WXS.wind.toFixed(1)} m/s from ${dirName(WXS.dir)} → smoke leans ${dirName(WXS.dir+180)}, the crane sways, the water breaks the sign</span>`);
+  L.push(`<span class="d">cloud ${WXS.cloud|0}% · humidity ${WXS.hum|0}% · visibility ${(WXS.vis/1000).toFixed(0)} km → haze, the neon blooms</span>`);
+  const mv=LIVE.filter(o=>o.mv&&o.k!=='tug').map(o=>o.name||SHIPNAME[o.k]);const tugs=LIVE.filter(o=>o.k==='tug'&&o.mv).length;
+  L.push(`<span class="d">on the water: ${mv.length?mv.slice(0,2).join(' · '):'moored'}${tugs?` · ${tugs} tug${tugs>1?'s':''} working`:''} · Old Bay Line sails 18:30</span>`);
+  const fl=FOC.left;L.push(`<span class="d">focus ${FOC.from===FOC.to||fl<=0?FOC.to+' (held)':FOC.from+' → '+FOC.to+' · '+Math.floor(fl/60)+':'+String(Math.floor(fl%60)).padStart(2,'0')} · memory ${MEM.hours.toFixed(1)} h${MEM.learned?' · has learned the steamer':''}</span>`);
+  for(const l of MEM.log.slice(-2))L.push(`<span class="d">${l}</span>`);
+  if(OPT.audio&&!(AU.ctx&&AU.ctx.state==='running'))L.push(`<span class="d">click or press any key for sound · i hides this</span>`);
+  info.innerHTML=L.join('\n');
+  info.style.background=`rgba(${PAL[0][0]},${PAL[0][1]},${PAL[0][2]},.74)`;info.style.color=css(PAL[5]);info.style.borderColor=`rgb(${NEON.join(',')})`;
+}
+
+/* ---------- main loop ---------- */
+let lastNight=null;
+function step(dt){
+  simT+=dt;updateClock();
+  const k=1-Math.exp(-dt/300),src=WX.ok?WX:synthWX(simT);
+  for(const key in WXS){if(key==='dir'){const d=((src.dir-WXS.dir+540)%360)-180;WXS.dir=(WXS.dir+d*k+360)%360;}else WXS[key]=fin(lerp(WXS[key],src[key],k),src[key]);}
+  computeLight();updateEra(dt);
+  const [wx,wz]=windVec();ST.cloudX=fin(ST.cloudX-wx*dt*1.3,0)%1e6;ST.cloudZ=fin(ST.cloudZ-wz*dt*1.3,0)%1e6;
+  ST.chop=fin(ST.chop+dt*(1.2+WXS.wind*.1),0)%1e5;
+  EVENTS=[];vessels();stepSmoke(dt);updateShot();
+  // the cameras notice what passes in front of them
+  for(const e of EVENTS){if(SHOT)SHOT.events=(SHOT.events||0)+1;queueEvent(e);}
+  const bl=LIVE.find(o=>o.k==='bayline'&&o.mv);
+  if(bl&&MEMORY_ON){const b=bearing(CAM.x,CAM.z,bl.x,bl.z);if(Math.abs(angDiff(b,CAM.yaw))<CAM.fov*.6){if(SHOT)SHOT.events=(SHOT.events||0)+.02;
+      if(!MEM.learned&&LOCAL.h>18.4&&LOCAL.h<19.2){MEM.learned=1;MEM.departures++;logEv('a crane saw the '+bl.name+' sail; it will wait for her');}}}
+  // the nearest working tug: its engine is heard
+  let best=0,pan=0;for(const o of LIVE){if(o.k!=='tug'||!o.mv)continue;const d=Math.hypot(o.x-CAM.x,o.z-CAM.z),v=200/(d+200);if(v>best){best=v;pan=screenPan(o.x,o.z);}}TUGNEAR=best;TUGPAN=pan;
+  INDUST=clamp(1-Math.hypot(CAM.x-0,CAM.z-170)/1400,0,1);
+  if(MEMORY_ON){const h=dt/3600;for(const st of STATIONS)if(st.unlock>0&&MEM.hours<st.unlock&&MEM.hours+h>=st.unlock)logEv('a crane went up at '+st.name.toLowerCase());MEM.hours+=h;if(WXS.wind<3)MEM.calm+=h;if(ERA.name==='VEIL')MEM.fog+=h;if(WXS.gust>14)MEM.storm+=h;MEM.pigment*=Math.exp(-h/12);
+    const nt=AIR.night>.5;if(lastNight===false&&nt){MEM.nights++;logEv('the sign came on over the branch');}lastNight=nt;}
+  for(const key in ST)if(!Number.isFinite(ST[key]))ST[key]=0;
+  if(!Number.isFinite(ERA.pressure))ERA.pressure=0;
+}
+function prewarm(){ // the harbour was running before you arrived
+  const steps=OPT.ff>0?Math.min(OPT.ff*360,40000):300;const dt=OPT.ff>0?10:1;simT-=steps*dt;
+  for(let i=0;i<steps;i++){step(dt);}
+}
+let lastRaf=performance.now(),acc=0,lastSaveAt=0,lastInfo=0,frames=0,lastErr=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  if(OPT.capture&&window.MZ&&MZ.captureHold)return;
+  const dtR=Math.min(.5,(now-lastRaf)/1000);lastRaf=now;acc+=dtR;if(acc<1/OPT.fps)return;
+  const dt=Math.min(acc,.5)*OPT.rate;acc=0;
+  try{step(dt);render();frames++;
+    if(now-lastInfo>1000){updateInfo();lastInfo=now;}
+    if(now-lastSaveAt>60000){save();lastSaveAt=now;}
+  }catch(e){if(now-lastErr>5000){console.error(e);lastErr=now;}for(const key in ST)ST[key]=fin(ST[key],0);SHOT=null;}
+}
+addEventListener('resize',resize);
+function gesture(){if(AU.ctx){if(AU.ctx.state!=='running')AU.ctx.resume().catch(()=>{});}else startAudio();}
+addEventListener('keydown',e=>{if(e.key==='i'||e.key==='I')info.classList.toggle('off');gesture();});
+addEventListener('pointerdown',gesture);
+addEventListener('beforeunload',save);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)save();});
+
+/* ---------- test / capture handles ---------- */
+window.MZ={
+  get state(){return{simT,local:{...LOCAL},era:ERA.name,amt:{...ERA.amt},pressure:ERA.pressure,mem:JSON.parse(JSON.stringify(MEM)),st:{...ST},wx:{...WXS},sun:SUN,mood:MOOD,
+    cam:{x:CAM.x,y:CAM.y,z:CAM.z,yaw:CAM.yaw,pitch:CAM.pitch,fov:CAM.fov},shot:SHOT&&{...SHOT,lastTg:undefined},live:LIVE.map(o=>o.name||o.k),smoke:SMOKE.length,neon:NEON_ON,signpx:SIGNPX,W,H,focus:{...FOC},audio:AU.ctx&&AU.ctx.state};},
+  force(op){
+    if(op==='take'){setEra('LONG TAKE');ERA.until=simT+1500;ERA.amt.take=1;SHOT=null;}
+    else if(op==='glass'){setEra('GLASS');ERA.amt.glass=1;}
+    else if(op==='veil'){setEra('VEIL');ERA.amt.veil=1;}
+    else if(op==='working'){setEra('WORKING');for(const k in ERA.amt)ERA.amt[k]=0;}
+    else if(op.startsWith('focus:'))OPT.focus=op.slice(6);
+    else if(op.startsWith('cam:')){OPT.cam=+op.slice(4);SHOT=null;}
+    else if(op.startsWith('shot:')){OPT.shot=op.slice(5);SHOT=null;}
+    else if(op==='storm'){Object.assign(WX,{wind:16,gust:24,cloud:95,low:80,rain:2,hum:90,vis:5000,ok:true});Object.assign(WXS,WX);}
+    else if(op==='calm'){Object.assign(WX,{wind:.6,gust:1.5,cloud:15,low:0,rain:0,hum:60,vis:30000,ok:true});Object.assign(WXS,WX);}
+    else if(op==='fog'){Object.assign(WX,{wind:1.5,gust:3,cloud:100,low:100,rain:0,hum:99,vis:900,ok:true});Object.assign(WXS,WX);}
+    else if(op==='unlock'){MEM.hours=Math.max(MEM.hours,6);MEM.learned=1;}
+    else if(op==='poison'){ST.chop=NaN;ST.cloudX=Infinity;ERA.pressure=NaN;CAM.x=NaN;}
+    else if(op==='next')SHOT=null;
+  },
+  hour(h){OPT.hour=h;SHOT=null;}, held(m){OPT.held=m;},
+  step(sec,n=1){for(let i=0;i<n;i++)step(sec);render();updateInfo();},
+  audio:AU, rebuild, save, captureHold:false
+};
+
+buildMask();resize();buildWorld();buildNearBoats();load();updateClock();computeLight();prewarm();
+if(MEMORY_ON&&!MEM.log.length)logEv('the cranes went up on the piers');
+fetchWX();setInterval(fetchWX,10*60*1000);
+if(OPT.audio&&!OPT.capture){startAudio().then(()=>{if(AU.ctx&&AU.ctx.state!=='running')AU.ctx.resume().catch(()=>{});});}
+{step(.01);render();updateInfo();}
+requestAnimationFrame(loop);
+</script>
+</body></html>
