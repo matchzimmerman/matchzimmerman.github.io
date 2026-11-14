@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MZ WORLD · MEMORIAL STADIUM 1959 · BIT FIELD 048 · PHASE 01 (provisional)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg,#22253f)}
+:root{--mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#stage{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);overflow:hidden;background:#000}
+#screen{position:absolute;left:0;top:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+#screen.smooth{image-rendering:auto}
+.box{position:absolute;font:11px/1.5 var(--mono);letter-spacing:.02em;white-space:pre-wrap;pointer-events:none;padding:8px 10px 7px;border-left:3px solid;transition:opacity .4s}
+.box b{font-weight:700;letter-spacing:.12em}
+.box .d{opacity:.72}
+#info{left:14px;bottom:12px;max-width:min(640px,56%)}
+#stamp{left:14px;top:12px;padding:4px 8px;font-size:10px;letter-spacing:.16em}
+#legend{right:14px;top:12px;max-width:min(360px,40%)}
+.sw{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:-1px}
+.off{opacity:0!important}
+@media (max-width:720px){.box{font-size:9px;padding:6px 8px}#info{max-width:calc(100% - 40px)}}
+</style></head><body>
+<div id="stage"><canvas id="screen" aria-label="Reconstruction of Baltimore's Memorial Stadium during the 1959 NFL Championship, seen from the upper deck; provisional"></canvas>
+<div id="stamp" class="box"></div><div id="legend" class="box off"></div><div id="info" class="box"></div></div>
+<script type="module">
+/* =====================================================================
+   MZ WORLD · MEMORIAL STADIUM · BIT FIELD 048 · PHASE 01 (provisional)
+   Baltimore's lost Memorial Stadium on 27 December 1959, NFL Championship,
+   Giants at Colts. One fixed camera in the upper deck. Three views of the
+   same frame: the HARBOUR LIGHT six-ink print, a neutral baseline, and
+   an evidence map of what each surface rests on.
+   ===================================================================== */
+import { buildStadium, STATIONS, DIM } from './js/geometry.js';
+import { makeCam, makeGBuffer, renderScene, shadowMap } from './js/raster.js';
+import { makeEnv, makeCut, printInk, printNeutral, printEvidence, claimAt, EV_COL, INKS_HEX } from './js/shade.js';
+import { SCENE, CLAIMS } from './js/evidence.js';
+
+const Q = new URLSearchParams(location.search), qn = (k, d) => { const v = Number(Q.get(k)); return Q.has(k) && Number.isFinite(v) ? v : d; };
+const OPT = {
+  view: ['ink', 'neutral', 'evidence'].includes(Q.get('view')) ? Q.get('view') : 'ink',
+  cam: Math.max(0, Math.min(STATIONS.length - 1, qn('cam', 0) | 0)), wx: Q.get('wx') === 'clear' ? 'clear' : 'drizzle',
+  t: Q.has('t') ? qn('t', 0) : null, lines: Math.max(90, Math.min(540, qn('lines', 180) | 0)), nh: Math.max(180, Math.min(1080, qn('nh', 540) | 0)),
+  info: Q.get('info') !== '0', stamp: Q.get('stamp') !== '0', seed: qn('seed', 48) | 0, fps: Math.max(2, Math.min(30, qn('fps', 12))),
+  claim: Q.has('claim') ? qn('claim', -1) | 0 : -1, capture: Q.get('capture') === '1',
+  hour: Q.has('hour') ? qn('hour', 15.1667) : 15 + 10 / 60      // scene time, EST
+};
+if (OPT.capture) { OPT.info = false; }
+const $ = id => document.getElementById(id), D2R = Math.PI / 180;
+
+/* ---------- the sun over 33rd Street (NOAA, simplified; same as 046/047) ---------- */
+function solar(lat, lon, ms) {
+  const d = ms / 86400000 + 2440587.5 - 2451545, g = (357.529 + .98560028 * d) * D2R, q = 280.459 + .98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + .02 * Math.sin(2 * g)) * D2R, e = (23.439 - 3.6e-7 * d) * D2R;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = (18.697374558 + 24.06570982441908 * d) % 24, lst = (gmst * 15 + lon) * D2R;
+  let ha = lst - ra; ha = Math.atan2(Math.sin(ha), Math.cos(ha));
+  const la = lat * D2R, el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = (Math.atan2(Math.sin(ha), Math.cos(ha) * Math.sin(la) - Math.tan(dec) * Math.cos(la)) / D2R + 180 + 360) % 360;
+  return { el, az: az * D2R };
+}
+const sceneMs = Date.UTC(1959, 11, 27, 5, 0) + OPT.hour * 3600000;   // EST = UTC−5
+const SUN = solar(SCENE.lat, SCENE.lon, sceneMs);
+
+/* ---------- build once ---------- */
+const T0 = performance.now();
+const G = buildStadium({ seed: OPT.seed }), CUT = makeCut(G);
+const STATS = { tris: G.n, lines: G.lines.length, buildMs: performance.now() - T0, raster: {}, print: {} };
+let ENV = makeEnv({ wx: OPT.wx, sun: SUN }), SH = null;
+const needShadow = () => ENV.dif > .2 && SUN.el > 0;
+function ensureShadow() { if (!SH && needShadow()) { const t = performance.now(); SH = shadowMap(G, ENV.sunDir, 1024); STATS.shadowMs = performance.now() - t; } }
+
+const cv = $('screen'), cx = cv.getContext('2d', { alpha: false });
+const CACHE = new Map();
+function frameFor(view, camI) {
+  const H = view === 'ink' ? OPT.lines : OPT.nh, W = Math.round(H * 16 / 9), key = `${camI}:${W}x${H}`;
+  if (!CACHE.has(key)) {
+    const st = STATIONS[camI].at(), cam = makeCam(st.pos, st.look, st.fov, W, H), gb = makeGBuffer(W, H);
+    const t = performance.now(); renderScene(gb, G, cam, CUT); STATS.raster[key] = +(performance.now() - t).toFixed(1);
+    CACHE.set(key, { cam, gb, img: new ImageData(W, H) });
+  }
+  return CACHE.get(key);
+}
+
+/* ---------- layout: a fixed 16:9 frame, integer pixel scale where it fits ---------- */
+function layout() {
+  const vw = innerWidth, vh = innerHeight; let w = vw, h = Math.round(vw * 9 / 16); if (h > vh) { h = vh; w = Math.round(vh * 16 / 9); }
+  const st = $('stage'); st.style.width = w + 'px'; st.style.height = h + 'px';
+}
+addEventListener('resize', layout); layout();
+
+/* ---------- info, stamp, legend in the piece's live inks ---------- */
+let SHARE = {};
+function paintChrome() {
+  const P = OPT.view === 'ink' ? INKS_HEX[ENV.wx] : ['#181c2e', '#2a3150', '#5a6584', '#9aa3b8', '#d8dbe2', '#f3f1ea'];
+  document.documentElement.style.setProperty('--bg', P[0]);
+  for (const el of document.querySelectorAll('.box')) { el.style.background = P[0] + 'e0'; el.style.color = P[5]; el.style.borderColor = P[3]; }
+  $('stamp').textContent = `1959 · PROVISIONAL · ${OPT.view === 'evidence' ? 'EVIDENCE MAP' : OPT.view === 'neutral' ? 'NEUTRAL BASELINE' : 'SIX-INK PRINT'}`;
+  $('stamp').classList.toggle('off', !OPT.stamp);
+  const st = STATIONS[OPT.cam], el = (SUN.el / D2R).toFixed(0), az = (SUN.az / D2R).toFixed(0);
+  const sh = s => SHARE[s] != null ? (SHARE[s] * 100).toFixed(0) + '%' : '–';
+  const L = [];
+  L.push(`<b>MZ WORLD · MEMORIAL STADIUM</b>  <span class="d">BIT FIELD 048 · PHASE 01 · PROVISIONAL</span>`);
+  L.push(`27 DEC 1959 · NFL CHAMPIONSHIP · NYG at BAL · ${SCENE.attendance.toLocaleString('en-US')} · scene ${String(Math.floor(OPT.hour)).padStart(2, '0')}:${String(Math.round(OPT.hour % 1 * 60)).padStart(2, '0')} EST <span class="d">(moment not yet chosen)</span>`);
+  L.push(`CAMERA ${st.id} · ${st.label}`);
+  L.push(`AIR ${ENV.wx === 'drizzle' ? 'drizzle, 49°F, wind 6 mph (box score S07; "cool and crisp" in S09 conflicts)' : 'clear (alternate: tests the sun and shadows)'} · sun ${el}° at ${az}°`);
+  L.push(`IN FRAME documented ${sh('documented')} · approximation ${sh('approx')} · creative ${sh('creative')} · sky ${sh('sky')}`);
+  L.push(`<span class="d">keys 1 ink · 2 neutral · 3 evidence · c camera · w weather · i hide  ·  ?view= ?cam= ?wx= ?t= ?lines= ?capture=1</span>`);
+  $('info').innerHTML = L.join('\n'); $('info').classList.toggle('off', !OPT.info);
+  const lg = $('legend'), sw = c => `<span class="sw" style="background:rgb(${c.join(',')})"></span>`;
+  lg.innerHTML = `<b>EVIDENCE</b>\n${sw(EV_COL.documented)}documented for 1959\n${sw(EV_COL.approx)}approximation (fitted to sources)\n${sw(EV_COL.creative)}creative (not claimed)\n<span class="d">hatched = unfinished geometry</span>` +
+    (OPT.claim >= 0 ? `\n\nisolating claim ${OPT.claim}: ${CLAIMS[OPT.claim]?.label || ''}` : '');
+  lg.classList.toggle('off', OPT.view !== 'evidence' || !OPT.info && !OPT.capture);
+}
+
+/* share of the visible frame by evidence status (counts pixels of the evidence grid) */
+function measureShare(fr) {
+  const c = { documented: 0, approx: 0, creative: 0, sky: 0 }, { gb } = fr, N = gb.W * gb.H;
+  for (let i = 0; i < N; i++) { const id = gb.id[i]; if (id < 0) { c.sky++; continue; }
+    c[CLAIMS[claimAt(G, gb, i)]?.status || 'creative']++; }
+  for (const k in c) c[k] /= N; return c;
+}
+
+/* ---------- draw ---------- */
+let simT = OPT.t ?? 0, lastStatic = '', frames = 0;
+function draw() {
+  const fr = frameFor(OPT.view, OPT.cam), { gb, cam, img } = fr, px = new Uint32Array(img.data.buffer);
+  const key = `${OPT.view}:${OPT.cam}:${ENV.wx}:${OPT.claim}`;
+  if (OPT.view !== 'ink' && key === lastStatic) return;
+  ensureShadow();
+  const t = performance.now();
+  if (OPT.view === 'ink') printInk(G, gb, cam, ENV, SH, px, simT);
+  else if (OPT.view === 'neutral') printNeutral(G, gb, cam, ENV, SH, px, simT);
+  else printEvidence(G, gb, cam, ENV, SH, px, simT, { claim: OPT.claim });
+  STATS.print[OPT.view] = +(performance.now() - t).toFixed(1);
+  if (cv.width !== gb.W || cv.height !== gb.H) { cv.width = gb.W; cv.height = gb.H; }
+  cv.classList.toggle('smooth', OPT.view !== 'ink');
+  cx.putImageData(img, 0, 0);
+  if (key !== lastStatic) { SHARE = measureShare(fr); paintChrome(); }
+  lastStatic = key; frames++;
+}
+let last = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (now - last < 1000 / OPT.fps) return;
+  const dt = Math.min(.5, (now - last) / 1000); last = now;
+  if (OPT.t == null) simT += dt;
+  try { draw(); } catch (e) { console.error(e); }
+}
+paintChrome(); draw(); requestAnimationFrame(loop);
+
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === '1') OPT.view = 'ink'; else if (k === '2') OPT.view = 'neutral'; else if (k === '3') OPT.view = 'evidence';
+  else if (k === 'c') OPT.cam = (OPT.cam + 1) % STATIONS.length;
+  else if (k === 'w') { OPT.wx = OPT.wx === 'clear' ? 'drizzle' : 'clear'; ENV = makeEnv({ wx: OPT.wx, sun: SUN }); }
+  else if (k === 'i') OPT.info = !OPT.info; else return;
+  lastStatic = ''; draw(); paintChrome();
+});
+
+/* test and capture handle */
+window.MZ = {
+  OPT, DIM, STATS, SUN, get G() { return { n: G.n, lines: G.lines.length }; },
+  get share() { return SHARE; }, get frames() { return frames; },
+  set(o) { Object.assign(OPT, o); if (o.wx) ENV = makeEnv({ wx: OPT.wx, sun: SUN }); if (o.t != null) simT = o.t; lastStatic = ''; draw(); paintChrome(); return this.state; },
+  get state() { return { view: OPT.view, cam: STATIONS[OPT.cam].id, wx: ENV.wx, simT, sun: { el: SUN.el / D2R, az: SUN.az / D2R }, W: cv.width, H: cv.height, share: SHARE, stats: STATS }; }
+};
+</script>
+</body></html>
