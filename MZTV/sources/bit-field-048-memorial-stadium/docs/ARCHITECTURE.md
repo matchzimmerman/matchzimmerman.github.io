@@ -52,5 +52,5 @@ For one fixed camera, the CPU path keeps the print bit-exact with HARBOUR LIGHT,
 ## Params and keys
 
 `?view=ink|neutral|evidence` · `?cam=0…6` (0–2 stands, 3–6 exterior) · `?wx=drizzle|clear` · `?t=` (freeze time, s) · `?hour=` (EST, default 16.1, the moment) · `?audio=0` · `?autoplay=1` · `?lines=` (ink resolution, default 180) · `?nh=` (neutral height, default 540) · `?seed=` · `?claim=N` (isolate one claim in the evidence view) · `?info=0` · `?stamp=0` · `?capture=1` · `?fps=`
-Keys: `1` ink · `2` neutral · `3` evidence · `c` camera · `w` weather · `i` info.
+Keys: `1` ink · `2` neutral · `3` evidence · `c` / `C` camera forward / back · `w` weather · `i` info · `s` sound. Touch: the same actions on a dock (`?ui=1|0` to force), portrait and landscape layouts.
 `window.MZ` exposes `state`, `share`, `STATS`, `sound`, `soundTest` (force suspend / close / rebuild / swell / PA), `set({...})` for tests.

@@ -12,6 +12,7 @@ Baltimore's Memorial Stadium on **27 December 1959**, NFL Championship, Giants a
 
 Serve the folder (ES modules need http), e.g. `python3 -m http.server` here, then open `index.html`.
 Keys `1` `2` `3` switch prints, `c` cycles cameras, `w` toggles weather, `i` hides the info box. Sound starts on the first click or key (at once in OBS); `?audio=0` silences it.
+On a phone or tablet a control dock replaces the keys (INK · NEUTRAL · EVIDENCE · ◂ CAM · CAM ▸ · weather · INFO · SOUND). Held sideways, the frame fills the screen and the dock fades after 4 s (tap the picture to bring it back); held upright, the frame sits at the top with the info card and dock beneath. `?ui=1` forces the dock on a desktop, `?ui=0` hides it.
 Params: `?view=ink|neutral|evidence&cam=0…6&wx=drizzle|clear&t=12&seed=48&capture=1` (cam3 = the memorial façade) (full list in `docs/ARCHITECTURE.md`).
 
 ## Files

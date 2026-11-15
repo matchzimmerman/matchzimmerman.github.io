@@ -24,6 +24,7 @@ Harness: `tests/capture.py` (Playwright, headless Chromium 153 with SwiftShader,
 | sound: recording (`tests/audio_test.py`, 60 s, `captures/audio-report.json`) | **pass**: no clicks (curvature max 1.85× its 99.9th percentile; nothing above 8 kHz), peak 0.40, per-second RMS −26 to −20 dB. Band share: 62% below 120 Hz, 29% 120–500 Hz, 8% 0.5–2 kHz, <0.1% above 2 kHz |
 | sound: recovery | **pass**: resumes after a forced suspend; a forced rebuild crossfades with sound continuing; a forced close recreates the context and sound returns |
 | sound: autoplay | starts at once in OBS (`window.obsstudio`) or with `?autoplay=1`; a plain browser waits for the first click or key, so captures load with no autoplay warnings |
+| phone (Playwright iPhone 13 emulation, 390×844 and 844×390) | **pass**: dock appears on touch; INK/NEUTRAL/EVIDENCE, CAM and INFO taps change the view; portrait puts the frame on top (390×219) with the card and dock beneath; landscape fills the height (693×390) and the dock fades after 4 s; 0 errors. Real iOS Safari not yet tested |
 | Firefox / Safari | **not tested**: only Chromium is installed in the build environment |
 | OBS browser source | **not tested** here (Chromium-based, so expected to match) |
 

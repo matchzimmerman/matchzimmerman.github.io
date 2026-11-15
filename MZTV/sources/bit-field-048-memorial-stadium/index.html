@@ -18,9 +18,26 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg,#2
 .sw{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:-1px}
 .off{opacity:0!important}
 @media (max-width:720px){.box{font-size:9px;padding:6px 8px}#info{max-width:calc(100% - 40px)}}
+/* touch: a control dock. Landscape: overlays the frame's foot and fades after a few seconds (tap the picture to bring it back).
+   Portrait: the frame sits at the top and the info card and dock stack in the space beneath it. */
+#dock{position:fixed;left:0;right:0;bottom:0;z-index:5;display:none;padding:8px max(8px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));transition:opacity .4s}
+.touch #dock{display:block}
+#dock.hide{opacity:0;pointer-events:none}
+#bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+#bar button{font:700 11px/1 var(--mono);letter-spacing:.1em;padding:11px 12px;min-height:40px;border:1px solid;border-radius:0;background:transparent;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#bar button.on{border-width:2px}
+#bar .gap{width:6px}
+.portrait #stage{top:env(safe-area-inset-top);transform:translateX(-50%)}
+.portrait #info.box{position:relative;left:auto;bottom:auto;max-width:none;margin:0 0 8px;font-size:10px;pointer-events:auto}
+.portrait #dock{overflow-y:auto;display:flex;flex-direction:column}
+.portrait #bar{margin-top:auto}
+.touch:not(.portrait) #info{top:40px;bottom:auto;max-height:calc(100% - 120px);overflow:hidden}
+.portrait #rot{display:block}
+#rot{display:none;font:10px/1.4 var(--mono);text-align:center;opacity:.7;margin-top:8px;letter-spacing:.08em}
 </style></head><body>
 <div id="stage"><canvas id="screen" aria-label="Reconstruction of Baltimore's Memorial Stadium during the 1959 NFL Championship, seen from the upper deck; provisional"></canvas>
 <div id="stamp" class="box"></div><div id="legend" class="box off"></div><div id="info" class="box"></div></div>
+<div id="dock"><div id="bar"></div><div id="rot">turn the phone sideways for the full frame</div></div>
 <script type="module">
 /* =====================================================================
    MZ WORLD · MEMORIAL STADIUM · BIT FIELD 048 · PHASE 01 (provisional)
@@ -82,11 +99,23 @@ function frameFor(view, camI) {
 }
 
 /* ---------- layout: a fixed 16:9 frame, integer pixel scale where it fits ---------- */
+const TOUCH = !OPT.capture && !window.obsstudio && (Q.get('ui') === '1' || Q.get('ui') !== '0' && matchMedia('(pointer: coarse)').matches);
+document.documentElement.classList.toggle('touch', TOUCH);
 function layout() {
-  const vw = innerWidth, vh = innerHeight; let w = vw, h = Math.round(vw * 9 / 16); if (h > vh) { h = vh; w = Math.round(vh * 16 / 9); }
+  const vv = window.visualViewport, vw = vv ? vv.width : innerWidth, vh = vv ? vv.height : innerHeight;
+  const portrait = TOUCH && vh > vw * 1.1;
+  document.documentElement.classList.toggle('portrait', portrait);
+  let w = vw, h = Math.round(vw * 9 / 16); if (h > vh) { h = vh; w = Math.round(vh * 16 / 9); }
   const st = $('stage'); st.style.width = w + 'px'; st.style.height = h + 'px';
+  // portrait: info card leaves the frame and joins the dock beneath it
+  const info = $('info'), dock = $('dock');
+  if (portrait && info.parentNode !== dock) dock.insertBefore(info, dock.firstChild);
+  if (!portrait && info.parentNode !== st) st.appendChild(info);
+  if (portrait) { dock.style.top = h + 'px'; dock.classList.remove('hide'); } else dock.style.top = '';
+  if (!layout.done && TOUCH && !portrait && !Q.has('info')) OPT.info = false;   // phone held sideways: the picture first, INFO brings the card back
+  layout.done = true;
 }
-addEventListener('resize', layout); layout();
+addEventListener('resize', layout); window.visualViewport && visualViewport.addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 150)); layout();
 
 /* ---------- info, stamp, legend in the piece's live inks ---------- */
 let SHARE = {};
@@ -94,6 +123,8 @@ function paintChrome() {
   const P = OPT.view === 'ink' ? INKS_HEX[ENV.wx] : ['#181c2e', '#2a3150', '#5a6584', '#9aa3b8', '#d8dbe2', '#f3f1ea'];
   document.documentElement.style.setProperty('--bg', P[0]);
   for (const el of document.querySelectorAll('.box')) { el.style.background = P[0] + 'e0'; el.style.color = P[5]; el.style.borderColor = P[3]; }
+  $('dock').style.background = document.documentElement.classList.contains('portrait') ? P[0] : P[0] + 'c8'; $('rot').style.color = P[5];
+  paintBar(P);
   $('stamp').textContent = `1959 · PROVISIONAL · ${OPT.view === 'evidence' ? 'EVIDENCE MAP' : OPT.view === 'neutral' ? 'NEUTRAL BASELINE' : 'SIX-INK PRINT'}`;
   $('stamp').classList.toggle('off', !OPT.stamp);
   const st = STATIONS[OPT.cam], el = (SUN.el / D2R).toFixed(0), az = (SUN.az / D2R).toFixed(0);
@@ -104,8 +135,8 @@ function paintChrome() {
   L.push(`CAMERA ${st.id} · ${st.label}`);
   L.push(`AIR ${ENV.wx === 'drizzle' ? 'drizzle, 49°F, wind 6 mph (box score S07; "cool and crisp" in S09 conflicts)' : 'clear (alternate: tests the sun and shadows)'} · sun ${el}° at ${az}°`);
   L.push(`IN FRAME documented ${sh('documented')} · approximation ${sh('approx')} · creative ${sh('creative')} · sky ${sh('sky')}`);
-  L.push(`SOUND <span id="snd">${OPT.audio ? 'click or press a key to hear the held second' : 'off (?audio=0)'}</span>`);
-  L.push(`<span class="d">keys 1 ink · 2 neutral · 3 evidence · c camera · w weather · i hide  ·  ?view= ?cam= ?wx= ?t= ?lines= ?capture=1</span>`);
+  L.push(`SOUND <span id="snd">${OPT.audio ? (TOUCH ? 'tap SOUND to hear the held second' : 'click or press a key to hear the held second') : 'off (?audio=0)'}</span>`);
+  if (!TOUCH) L.push(`<span class="d">keys 1 ink · 2 neutral · 3 evidence · c camera · w weather · i hide  ·  ?view= ?cam= ?wx= ?t= ?lines= ?capture=1</span>`);
   $('info').innerHTML = L.join('\n'); $('info').classList.toggle('off', !OPT.info);
   const lg = $('legend'), sw = c => `<span class="sw" style="background:rgb(${c.join(',')})"></span>`;
   lg.innerHTML = `<b>EVIDENCE</b>\n${sw(EV_COL.documented)}documented for 1959\n${sw(EV_COL.approx)}approximation (fitted to sources)\n${sw(EV_COL.creative)}creative (not claimed)\n<span class="d">hatched = unfinished geometry</span>` +
@@ -153,19 +184,49 @@ paintChrome(); draw(); requestAnimationFrame(loop);
 // OBS browser sources (window.obsstudio) and ?autoplay=1 start at once; a plain browser waits for a gesture (no autoplay warning).
 if (!OPT.audio) disableSound(); else if (window.obsstudio || Q.get('autoplay') === '1' || navigator.userActivation?.hasBeenActive) startSound();
 setInterval(() => { const e = $('snd'); if (!e || !OPT.audio) return; const s = soundState();
-  e.textContent = s.state === 'running' ? `crowd held · ${s.swell > .05 ? 'second wave ' + s.swell.toFixed(2) : 'murmur'} · band drum E(5,13) · drizzle${s.lastEvent ? ' · last: ' + s.lastEvent : ''}` : s.state === 'suspended' ? 'click or press a key to hear the held second' : s.state; }, 1000);
+  e.textContent = s.state === 'running' ? `crowd held · ${s.swell > .05 ? 'second wave ' + s.swell.toFixed(2) : 'murmur'} · band drum E(5,13) · drizzle${s.lastEvent ? ' · last: ' + s.lastEvent : ''}` : s.state === 'suspended' ? (TOUCH ? 'tap SOUND to hear the held second' : 'click or press a key to hear the held second') : s.state; }, 1000);
 
-addEventListener('pointerdown', () => OPT.audio && gestureSound());
-addEventListener('keydown', e => {
-  if (OPT.audio && !e.ctrlKey && !e.metaKey) gestureSound();
-  const k = e.key.toLowerCase();
+/* ---------- controls: one set of actions for keys and the touch dock ---------- */
+function act(k) {
   if (k === '1') OPT.view = 'ink'; else if (k === '2') OPT.view = 'neutral'; else if (k === '3') OPT.view = 'evidence';
   else if (k === 'c') OPT.cam = (OPT.cam + 1) % STATIONS.length;
+  else if (k === 'C') OPT.cam = (OPT.cam + STATIONS.length - 1) % STATIONS.length;
   else if (k === 'w') { OPT.wx = OPT.wx === 'clear' ? 'drizzle' : 'clear'; ENV = makeEnv({ wx: OPT.wx, sun: SUN, hour: OPT.hour }); }
-  else if (k === 'i') OPT.info = !OPT.info; else return;
-  lastStatic = ''; draw(); paintChrome();
-});
+  else if (k === 'i') OPT.info = !OPT.info;
+  else if (k === 's') { if (!OPT.audio) return true; const st = soundState().state; if (st === 'running') soundTest.suspend(); else gestureSound(); setTimeout(paintChrome, 300); return true; }
+  else return false;
+  lastStatic = ''; draw(); paintChrome(); return true;
+}
+function paintBar(P) {
+  const bar = $('bar'); if (!TOUCH) return;
+  const BAR = [['1', 'INK'], ['2', 'NEUTRAL'], ['3', 'EVIDENCE'], null, ['C', '◂ CAM'], ['c', 'CAM ▸'], null, ['w', 'WEATHER'], ['i', 'INFO'], ['s', 'SOUND']];
+  if (!bar.childNodes.length) for (const b of BAR) {
+    if (!b) { const g = document.createElement('span'); g.className = 'gap'; bar.appendChild(g); continue; }
+    const el = document.createElement('button'); el.dataset.k = b[0]; el.textContent = b[1];
+    el.addEventListener('click', e => { e.stopPropagation(); act(b[0]); wake(); }); bar.appendChild(el);
+  }
+  const snd = soundState().state === 'running';
+  for (const el of bar.querySelectorAll('button')) {
+    const k = el.dataset.k, on = k === '1' && OPT.view === 'ink' || k === '2' && OPT.view === 'neutral' || k === '3' && OPT.view === 'evidence' ||
+      k === 'w' && OPT.wx === 'clear' || k === 'i' && OPT.info || k === 's' && snd;
+    el.classList.toggle('on', on); el.style.color = on ? P[0] : P[5]; el.style.background = on ? P[4] : P[0] + 'b0'; el.style.borderColor = on ? P[5] : P[3];
+    if (k === 'c') el.textContent = `CAM ${OPT.cam} ▸`;
+    if (k === 'w') el.textContent = OPT.wx === 'clear' ? 'CLEAR' : 'DRIZZLE';
+  }
+}
+// landscape: the dock fades after 4 s; a tap on the picture brings it back (and starts the sound)
+var sleepT = 0;
+function wake() { const d = $('dock'); d.classList.remove('hide'); clearTimeout(sleepT);
+  if (!document.documentElement.classList.contains('portrait')) sleepT = setTimeout(() => d.classList.add('hide'), 4000); }
+if (TOUCH) { $('stage').addEventListener('click', () => { const d = $('dock'); if (d.classList.contains('hide')) wake(); else if (!document.documentElement.classList.contains('portrait')) d.classList.add('hide'); }); wake(); }
 
+addEventListener('pointerdown', e => { if (OPT.audio && !(e.target.closest && e.target.closest('#bar'))) gestureSound(); });
+addEventListener('keydown', e => {
+  if (OPT.audio && !e.ctrlKey && !e.metaKey) gestureSound();
+  const k = e.key.length === 1 ? e.key : ''; if (!k) return;
+  act(k === 'C' ? 'C' : k.toLowerCase());
+});
+setInterval(() => TOUCH && paintChrome(), 2000);   // keeps the SOUND button honest
 /* test and capture handle */
 window.MZ = {
   OPT, DIM, STATS, SUN, get G() { return { n: G.n, lines: G.lines.length }; },
