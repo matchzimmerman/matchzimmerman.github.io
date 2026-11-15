@@ -65,9 +65,9 @@ export const SOURCES = [
     supports: 'Memorial Stadium backstop 70.5 ft (1954), 72 ft (1957); home plate moved from the north to the south',
     confidence: 'medium-high (standard reference)', rights: 'facts only', discrepancy: '' },
   { id: 'S11', title: 'Memorial Stadium, 900 East 33rd Street, Baltimore (HABS survey)', creator: 'Historic American Buildings Survey; James W. Rosenthal, photographer; Martin Perschler, historian',
-    url: 'https://www.loc.gov/pictures/item/md1542/', date: 'photographed 2000–2001 (pre-demolition)', era: 'RETROSPECTIVE: shows the 1964+ stadium, empty, c.2000',
-    supports: 'not yet inspected in this session (the Library of Congress page could not be fetched from the build environment). Expected: architecture, façade, deck structure, column rhythm',
-    confidence: 'n/a until read', rights: 'HABS photos are generally US Government work with no known restrictions; confirm on the item record before any reuse',
+    url: 'https://www.loc.gov/pictures/item/md1542/', date: 'photographed 2000 by James W. Rosenthal', era: 'RETROSPECTIVE: shows the 1964+ stadium, empty, c.2000',
+    supports: 'INSPECTED (HABS MD-1111: 82 photographs, 6 colour transparencies, caption index). Façade elevation (-3, -15, -17), memorial entrance and canopy on red cast-granite columns (-16, -18..-21), 1954 date stone in the brick (-23), c.1922 fence and hedges (-14), brick concourse with glass-block window bands (-11), open upper tier and frames (-3, -6, -12), columns and arched brackets (-37, -38, -45), west press boxes (-48, -49), flagpoles (-66), light towers (-3, -7, -63..-65)',
+    confidence: 'high for forms that did not change after 1959; checked against the chronology for everything else', rights: 'HABS photos are generally US Government work with no known restrictions; confirm on the item record before any reuse',
     discrepancy: 'must not be presented as 1959 evidence: upper deck was extended in 1964, seats replaced, boxes added 1961, scoreboards replaced 1970/1985' },
   { id: 'S12', title: 'Forgotten Stadiums: Baltimore\'s Memorial Stadium', creator: 'Stadium Journey',
     url: 'https://www.stadiumjourney.com/stadiums/forgotten-stadiums-baltimores-memorial-stadium', date: 'n.d.', era: 'lifetime',
@@ -111,7 +111,10 @@ export const SOURCES = [
     supports: 'Ednor Gardens built in the 1920s–30s next to Venable Park (the stadium site); Gallagher daylight houses with front sunrooms; Baltimore City College ("the Castle on the Hill") across 33rd Street', confidence: 'medium', rights: 'facts only', discrepancy: '' },
   { id: 'S24', title: 'Baltimore Row Houses', creator: 'Old House Online',
     url: 'https://www.oldhouseonline.com/house-tours/baltimores-varied-row-houses', date: 'n.d.', era: 'typology',
-    supports: 'enclosed front porches on the 1920s "sunlight day-parlor" houses of Waverly; two-storey, two-bay rows', confidence: 'medium', rights: 'facts only', discrepancy: '' }
+    supports: 'enclosed front porches on the 1920s "sunlight day-parlor" houses of Waverly; two-storey, two-bay rows', confidence: 'medium', rights: 'facts only', discrepancy: '' },
+  { id: 'S26', title: 'Oriole Park at Camden Yards (with a description of Memorial Stadium in 1954)', creator: 'SABR BioProject',
+    url: 'https://sabr.org/?p=12946', date: 'n.d.', era: '1954',
+    supports: 'on entering in 1954 a visitor saw ramps, left- and right-field bleachers and three tiers in a semicircle; only the lower deck had seats with backs; an 11 ft 6 in wall at each 446 ft alley; a 10-ft hedge from left- to right-centre the first year', confidence: 'medium', rights: 'facts only', discrepancy: 'alley wall 11 ft 6 in here, 14 ft (NYT) or 8 ft (Bready) in S01' }
 ];
 
 export const CLAIMS = [
@@ -119,9 +122,9 @@ export const CLAIMS = [
   { id: 1,  key: 'orientation',label: 'Horseshoe open to the north, home plate at the south', status: 'documented', src: ['S02','S05','S10'], note: 'CF due north; diamond at the south end since 1950' },
   { id: 2,  key: 'bowl',       label: 'Lower-deck horseshoe plan (front wall curve)',   status: 'approx',     src: ['S01','S02','S10'], note: 'circle fitted through the 72 ft backstop (1957) and the 309 ft foul poles; real plan not traced' },
   { id: 3,  key: 'lowerdeck',  label: 'Lower deck rows and rake (36 rows, 8 ft front wall)', status: 'approx', src: ['S01','S02'], note: '46 lifetime rows minus ~10 rows of 1961 boxes; tread/riser assumed (0.84 / 0.38 m)' },
-  { id: 4,  key: 'upperdeck',  label: 'Upper deck: 1954 extent, 33 rows, roofless',     status: 'approx',     src: ['S01','S02','S03','S04'], note: 'ends ~50 ft short of the foul poles (before the 1964 extensions); tread assumed (0.8 m); riser 0.46 m set so the rim (35.5 m) meets the documented 116 ft façade (S12)' },
-  { id: 5,  key: 'columns',    label: 'Concrete columns under the upper deck',          status: 'approx',     src: ['S02'], note: 'documented that they existed and blocked views; spacing (6°) and radius are assumed' },
-  { id: 6,  key: 'soffit',     label: 'Upper-deck underside, fascia and concourse wall',status: 'creative',   src: [], note: 'needed to close the section; shape invented' },
+  { id: 4,  key: 'upperdeck',  label: 'Upper deck: 1954 extent, 33 rows, roofless, rim at ~32.6 m', status: 'approx', src: ['S01','S02','S03','S04','S11'], note: 'ends ~50 ft short of the poles before the 1964 extensions; rim height measured from HABS MD-1111-3/-15 (~3 m below the 116 ft façade top); tread 0.8 m, riser 0.40 m fitted to it' },
+  { id: 5,  key: 'columns',    label: 'Concrete columns with arched brackets under the upper deck', status: 'approx', src: ['S02','S11'], note: 'columns and their arched brackets documented (S02; HABS MD-1111-37, -38, -45); spacing (6°) and radius fitted' },
+  { id: 6,  key: 'soffit',     label: 'Upper-deck underside, fascia and lower concourse wall', status: 'approx', src: ['S11'], note: 'underside exposed outside above the brick ring and over an open upper promenade (HABS MD-1111-3, -45); plane simplified' },
   { id: 7,  key: 'field',      label: 'Football field 1959 (lines, hash marks 20 yd in, end zones)', status: 'documented', src: ['S15'], note: 'rule dimensions; placement along the axis is approximate (see gridiron)' },
   { id: 8,  key: 'gridiron',   label: 'Gridiron position (south end line 6 m north of the backstop line)', status: 'approx', src: ['S02','S03'], note: 'chosen so the upper deck ends near the far 40, as S03 describes; S02 says the position changed over the years' },
   { id: 9,  key: 'goalposts',  label: 'Goalposts on the goal lines (H-shape)',          status: 'documented', src: ['S15'], note: 'position by rule; upright height and colour assumed' },
@@ -131,37 +134,49 @@ export const CLAIMS = [
   { id: 13, key: 'scoreboard', label: 'Gunther scoreboard (1954) beyond the north end zone, 65 ft, Longines clock', status: 'approx', src: ['S01','S03','S04'], note: 'existence, date, height, clock documented; width, exact position (centre vs right-centre) and face design are not' },
   { id: 14, key: 'outfield',   label: 'Outfield wings, wall and centre-field opening',  status: 'approx',     src: ['S01','S02'], note: '14 ft corner walls receding at 135°, wire fence and terrace in CF, LF/RF bleachers; plan fitted to 445/446 ft' },
   { id: 15, key: 'foulpoles',  label: 'Foul poles at 309 ft',                           status: 'documented', src: ['S01','S02'], note: 'height assumed' },
-  { id: 16, key: 'pressbox',   label: 'Press box on the rim behind home plate',        status: 'creative',   src: [], note: 'placeholder; 1959 press box form and position not yet researched' },
+  { id: 16, key: 'pressbox',   label: 'Press box on the west mezzanine, under the upper-deck front', status: 'approx', src: ['S11','S26'], note: 'HABS shows the west press boxes there in 2000; a mezzanine tier existed in 1954 (S26); 1959 form assumed' },
   { id: 17, key: 'neighbour',  label: 'Rowhouses round the site: Ednor Gardens Tudor rows (north), porch-front daylight rows (elsewhere), bare trees', status: 'creative', src: ['S22','S23','S24'], note: 'house types documented for the neighbourhoods (S22, S24); every individual house, its position and the tree layout are generated' },
   { id: 18, key: 'ground',     label: 'Ground outside the bowl',                        status: 'creative',   src: [], note: 'flat plane; real grades not modelled' },
   { id: 19, key: 'aisles',     label: 'Aisles and portals in the stands',               status: 'creative',   src: [], note: 'rhythm assumed (12° aisles, 24° portals)' },
-  { id: 20, key: 'lighttowers',label: 'Light towers (late 1950s)',                      status: 'creative',   src: ['S02'], note: 'NOT MODELLED: S02 says big towers were added later in the 1950s; date and positions unknown, and it was a day game' },
-  { id: 21, key: 'facade',     label: 'Memorial façade on 33rd Street: 116 ft, concrete panel in brick, seal, entrance gates', status: 'approx', src: ['S03','S05','S12','S18','S19'], note: 'height, materials, seal, letters and position documented; width (44 m panel), proud of the curve by 2.75 m, seal position and gate rhythm assumed' },
-  { id: 22, key: 'inscription',label: 'The dedication, in stainless-steel letters', status: 'documented', src: ['S12','S16','S17','S18'], note: 'text agreed by three transcriptions; line breaks partly documented (S16, S12); letter sizes fitted inside the documented 12 in – 10 ft range; bitmap letterforms are not the originals' },
-  { id: 23, key: 'exterior',   label: 'Brick shell round the horseshoe', status: 'approx', src: ['S02','S03','S19'], note: 'massive reddish-brown brick wall documented; concrete bands, vents and portals are invented; external ramps left out (most were added later)' },
+  { id: 20, key: 'lighttowers',label: 'Light towers: twin-leg steel lattice with lamp banks, four on the rim and two in the outfield', status: 'approx', src: ['S11','S02'], note: 'form and positions from HABS (2000); S02 says big new towers came "later in the 1950s" and no year is found, so their presence in 1959 is assumed; lamps unlit (day game)' },
+  { id: 21, key: 'facade',     label: 'Memorial façade: stone panel, brick infills and pylons, name band, seal, entrance', status: 'documented', src: ['S11','S12','S03'], note: 'measured from HABS MD-1111-15 at 116 ft (check: the 10-ft name letters measure 3.1 m): 37.2 m wide, panel 19.3 m, pylons 3.9 m, seal 6 m at 26.7 m; ±0.5–1 m; depth and the entrance doors assumed' },
+  { id: 22, key: 'inscription',label: 'The dedication, in stainless-steel letters, as laid out on the panel', status: 'documented', src: ['S11','S12','S16','S17','S18'], note: 'text agreed by three transcriptions; line breaks, sizes and positions read from HABS MD-1111-15/-17; bitmap letterforms are not the original Art Deco forms' },
+  { id: 23, key: 'exterior',   label: 'Brick concourse ring with glass-block window bands; open upper tier on raking frames; rim band', status: 'approx', src: ['S02','S03','S11','S19'], note: 'form from HABS MD-1111-3, -6, -11, -12 (2000); ring height ~18.5 m measured; window rhythm and frame spacing fitted; external ramp blocks left out (dates unknown, some added later, S02)' },
   { id: 24, key: 'streets',    label: '33rd Street boulevard (tree-lined), Ellerslie Ave, Ednor Rd, 36th Street', status: 'approx', src: ['S05','S22'], note: 'which street bounds which side is documented, and 33rd St was a wide tree-lined boulevard (S22); positions, widths and tree spacing are not traced' },
   { id: 25, key: 'dugouts',    label: 'Baseball dugouts in the front wall, between home and the bases', status: 'approx', src: ['S02'], note: 'dugouts documented (1958 temporary boxes ran "between the dugouts and the foul poles"); position on the wall and size assumed' },
   { id: 26, key: 'railings',   label: 'Rails on the field wall and the upper-deck fascia', status: 'creative', src: [], note: 'rails surely existed; height and form assumed' },
   { id: 27, key: 'clockface',  label: 'Longines clock showing the scene time', status: 'approx', src: ['S01'], note: 'the clock is documented; its face design is assumed; the hands follow ?hour= (default 15:10)' },
-  { id: 28, key: 'cornerstone',label: '1954 cornerstone at the foot of the façade', status: 'approx', src: ['S21'], note: 'a 1954 cornerstone with a time capsule was set in the brick wall; position and size assumed' },
+  { id: 28, key: 'cornerstone',label: '1954 date stone in the brick at the east side entrance', status: 'documented', src: ['S21','S11'], note: 'HABS MD-1111-23 shows it in the brick of the east side memorial entrance; exact height assumed' },
   { id: 29, key: 'cars',       label: 'Game-day parked cars along the streets', status: 'creative', src: [], note: 'a sell-out (S08) implies full streets, but no source places cars; generic late-1950s bodies and colours' },
   { id: 30, key: 'streetlamps',label: 'Street lamps on 33rd Street', status: 'creative', src: [], note: 'type and spacing invented; unlit (daytime)' },
-  { id: 31, key: 'citycollege',label: 'Baltimore City College ("the Castle on the Hill") across 33rd Street', status: 'approx', src: ['S23'], note: 'documented across 33rd St; placed from its address about 400 m WSW; Gothic massing and tower are generic' }
+  { id: 31, key: 'citycollege',label: 'Baltimore City College ("the Castle on the Hill") across 33rd Street', status: 'approx', src: ['S23'], note: 'documented across 33rd St; placed from its address about 400 m WSW; Gothic massing and tower are generic' },
+  { id: 32, key: 'canopy',     label: 'Memorial entrance canopy on red cast-granite columns, with an oval opening over a raised planter', status: 'approx', src: ['S11'], note: 'HABS MD-1111-16, -18, -19, -20, -21 (2000); assumed original to the 1954 memorial entrance; plan and column count approximated from oblique views' },
+  { id: 33, key: 'forecourt',  label: 'Forecourt lawn, walk, hedges and the c.1922 wrought-iron fence', status: 'approx', src: ['S11'], note: 'fence and hedges on the south line predate the stadium (HABS MD-1111-14), so they stood in 1959; lawn, walk and second hedge follow the 2000 photographs' },
+  { id: 34, key: 'flagpoles',  label: 'Three flagpoles on the top row behind home plate', status: 'approx', src: ['S11'], note: 'HABS MD-1111-66 (US, Maryland, Baltimore City), 2000; assumed for 1959; flags not drawn' }
 ];
 
-/* the 1954 dedication (S16, S17, S12). Line breaks: S12 for the opening and close, S16 for the middle.
-   size = cap height in metres (documented range 12 in – 10 ft; individual sizes fitted). */
+/* the 1954 dedication as laid out on the façade, read from HABS MD-1111-15 and -17 (text agreed with S16, S17, S12).
+   y = line centre (m above ground), size = cap height (m), w = line width (m); the nine-line memorial block is justified.
+   The name sits on the band above the panel. Positions ±0.3 m. */
 export const INSCRIPTION = [
-  { t: 'MEMORIAL STADIUM', size: 3.05, y: 31.4 },
-  { t: 'ERECTED BY THE CITY OF BALTIMORE 1954', size: .62, y: 21.4 },
-  { t: 'DEDICATED BY THE MAYOR AND THE CITY COUNCIL', size: .62, y: 20.3 },
-  { t: 'AND THE PEOPLE OF BALTIMORE CITY IN THE STATE OF MARYLAND', size: .62, y: 19.2 },
-  { t: 'AS A MEMORIAL TO ALL WHO SO VALIANTLY FOUGHT', size: .62, y: 17.7 },
-  { t: 'AND SERVED IN THE WORLD WARS WITH ETERNAL', size: .62, y: 16.6 },
-  { t: 'GRATITUDE TO THOSE WHO MADE THE SUPREME', size: .62, y: 15.5 },
-  { t: 'SACRIFICE TO PRESERVE EQUALITY AND FREEDOM', size: .62, y: 14.4 },
-  { t: 'THROUGHOUT THE WORLD', size: .62, y: 13.3 },
-  { t: 'TIME WILL NOT DIM THE GLORY OF THEIR DEEDS', size: 1.15, y: 10.6 }
+  { t: 'MEMORIAL STADIUM', size: 3.1, y: 32.7, w: 26.8 },
+  { t: 'ERECTED BY THE', size: .5, y: 21.1, w: 5.4 },
+  { t: 'CITY OF BALTIMORE', size: 1.09, y: 19.9, w: 10.4 },
+  { t: '1954', size: .45, y: 19.0, w: 1.7 },
+  { t: 'DEDICATED BY', size: .6, y: 17.9, w: 5.9 },
+  { t: 'THE MAYOR AND THE CITY COUNCIL', size: .42, y: 16.4, w: 11.7 },
+  { t: 'AND THE PEOPLE OF BALTIMORE CITY', size: .42, y: 15.9, w: 12.3 },
+  { t: 'IN THE STATE OF MARYLAND', size: .42, y: 15.4, w: 9.7 },
+  { t: 'AS A MEMORIAL TO ALL', size: .55, y: 13.86, w: 9.7 },
+  { t: 'WHO SO VALIANTLY FOUGHT', size: .55, y: 13.17, w: 9.7 },
+  { t: 'AND SERVED IN THE WORLD', size: .55, y: 12.48, w: 9.7 },
+  { t: 'WARS WITH ETERNAL', size: .55, y: 11.79, w: 9.7 },
+  { t: 'GRATITUDE TO THOSE WHO', size: .55, y: 11.10, w: 9.7 },
+  { t: 'MADE THE SUPREME', size: .55, y: 10.41, w: 9.7 },
+  { t: 'SACRIFICE TO PRESERVE', size: .55, y: 9.72, w: 9.7 },
+  { t: 'EQUALITY AND FREEDOM', size: .55, y: 9.03, w: 9.7 },
+  { t: 'THROUGHOUT THE WORLD', size: .55, y: 8.34, w: 9.7 },
+  { t: 'TIME WILL NOT DIM THE GLORY OF THEIR DEEDS', size: .69, y: 6.1, w: 17.8 }
 ];
 
 export const STATUS = {

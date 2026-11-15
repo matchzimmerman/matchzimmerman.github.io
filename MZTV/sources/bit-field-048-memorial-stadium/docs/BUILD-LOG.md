@@ -28,4 +28,16 @@ Question → Evidence → Approximation → Build → Comparison → Revision.
 - *Added.* Branching bare trees; Tudor and porch-front rowhouses with bays, porches, gables, gardens and chimneys; parked cars and street lamps (creative); City College massing; façade joints, grilles, letter shadows and cornerstone; coursed brick; crowd coats, hats and pose shifts; dugouts and rails; scoreboard zones and a clock at the scene time; wet reflections in drizzle.
 - *Revision.* The first crowd pass showed faces from behind. Spectators face the field, so the shader now checks each seat's facing against the camera and shows hair and hat brims from behind. Trees were kept off the façade axis so the wall stays visible (a composition choice, logged).
 
+**Evidence layer (2026-11-14): HABS MD-1111 read in full.**
+- *How.* The Library of Congress pages sit behind a bot check, so they were opened in a browser. The survey's caption index, then all 88 images, were pulled from the Library's tile server for reference. They are kept out of the repo and the build, and nothing is copied from them.
+- *What it overturned.*
+  - The façade is 37 m wide, not 58 m. The name sits on a band above the panel, not on it. The panel is pale stone in 2.8 × 2.0 m slabs.
+  - The entrance has a thin concrete canopy on red cast-granite columns, with an oval opening over a planter.
+  - The shell is a brick concourse ring with glass-block window bands, with the upper tier open above it on raking frames. It is not a full-height brick drum.
+  - The rim stands about 3 m below the top of the façade, at 32.6 m, so the riser was refitted.
+  - The press box is on the west mezzanine, not the rim. The date stone is in brick at the east entrance.
+  - Light towers stand on the rim and in the outfield. Columns carry arched brackets.
+- *Scale check.* Measuring MD-1111-15 at the documented 116 ft makes the name letters 3.1 m tall; the sources give 10 ft (3.05 m). The documents agree.
+- *Chronology.* 2000 features left out: the western office annex, sky boxes, the 1985 scoreboard and the added ramp blocks. Assumed for 1959, and flagged: the canopy (1954 memorial entrance), light towers ("later in the 1950s"), flagpoles and the mezzanine press box.
+
 **Next (pending review).** See `REVIEW-QUEUE.md`.

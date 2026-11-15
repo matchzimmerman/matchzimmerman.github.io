@@ -30,7 +30,7 @@ Caveat: S03's football note is undated. If it describes the post-1964 deck, the 
 |---|---|---|---|
 | field wall | 8 ft (2.44 m) | lowered in 1961 (S01) | documented |
 | lower deck | 36 rows, tread 0.84 m, riser 0.38 m → back at R0 + 30.2 m, 15.7 m up | 46 lifetime rows (S02) minus about 10 rows of 1961 boxes (S02); tread/riser assumed | approximation |
-| upper deck | 33 rows, tread 0.80 m, riser 0.46 m, front at R0 + 11 m, 17.6–19.6 m up; rim 35.5 m | 33 rows (S02); "shaded most of the lower deck" (S02). The riser is set so the rim meets the documented 116 ft (35.4 m) façade (S12); the first pass used 0.50 m and put the rim 1.4 m above the wall | approximation (constrained by the façade) |
+| upper deck | 33 rows, tread 0.80 m, riser 0.40 m, front at R0 + 11 m, 16.8–18.6 m up; rim 32.6 m | 33 rows (S02); "shaded most of the lower deck" (S02); rim measured from HABS MD-1111-3/-15 at ~3 m below the façade top (earlier passes had 35.5 m and 36.8 m) | approximation (constrained by the HABS measurement) |
 | upper-deck extent | ±96.8° (ends 15.24 m short of the poles) | 1964 extension of ~50 ft each end (S02) | approximation |
 | columns | 0.9 m square, every 6°, 19 m behind the front wall | existence and obstruction documented (S02); spacing and position assumed | approximation |
 | underside, fascia, concourse wall | straight soffit parallel to the rake | needed to close the section | creative |
@@ -58,22 +58,32 @@ Lines are 4 in wide. The ink print draws them with pixel-footprint coverage, exa
 | scoreboard | 65 ft overall, 28 m wide, centred at z = 152 m, three legs, lamp-grid face, Longines clock disc above | height, date and clock documented (S01); width, offset and face design assumed; S03 says right-centre | approximation |
 | foul poles | 20 m | position documented; height assumed | documented / approximation |
 
-## Exterior
+## Exterior (rebuilt from HABS MD-1111 in the evidence layer)
+
+The Library of Congress survey (HABS MD-1111, James W. Rosenthal, 2000: 82 photographs, 6 colour transparencies, caption index) was read in full. It shows the stadium in 2000, so each element was checked against the chronology (1961 boxes, 1964 deck extensions, 1970/1985 scoreboards, later sky boxes, the western office annex, added ramps) before it was used for 1959.
+
+**Façade, measured from MD-1111-15** (a near-orthographic elevation). Scale: the documented 116 ft (35.36 m) height. Independent check: the "MEMORIAL STADIUM" letters measure 3.1 m against the documented 10 ft (3.05 m). Estimated error ±0.5–1 m.
+
+| element | value | status |
+|---|---|---|
+| overall width | 37.2 m: pylons 3.9 m, brick infills 5.1 m, stone panel 19.3 m | documented (measured) |
+| stone panel | 19.3 × 26.5 m, from 4.0 m (canopy) to 30.5 m; slabs ~2.76 × 2.0 m | documented (measured) |
+| name band | 30.5–34.8 m between the pylons; "MEMORIAL STADIUM" 3.1 m caps, 26.8 m long, condensed | documented (measured) |
+| pylons | brick, full 116 ft, stepped tops | documented (measured) |
+| city seal | 6 m across, centre 26.7 m; the seal's artwork is not drawn | documented (measured) |
+| dedication | the line breaks, sizes and positions read from MD-1111-15/-17, including the justified nine-line memorial block and the full-width closing line | documented (text and layout); letterforms are bitmap stand-ins |
+| entrance canopy | thin slab at 3.9 m, ~52 × 11.5 m with rounded ends, an oval opening over a raised round planter, red cast-granite columns (MD-1111-16, -18..-21) | approximation (plan from oblique views; assumed original to the 1954 memorial entrance) |
+| 1954 date stone | in the brick of the east side entrance (MD-1111-23) | documented (height assumed) |
+| forecourt | lawn, central walk, hedges, and the c.1922 wrought-iron fence on the south line (MD-1111-3, -14); 33rd St moved to 37.5 m south of the façade | fence and hedges documented as predating the stadium; layout approximate |
+
+**Shell.** The exterior is not one tall brick wall. It is a brick concourse ring about 18.5 m high (measured), with bands of glass-block windows in cast-concrete surrounds (MD-1111-11). Above the ring the upper tier is open: the deck's underside is exposed on raking concrete frames, under a concrete rim band (MD-1111-3, -6, -12). The rim measures ~32.6 m, about 3 m below the top of the façade, so the upper-deck riser was refitted to 0.40 m. Ramp blocks on the south façade (MD-1111-13) are left out because their dates are unknown and S02 says ramps were added later.
+
+**Inside.** Columns carry arched brackets between them under the deck (MD-1111-37, -38, -45). The press box moved from an invented rim box to the west mezzanine (MD-1111-48, -49; S26: "three tiers" in 1954). Three flagpoles stand on the top row behind home plate (MD-1111-66). Twin-leg steel lattice light towers stand on the rim at ±42° and ±82°, plus two in the outfield (MD-1111-3, -7, -63..-65). Their presence in 1959 is assumed from S02 ("later in the 1950s"), and they are unlit for the day game.
 
 | element | value | basis | status |
 |---|---|---|---|
-| memorial façade | 116 ft (35.36 m) tall, centred on the home-plate axis, front at z = −62.5 m, 5.5 m deep | height and "ten stories" (S12); on 33rd St at the home-plate entrance (S03, S05) | height and position documented |
-| façade composition | a 44 m concrete panel framed by 7 m brick pylons | "brick and stone façade" (S12), "tall concrete wall" (S03), brick (S19); the widths are assumed. The 10-ft name letters set a floor of about 42 m on the panel width | approximation |
-| lettering | "MEMORIAL STADIUM" at 10 ft; the dedication at 0.62 m; the closing line at 1.15 m | text from S16 + S17 + S12; name on the sign (S18); sizes inside the documented 12 in – 10 ft range (S12); the bitmap letterforms are not the originals (the closing line's letters were wider and rounder, S20) | text documented; sizes and forms approximate |
-| city seal | plain disc 5.4 m across, centred below the name | existence documented (S12); size, position and the seal's artwork are not drawn | approximation |
-| entrance gates | seven openings, 3.2 m × 4.6 m, at a 5.6 m pitch | the home-plate entrance is documented (S03, S16); the gate rhythm is invented | creative |
-| brick shell | vertical wall round the 1954 horseshoe, 0.4 m outside the upper deck back, full height to the rim; lower outside the decks' open ends and the wings | "massive brick exterior wall" (S02), reddish-brown (S03), Baltimore brick (S19) | approximation |
-| shell articulation | concrete band at 16.6–17.9 m and coping at the rim, two rows of vents, ground portals every 12° | invented to give the wall scale | creative (claim 23 note) |
-| external ramps | not modelled | most were "additional" ramps added round the periphery by the 1970s (S02) | — |
-| entrance plaza | paving between the façade and 33rd St | plaza finished in 1954 (S05); extent assumed | approximation |
-| 33rd Street | divided boulevard: 10 m carriageways either side of an 8 m grass median, north edge 9.5 m south of the façade; no median trees drawn | "33rd Street boulevard/parkway" (S05); widths and offsets assumed | approximation |
-| Ellerslie Ave / Ednor Rd / 36th St | 12 m streets at x = −150 m, x = +150 m and z = 200 m | sides documented (S05); positions not traced | approximation |
-| neighbourhood | generic two-storey rowhouse terraces and bare street trees on every side | creative | creative |
+| streets | 33rd St a divided boulevard at z = −100 (north edge); Ellerslie Ave x = −150; Ednor Rd x = +150; 36th St z = 200 | sides documented (S05); positions not traced | approximation |
+| neighbourhood | see the detail layer | | creative |
 
 ## Detail layer (pass 3)
 
@@ -106,7 +116,7 @@ Lines are 4 in wide. The ink print draws them with pixel-footprint coverage, exa
 | **cam0 `sw-upper`** (review view) | upper deck, third-base curve (θ = −35°), row 12, eye 1.15 m above the tread: (−51.8, 26.8, −26.6) | yaw 20° (NNE), pitch −15° | 74° horizontal |
 | cam1 `w-upper-50` | west upper deck, row 14, near the 50 | east across the field | 66° |
 | cam2 `home-rim` | upper deck behind home plate, row 26 | due north up the horseshoe | 70° |
-| cam3 `33rd-street` | south side of 33rd Street, eye 1.6 m, 50 m from the façade | up at the memorial wall | 70° |
+| cam3 `33rd-street` | the 33rd Street median, eye 1.6 m, ~51 m from the façade | up at the memorial wall | 64° |
 | cam4 `ellerslie` | corner of 33rd St and Ellerslie Ave | east along the façade and the brick shell | 64° |
 | cam5 `overview-se` | 175 m up, south-east of the site (a model view, not a 1959 vantage) | the whole bowl in its blocks | 46° |
 | cam6 `north-lawn` | open ground inside the block just south of 36th Street, eye 1.6 m | south-west into the open end past the scoreboard | 68° |

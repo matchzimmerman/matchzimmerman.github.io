@@ -72,35 +72,25 @@ const GLYPH = {
   '1':'00100011000010000100001000010001110', '4':'00010001100101010010111110001000010', '5':'11111100001111000001000011000101110', '9':'01110100011000101111000010001001100'
 };
 const GDENS = Object.fromEntries(Object.entries(GLYPH).map(([k, v]) => [k, v.split('').filter(c => c === '1').length / 42]));
-/* coverage of one centred line of bitmap text (cap height h, centre cx/cy) at (x, y) */
-function textCover(str, cx, cy, h, x, y, fp) {
-  const u = h / 7; if (Math.abs(y - cy) > h / 2 + fp) return 0;
-  const n = str.length, adv = 6 * u, w = n * adv - u, x0 = cx - w / 2;
-  if (x < x0 - fp || x > x0 + w + fp) return 0;
-  const ci = Math.floor((x - x0) / adv); if (ci < 0 || ci >= n) return 0;
+/* coverage of one centred line of bitmap text (cap height h, width w, centre cx/cy) at (x, y).
+   Letters are stretched to the line width (the façade's Art Deco letters are condensed; the memorial block is justified). */
+function textCover(str, cx, cy, h, x, y, fp, w = null) {
+  const uy = h / 7; if (Math.abs(y - cy) > h / 2 + fp) return 0;
+  const n = str.length, W = w ?? (n * 6 - 1) * uy, ux = W / (n * 6 - 1), x0 = cx - W / 2;
+  if (x < x0 - fp || x > x0 + W + fp) return 0;
+  const ci = Math.floor((x - x0) / (6 * ux)); if (ci < 0 || ci >= n) return 0;
   const ch = str[ci], g = GLYPH[ch]; if (!g) return 0;
-  if (fp > u * .8) return Math.min(1, GDENS[ch] * 1.15);
-  const col = Math.floor((x - x0 - ci * adv) / u), row = Math.floor((cy + h / 2 - y) / u);
+  if (fp > Math.max(ux, uy * .6) * 2.2) return Math.min(1, GDENS[ch] * 1.15);   // far too small: average tone; otherwise point-sample (crisp, pixel-print legible)
+  const col = Math.floor((x - x0 - ci * 6 * ux) / ux), row = Math.floor((cy + h / 2 - y) / uy);
   return col < 0 || col > 4 || row < 0 || row > 6 ? 0 : g[row * 5 + col] === '1' ? 1 : 0;
 }
-const CORNER = { x: 18.6, y: .95, w: 1.8, h: 1.0 };   // 1954 cornerstone (claim 28, position assumed)
+const CORNER = { x: 12.2, y: 1.0, w: 1.5, h: .85 };   // 1954 date stone in the east brick infill (HABS MD-1111-23; height assumed)
+const atCorner = (x, y, z) => Math.abs(x - CORNER.x) < CORNER.w / 2 && Math.abs(y - CORNER.y) < CORNER.h / 2 && Math.abs(z - (DIM.facade.z + .1)) < .35;
 /* late-1950s car paints (generic): black, white, turquoise, coral, sea green, cream, navy, red, two-tone grey */
 const PAINT = [[.2, .2, .2], [.06, .06, .07], [.86, .86, .84], [.35, .66, .66], [.82, .48, .42], [.48, .64, .52], [.86, .80, .64], [.14, .18, .34], [.58, .14, .13], [.62, .63, .64]];
 /* coverage (0..1) of the dedication letters at façade point (x, y) for a pixel of footprint fp metres */
 export function facadeTextAt(x, y, fp = .02) {
-  for (const L of INSCRIPTION) {
-    const h = L.size, u = h / 7;
-    if (Math.abs(y - L.y) > h / 2 + fp) continue;
-    const n = L.t.length, adv = 6 * u, w = n * adv - u, x0 = -w / 2;
-    if (x < x0 - fp || x > x0 + w + fp) return 0;
-    const ci = Math.floor((x - x0) / adv); if (ci < 0 || ci >= n) return 0;
-    const ch = L.t[ci]; if (ch === ' ') return 0;
-    const g = GLYPH[ch]; if (!g) return 0;
-    if (fp > u * .8) return Math.min(1, GDENS[ch] * 1.15);       // too small to resolve: average tone
-    const col = Math.floor((x - x0 - ci * adv) / u), row = Math.floor((L.y + h / 2 - y) / u);
-    if (col < 0 || col > 4 || row < 0 || row > 6) return 0;
-    return g[row * 5 + col] === '1' ? 1 : 0;
-  }
+  for (const L of INSCRIPTION) { if (Math.abs(y - L.y) > L.size / 2 + fp) continue; const c = textCover(L.t, 0, L.y, L.size, x, y, fp, L.w); if (c) return c; }
   return 0;
 }
 
@@ -114,9 +104,8 @@ export function dugoutAt(x, y, z) {
 export function claimAt(G, gb, i) {
   const id = gb.id[i]; if (id < 0) return 0;
   if (id >= G.n) return G.lines[id - G.n][7];
-  if (G.mat[id] === MAT.FACADE_FACE) { const x = gb.wx[i], y = gb.wy[i];
-    if (Math.abs(x - CORNER.x) < CORNER.w / 2 && Math.abs(y - CORNER.y) < CORNER.h / 2) return CLAIMS.find(c => c.key === 'cornerstone').id;
-    return facadeTextAt(x, y, .05) > 0 ? CLAIMS.find(c => c.key === 'inscription').id : G.claim[id]; }
+  if (G.mat[id] === MAT.FACADE_FACE) return facadeTextAt(gb.wx[i], gb.wy[i], .05) > 0 ? CLAIMS.find(c => c.key === 'inscription').id : G.claim[id];
+  if (G.mat[id] === MAT.EXTERIOR && atCorner(gb.wx[i], gb.wy[i], gb.wz[i])) return CLAIMS.find(c => c.key === 'cornerstone').id;
   if (G.mat[id] === MAT.WALL && dugoutAt(gb.wx[i], gb.wy[i], gb.wz[i])) return CLAIMS.find(c => c.key === 'dugouts').id;
   if (G.mat[id] === MAT.CLOCK) return CLAIMS.find(c => c.key === 'clockface').id;
   if (G.mat[id] !== MAT.FIELD) return G.claim[id];
@@ -136,7 +125,8 @@ const ALB = {
   [MAT.ROOF]: [.20, .22, .21, .22], [MAT.TREE]: [.22, .26, .23, .20], [MAT.FENCE]: [.30, .32, .33, .33],
   [MAT.PRESSBOX]: [.50, .54, .54, .52], [MAT.CLOCK]: [.85, .88, .87, .82],
   [MAT.FACADE]: [.50, .55, .54, .50], [MAT.FACADE_FACE]: [.50, .55, .54, .50], [MAT.ROAD]: [.15, .17, .17, .18], [MAT.PAVING]: [.40, .43, .42, .39], [MAT.GRASS]: [.24, .27, .29, .18],
-  [MAT.CAR]: [.3, .3, .3, .3], [MAT.STONE]: [.46, .50, .49, .45], [MAT.PORCH]: [.80, .84, .83, .79], [MAT.LAMP]: [.22, .24, .25, .26]
+  [MAT.CAR]: [.3, .3, .3, .3], [MAT.STONE]: [.46, .50, .49, .45], [MAT.PORCH]: [.80, .84, .83, .79], [MAT.LAMP]: [.22, .24, .25, .26],
+  [MAT.GRANITE]: [.36, .50, .27, .24], [MAT.LAMPBANK]: [.2, .21, .22, .23], [MAT.HEDGE]: [.17, .17, .22, .13], [MAT.CANOPY]: [.6, .64, .63, .6]
 };
 const COATS = [[.10, .11, .16], [.16, .13, .11], [.22, .22, .23], [.07, .07, .08], [.28, .22, .16], [.12, .16, .26], [.34, .33, .31], [.40, .14, .12]];
 const FACE = [[.62, .48, .40], [.50, .37, .30], [.30, .22, .18], [.24, .24, .26], [.70, .70, .66]];
@@ -247,23 +237,25 @@ function surface(mat, x, y, z, out, fp = .02, t = 0, env = null, vari = 0) {
     const door = fl === 0 && fy < 2.3 && along > 4.6 && along < 5.3;
     if (win || door) { out[0] = door ? .1 : .16; out[1] = door ? .12 : .17; out[2] = door ? .1 : .18; out[3] = door ? .09 : .2; }
   } else if (mat === MAT.FACADE_FACE) {
-    // weathered concrete panel; city seal (a plain disc: the seal's artwork is not drawn); entrance gates; stainless letters
-    const n = vn(x * .4, y * .25) * .07; let L = .50 + n, r = .55 + n, g = .54 + n, b = .50 + n;
-    const sx = x, sy = y - DIM.facade.sealY, sr = Math.hypot(sx, sy);
-    if (sr < 2.7) { const ring = sr > 2.25; L = ring ? .78 : .36; r = ring ? .82 : .45; g = ring ? .82 : .38; b = ring ? .80 : .28; }
-    const joint = Math.max(cover(((y % 3.05) + 3.05) % 3.05 < 1.525 ? ((y % 3.05) + 3.05) % 3.05 : 3.05 - ((y % 3.05) + 3.05) % 3.05, .015, fp), cover(((x % 4.4) + 4.4) % 4.4 < 2.2 ? ((x % 4.4) + 4.4) % 4.4 : 4.4 - ((x % 4.4) + 4.4) % 4.4, .015, fp)) * .7;
-    if (joint > 0) { L -= .16 * joint; r -= .16 * joint; g -= .16 * joint; b -= .16 * joint; }      // concrete panel joints (pattern assumed)
-    const pitch = 5.6, gi = Math.round(x / pitch), gx = x - gi * pitch;
-    if (y < 4.6 && Math.abs(gi) <= 3 && Math.abs(gx) < 1.6) {                                         // gates with iron grilles (rhythm invented)
-      const bar = cover(((gx % .22) + .22) % .22 - .11, .02, fp), rail = cover(y - 2.3, .03, fp);
-      const k = Math.max(bar, rail); L = .05 + .25 * k; r = g = b = .05 + .25 * k;
-    } else if (y >= 4.6 && y < 5.1 && Math.abs(x) < 20) { L = .62; r = .66; g = .66; b = .63; }      // lintel band
-    if (Math.abs(x - CORNER.x) < CORNER.w / 2 && Math.abs(y - CORNER.y) < CORNER.h / 2) {             // 1954 cornerstone
-      L = .66; r = .7; g = .69; b = .64; const ct = textCover('1954', CORNER.x, CORNER.y, .32, x, y, fp); if (ct) { L -= .3 * ct; r -= .3 * ct; g -= .3 * ct; b -= .3 * ct; } }
+    const F = DIM.facade; let L, r, g, b;
+    const n = vn(x * .4, y * .25) * .05;
+    if (y >= F.panelY1) { L = .6 + n; r = .64 + n; g = .63 + n; b = .59 + n; }                         // name band (concrete)
+    else if (y >= F.panelY0) {                                                                          // pale stone panel
+      L = .66 + n; r = .71 + n; g = .69 + n; b = .62 + n;
+      const cw = F.panelW / 7, jx = ((x + F.panelW / 2) % cw + cw) % cw, jy = ((y - F.panelY0) % 2.0 + 2.0) % 2.0;   // slabs ~2.76 × 2.0 m (HABS)
+      const joint = Math.max(cover(jx < cw / 2 ? jx : cw - jx, .02, fp), cover(jy < 1 ? jy : 2 - jy, .02, fp)) * .8;
+      if (joint > 0) { L -= .15 * joint; r -= .15 * joint; g -= .15 * joint; b -= .15 * joint; }
+      const sr = Math.hypot(x, y - F.sealY);                                                           // the city seal (artwork not drawn)
+      if (sr < F.sealR) { const ring = sr > F.sealR * .82; L = ring ? .8 : .42; r = ring ? .84 : .5; g = ring ? .84 : .44; b = ring ? .82 : .33;
+        if (!ring && sr < F.sealR * .6 && Math.abs(x) < 1.1 && y > F.sealY - 1.2 && y < F.sealY + 1.4) { L = .7; r = g = b = .72; } }
+    } else {                                                                                            // entrance doors under the canopy (assumed)
+      const bay = ((x % 3.2) + 3.2) % 3.2, frame = cover(bay - 1.6, .06, fp) + cover(bay, .12, fp) + cover(y - 2.4, .05, fp);
+      L = .1 + .45 * Math.min(1, frame); r = g = b = L;
+    }
     const sh = facadeTextAt(x - .06, y + .09, fp) * .5;                                                // letters stand off the wall: a soft shadow
     if (sh > 0) { L -= .14 * sh; r -= .14 * sh; g -= .14 * sh; b -= .14 * sh; }
     const t = facadeTextAt(x, y, fp);
-    if (t > 0) { L += (.86 - L) * t; r += (.88 - r) * t; g += (.89 - g) * t; b += (.90 - b) * t; }
+    if (t > 0) { L += (.9 - L) * t; r += (.9 - r) * t; g += (.91 - g) * t; b += (.92 - b) * t; }
     out[0] = L; out[1] = r; out[2] = g; out[3] = b;
   } else if (mat === MAT.EXTERIOR) {
     // reddish-brown brick (S03, S19) with invented concrete bands, vents and ground portals
@@ -274,13 +266,25 @@ function surface(mat, x, y, z, out, fp = .02, t = 0, env = null, vari = 0) {
     const mBed = cover((y % .075) - .0375 > 0 ? .075 - (y % .075) : y % .075, .006, fp), mHead = cover(((arc / .2 + (course & 1) * .5) % 1) * .2, .005, fp) * .6;
     const m = Math.max(mBed, mHead); if (m > 0) { L += (.5 - L) * m; r += (.55 - r) * m; g += (.52 - g) * m; b += (.47 - b) * m; }
     if (y < 1.1) { const k = .78 + .2 * y / 1.1; L *= k; r *= k; g *= k; b *= k; }   // splash and grime at the foot of the wall
-    const band = (y > 16.6 && y < 17.9) || y > DIM.upTopY + .2;
-    const vent = ((y > 9.2 && y < 10.5) || (y > 24.6 && y < 25.9)) && Math.abs(((arc % 4.5) + 4.5) % 4.5 - 2.25) < .55;
-    const portal = y < 3.9 && Math.abs(((deg % 12) + 12) % 12 - 6) * rr * Math.PI / 180 < 1.9 && rr > DIM.upBackR - 2;
-    if (band) { L = .55; r = .59; g = .58; b = .54; }
-    if (vent) { L = .09; r = .09; g = .08; b = .08; }
+    const onRing = rr > DIM.ringR - 1 && !(z < DIM.facade.z + DIM.facade.depth + 1.5 && Math.abs(x) < 24);
+    const coping = onRing && y > DIM.ringH - .9;
+    // bands of glass-block windows in cast-concrete surrounds (HABS MD-1111-11); rhythm fitted
+    const bandY = [[3.4, 5.6], [8.8, 11.0], [13.4, 15.6]].find(([a0, a1]) => y > a0 - .25 && y < a1 + .25);
+    let win = 0, surround = 0;
+    if (onRing && bandY) { const grp = ((arc % 14) + 14) % 14; if (grp < 9.6) { surround = 1;
+      const inY = y > bandY[0] && y < bandY[1], cell = grp % 1.6; if (inY && cell > .22) win = 1; } }
+    const portal = onRing && y < 3.0 && Math.abs(((deg % 12) + 12) % 12 - 6) * rr * Math.PI / 180 < 1.9;
+    if (coping || (surround && !win)) { L = .58; r = .62; g = .61; b = .57; }
+    if (win) { const gbk = Math.max(cover(((arc % .2) + .2) % .2 - .1, .012, fp), cover(((y % .2) + .2) % .2 - .1, .012, fp));
+      L = .5 - .12 * gbk; r = .54 - .12 * gbk; g = .57 - .12 * gbk; b = .58 - .12 * gbk; }               // glass block reads pale, with a fine grid
     if (portal) { L = .05; r = g = b = .05; }
+    if (atCorner(x, y, z)) { L = .6; r = .62; g = .6; b = .55; const ct = textCover('1954', CORNER.x, CORNER.y, .5, x, y, fp, 1.15); if (ct) { L -= .3 * ct; r -= .3 * ct; g -= .3 * ct; b -= .3 * ct; } }
     out[0] = L; out[1] = r; out[2] = g; out[3] = b;
+  } else if (mat === MAT.LAMPBANK) {
+    const u = ((x + z) * 1.25 % 1 + 1) % 1, v = (y * 1.25 % 1 + 1) % 1, lamp = (u - .5) ** 2 + (v - .5) ** 2 < .12;
+    if (lamp) { out[0] = .5; out[1] = .52; out[2] = .53; out[3] = .5; }            // lamps unlit: a day game
+  } else if (mat === MAT.GRANITE || mat === MAT.HEDGE || mat === MAT.CANOPY) {
+    const n = (vn(x * 2.3 + z * 2.3, y * 2.3) - .5) * (mat === MAT.HEDGE ? .12 : .05); out[0] += n; out[1] += n; out[2] += n; out[3] += n;
   } else if (mat === MAT.WALL && dugoutAt(x, y, z)) {
     out[0] = y > 1.85 ? .5 : .05; out[1] = out[2] = out[3] = out[0];
   } else if (mat === MAT.ROAD || mat === MAT.PAVING || mat === MAT.GRASS) {

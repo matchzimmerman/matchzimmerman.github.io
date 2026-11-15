@@ -20,8 +20,8 @@ export const DIM = (() => {
     wallH: 8 * FT,                        // 8 ft field wall, lowered in 1961 (S01)
     lowRows: 36, lowTread: 0.84, lowRise: 0.38,         // 46 lifetime rows − ~10 rows of 1961 boxes (S02)
     over: 11,                              // upper deck front 11 m out over the lower deck ("shaded most of it", S02)
-    fasciaLow: 17.6, upY0: 19.6,
-    upRows: 33, upTread: 0.80, upRise: 0.46,            // 33 rows (S02, lifetime); rise set so the rim meets the 116 ft façade (S12)
+    fasciaLow: 16.8, upY0: 18.6,
+    upRows: 33, upTread: 0.80, upRise: 0.40,            // 33 rows (S02); rim measured ~32.6 m, about 3 m under the façade top (HABS MD-1111-3, -15)
     upShort: 50 * FT,                      // 1954 deck ended ~50 ft short of the poles each side (1964 extension, S02)
     colR: 19, colStep: 6,                  // columns: radius from front wall, every 6°  (assumed)
     // football (S15): 120 yd × 160 ft
@@ -35,9 +35,14 @@ export const DIM = (() => {
     sbH: 65 * FT, sbW: 28, sbZ: 152, sbX: 0,
     poleH: 20,
     // exterior (S12: 116 ft; width, depth, pylons assumed)
-    facade: { h: 116 * FT, w: 44, depth: 5.5, z: -62.5, pylon: 7, sealY: 26.2 },
+    // memorial façade, measured from HABS MD-1111-15 (scale: 116 ft height; check: the 10-ft name letters measure 3.1 m)
+    facade: { h: 116 * FT, z: -62.5, depth: 7.5, panelW: 19.3, infill: 5.1, pylon: 3.9, panelY0: 4.0, panelY1: 30.5, bandY1: 34.8, sealY: 26.7, sealR: 3.0 },
+    // the 1954 entrance canopy and planter (HABS MD-1111-16, -18, -19, -20; plan approximated from oblique views)
+    canopy: { y: 3.9, t: .45, hx: 26, z0: -62.5, z1: -74, holeZ: -68.5, hrx: 5.5, hrz: 3.2 },
+    // brick concourse ring under the open upper tier (HABS MD-1111-3, -11, -12): height measured ~18.5 m
+    ringOut: 34, ringH: 18.5,
     // streets (S05: which side; positions and widths assumed)
-    streets: { n33: -72, ellerslie: -150, ednor: 150, z36: 200 },
+    streets: { n33: -100, ellerslie: -150, ednor: 150, z36: 200 },   // 33rd St ~37 m south of the façade (forecourt lawn, HABS MD-1111-3)
     // Baltimore City College, ~400 m WSW across 33rd St (S23; from its address; footprint and hill assumed)
     cityCollege: { x0: -470, x1: -330, z0: -300, z1: -230, hill: 7 }
   };
@@ -47,6 +52,7 @@ export const DIM = (() => {
   d.upBackR = d.upFrontR + d.upRows * d.upTread;
   d.upTopY = d.upY0 + (d.upRows - 1) * d.upRise;
   d.thUp = d.thPole - d.upShort / (R0 + d.over + 14);
+  d.ringR = R0 + d.ringOut;
   d.goalS = d.endS + d.endZ; d.goalN = d.endS + d.fieldL - d.endZ; d.endN = d.endS + d.fieldL;
   d.fifty = (d.goalS + d.goalN) / 2;
   return d;
@@ -57,7 +63,7 @@ export const pol = (th, r, y) => [Math.sin(th) * r, y, DIM.cz - Math.cos(th) * r
 export const softUnder = r => DIM.fasciaLow + (r - DIM.upFrontR) * (DIM.upRise / DIM.upTread);
 
 export const MAT = { GROUND:1, FIELD:2, WALL:3, CONCRETE:4, CROWD_L:5, CROWD_U:6, SOFFIT:7, COLUMN:8, FASCIA:9,
-  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25, CAR:26, STONE:27, PORCH:28, LAMP:29 };
+  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25, CAR:26, STONE:27, PORCH:28, LAMP:29, GRANITE:30, LAMPBANK:31, HEDGE:32, CANOPY:33 };
 export const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));
 
 export function buildStadium(opt = {}) {
@@ -97,8 +103,8 @@ export function buildStadium(opt = {}) {
     if (!covered) { // open lower-deck ends near the poles: back rail and exterior
       const r = D.lowBackR, y = D.lowBackY;
       quad(pol(a, r, y), pol(b, r, y), pol(b, r, y + 1.4), pol(a, r, y + 1.4), MAT.CONCRETE, K.lowerdeck.id, .9);
-      quad(pol(a, r, y + 1.4), pol(b, r, y + 1.4), pol(b, r + 1.5, y + 1.4), pol(a, r + 1.5, y + 1.4), MAT.CONCRETE, K.lowerdeck.id, .9);
-      quad(pol(b, r + 1.5, 0), pol(a, r + 1.5, 0), pol(a, r + 1.5, y + 1.4), pol(b, r + 1.5, y + 1.4), MAT.EXTERIOR, K.exterior.id, .8, 0);
+      quad(pol(a, r, y + 1.4), pol(b, r, y + 1.4), pol(b, D.ringR, y + 1.4), pol(a, D.ringR, y + 1.4), MAT.CONCRETE, K.exterior.id, .9);
+      quad(pol(b, D.ringR, 0), pol(a, D.ringR, 0), pol(a, D.ringR, y + 1.4), pol(b, D.ringR, y + 1.4), MAT.EXTERIOR, K.exterior.id, .8, 0);
     }
   }
   // rails: field wall and upper-deck fascia (claim 'railings', creative)
@@ -106,7 +112,8 @@ export function buildStadium(opt = {}) {
   // lower-deck end caps at the foul poles
   for (const sgn of [-1, 1]) {
     const th = sgn * D.thPole;
-    quad(pol(th, D.R0, 0), pol(th, D.R0, D.wallH), pol(th, D.lowBackR, D.lowBackY + 1.4), pol(th, D.lowBackR + 1.5, 0), MAT.CONCRETE, K.lowerdeck.id, .8, 1);
+    quad(pol(th, D.R0, 0), pol(th, D.R0, D.wallH), pol(th, D.lowBackR, D.lowBackY + 1.4), pol(th, D.lowBackR, 0), MAT.CONCRETE, K.lowerdeck.id, .8, 1);
+    quad(pol(th, D.lowBackR, 0), pol(th, D.ringR, 0), pol(th, D.ringR, D.lowBackY + 1.4), pol(th, D.lowBackR, D.lowBackY + 1.4), MAT.EXTERIOR, K.exterior.id, .8, 0);
   }
 
   /* ---- upper deck (1954 extent), concourse wall, soffit, columns ---- */
@@ -122,35 +129,65 @@ export function buildStadium(opt = {}) {
     const rb = D.upBackR, yt = D.upTopY;
     quad(pol(a, rb, yt), pol(b, rb, yt), pol(b, rb, yt + 1.2), pol(a, rb, yt + 1.2), MAT.CONCRETE, K.upperdeck.id, 1);               // rear rail
     quad(pol(a, rb, yt + 1.2), pol(b, rb, yt + 1.2), pol(b, rb + .4, yt + 1.2), pol(a, rb + .4, yt + 1.2), MAT.CONCRETE, K.upperdeck.id, 1);
-    quad(pol(b, rb + .4, 0), pol(a, rb + .4, 0), pol(a, rb + .4, yt + 1.2), pol(b, rb + .4, yt + 1.2), MAT.EXTERIOR, K.exterior.id, .8, 0);
-    // underside and the concourse wall behind the lower deck (invented section: claim 'soffit')
-    quad(pol(b, D.upFrontR, D.fasciaLow), pol(a, D.upFrontR, D.fasciaLow), pol(a, D.lowBackR, softUnder(D.lowBackR)), pol(b, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .3, 1);
-    quad(pol(a, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, softUnder(D.lowBackR)), pol(a, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .2, 1);
+    // outer face of the rim: a concrete band over the exposed underside (HABS MD-1111-3, -12)
+    quad(pol(b, rb + .4, softUnder(rb) - .3), pol(a, rb + .4, softUnder(rb) - .3), pol(a, rb + .4, yt + 1.2), pol(b, rb + .4, yt + 1.2), MAT.CONCRETE, K.exterior.id, .85, 0);
+    // underside, now carried out to the rim: from outside it shows as the dark band above the brick ring
+    quad(pol(b, D.upFrontR, D.fasciaLow), pol(a, D.upFrontR, D.fasciaLow), pol(a, D.lowBackR, softUnder(D.lowBackR)), pol(b, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .3, 0);
+    quad(pol(b, D.lowBackR, softUnder(D.lowBackR)), pol(a, D.lowBackR, softUnder(D.lowBackR)), pol(a, rb + .4, softUnder(rb) - .3), pol(b, rb + .4, softUnder(rb) - .3), MAT.SOFFIT, K.exterior.id, .35, 0);
+    // concourse: the back wall of the lower deck stops at the promenade floor; above it the upper promenade is open (HABS MD-1111-45)
+    quad(pol(a, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, D.ringH), pol(a, D.lowBackR, D.ringH), MAT.SOFFIT, K.soffit.id, .3, 0);
+    quad(pol(a, D.lowBackR, D.ringH), pol(b, D.lowBackR, D.ringH), pol(b, D.ringR, D.ringH), pol(a, D.ringR, D.ringH), MAT.CONCRETE, K.exterior.id, .5, 0);
+    // the brick concourse ring with its glass-block window bands (HABS MD-1111-11)
+    quad(pol(b, D.ringR, 0), pol(a, D.ringR, 0), pol(a, D.ringR, D.ringH), pol(b, D.ringR, D.ringH), MAT.EXTERIOR, K.exterior.id, .8, 0);
+    // light lattice fence along the top of the rim (HABS MD-1111-64)
+    line(pol(a, rb + .2, yt + 2.3), pol(b, rb + .2, yt + 2.3), MAT.FENCE, K.exterior.id, .04);
   }
   for (let s2 = 0; s2 < upTh.length - 1; s2++) line(pol(upTh[s2], D.upFrontR + .15, D.upY0 + .95), pol(upTh[s2 + 1], D.upFrontR + .15, D.upY0 + .95), MAT.FENCE, K.railings.id, .05);
   // upper-deck end caps
   for (const sgn of [-1, 1]) {
     const th = sgn * D.thUp, rf = D.upFrontR, rb = D.upBackR + .4, rl = D.lowBackR;
     quad(pol(th, rf, D.fasciaLow), pol(th, rf, D.upY0), pol(th, D.upBackR, D.upTopY + 1.2), pol(th, D.upBackR, softUnder(D.upBackR)), MAT.CONCRETE, K.upperdeck.id, .75, 1);
-    const F = pol(th, rl, 0), E = pol(th, rb, 0), Dd = pol(th, rb, D.upTopY + 1.2), H = pol(th, D.upBackR, softUnder(D.upBackR)), G = pol(th, rl, softUnder(rl));
-    tri(F, E, Dd, MAT.CONCRETE, K.upperdeck.id, .7, 1); tri(F, Dd, H, MAT.CONCRETE, K.upperdeck.id, .7, 1); tri(F, H, G, MAT.CONCRETE, K.upperdeck.id, .7, 1);
+    quad(pol(th, rl, 0), pol(th, D.ringR, 0), pol(th, D.ringR, D.ringH), pol(th, rl, D.ringH), MAT.EXTERIOR, K.exterior.id, .7, 0);
   }
   // columns: square, from the lower-deck tread at colR up to the underside
   const row = Math.floor(D.colR / D.lowTread), cy0 = D.wallH + row * D.lowRise, cy1 = softUnder(D.R0 + D.colR);
   for (let th = -D.thUp + 3 * D2R; th < D.thUp - 2 * D2R; th += D.colStep * D2R) {
     const c = pol(th, D.R0 + D.colR, 0), h = .45;
     box(c[0] - h, cy0, c[2] - h, c[0] + h, cy1, c[2] + h, MAT.COLUMN, K.columns.id, .4, 0, false);
+    // raking concrete frame from the brick ring up to the underside, seen from outside (HABS MD-1111-3, -6)
+    line(pol(th, D.ringR - .2, D.ringH), pol(th, D.ringR + 1.6, softUnder(D.ringR + 1.6) - .2), MAT.COLUMN, K.exterior.id, .75);
+    line(pol(th, D.lowBackR + .3, D.ringH), pol(th, D.lowBackR + .3, softUnder(D.lowBackR + .3) - .2), MAT.COLUMN, K.columns.id, .6);
   }
-  // press box placeholder on the rim behind home plate (claim 'pressbox': creative)
+  // arched brackets springing between neighbouring columns under the deck (the arcade seen from the lower deck)
+  for (let th = -D.thUp + 3 * D2R; th + D.colStep * D2R < D.thUp - 2 * D2R; th += D.colStep * D2R) {
+    const tb = th + D.colStep * D2R, rr = D.R0 + D.colR; let prev = null;
+    for (let k = 0; k <= 8; k++) { const t = k / 8, a = th + (tb - th) * t, y = cy1 - .15 - 3.4 * (1 - Math.sin(Math.PI * t)) ** 1.6, p = pol(a, rr, y);
+      if (prev) line(prev, p, MAT.COLUMN, K.columns.id, .42); prev = p; }
+  }
+  // press box on the west mezzanine, hung under the upper-deck front (HABS MD-1111-48, -49 show it there in 2000)
   {
-    const t0 = -9 * D2R, t1 = 9 * D2R, r0 = D.upBackR - 4.5, r1 = D.upBackR + .4, y0 = D.upTopY + 1.2, y1 = y0 + 3.6;
-    const ts = steps(t0, t1);
-    for (let i = 0; i < ts.length - 1; i++) {
-      const a = ts[i], b = ts[i + 1];
+    const ts = steps(-97 * D2R, -78 * D2R), r0 = D.upFrontR - 2.8, r1 = D.upFrontR + .4, y0 = 13.6, y1 = D.fasciaLow;
+    for (let i = 0; i < ts.length - 1; i++) { const a = ts[i], b = ts[i + 1];
       quad(pol(a, r0, y0), pol(b, r0, y0), pol(b, r0, y1), pol(a, r0, y1), MAT.PRESSBOX, K.pressbox.id, .8, 1);
-      quad(pol(a, r0, y1), pol(b, r0, y1), pol(b, r1, y1), pol(a, r1, y1), MAT.PRESSBOX, K.pressbox.id, .9, 1);
-    }
+      quad(pol(a, r0, y0), pol(b, r0, y0), pol(b, r1, y0), pol(a, r1, y0), MAT.PRESSBOX, K.pressbox.id, .6, 1); }
+    for (const th of [ts[0], ts[ts.length - 1]]) quad(pol(th, r0, y0), pol(th, r1, y0), pol(th, r1, y1), pol(th, r0, y1), MAT.PRESSBOX, K.pressbox.id, .7, 1);
   }
+  // flagpoles on the top row behind home plate (US, Maryland, Baltimore: HABS MD-1111-66)
+  for (const d2 of [-3, 0, 3]) line(pol(d2 * D2R, D.upBackR + .2, D.upTopY + 1.2), pol(d2 * D2R, D.upBackR + .2, D.upTopY + 12.5), MAT.LAMP, K.flagpoles.id, .2);
+  // light towers: twin-leg steel lattice with a lamp bank, on the rim and in the outfield
+  // (HABS MD-1111-3, -7, -63..65; "big new light towers later in the 1950s", S02: present in 1959 is assumed)
+  const tower = (bx, by, bz, fx, fz, H, legGap) => {
+    const fl = Math.hypot(fx, fz), nx = fx / fl, nz = fz / fl, tx = -nz, tz = nx, g = legGap / 2;
+    for (const sg of [-1, 1]) { const lx = bx + tx * g * sg, lz = bz + tz * g * sg;
+      line([lx, by, lz], [lx, by + H, lz], MAT.LAMP, K.lighttowers.id, .45);
+      for (let y = by; y + 3 < by + H; y += 3) line([lx - nx * .6, y, lz - nz * .6], [lx + nx * .6, y + 3, lz + nz * .6], MAT.LAMP, K.lighttowers.id, .08); }
+    for (let y = by + 3; y < by + H; y += 4.5) line([bx - tx * g, y, bz - tz * g], [bx + tx * g, y + 2.2, bz + tz * g], MAT.LAMP, K.lighttowers.id, .1);
+    const w = 4.4, y0 = by + H, y1 = y0 + 4.6, c = (u, v, o) => [bx + tx * u + nx * o, v, bz + tz * u + nz * o];
+    quad(c(-w, y0, .4), c(w, y0, .4), c(w, y1, .4), c(-w, y1, .4), MAT.LAMPBANK, K.lighttowers.id, .9, 1);
+    quad(c(-w, y0, -.4), c(w, y0, -.4), c(w, y1, -.4), c(-w, y1, -.4), MAT.LAMP, K.lighttowers.id, .9, 1);
+  };
+  for (const deg of [-82, -42, 42, 82]) { const th = deg * D2R, p = pol(th, D.upBackR - 1.6, D.upTopY + 1.2); tower(p[0], p[1], p[2], -p[0], D.cz - p[2], 22, 2.8); }
+  for (const sx of [-1, 1]) tower(sx * 84, 0, 104, -sx * 84, 40 - 104, 46, 3.4);
 
   /* ---- outfield: corner walls, wings, wire fence across centre field ---- */
   const zWingEnd = 108, rcf = [Math.sin(22.5 * D2R) * D.rcf, Math.cos(22.5 * D2R) * D.rcf];
@@ -204,17 +241,50 @@ export function buildStadium(opt = {}) {
     line([-g, D.barH, gz], [g, D.barH, gz], MAT.POST, K.goalposts.id, .14);
   }
 
-  /* ---- the memorial façade on 33rd Street (S03, S12, S18): 116 ft, concrete panel framed in brick ---- */
+  /* ---- the memorial façade on 33rd Street, measured from HABS MD-1111-15 ----
+     a pale stone panel (19.3 m) between brick infills (5.1 m) and brick pylons (3.9 m) that rise to 116 ft;
+     the name on a band above the panel; the 1954 entrance canopy on red cast-granite columns; the forecourt */
   {
-    const F = DIM.facade, x0 = -F.w / 2, x1 = F.w / 2, zf = F.z, zb = F.z + F.depth, H = F.h;
-    box(x0, 0, zf, x1, H, zb, MAT.FACADE, K.facade.id, .9, 0);
-    quad([x0, 0, zf - .03], [x1, 0, zf - .03], [x1, H, zf - .03], [x0, H, zf - .03], MAT.FACADE_FACE, K.facade.id, .95, 0);
-    // brick pylons either side (composition assumed: "brick and stone façade")
-    for (const sx of [-1, 1]) { const a = sx > 0 ? x1 : x0 - F.pylon, b = sx > 0 ? x1 + F.pylon : x0;
-      box(a, 0, zf + .6, b, H - .8, zb + 1.5, MAT.EXTERIOR, K.facade.id, .85, 0); }
-    // entrance plaza (finished 1954, S05) and 33rd Street as a divided boulevard (widths assumed)
-    const S = DIM.streets;
-    quad([-70, .03, zf], [70, .03, zf], [70, .03, S.n33], [-70, .03, S.n33], MAT.PAVING, K.facade.id, 1, 0);
+    const F = DIM.facade, zf = F.z, zb = F.z + F.depth, H = F.h, pw = F.panelW / 2, iw = pw + F.infill, ow = iw + F.pylon;
+    box(-pw, 0, zf + .25, pw, F.bandY1, zb, MAT.FACADE, K.facade.id, .9, 0);                 // panel block (face drawn below)
+    quad([-pw, F.panelY0, zf + .22], [pw, F.panelY0, zf + .22], [pw, F.panelY1, zf + .22], [-pw, F.panelY1, zf + .22], MAT.FACADE_FACE, K.facade.id, .95, 0);
+    quad([-iw, F.panelY1, zf - .03], [iw, F.panelY1, zf - .03], [iw, F.bandY1, zf - .03], [-iw, F.bandY1, zf - .03], MAT.FACADE_FACE, K.facade.id, .95, 0);  // name band
+    box(-iw, F.panelY1, zf, iw, F.bandY1, zb, MAT.CONCRETE, K.facade.id, .9, 0);
+    quad([-pw, 0, zf + .22], [pw, 0, zf + .22], [pw, F.panelY0, zf + .22], [-pw, F.panelY0, zf + .22], MAT.FACADE_FACE, K.facade.id, .7, 0); // entrance under the canopy
+    for (const sx of [-1, 1]) {
+      box(sx > 0 ? pw : -iw, 0, zf + .1, sx > 0 ? iw : -pw, F.panelY1, zb, MAT.EXTERIOR, K.facade.id, .85, 0);        // brick infill
+      box(sx > 0 ? iw : -ow, 0, zf - .35, sx > 0 ? ow : -iw, H, zb + 1, MAT.EXTERIOR, K.facade.id, .85, 0);          // pylon
+      box(sx > 0 ? iw + .5 : -ow + .5, H, zf - .1, sx > 0 ? ow - .5 : -iw - .5, H + .9, zb, MAT.EXTERIOR, K.facade.id, .85, 0); // stepped top
+    }
+    // the canopy: a thin slab with rounded ends and an oval opening over the planter
+    const C = DIM.canopy, cz = (C.z0 + C.z1) / 2, hz = (C.z0 - C.z1) / 2, N = 48;
+    const outer = t => { const c = Math.cos(t), s2 = Math.sin(t), e = 4; const k = Math.pow(Math.pow(Math.abs(c), e) + Math.pow(Math.abs(s2), e), -1 / e); return [C.hx * c * k, cz + hz * s2 * k]; };
+    const inner = t => [C.hrx * Math.cos(t), C.holeZ + C.hrz * Math.sin(t)];
+    for (let i = 0; i < N; i++) { const t0 = i / N * 2 * Math.PI, t1 = (i + 1) / N * 2 * Math.PI, o0 = outer(t0), o1 = outer(t1), i0 = inner(t0), i1 = inner(t1);
+      for (const y of [C.y, C.y + C.t]) quad([o0[0], y, o0[1]], [o1[0], y, o1[1]], [i1[0], y, i1[1]], [i0[0], y, i0[1]], MAT.CANOPY, K.canopy.id, y === C.y ? .45 : .95, 0);
+      quad([o0[0], C.y, o0[1]], [o1[0], C.y, o1[1]], [o1[0], C.y + C.t, o1[1]], [o0[0], C.y + C.t, o0[1]], MAT.CANOPY, K.canopy.id, .8, 0);
+      quad([i0[0], C.y, i0[1]], [i1[0], C.y, i1[1]], [i1[0], C.y + C.t, i1[1]], [i0[0], C.y + C.t, i0[1]], MAT.CANOPY, K.canopy.id, .7, 0); }
+    // red cast-granite columns (HABS MD-1111-20): along the front and round the opening (count and spacing assumed)
+    const col = (x, z) => { const r2 = .32, n = 8; for (let i = 0; i < n; i++) { const a0 = i / n * 2 * Math.PI, a1 = (i + 1) / n * 2 * Math.PI;
+      quad([x + Math.cos(a0) * r2, 0, z + Math.sin(a0) * r2], [x + Math.cos(a1) * r2, 0, z + Math.sin(a1) * r2], [x + Math.cos(a1) * r2, C.y, z + Math.sin(a1) * r2], [x + Math.cos(a0) * r2, C.y, z + Math.sin(a0) * r2], MAT.GRANITE, K.canopy.id, .8, 0); } };
+    for (let x = -21; x <= 21; x += 7) col(x, C.z1 + 1.6);
+    for (const t of [0, Math.PI]) col(Math.cos(t) * (C.hrx + 1.2), C.holeZ);
+    // raised round planter with shrubs under the opening (HABS MD-1111-18)
+    { const n = 24, r2 = 4.6, h = .95; for (let i = 0; i < n; i++) { const a0 = i / n * 2 * Math.PI, a1 = (i + 1) / n * 2 * Math.PI, p0 = [Math.cos(a0) * r2, Math.sin(a0) * r2 * .62], p1 = [Math.cos(a1) * r2, Math.sin(a1) * r2 * .62];
+      quad([p0[0], 0, C.holeZ + p0[1]], [p1[0], 0, C.holeZ + p1[1]], [p1[0], h, C.holeZ + p1[1]], [p0[0], h, C.holeZ + p0[1]], MAT.CANOPY, K.canopy.id, .8, 0);
+      tri([0, h + 1.4, C.holeZ], [p0[0] * .9, h, C.holeZ + p0[1] * .9], [p1[0] * .9, h, C.holeZ + p1[1] * .9], MAT.HEDGE, K.canopy.id, .9, 0); } }
+    // forecourt: lawn, a straight walk to the entrance, hedges and the c.1922 wrought-iron fence on the south line (HABS MD-1111-3, -14)
+    const S = DIM.streets, fz = S.n33 + 1.5;
+    quad([-150, .03, zf], [150, .03, zf], [150, .03, S.n33], [-150, .03, S.n33], MAT.GRASS, K.forecourt.id, 1, 0);
+    quad([-2.6, .05, C.z1 + .5], [2.6, .05, C.z1 + .5], [2.6, .05, S.n33], [-2.6, .05, S.n33], MAT.PAVING, K.forecourt.id, 1, 0);
+    quad([-30, .045, zf], [30, .045, zf], [30, .045, C.z1 + .5], [-30, .045, C.z1 + .5], MAT.PAVING, K.forecourt.id, 1, 0);
+    for (const [x0, x1] of [[-148, -3.4], [3.4, 148]]) {
+      box(x0, 0, fz + .4, x1, 1.25, fz + 1.6, MAT.HEDGE, K.forecourt.id, .9, 0);
+      line([x0, 1.5, fz], [x1, 1.5, fz], MAT.FENCE, K.forecourt.id, .04); line([x0, .15, fz], [x1, .15, fz], MAT.FENCE, K.forecourt.id, .04);
+      for (let x = x0; x <= x1; x += .32) line([x, 0, fz], [x, 1.62, fz], MAT.FENCE, K.forecourt.id, .02);
+    }
+    // a second hedge line across the lawn, as in the 2000 photographs (layout assumed for 1959)
+    for (const [x0, x1] of [[-60, -3.4], [3.4, 60]]) box(x0, 0, fz + 13, x1, 1.0, fz + 14, MAT.HEDGE, K.forecourt.id, .9, 0);
     quad([-620, .025, S.n33], [620, .025, S.n33], [620, .025, S.n33 - 10], [-620, .025, S.n33 - 10], MAT.ROAD, K.streets.id, 1, 0);
     quad([-620, .03, S.n33 - 10], [620, .03, S.n33 - 10], [620, .03, S.n33 - 18], [-620, .03, S.n33 - 18], MAT.GRASS, K.streets.id, 1, 0);
     quad([-620, .025, S.n33 - 18], [620, .025, S.n33 - 18], [620, .025, S.n33 - 28], [-620, .025, S.n33 - 28], MAT.ROAD, K.streets.id, 1, 0);
@@ -343,8 +413,8 @@ export const STATIONS = [
     at: () => { const th = -86 * D2R, r = DIM.upFrontR + 14 * DIM.upTread + .4, y = DIM.upY0 + 14 * DIM.upRise + 1.15; return { pos: pol(th, r, y), look: [0, 0, DIM.fifty + 6], fov: 66 }; } },
   { id: 'home-rim', label: 'Upper deck behind home plate, top rows — the horseshoe and the open end',
     at: () => { const r = DIM.upFrontR + 26 * DIM.upTread + .4, y = DIM.upY0 + 26 * DIM.upRise + 1.15; return { pos: pol(0, r, y), look: [0, 0, 70], fov: 70 }; } },
-  { id: '33rd-street', label: 'Exterior: south sidewalk of 33rd Street, looking up at the memorial façade',
-    at: () => ({ pos: [-12, 1.6, DIM.streets.n33 - 40], look: [0, 17, DIM.facade.z], fov: 70 }) },
+  { id: '33rd-street', label: 'Exterior: the 33rd Street median, looking up at the memorial façade',
+    at: () => ({ pos: [-8, 1.6, DIM.streets.n33 - 14], look: [0, 18, DIM.facade.z], fov: 64 }) },
   { id: 'ellerslie', label: 'Exterior: corner of 33rd Street and Ellerslie Avenue, looking east along the façade and the brick shell',
     at: () => ({ pos: [DIM.streets.ellerslie - 8, 1.6, DIM.streets.n33 - 12], look: [-20, 16, -32], fov: 64 }) },
   { id: 'overview-se', label: 'Exterior overview from the south-east (a model view, not a 1959 vantage)',

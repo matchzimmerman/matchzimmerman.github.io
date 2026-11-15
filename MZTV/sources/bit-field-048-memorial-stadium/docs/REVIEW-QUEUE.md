@@ -14,9 +14,12 @@ Decisions only Match can make, in rough priority order. Nothing here blocks read
 | **R8** | **Publish or keep private** | the branch adds the piece under `MZTV/sources/` but does not touch `MZTV/README.md` or link it anywhere | add the README entry only after R1–R7 |
 | **R9** | **MZ CAM** | promote the camera stations to a shared MZ WORLDS module now · wait for Phase 03 | wait |
 | **R10** | **Research access** | HABS (LoC) pages and the 1963 Colts media guide could not be fetched from the build environment | a short session in a browser (Claude in Chrome or by hand) to pull the HABS data pages and any 1959 photos with rights noted. HABS photographed the façade, so it is the best fix for R11–R13 |
-| **R11** | **Façade composition** | the 44 m concrete panel framed by brick pylons is fitted, not traced. Height, materials, seal, letters and text are documented | check against a HABS or period photograph before anything public shows the façade close up |
+| **R11** | **Façade composition** | RESOLVED in the evidence layer: measured from HABS MD-1111-15 (37.2 m wide, 19.3 m stone panel, name band above, seal at 26.7 m) | — |
 | **R12** | **Lettering** | bitmap capitals (current, honest about not being the originals) · draw the original letterforms from photographs (the closing line was wider and rounder) | keep bitmap until photographs are in hand; the evidence view already marks the text as documented and the forms as not |
-| **R13** | **Brick shell articulation** | plain brick with invented bands, vents and portals (current) · plain brick with no articulation · wait for photographs | keep, labelled creative; replace from HABS |
+| **R13** | **Brick shell articulation** | RESOLVED: brick concourse ring with glass-block window bands and an open upper tier, from HABS MD-1111-3/-11/-12 | — |
+| **R18** | **South façade ramp blocks** | HABS MD-1111-13 shows concourse ramp blocks on the south façade; S02 says ramps were added "by the 1970s" and S26 says a 1954 visitor "saw ramps" | left out until a 1950s photograph dates them |
+| **R19** | **Light towers in 1959** | form and positions from HABS (2000); S02 puts them "later in the 1950s" with no year | keep (unlit); confirm with a 1958–59 photograph |
+| **R20** | **Canopy date** | assumed original to the 1954 memorial entrance | confirm with a 1950s photograph of the entrance |
 | **R15** | **Creative street life** | keep game-day cars and street lamps (both creative) · remove them until a period photograph shows the streets | keep for the piece, labelled; drop from any "evidence" still |
 | **R16** | **City College** | keep the generic Gothic massing at its address · trace its real footprint and tower | trace before any exterior frame that shows it large |
 | **R17** | **Crowd movement** | a few spectators shift every ~3 s in the live print · fully static | keep: it is the only motion besides drizzle and cloud, and it stays below notice |

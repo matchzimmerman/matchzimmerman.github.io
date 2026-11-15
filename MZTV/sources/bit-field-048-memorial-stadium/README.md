@@ -23,7 +23,7 @@ Params: `?view=ink|neutral|evidence&cam=0…6&wx=drizzle|clear&t=12&seed=48&capt
 | `js/geometry.js` | the stadium in metres, a claim id on every triangle, camera stations |
 | `js/raster.js` | z-buffered rasterizer and sun shadow map |
 | `js/shade.js` | lighting and the three printers |
-| `docs/EVIDENCE-REGISTER.md` | sources, claims, discrepancies (generated) |
+| `docs/EVIDENCE-REGISTER.md` | sources, claims, discrepancies (generated); the façade and shell now rest on the HABS MD-1111 survey |
 | `docs/GEOMETRY.md` · `plan.svg` · `section.svg` | dimensions, fits, assumptions, diagrams (generated) |
 | `docs/ARCHITECTURE.md` | reuse audit and the route to a navigable world |
 | `docs/TEST-REPORT.md` | QA results |

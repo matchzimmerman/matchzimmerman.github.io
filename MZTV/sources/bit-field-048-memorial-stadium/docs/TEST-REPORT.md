@@ -1,4 +1,4 @@
-# Test report · BIT FIELD 048 · Phase 01 (interior + exterior + detail pass) · 2026-11-14
+# Test report · BIT FIELD 048 · Phase 01 (interior + exterior + detail + evidence layer) · 2026-11-14
 
 Harness: `tests/capture.py` (Playwright, headless Chromium 153 with SwiftShader, viewport 1920×1080). Raw results: `captures/report.json`. Contact sheets: `captures/contact-sheet.png` (stands) and `captures/contact-sheet-exterior.png` (exterior).
 
