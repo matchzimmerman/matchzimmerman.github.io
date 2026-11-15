@@ -3,7 +3,7 @@
 > Generated from `js/evidence.js` by `tests/register.mjs`. Edit the data file, not this page.
 
 **Scene:** NFL Championship Game · New York Giants at Baltimore Colts, 1959-12-27, kickoff 14:05 EST, Colts 31 – Giants 16, attendance 57,545.  
-**Scene time in the prototype:** 15:10 EST (provisional: third quarter, exact moment not chosen).  
+**Scene time in the prototype:** 16:06 EST (approx.): early 4th quarter, Unitas 4-yd TD run, BAL 14–9.  
 **Status:** PROVISIONAL · awaiting MZ.Human approval of the moment and the baseline.
 
 ## Status classes
@@ -43,6 +43,8 @@ Images found during research are listed as references only. None are copied into
 | S23 | [Suburb in the city: Ednor Gardens is an urban gem](https://www.washingtonexaminer.com/?p=703824) | Washington Examiner | n.d. | present, with history | Ednor Gardens built in the 1920s–30s next to Venable Park (the stadium site); Gallagher daylight houses with front sunrooms; Baltimore City College ("the Castle on the Hill") across 33rd Street | medium | facts only |  |
 | S24 | [Baltimore Row Houses](https://www.oldhouseonline.com/house-tours/baltimores-varied-row-houses) | Old House Online | n.d. | typology | enclosed front porches on the 1920s "sunlight day-parlor" houses of Waverly; two-storey, two-bay rows | medium | facts only |  |
 | S26 | [Oriole Park at Camden Yards (with a description of Memorial Stadium in 1954)](https://sabr.org/?p=12946) | SABR BioProject | n.d. | 1954 | on entering in 1954 a visitor saw ramps, left- and right-field bleachers and three tiers in a semicircle; only the lower deck had seats with backs; an 11 ft 6 in wall at each 446 ft alley; a 10-ft hedge from left- to right-centre the first year | medium | facts only | alley wall 11 ft 6 in here, 14 ft (NYT) or 8 ft (Bready) in S01 |
+| S27 | [The Best Team You Ever Saw](https://vault.si.com/vault/1960/01/04/the-best-team-you-ever-saw) | Tex Maule, Sports Illustrated | 1960-01-04 | game report (contemporary) | the go-ahead drive followed a failed Giant fourth-and-one at the Baltimore 28; Unitas to Berry for 17, to Moore on a slant to the Giant 14; Unitas scored from the 4 on a rollout toward Lindon Crow with Moore blocking; fans tore at the steel goalposts afterwards | high | facts only; no text reused | does not say which end zone |
+| S28 | [December 27, 1959: Colts pummel Giants (game recap)](https://onthisdayinsports.blogspot.com/2013/12/december-27-1958-colts-pummel-giants.html) | On This Day in Sports (blog) | 2013-12-27 | retrospective | the go-ahead drive was 10 plays, 86 yards, ending in Unitas's 4-yd run for 14–9 | medium-low | facts only | 86 yd implies a start at the BAL 14, not the 28 (S27); unresolved |
 
 ## Claims (what each modelled thing rests on)
 
@@ -83,6 +85,12 @@ Images found during research are listed as references only. None are copied into
 | 32 | Memorial entrance canopy on red cast-granite columns, with an oval opening over a raised planter | APPROXIMATION | S11 | HABS MD-1111-16, -18, -19, -20, -21 (2000); assumed original to the 1954 memorial entrance; plan and column count approximated from oblique views |
 | 33 | Forecourt lawn, walk, hedges and the c.1922 wrought-iron fence | APPROXIMATION | S11 | fence and hedges on the south line predate the stadium (HABS MD-1111-14), so they stood in 1959; lawn, walk and second hedge follow the 2000 photographs |
 | 34 | Three flagpoles on the top row behind home plate | APPROXIMATION | S11 | HABS MD-1111-66 (US, Maryland, Baltimore City), 2000; assumed for 1959; flags not drawn |
+| 35 | The 22 players a second after the touchdown: Unitas in the north end zone, Moore on Crow, the lines piled at the 4 | CREATIVE | S27, S06, S07 | who scored, from the 4, on a rollout toward Crow behind Moore: documented (S27). Which end zone, every position and pose: creative. Colts royal-blue jerseys and white helmets, Giants white jerseys and navy helmets: approx (1959 team colours) |
+| 36 | Five officials, the back judge signalling touchdown | APPROXIMATION | S08 | five officials in 1959 (S08: line judge added 1965); striped shirts, white caps: period practice; positions creative |
+| 37 | Scoreboard reads COLTS 14 · GIANTS 9 · QTR 4 | APPROXIMATION | S06, S07, S01 | the score and quarter are documented; what the 1954 board actually displayed, and how, is not: lamp letters and layout are creative |
+| 38 | Scene time 16:06 EST, low sun behind overcast | APPROXIMATION | S08, S27 | kickoff 14:05 documented; the TD came early in the 4th; the clock time is estimated from typical 1959 game length (~2 h 30 m); sun ~6° up, sunset 16:52 |
+| 39 | Field lights burning in the dusk | CREATIVE | — | towers existed for night baseball; whether they were switched on during this game is not recorded |
+| 40 | Sound: the held second (crowd bed, second waves, band drum, bowl, drizzle, far PA) | CREATIVE | S08 | a full house and drizzle are documented; no recording of this crowd is used or imitated; every voice is synthesised |
 
 ## Open discrepancies
 
@@ -97,6 +105,8 @@ Images found during research are listed as references only. None are copied into
 - **S16**: writes "Serve" for "Served" (typo)
 - **S20**: architect credited to Kooken here, to Hall, Border and Donaldson on Wikipedia
 - **S26**: alley wall 11 ft 6 in here, 14 ft (NYT) or 8 ft (Bready) in S01
+- **S27**: does not say which end zone
+- **S28**: 86 yd implies a start at the BAL 14, not the 28 (S27); unresolved
 
 ## Sources still to read before Phase 02
 

@@ -15,7 +15,8 @@ export const SCENE = {
   result: 'Colts 31 – Giants 16',
   attendance: 57545,
   kickoff: '14:05 EST',
-  sceneTime: '15:10 EST (provisional: third quarter, exact moment not chosen)',
+  sceneTime: '16:06 EST (approx.): early 4th quarter, Unitas 4-yd TD run, BAL 14–9',
+  moment: 'Unitas has just rolled out right behind Lenny Moore\'s block and crossed the north goal line; BAL 14, NYG 9, 4th quarter',
   lat: 39.3294, lon: -76.6014,
   status: 'PROVISIONAL · awaiting MZ.Human approval of the moment and the baseline'
 };
@@ -114,7 +115,13 @@ export const SOURCES = [
     supports: 'enclosed front porches on the 1920s "sunlight day-parlor" houses of Waverly; two-storey, two-bay rows', confidence: 'medium', rights: 'facts only', discrepancy: '' },
   { id: 'S26', title: 'Oriole Park at Camden Yards (with a description of Memorial Stadium in 1954)', creator: 'SABR BioProject',
     url: 'https://sabr.org/?p=12946', date: 'n.d.', era: '1954',
-    supports: 'on entering in 1954 a visitor saw ramps, left- and right-field bleachers and three tiers in a semicircle; only the lower deck had seats with backs; an 11 ft 6 in wall at each 446 ft alley; a 10-ft hedge from left- to right-centre the first year', confidence: 'medium', rights: 'facts only', discrepancy: 'alley wall 11 ft 6 in here, 14 ft (NYT) or 8 ft (Bready) in S01' }
+    supports: 'on entering in 1954 a visitor saw ramps, left- and right-field bleachers and three tiers in a semicircle; only the lower deck had seats with backs; an 11 ft 6 in wall at each 446 ft alley; a 10-ft hedge from left- to right-centre the first year', confidence: 'medium', rights: 'facts only', discrepancy: 'alley wall 11 ft 6 in here, 14 ft (NYT) or 8 ft (Bready) in S01' },
+  { id: 'S27', title: 'The Best Team You Ever Saw', creator: 'Tex Maule, Sports Illustrated',
+    url: 'https://vault.si.com/vault/1960/01/04/the-best-team-you-ever-saw', date: '1960-01-04', era: 'game report (contemporary)',
+    supports: 'the go-ahead drive followed a failed Giant fourth-and-one at the Baltimore 28; Unitas to Berry for 17, to Moore on a slant to the Giant 14; Unitas scored from the 4 on a rollout toward Lindon Crow with Moore blocking; fans tore at the steel goalposts afterwards', confidence: 'high', rights: 'facts only; no text reused', discrepancy: 'does not say which end zone' },
+  { id: 'S28', title: 'December 27, 1959: Colts pummel Giants (game recap)', creator: 'On This Day in Sports (blog)',
+    url: 'https://onthisdayinsports.blogspot.com/2013/12/december-27-1958-colts-pummel-giants.html', date: '2013-12-27', era: 'retrospective',
+    supports: 'the go-ahead drive was 10 plays, 86 yards, ending in Unitas\'s 4-yd run for 14–9', confidence: 'medium-low', rights: 'facts only', discrepancy: '86 yd implies a start at the BAL 14, not the 28 (S27); unresolved' },
 ];
 
 export const CLAIMS = [
@@ -152,7 +159,13 @@ export const CLAIMS = [
   { id: 31, key: 'citycollege',label: 'Baltimore City College ("the Castle on the Hill") across 33rd Street', status: 'approx', src: ['S23'], note: 'documented across 33rd St; placed from its address about 400 m WSW; Gothic massing and tower are generic' },
   { id: 32, key: 'canopy',     label: 'Memorial entrance canopy on red cast-granite columns, with an oval opening over a raised planter', status: 'approx', src: ['S11'], note: 'HABS MD-1111-16, -18, -19, -20, -21 (2000); assumed original to the 1954 memorial entrance; plan and column count approximated from oblique views' },
   { id: 33, key: 'forecourt',  label: 'Forecourt lawn, walk, hedges and the c.1922 wrought-iron fence', status: 'approx', src: ['S11'], note: 'fence and hedges on the south line predate the stadium (HABS MD-1111-14), so they stood in 1959; lawn, walk and second hedge follow the 2000 photographs' },
-  { id: 34, key: 'flagpoles',  label: 'Three flagpoles on the top row behind home plate', status: 'approx', src: ['S11'], note: 'HABS MD-1111-66 (US, Maryland, Baltimore City), 2000; assumed for 1959; flags not drawn' }
+  { id: 34, key: 'flagpoles',  label: 'Three flagpoles on the top row behind home plate', status: 'approx', src: ['S11'], note: 'HABS MD-1111-66 (US, Maryland, Baltimore City), 2000; assumed for 1959; flags not drawn' },
+  { id: 35, key: 'players',    label: 'The 22 players a second after the touchdown: Unitas in the north end zone, Moore on Crow, the lines piled at the 4', status: 'creative', src: ['S27','S06','S07'], note: 'who scored, from the 4, on a rollout toward Crow behind Moore: documented (S27). Which end zone, every position and pose: creative. Colts royal-blue jerseys and white helmets, Giants white jerseys and navy helmets: approx (1959 team colours)' },
+  { id: 36, key: 'officials',  label: 'Five officials, the back judge signalling touchdown', status: 'approx', src: ['S08'], note: 'five officials in 1959 (S08: line judge added 1965); striped shirts, white caps: period practice; positions creative' },
+  { id: 37, key: 'sbstate',    label: 'Scoreboard reads COLTS 14 · GIANTS 9 · QTR 4', status: 'approx', src: ['S06','S07','S01'], note: 'the score and quarter are documented; what the 1954 board actually displayed, and how, is not: lamp letters and layout are creative' },
+  { id: 38, key: 'moment',     label: 'Scene time 16:06 EST, low sun behind overcast', status: 'approx', src: ['S08','S27'], note: 'kickoff 14:05 documented; the TD came early in the 4th; the clock time is estimated from typical 1959 game length (~2 h 30 m); sun ~6° up, sunset 16:52' },
+  { id: 39, key: 'lightson',   label: 'Field lights burning in the dusk', status: 'creative', src: [], note: 'towers existed for night baseball; whether they were switched on during this game is not recorded' },
+  { id: 40, key: 'sound',      label: 'Sound: the held second (crowd bed, second waves, band drum, bowl, drizzle, far PA)', status: 'creative', src: ['S08'], note: 'a full house and drizzle are documented; no recording of this crowd is used or imitated; every voice is synthesised' },
 ];
 
 /* the 1954 dedication as laid out on the façade, read from HABS MD-1111-15 and -17 (text agreed with S16, S17, S12).

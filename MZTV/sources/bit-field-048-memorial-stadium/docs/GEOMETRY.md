@@ -93,7 +93,7 @@ The Library of Congress survey (HABS MD-1111, James W. Rosenthal, 2000: 82 photo
 | dugouts | dark openings in the field wall 58°–73° either side of the axis, under a 0.3 m lintel | dugouts documented (S02); placement assumed | approximation (claim 25) |
 | rails | 0.95 m above the field wall and the upper fascia | assumed | creative (claim 26) |
 | scoreboard | face divided into zones by dark bands; lamp cells inside; no text or score | structure assumed; content deliberately blank | approximation (claim 13) |
-| Longines clock | ticks and hands at the scene time (`?hour=`, default 15:10) | clock documented (S01) | approximation (claim 27) |
+| Longines clock | ticks and hands at the scene time (`?hour=`, default 16:06, the moment) | clock documented (S01) | approximation (claim 27) |
 | façade | concrete panel joints (3.05 × 4.4 m), letters standing off the wall with a soft shadow, iron grilles in the gates, lintel band, 1954 cornerstone at the foot of the east side | cornerstone documented (S21); joint grid, grilles and cornerstone position assumed | approximation / creative |
 | brick | coursed brick with mortar drawn at close range, grime at the foot of the wall | Baltimore brick (S19); texture generated | approximation |
 | neighbourhood | Ednor Gardens north of 36th St as Tudor rows (steep roofs, front gables, half-timbered upper storeys, terraced front gardens); porch-front daylight rows elsewhere (flat roofs, stone-trim cornice, deep porches with white posts); 5.5 m house bays with windows and doors; chimneys | house types documented (S22, S24); every house generated | creative (claim 17) |
@@ -106,7 +106,7 @@ The Library of Congress survey (HABS MD-1111, James W. Rosenthal, 2000: 82 photo
 ## Not modelled (on purpose)
 
 - **Light towers.** S02 says big towers came "later in the 1950s", but no date or positions yet, and it was a day game (claim 20).
-- **Players, officials, benches, flags, field-level "field seats" (S14), scoreboard content.** These wait for MZ.Human to choose a moment and for period photographs.
+- **Field-level "field seats" (S14) and flags.** Players, officials, benches and the scoreboard state now exist for the chosen moment (see below).
 - **Real ground levels** outside the bowl.
 
 ## Camera stations
@@ -121,4 +121,16 @@ The Library of Congress survey (HABS MD-1111, James W. Rosenthal, 2000: 82 photo
 | cam5 `overview-se` | 175 m up, south-east of the site (a model view, not a 1959 vantage) | the whole bowl in its blocks | 46° |
 | cam6 `north-lawn` | open ground inside the block just south of 36th Street, eye 1.6 m | south-west into the open end past the scoreboard | 68° |
 
-Scene sun (15:10 EST, 27 Dec 1959): elevation 14.2°, azimuth 222.6° (SW), from the NOAA approximation shared with 046/047.
+Scene sun (16:06 EST, 27 Dec 1959): elevation 6.2°, azimuth 232.8° (SW), from the NOAA approximation shared with 046/047. Sunset 16:52.
+
+
+## The moment (claims 35–39)
+
+| element | how it is built | resting on | status |
+|---|---|---|---|
+| Unitas and the play | 22 block figures at 1.85 m (helmet, shoulders, arms, legs); Unitas 1.1 m into the north end zone, arms up; Moore crouched over Crow; lines piled at the 4 | S27 (scorer, distance, rollout toward Crow behind Moore) | creative (positions, end zone) |
+| Officials | five figures in stripes; back judge deep in the end zone and field judge on the goal line signal TD | S08 (five officials in 1959) | approx |
+| Benches | 34 per team in ranks 3.4–5.5 m off each sideline between the 35s | none | creative |
+| Uniform colours | Colts royal blue / white; Giants white / navy / grey; officials stripes, white caps | period team colours | approx |
+| Scoreboard | 48 × 17 lamp cells at 0.55 m; COLTS 14 over GIANTS 9 in the 5×7 face | S06/S07 (score) | approx (layout creative) |
+| Lights | tower lamp banks self-lit | none for this game | creative |

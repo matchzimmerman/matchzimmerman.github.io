@@ -41,3 +41,13 @@ Question → Evidence → Approximation → Build → Comparison → Revision.
 - *Chronology.* 2000 features left out: the western office annex, sky boxes, the 1985 scoreboard and the added ramp blocks. Assumed for 1959, and flagged: the canopy (1954 memorial entrance), light towers ("later in the 1950s"), flagpoles and the mezzanine press box.
 
 **Next (pending review).** See `REVIEW-QUEUE.md`.
+
+## The moment layer — 4th-quarter surge
+
+MZ.Human chose the 4th-quarter surge. The frame is frozen a second after Johnny Unitas's 4-yard touchdown run that put Baltimore ahead 14–9.
+
+- **Sources added:** S27 (Tex Maule, *Sports Illustrated*, 4 Jan 1960: the drive, the rollout toward Lindon Crow behind Lenny Moore's block) and S28 (a retrospective recap: 10 plays, 86 yards; conflicts with S27's drive start, R23).
+- **On the field (claims 35, 36):** 22 players at true scale, Unitas in the end zone, Moore on Crow, the lines piled at the 4; five officials, back and field judges signalling. Both benches between the 35s. End zone, positions and poses are creative (R21); uniform colours approx (R24).
+- **Scoreboard (claim 37):** the lamp face spells COLTS 14 / GIANTS 9. Score documented, layout creative.
+- **Time and light (claims 38, 39):** 16:06 EST, sun ~6° above the horizon behind overcast (sunset 16:52). The print holds its exposure like a press camera, so dusk shows as softer shadows and a lower sky rather than a darker picture. The field lights burn (creative, R22).
+- The play is at the north end, so the primary view sees it beneath the scoreboard; cam2 (home rim) is the clearest frame of the moment.

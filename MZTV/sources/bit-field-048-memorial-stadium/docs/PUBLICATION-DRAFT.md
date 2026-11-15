@@ -8,15 +8,15 @@ Everything here waits for MZ.Human (review item R7). No asset has been published
 
 ## One line
 
-A provisional reconstruction of Baltimore's lost Memorial Stadium on 27 December 1959, the afternoon the Colts beat the Giants 31–16 for the NFL title, seen from the upper deck and printed in six inks.
+A provisional reconstruction of Baltimore's lost Memorial Stadium on 27 December 1959, held at the second Johnny Unitas ran in from the 4 to put the Colts ahead 14–9 on their way to a 31–16 title, seen from the upper deck and printed in six inks.
 
 ## Short caption (social)
 
-Memorial Stadium, 33rd Street, 27 Dec 1959. NFL Championship, Giants at Colts, 57,545 in the stands. The stadium is gone; this is a reconstruction from the record: dated measurements, the box score, the 1954 upper deck before its 1964 extensions. Provisional. Every surface is tagged documented, approximation or creative. Phase 01 of MZ WORLD · MEMORIAL STADIUM.
+Memorial Stadium, 33rd Street, 27 Dec 1959, 4:06 pm. Early 4th quarter: Unitas has just run it in from the 4, Colts 14, Giants 9, 57,545 in the stands. The stadium is gone; this is a reconstruction from the record: dated measurements, the box score, the 1954 upper deck before its 1964 extensions. Provisional. Every surface is tagged documented, approximation or creative. Phase 01 of MZ WORLD · MEMORIAL STADIUM.
 
 ## Longer note (site / archive)
 
-Memorial Stadium stood on 33rd Street from 1950 until its demolition in 2001. This is not a photograph and not a replica. It is a model built from dated evidence. The horseshoe is fitted to the 1957 backstop distance and the 309 ft foul poles. The roofless upper deck stops where it stopped before the 1964 extensions. The Gunther scoreboard of 1954 stands beyond the north end zone. The light is the sun over Baltimore at 3:10 that afternoon, behind the drizzle the box score records. Outside, the 116-foot memorial wall on 33rd Street carries the 1954 dedication word for word, set in bitmap capitals rather than the original letterforms. Where the record is silent (the underside of the deck, the houses beyond the open end, the crowd), the work says so: an evidence view colours each surface by what it rests on. The image is printed in HARBOUR LIGHT's six-ink language. The scene is provisional and will change as better sources arrive.
+Memorial Stadium stood on 33rd Street from 1950 until its demolition in 2001. This is not a photograph and not a replica. It is a model built from dated evidence. The horseshoe is fitted to the 1957 backstop distance and the 309 ft foul poles. The roofless upper deck stops where it stopped before the 1964 extensions. The Gunther scoreboard of 1954 stands beyond the north end zone. The moment is the go-ahead touchdown early in the fourth quarter: Unitas rolling right behind Lenny Moore's block, as Sports Illustrated reported it; the positions of the players, the end zone and the scoreboard's layout are the work's, and the evidence view says so. The light is a low December sun at about 4:06, six degrees up behind the drizzle the box score records, with the towers' lamps burning (an assumption). The sound holds the same second: a synthesised crowd roar stretched into a bed that breathes, with no recording of the game used. Outside, the 116-foot memorial wall on 33rd Street carries the 1954 dedication word for word, set in bitmap capitals rather than the original letterforms. Where the record is silent (the underside of the deck, the houses beyond the open end, the crowd), the work says so: an evidence view colours each surface by what it rests on. The image is printed in HARBOUR LIGHT's six-ink language. The scene is provisional and will change as better sources arrive.
 
 ## Required wording in every post
 
@@ -26,7 +26,7 @@ Memorial Stadium stood on 33rd Street from 1950 until its demolition in 2001. Th
 
 ## Alt text
 
-Pixel-printed view from the upper deck of a horseshoe-shaped stadium on a grey afternoon: rows of spectators in the foreground, a football field marked in white running away to the right, a large scoreboard and bare trees beyond the open north end, rowhouses on the horizon. A provisional reconstruction of Memorial Stadium, Baltimore, 27 December 1959.
+Pixel-printed view from the upper deck of a horseshoe-shaped stadium in grey late-afternoon light: rows of spectators in the foreground, a football field marked in white running away to the right with a tight knot of players at the far goal line and both teams' benches along the sidelines, a large scoreboard reading COLTS 14 GIANTS 9 and bare trees beyond the open north end, rowhouses on the horizon. A provisional reconstruction of Memorial Stadium, Baltimore, 27 December 1959.
 
 Exterior (cam3): Pixel-printed view from across 33rd Street of a tall concrete wall set in a curved brick stadium on a grey afternoon. Large letters across the top read MEMORIAL STADIUM above a round seal, a block of smaller dedication text and the line TIME WILL NOT DIM THE GLORY OF THEIR DEEDS; seven dark entrance gates line the base. A provisional reconstruction of Memorial Stadium, Baltimore, 27 December 1959.
 

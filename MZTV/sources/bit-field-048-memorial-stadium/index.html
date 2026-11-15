@@ -33,6 +33,7 @@ import { buildStadium, STATIONS, DIM } from './js/geometry.js';
 import { makeCam, makeGBuffer, renderScene, shadowMap } from './js/raster.js';
 import { makeEnv, makeCut, printInk, printNeutral, printEvidence, claimAt, EV_COL, INKS_HEX } from './js/shade.js';
 import { SCENE, CLAIMS } from './js/evidence.js';
+import { startSound, gestureSound, disableSound, soundState, soundTest } from './js/sound.js';
 
 const Q = new URLSearchParams(location.search), qn = (k, d) => { const v = Number(Q.get(k)); return Q.has(k) && Number.isFinite(v) ? v : d; };
 const OPT = {
@@ -40,8 +41,8 @@ const OPT = {
   cam: Math.max(0, Math.min(STATIONS.length - 1, qn('cam', 0) | 0)), wx: Q.get('wx') === 'clear' ? 'clear' : 'drizzle',
   t: Q.has('t') ? qn('t', 0) : null, lines: Math.max(90, Math.min(540, qn('lines', 180) | 0)), nh: Math.max(180, Math.min(1080, qn('nh', 540) | 0)),
   info: Q.get('info') !== '0', stamp: Q.get('stamp') !== '0', seed: qn('seed', 48) | 0, fps: Math.max(2, Math.min(30, qn('fps', 12))),
-  claim: Q.has('claim') ? qn('claim', -1) | 0 : -1, capture: Q.get('capture') === '1',
-  hour: Q.has('hour') ? qn('hour', 15.1667) : 15 + 10 / 60      // scene time, EST
+  claim: Q.has('claim') ? qn('claim', -1) | 0 : -1, capture: Q.get('capture') === '1', audio: Q.get('audio') !== '0',
+  hour: Q.has('hour') ? qn('hour', 16.1) : 16 + 6 / 60          // scene time, EST: the moment (claim 38)
 };
 if (OPT.capture) { OPT.info = false; }
 const $ = id => document.getElementById(id), D2R = Math.PI / 180;
@@ -99,10 +100,11 @@ function paintChrome() {
   const sh = s => SHARE[s] != null ? (SHARE[s] * 100).toFixed(0) + '%' : '–';
   const L = [];
   L.push(`<b>MZ WORLD · MEMORIAL STADIUM</b>  <span class="d">BIT FIELD 048 · PHASE 01 · PROVISIONAL</span>`);
-  L.push(`27 DEC 1959 · NFL CHAMPIONSHIP · NYG at BAL · ${SCENE.attendance.toLocaleString('en-US')} · scene ${String(Math.floor(OPT.hour)).padStart(2, '0')}:${String(Math.round(OPT.hour % 1 * 60)).padStart(2, '0')} EST <span class="d">(moment not yet chosen)</span>`);
+  L.push(`27 DEC 1959 · NFL CHAMPIONSHIP · NYG at BAL · ${SCENE.attendance.toLocaleString('en-US')} · scene ${String(Math.floor(OPT.hour)).padStart(2, '0')}:${String(Math.round(OPT.hour % 1 * 60)).padStart(2, '0')} EST · 4th QTR · UNITAS 4-YD RUN · BAL 14 NYG 9`);
   L.push(`CAMERA ${st.id} · ${st.label}`);
   L.push(`AIR ${ENV.wx === 'drizzle' ? 'drizzle, 49°F, wind 6 mph (box score S07; "cool and crisp" in S09 conflicts)' : 'clear (alternate: tests the sun and shadows)'} · sun ${el}° at ${az}°`);
   L.push(`IN FRAME documented ${sh('documented')} · approximation ${sh('approx')} · creative ${sh('creative')} · sky ${sh('sky')}`);
+  L.push(`SOUND <span id="snd">${OPT.audio ? 'click or press a key to hear the held second' : 'off (?audio=0)'}</span>`);
   L.push(`<span class="d">keys 1 ink · 2 neutral · 3 evidence · c camera · w weather · i hide  ·  ?view= ?cam= ?wx= ?t= ?lines= ?capture=1</span>`);
   $('info').innerHTML = L.join('\n'); $('info').classList.toggle('off', !OPT.info);
   const lg = $('legend'), sw = c => `<span class="sw" style="background:rgb(${c.join(',')})"></span>`;
@@ -147,7 +149,15 @@ function loop(now) {
 }
 paintChrome(); draw(); requestAnimationFrame(loop);
 
+/* sound: THE HELD SECOND (js/sound.js). Starts at once where autoplay is allowed (OBS), otherwise on the first click or key. */
+// OBS browser sources (window.obsstudio) and ?autoplay=1 start at once; a plain browser waits for a gesture (no autoplay warning).
+if (!OPT.audio) disableSound(); else if (window.obsstudio || Q.get('autoplay') === '1' || navigator.userActivation?.hasBeenActive) startSound();
+setInterval(() => { const e = $('snd'); if (!e || !OPT.audio) return; const s = soundState();
+  e.textContent = s.state === 'running' ? `crowd held · ${s.swell > .05 ? 'second wave ' + s.swell.toFixed(2) : 'murmur'} · band drum E(5,13) · drizzle${s.lastEvent ? ' · last: ' + s.lastEvent : ''}` : s.state === 'suspended' ? 'click or press a key to hear the held second' : s.state; }, 1000);
+
+addEventListener('pointerdown', () => OPT.audio && gestureSound());
 addEventListener('keydown', e => {
+  if (OPT.audio && !e.ctrlKey && !e.metaKey) gestureSound();
   const k = e.key.toLowerCase();
   if (k === '1') OPT.view = 'ink'; else if (k === '2') OPT.view = 'neutral'; else if (k === '3') OPT.view = 'evidence';
   else if (k === 'c') OPT.cam = (OPT.cam + 1) % STATIONS.length;
@@ -159,7 +169,7 @@ addEventListener('keydown', e => {
 /* test and capture handle */
 window.MZ = {
   OPT, DIM, STATS, SUN, get G() { return { n: G.n, lines: G.lines.length }; },
-  get share() { return SHARE; }, get frames() { return frames; },
+  get share() { return SHARE; }, get frames() { return frames; }, get sound() { return soundState(); }, soundTest,
   set(o) { Object.assign(OPT, o); if (o.wx) ENV = makeEnv({ wx: OPT.wx, sun: SUN, hour: OPT.hour }); if (o.t != null) simT = o.t; lastStatic = ''; draw(); paintChrome(); return this.state; },
   get state() { return { view: OPT.view, cam: STATIONS[OPT.cam].id, wx: ENV.wx, simT, sun: { el: SUN.el / D2R, az: SUN.az / D2R }, W: cv.width, H: cv.height, share: SHARE, stats: STATS }; }
 };

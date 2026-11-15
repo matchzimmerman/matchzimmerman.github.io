@@ -63,7 +63,7 @@ export const pol = (th, r, y) => [Math.sin(th) * r, y, DIM.cz - Math.cos(th) * r
 export const softUnder = r => DIM.fasciaLow + (r - DIM.upFrontR) * (DIM.upRise / DIM.upTread);
 
 export const MAT = { GROUND:1, FIELD:2, WALL:3, CONCRETE:4, CROWD_L:5, CROWD_U:6, SOFFIT:7, COLUMN:8, FASCIA:9,
-  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25, CAR:26, STONE:27, PORCH:28, LAMP:29, GRANITE:30, LAMPBANK:31, HEDGE:32, CANOPY:33 };
+  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25, CAR:26, STONE:27, PORCH:28, LAMP:29, GRANITE:30, LAMPBANK:31, HEDGE:32, CANOPY:33, PLAYER:34 };
 export const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));
 
 export function buildStadium(opt = {}) {
@@ -239,6 +239,45 @@ export function buildStadium(opt = {}) {
     line([-g, 0, gz], [-g, D.postH, gz], MAT.POST, K.goalposts.id, .14);
     line([g, 0, gz], [g, D.postH, gz], MAT.POST, K.goalposts.id, .14);
     line([-g, D.barH, gz], [g, D.barH, gz], MAT.POST, K.goalposts.id, .14);
+  }
+
+  /* ---- THE MOMENT (claims 35, 36): early 4th quarter, Unitas has just scored from the 4 on a rollout
+     toward Lindon Crow behind Lenny Moore's block (S27). Which end zone and every position are creative:
+     here the Colts are driving north, toward the open end and the scoreboard.
+     Figures are blocks at true scale (1.85 m): helmet, shoulders, arms, legs. VAR: 1 Colts, 2 Giants, 3 official; +10 lying. */
+  {
+    let ps = 1959 * 31 + 27; const rnd = () => (ps = (ps * 16807) % 2147483647) / 2147483647;   // own stream: the rest of the world stays put
+    const fig = (x, z, team, pose = 'stand', cl = K.players.id) => {
+      const s = .9 + rnd() * .2;
+      if (pose === 'down') { VAR = team + 10; box(x - .9, 0, z - .28, x + .9, .42, z + .28, MAT.PLAYER, cl, .7, 0); VAR = 0; return; }
+      VAR = team + (pose === 'crouch' ? 20 : 0);
+      const h = pose === 'crouch' ? .72 : 1, hip = .9 * h * s, sh = 1.55 * h * s, top = 1.86 * h * s;
+      box(x - .22, 0, z - .1, x - .04, hip, z + .1, MAT.PLAYER, cl, .75, 0);
+      box(x + .04, 0, z - .1, x + .22, hip, z + .1, MAT.PLAYER, cl, .75, 0);
+      box(x - .29, hip, z - .17, x + .29, sh, z + .17, MAT.PLAYER, cl, .85, 0);
+      box(x - .13, sh, z - .14, x + .13, top, z + .14, MAT.PLAYER, cl, .9, 0);
+      const ay0 = pose === 'arms' ? sh - .05 : hip + .05, ay1 = pose === 'arms' ? top + .55 : sh - .05;
+      for (const sx of [-1, 1]) box(x + sx * .29, ay0, z - .06, x + sx * .4, ay1, z + .06, MAT.PLAYER, cl, .8, 0);
+      VAR = 0;
+    };
+    const g = D.goalN, los = g - 4 * .9144;            // goal line; the play started from the 4
+    // Colts (driving north)
+    fig(7.6, g + 1.1, 1, 'arms');                          // Unitas, just over the line on the right
+    fig(6.3, g - 1.4, 1, 'crouch'); fig(6.9, g - 1.1, 2, 'down');   // Moore's block on Crow
+    fig(-15.5, g + 2.0, 1); fig(2.6, los + 1.0, 1, 'crouch'); fig(-6.2, g - 1.8, 1); fig(4.4, los - 1.6, 1);
+    for (let k = -2; k <= 2; k++) fig(k * 1.05 + (rnd() - .5) * .4, los - .2 + rnd() * .6, 1, rnd() < .4 ? 'down' : 'crouch');
+    // Giants (defending the north goal)
+    for (let k = 0; k < 4; k++) fig(-1.6 + k * 1.1 + (rnd() - .5) * .3, los + .8 - rnd() * .5, 2, rnd() < .35 ? 'down' : 'crouch');
+    fig(-3.6, g - 2.4, 2); fig(4.9, g - 2.6, 2); fig(.5, g - 1.2, 2);          // linebackers
+    fig(10.2, g + .2, 2); fig(-13.4, g + 1.2, 2); fig(1.2, g + 4.2, 2);        // the secondary
+    // the five officials (claim 36): back judge and field judge signal the touchdown
+    fig(.4, g + 6.8, 3, 'arms', K.officials.id); fig(D.fieldW / 2 + .8, g, 3, 'arms', K.officials.id);
+    fig(-D.fieldW / 2 - .8, los, 3, 'stand', K.officials.id); fig(-1.8, g - .9, 3, 'stand', K.officials.id); fig(2.4, los - 8.5, 3, 'stand', K.officials.id);
+    // the benches between the 35s, teams in ranks along the sidelines (which side each team used: creative)
+    for (const [team, sx] of [[1, -1], [2, 1]]) for (let k = 0; k < 34; k++) {
+      const z = D.fifty - 14 + k * .85 + (rnd() - .5) * .3, x = sx * (D.fieldW / 2 + 3.4 + (k % 3) * .8 + rnd() * .5);
+      fig(x, z, team);
+    }
   }
 
   /* ---- the memorial façade on 33rd Street, measured from HABS MD-1111-15 ----

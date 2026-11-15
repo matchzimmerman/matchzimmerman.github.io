@@ -86,6 +86,29 @@ function textCover(str, cx, cy, h, x, y, fp, w = null) {
 }
 const CORNER = { x: 12.2, y: 1.0, w: 1.5, h: .85 };   // 1954 date stone in the east brick infill (HABS MD-1111-23; height assumed)
 const atCorner = (x, y, z) => Math.abs(x - CORNER.x) < CORNER.w / 2 && Math.abs(y - CORNER.y) < CORNER.h / 2 && Math.abs(z - (DIM.facade.z + .1)) < .35;
+/* ---------- the moment: scoreboard text and uniforms ---------- */
+const SB0 = { x: DIM.sbX - DIM.sbW / 2 + .8, y: 6.2 + .8 };            // lower-left of the lamp face (geometry.js)
+const SB_LINES = [{ t: 'COLTS 14', row: 9 }, { t: 'GIANTS 9', row: 1 }, { t: 'QTR 4', row: 0, small: true }];
+function sbCell(cx, cy) {
+  if (cx < 0 || cx > 47 || cy < 0 || cy > 16) return false;
+  for (const L of SB_LINES) { if (L.small) continue;
+    const r = 6 - (cy - L.row); if (r < 0 || r > 6) continue;
+    const ci = Math.floor(cx / 6), col = cx % 6, ch = L.t[ci]; if (!ch || col > 4) return false;
+    const g = GLYPH[ch]; return !!g && g[r * 5 + col] === '1'; }
+  return cy === 8 && cx > 20 && cx < 27;                                  // a bar dividing the teams; the quarter lamp sits at the right end
+}
+export const sbLit = (x, y) => { const cx = Math.floor((x - SB0.x) / .55), cy = Math.floor((y - SB0.y) / .55); return sbCell(cx, cy); };
+/* 1959 uniforms (claim 35, approx): Colts royal-blue jerseys, white pants and helmets; Giants white jerseys, grey pants,
+   navy helmets; officials in black-and-white stripes, white caps and knickers. Mud on knees and seats in the drizzle. */
+function playerColour(v, x, y, z) {
+  const team = v % 10, lying = v >= 10 && v < 20, mud = (vn(x * 5, z * 5 + y * 3) > .55 ? .78 : 1);
+  if (team === 3) { if (y > 1.6) return [.9, .9, .88]; if (y > .95) return ((x + z) * 6.5 % 1 + 1) % 1 < .5 ? [.08, .08, .08] : [.9, .9, .88]; return y > .35 ? [.88, .88, .86] : [.06, .06, .06]; }
+  const C = team === 1 ? { hel: [.9, .9, .88], jer: [.08, .17, .5], pan: [.86, .85, .8], sock: [.08, .17, .5] }
+                       : { hel: [.08, .1, .22], jer: [.88, .88, .86], pan: [.56, .56, .54], sock: [.48, .1, .1] };
+  if (lying) return (y > .3 ? C.jer : C.pan).map(k => k * mud);
+  const yy = v >= 20 ? y / .72 : y;
+  if (yy > 1.52) return C.hel; if (yy > .88) return C.jer; if (yy > .34) return C.pan.map(k => k * mud); if (yy > .12) return C.sock; return [.05, .05, .05];
+}
 /* late-1950s car paints (generic): black, white, turquoise, coral, sea green, cream, navy, red, two-tone grey */
 const PAINT = [[.2, .2, .2], [.06, .06, .07], [.86, .86, .84], [.35, .66, .66], [.82, .48, .42], [.48, .64, .52], [.86, .80, .64], [.14, .18, .34], [.58, .14, .13], [.62, .63, .64]];
 /* coverage (0..1) of the dedication letters at façade point (x, y) for a pixel of footprint fp metres */
@@ -108,6 +131,8 @@ export function claimAt(G, gb, i) {
   if (G.mat[id] === MAT.EXTERIOR && atCorner(gb.wx[i], gb.wy[i], gb.wz[i])) return CLAIMS.find(c => c.key === 'cornerstone').id;
   if (G.mat[id] === MAT.WALL && dugoutAt(gb.wx[i], gb.wy[i], gb.wz[i])) return CLAIMS.find(c => c.key === 'dugouts').id;
   if (G.mat[id] === MAT.CLOCK) return CLAIMS.find(c => c.key === 'clockface').id;
+  if (G.mat[id] === MAT.SB_FACE && sbLit(gb.wx[i], gb.wy[i])) return CLAIMS.find(c => c.key === 'sbstate').id;
+  if (G.mat[id] === MAT.LAMPBANK) return CLAIMS.find(c => c.key === 'lightson').id;
   if (G.mat[id] !== MAT.FIELD) return G.claim[id];
   const x = gb.wx[i], z = gb.wz[i], D = DIM;
   if (fieldLineCover(x, z, .05) > 0) return CLAIMS.find(c => c.key === 'field').id;
@@ -126,7 +151,7 @@ const ALB = {
   [MAT.PRESSBOX]: [.50, .54, .54, .52], [MAT.CLOCK]: [.85, .88, .87, .82],
   [MAT.FACADE]: [.50, .55, .54, .50], [MAT.FACADE_FACE]: [.50, .55, .54, .50], [MAT.ROAD]: [.15, .17, .17, .18], [MAT.PAVING]: [.40, .43, .42, .39], [MAT.GRASS]: [.24, .27, .29, .18],
   [MAT.CAR]: [.3, .3, .3, .3], [MAT.STONE]: [.46, .50, .49, .45], [MAT.PORCH]: [.80, .84, .83, .79], [MAT.LAMP]: [.22, .24, .25, .26],
-  [MAT.GRANITE]: [.36, .50, .27, .24], [MAT.LAMPBANK]: [.2, .21, .22, .23], [MAT.HEDGE]: [.17, .17, .22, .13], [MAT.CANOPY]: [.6, .64, .63, .6]
+  [MAT.GRANITE]: [.36, .50, .27, .24], [MAT.LAMPBANK]: [.2, .21, .22, .23], [MAT.HEDGE]: [.17, .17, .22, .13], [MAT.CANOPY]: [.6, .64, .63, .6], [MAT.PLAYER]: [.5, .5, .5, .5]
 };
 const COATS = [[.10, .11, .16], [.16, .13, .11], [.22, .22, .23], [.07, .07, .08], [.28, .22, .16], [.12, .16, .26], [.34, .33, .31], [.40, .14, .12]];
 const FACE = [[.62, .48, .40], [.50, .37, .30], [.30, .22, .18], [.24, .24, .26], [.70, .70, .66]];
@@ -134,9 +159,14 @@ const FACE = [[.62, .48, .40], [.50, .37, .30], [.30, .22, .18], [.24, .24, .26]
 export function makeEnv(opt) {
   const wx = opt.wx === 'clear' ? 'clear' : 'drizzle', hour = opt.hour ?? 15 + 10 / 60;
   const s = opt.sun, sd = [Math.sin(s.az) * Math.cos(s.el), Math.sin(s.el), Math.cos(s.az) * Math.cos(s.el)];
-  return wx === 'drizzle'
+  // dusk (claim 38): below ~12° the overcast dims; the print keeps its range, so the drop is held to a step or so of ink
+  const dusk = 1 - sstep(1, 12, s.el * 180 / Math.PI), lights = opt.lights ?? (dusk > .45);
+  const e = wx === 'drizzle'
     ? { wx, hour, wet: 1, sunDir: sd, amb: 1.0, dif: .10, vis: 1400, skyBase: .66, skyTop: .2, glow: .08, rain: 1, inks: INKS.drizzle }
     : { wx, hour, wet: .25, sunDir: sd, amb: .55, dif: .95, vis: 14000, skyBase: .62, skyTop: .1, glow: .32, rain: 0, inks: INKS.clear };
+  e.dif *= 1 - .5 * dusk; e.skyBase -= .03 * dusk;   // exposure held, as a press camera would e.glow += .06 * dusk; e.vis *= 1 - .3 * dusk;
+  e.dusk = dusk; e.lights = lights;
+  return e;
 }
 
 /* sky luminance along a view ray (overcast: brightest above, a faint warm patch where the sun is) */
@@ -203,13 +233,13 @@ function surface(mat, x, y, z, out, fp = .02, t = 0, env = null, vari = 0) {
     const hat = brim;
     out[1] = c[0]; out[2] = c[1]; out[3] = c[2]; out[0] = Math.min(head && !hat ? .34 : 1, c[0] * .3 + c[1] * .59 + c[2] * .11); // faces stay inside the crowd's tone in print
   } else if (mat === MAT.SB_FACE) {
-    // structure: a frame of dark bands dividing the face into zones (layout assumed), then lamp cells.
-    // No text and no score are drawn: the face makes no claim about what was displayed.
-    const fx0 = x - DIM.sbX, zoneLine = Math.abs(((fx0 + 14) % 4.6 + 4.6) % 4.6) < .18 || Math.abs(y - 13.2) < .2 || Math.abs(y - 9.4) < .2;
-    if (zoneLine) { out[0] = .04; out[1] = out[2] = out[3] = .05; return out; }
-    const cx = Math.floor((x + 40) / .55), cy = Math.floor(y / .55), lit = h2(Math.floor(cx / 3), Math.floor(cy / 4)) > .62 && h2(cx, cy) > .25;
-    const fx = (x + 40) / .55 - cx, fy = y / .55 - cy, bulb = (fx - .5) ** 2 + (fy - .5) ** 2 < .1;
-    if (bulb) { out[0] = lit ? .9 : .2; out[1] = lit ? 1 : .2; out[2] = lit ? .78 : .2; out[3] = lit ? .42 : .2; out[4] = lit ? 1 : 0; }
+    // lamp cells on a 0.55 m grid; the moment's score spelled in lit bulbs (claim 37: score documented, layout creative)
+    const cx = Math.floor((x - SB0.x) / .55), cy = Math.floor((y - SB0.y) / .55);
+    const fx = (x - SB0.x) / .55 - cx, fy = (y - SB0.y) / .55 - cy, bulb = fp > .2 || (fx - .5) ** 2 + (fy - .5) ** 2 < .11;   // far away: the cell reads as one lamp
+    if (bulb) { const lit = sbCell(cx, cy); out[0] = lit ? .92 : .16; out[1] = lit ? 1 : .17; out[2] = lit ? .8 : .16; out[3] = lit ? .45 : .15; out[4] = lit ? 1 : 0; }
+    else { out[0] = .05; out[1] = out[2] = out[3] = .06; }
+  } else if (mat === MAT.PLAYER) {
+    const c = playerColour(vari, x, y, z); out[1] = c[0]; out[2] = c[1]; out[3] = c[2]; out[0] = c[0] * .3 + c[1] * .59 + c[2] * .11;
   } else if (mat === MAT.CLOCK) {
     // the Longines clock, hands at the scene time (claim 27)
     const cx = x - DIM.sbX, cy = y - (DIM.sbH - 2.6 + 1.3), r = Math.hypot(cx, cy), ang = Math.atan2(cx, cy);
@@ -282,7 +312,7 @@ function surface(mat, x, y, z, out, fp = .02, t = 0, env = null, vari = 0) {
     out[0] = L; out[1] = r; out[2] = g; out[3] = b;
   } else if (mat === MAT.LAMPBANK) {
     const u = ((x + z) * 1.25 % 1 + 1) % 1, v = (y * 1.25 % 1 + 1) % 1, lamp = (u - .5) ** 2 + (v - .5) ** 2 < .12;
-    if (lamp) { out[0] = .5; out[1] = .52; out[2] = .53; out[3] = .5; }            // lamps unlit: a day game
+    if (lamp) { const on = env && env.lights; out[0] = on ? .95 : .5; out[1] = on ? 1 : .52; out[2] = on ? .93 : .53; out[3] = on ? .74 : .5; out[4] = on ? 1 : 0; }   // claim 39: lit at dusk (creative)
   } else if (mat === MAT.GRANITE || mat === MAT.HEDGE || mat === MAT.CANOPY) {
     const n = (vn(x * 2.3 + z * 2.3, y * 2.3) - .5) * (mat === MAT.HEDGE ? .12 : .05); out[0] += n; out[1] += n; out[2] += n; out[3] += n;
   } else if (mat === MAT.WALL && dugoutAt(x, y, z)) {
@@ -358,7 +388,7 @@ export function printInk(G, gb, cam, env, sh, px32, t) {
         if (q - k < .1 && h2(col, k) < .07) L += L > .55 ? -.16 : .16; }
       L = clamp(L, 0, 1); L = L < .5 ? .5 * Math.pow(2 * L, 1.35) : 1 - .5 * Math.pow(2 - 2 * L, 1.15);
       const v = L * 5, iv = v | 0, ink = v - iv > BAYER[by + (x & 3)] ? iv + 1 : iv;
-      px32[i] = lamp && BAYER[by + (x & 3)] < .8 ? LAMP : pal[ink > 5 ? 5 : ink];
+      px32[i] = lamp ? LAMP : pal[ink > 5 ? 5 : ink];
     }
   }
 }
