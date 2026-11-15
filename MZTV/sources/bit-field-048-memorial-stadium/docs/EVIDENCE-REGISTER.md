@@ -38,12 +38,16 @@ Images found during research are listed as references only. None are copied into
 | S18 | [Memorial Stadium (BR Bullpen)](https://www.baseball-reference.com/bullpen/Memorial_Stadium) | Baseball-Reference Bullpen contributors | n.d. | lifetime | a sign above the entrance, dedicated 1954, carried the inscription; the letters spelling the park's name were on that sign (later leased to Cal Ripken Jr.) | medium | facts only |  |
 | S19 | [Common Ground (NPS), Summer 2004: "Artifact" (Memorial Stadium HABS documentation)](https://www.nps.gov/crps/commonground/Summer2004/artifact.pdf) | National Park Service | 2004 | retrospective | local labour and materials; the signature Baltimore brick of the façade marked it as a city institution | medium | US Government text; facts only |  |
 | S20 | [Memorial Stadium lettering](https://www.typeoff.de/2006/11/memorial-stadium-lettering/) | typeoff.de | 2006-11 | façade letters | the last line's letters were wider and rounder than the first line's; façade attributed to L. P. Kooken (spelled "Cook") and Company | medium-low | not reused (its redrawn letters are not copied) | architect credited to Kooken here, to Hall, Border and Donaldson on Wikipedia |
+| S21 | [Death of an old friend (demolition photo essay)](https://thedailyrecord.com/2002/02/18/death-of-an-old-friend/) | The Daily Record (Baltimore) | 2002-02-18 | demolition, 2001–02 | the 1954 cornerstone, holding a time capsule, was set in the brick wall; the city seal on the façade; façade bricks sold as artifacts | medium | facts only; photographs not reused |  |
+| S22 | [Ednor Gardens Historic District, National Register nomination](https://npgallery.nps.gov/GetAsset/c2966e13-6a88-4074-bc4e-c0e346ee0e78) | National Park Service / Maryland Historical Trust | listed 2004-03-30 | 1925–1950 development | Ednor Gardens (north of 36th St, by Ellerslie Ave): Tudor, Norman and Colonial rowhouses with terraced front gardens; Daylight houses with small front yards and broad front porches; red brick with stone trim, deep front porches with white-painted trim; the wide, tree-lined 33rd Street boulevard | high | US Government document; facts only |  |
+| S23 | [Suburb in the city: Ednor Gardens is an urban gem](https://www.washingtonexaminer.com/?p=703824) | Washington Examiner | n.d. | present, with history | Ednor Gardens built in the 1920s–30s next to Venable Park (the stadium site); Gallagher daylight houses with front sunrooms; Baltimore City College ("the Castle on the Hill") across 33rd Street | medium | facts only |  |
+| S24 | [Baltimore Row Houses](https://www.oldhouseonline.com/house-tours/baltimores-varied-row-houses) | Old House Online | n.d. | typology | enclosed front porches on the 1920s "sunlight day-parlor" houses of Waverly; two-storey, two-bay rows | medium | facts only |  |
 
 ## Claims (what each modelled thing rests on)
 
 | # | claim | status | sources | note |
 |---|---|---|---|---|
-| 0 | Sky and air (overcast drizzle) | APPROXIMATION | S07 | drizzle 49 °F from S07; cloud form, haze amount and brightness are fitted, not recorded |
+| 0 | Sky and air (overcast drizzle, wet surfaces) | APPROXIMATION | S07 | drizzle 49 °F from S07; cloud form, haze, wetness and reflections are fitted, not recorded |
 | 1 | Horseshoe open to the north, home plate at the south | DOCUMENTED | S02, S05, S10 | CF due north; diamond at the south end since 1950 |
 | 2 | Lower-deck horseshoe plan (front wall curve) | APPROXIMATION | S01, S02, S10 | circle fitted through the 72 ft backstop (1957) and the 309 ft foul poles; real plan not traced |
 | 3 | Lower deck rows and rake (36 rows, 8 ft front wall) | APPROXIMATION | S01, S02 | 46 lifetime rows minus ~10 rows of 1961 boxes; tread/riser assumed (0.84 / 0.38 m) |
@@ -60,14 +64,21 @@ Images found during research are listed as references only. None are copied into
 | 14 | Outfield wings, wall and centre-field opening | APPROXIMATION | S01, S02 | 14 ft corner walls receding at 135°, wire fence and terrace in CF, LF/RF bleachers; plan fitted to 445/446 ft |
 | 15 | Foul poles at 309 ft | DOCUMENTED | S01, S02 | height assumed |
 | 16 | Press box on the rim behind home plate | CREATIVE | — | placeholder; 1959 press box form and position not yet researched |
-| 17 | Waverly / Ednor Gardens rowhouses and bare trees round the site | CREATIVE | S05 | streets documented; houses are generic two-storey massing |
+| 17 | Rowhouses round the site: Ednor Gardens Tudor rows (north), porch-front daylight rows (elsewhere), bare trees | CREATIVE | S22, S23, S24 | house types documented for the neighbourhoods (S22, S24); every individual house, its position and the tree layout are generated |
 | 18 | Ground outside the bowl | CREATIVE | — | flat plane; real grades not modelled |
 | 19 | Aisles and portals in the stands | CREATIVE | — | rhythm assumed (12° aisles, 24° portals) |
 | 20 | Light towers (late 1950s) | CREATIVE | S02 | NOT MODELLED: S02 says big towers were added later in the 1950s; date and positions unknown, and it was a day game |
 | 21 | Memorial façade on 33rd Street: 116 ft, concrete panel in brick, seal, entrance gates | APPROXIMATION | S03, S05, S12, S18, S19 | height, materials, seal, letters and position documented; width (44 m panel), proud of the curve by 2.75 m, seal position and gate rhythm assumed |
 | 22 | The dedication, in stainless-steel letters | DOCUMENTED | S12, S16, S17, S18 | text agreed by three transcriptions; line breaks partly documented (S16, S12); letter sizes fitted inside the documented 12 in – 10 ft range; bitmap letterforms are not the originals |
 | 23 | Brick shell round the horseshoe | APPROXIMATION | S02, S03, S19 | massive reddish-brown brick wall documented; concrete bands, vents and portals are invented; external ramps left out (most were added later) |
-| 24 | 33rd Street boulevard, Ellerslie Ave, Ednor Rd, 36th Street | APPROXIMATION | S05 | which street bounds which side is documented; positions and widths (33rd St as a divided boulevard) are not traced |
+| 24 | 33rd Street boulevard (tree-lined), Ellerslie Ave, Ednor Rd, 36th Street | APPROXIMATION | S05, S22 | which street bounds which side is documented, and 33rd St was a wide tree-lined boulevard (S22); positions, widths and tree spacing are not traced |
+| 25 | Baseball dugouts in the front wall, between home and the bases | APPROXIMATION | S02 | dugouts documented (1958 temporary boxes ran "between the dugouts and the foul poles"); position on the wall and size assumed |
+| 26 | Rails on the field wall and the upper-deck fascia | CREATIVE | — | rails surely existed; height and form assumed |
+| 27 | Longines clock showing the scene time | APPROXIMATION | S01 | the clock is documented; its face design is assumed; the hands follow ?hour= (default 15:10) |
+| 28 | 1954 cornerstone at the foot of the façade | APPROXIMATION | S21 | a 1954 cornerstone with a time capsule was set in the brick wall; position and size assumed |
+| 29 | Game-day parked cars along the streets | CREATIVE | — | a sell-out (S08) implies full streets, but no source places cars; generic late-1950s bodies and colours |
+| 30 | Street lamps on 33rd Street | CREATIVE | — | type and spacing invented; unlit (daytime) |
+| 31 | Baltimore City College ("the Castle on the Hill") across 33rd Street | APPROXIMATION | S23 | documented across 33rd St; placed from its address about 400 m WSW; Gothic massing and tower are generic |
 
 ## Open discrepancies
 

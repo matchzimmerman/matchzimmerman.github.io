@@ -17,6 +17,9 @@ Decisions only Match can make, in rough priority order. Nothing here blocks read
 | **R11** | **Façade composition** | the 44 m concrete panel framed by brick pylons is fitted, not traced. Height, materials, seal, letters and text are documented | check against a HABS or period photograph before anything public shows the façade close up |
 | **R12** | **Lettering** | bitmap capitals (current, honest about not being the originals) · draw the original letterforms from photographs (the closing line was wider and rounder) | keep bitmap until photographs are in hand; the evidence view already marks the text as documented and the forms as not |
 | **R13** | **Brick shell articulation** | plain brick with invented bands, vents and portals (current) · plain brick with no articulation · wait for photographs | keep, labelled creative; replace from HABS |
+| **R15** | **Creative street life** | keep game-day cars and street lamps (both creative) · remove them until a period photograph shows the streets | keep for the piece, labelled; drop from any "evidence" still |
+| **R16** | **City College** | keep the generic Gothic massing at its address · trace its real footprint and tower | trace before any exterior frame that shows it large |
+| **R17** | **Crowd movement** | a few spectators shift every ~3 s in the live print · fully static | keep: it is the only motion besides drizzle and cloud, and it stays below notice |
 | **R14** | **Exterior review frame** | cam3 (33rd Street, the memorial wall) · cam4 (corner of 33rd and Ellerslie) · cam5 (overview, a model view) | cam3 for the piece's exterior; cam5 only for explaining the model |
 
 Approval is on MZ.Human. No merge or deploy happens until then.

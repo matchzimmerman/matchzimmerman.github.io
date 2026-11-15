@@ -1,13 +1,13 @@
-# Test report · BIT FIELD 048 · Phase 01 (interior + exterior) · 2026-11-14
+# Test report · BIT FIELD 048 · Phase 01 (interior + exterior + detail pass) · 2026-11-14
 
 Harness: `tests/capture.py` (Playwright, headless Chromium 153 with SwiftShader, viewport 1920×1080). Raw results: `captures/report.json`. Contact sheets: `captures/contact-sheet.png` (stands) and `captures/contact-sheet-exterior.png` (exterior).
 
 | check | result |
 |---|---|
-| loads without console errors or page errors (30 loads: 3 views × 6 cameras, both weathers for cam0, repro, motion) | **pass** (0 errors; the blocked webfont request is filtered as expected offline) |
-| first frame | **pass**: 1.5–2.0 s from navigation to the first drawn frame, including geometry build (≈35–50 ms, 32,788 triangles + 2,067 line primitives with the exterior and neighbourhood) |
-| render cost (one-off per camera) | raster 320×180: 45–65 ms · 960×540: 90–185 ms · sun shadow map (clear only): 51–60 ms |
-| print cost | ink 17–40 ms/frame · neutral 270–450 ms (once) · evidence 125–190 ms (once) |
+| loads without console errors or page errors (33 loads: 3 views × 7 cameras, both weathers for cam0, repro, motion) | **pass** (0 errors; the blocked webfont request is filtered as expected offline) |
+| first frame | **pass**: 1.2–2.5 s from navigation to the first drawn frame, including geometry build (≈110–175 ms for 50,564 triangles + 86,951 line primitives after the detail pass) |
+| render cost (one-off per camera) | raster 71–350 ms (320×180 to 960×540; most of it is tree twigs) · sun shadow map (clear only): 51–60 ms |
+| print cost | ink 17–51 ms/frame · neutral 370–670 ms (once) · evidence 120–250 ms (once) |
 | live ink frame rate | 10.4 fps measured against a 12 fps target, headless software rendering. **Note:** retest on the studio machine in OBS before Phase 02 |
 | reproducibility | **pass**: identical SHA-1 for two loads with the same `seed`, `t` and view (`4133d733…`) |
 | motion | **pass**: frames at t=0 and t=30 differ only by drizzle streaks and cloud drift; geometry and evidence are static |
@@ -17,6 +17,7 @@ Harness: `tests/capture.py` (Playwright, headless Chromium 153 with SwiftShader,
 | in-frame evidence share, cam2 | documented 0.4% · approximation 37.2% · creative 43.1% · sky 19.3% |
 | in-frame evidence share, cam3 (façade) | documented 2.5% (the inscription) · approximation 78.9% · creative 1.4% · sky 17.2% |
 | in-frame evidence share, cam5 (overview) | documented 0.2% · approximation 32.3% · creative 67.5% (mostly the invented neighbourhood) |
+| detail pass checks | **pass**: spectators seen from behind show hair and hats (faces only in the opposite stands); the clock shows 3:10; wet roads take the sky; no tree stands on the façade axis |
 | façade lettering | **pass**: the name is legible in the 320×180 print at street distance; the dedication resolves letter by letter at 960×540 and drops to an average tone when too small (no aliasing shimmer) |
 | scene sun | elevation 14.2°, azimuth 222.6° at 15:10 EST (NOAA approximation) |
 | Firefox / Safari | **not tested**: only Chromium is installed in the build environment |

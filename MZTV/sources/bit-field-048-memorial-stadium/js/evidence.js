@@ -99,12 +99,23 @@ export const SOURCES = [
     url: 'https://www.nps.gov/crps/commonground/Summer2004/artifact.pdf', date: '2004', era: 'retrospective',
     supports: 'local labour and materials; the signature Baltimore brick of the façade marked it as a city institution', confidence: 'medium', rights: 'US Government text; facts only', discrepancy: '' },
   { id: 'S20', title: 'Memorial Stadium lettering', creator: 'typeoff.de', url: 'https://www.typeoff.de/2006/11/memorial-stadium-lettering/', date: '2006-11', era: 'façade letters',
-    supports: 'the last line\'s letters were wider and rounder than the first line\'s; façade attributed to L. P. Kooken (spelled "Cook") and Company', confidence: 'medium-low', rights: 'not reused (its redrawn letters are not copied)', discrepancy: 'architect credited to Kooken here, to Hall, Border and Donaldson on Wikipedia' }
+    supports: 'the last line\'s letters were wider and rounder than the first line\'s; façade attributed to L. P. Kooken (spelled "Cook") and Company', confidence: 'medium-low', rights: 'not reused (its redrawn letters are not copied)', discrepancy: 'architect credited to Kooken here, to Hall, Border and Donaldson on Wikipedia' },
+  { id: 'S21', title: 'Death of an old friend (demolition photo essay)', creator: 'The Daily Record (Baltimore)',
+    url: 'https://thedailyrecord.com/2002/02/18/death-of-an-old-friend/', date: '2002-02-18', era: 'demolition, 2001–02',
+    supports: 'the 1954 cornerstone, holding a time capsule, was set in the brick wall; the city seal on the façade; façade bricks sold as artifacts', confidence: 'medium', rights: 'facts only; photographs not reused', discrepancy: '' },
+  { id: 'S22', title: 'Ednor Gardens Historic District, National Register nomination', creator: 'National Park Service / Maryland Historical Trust',
+    url: 'https://npgallery.nps.gov/GetAsset/c2966e13-6a88-4074-bc4e-c0e346ee0e78', date: 'listed 2004-03-30', era: '1925–1950 development',
+    supports: 'Ednor Gardens (north of 36th St, by Ellerslie Ave): Tudor, Norman and Colonial rowhouses with terraced front gardens; Daylight houses with small front yards and broad front porches; red brick with stone trim, deep front porches with white-painted trim; the wide, tree-lined 33rd Street boulevard', confidence: 'high', rights: 'US Government document; facts only', discrepancy: '' },
+  { id: 'S23', title: 'Suburb in the city: Ednor Gardens is an urban gem', creator: 'Washington Examiner',
+    url: 'https://www.washingtonexaminer.com/?p=703824', date: 'n.d.', era: 'present, with history',
+    supports: 'Ednor Gardens built in the 1920s–30s next to Venable Park (the stadium site); Gallagher daylight houses with front sunrooms; Baltimore City College ("the Castle on the Hill") across 33rd Street', confidence: 'medium', rights: 'facts only', discrepancy: '' },
+  { id: 'S24', title: 'Baltimore Row Houses', creator: 'Old House Online',
+    url: 'https://www.oldhouseonline.com/house-tours/baltimores-varied-row-houses', date: 'n.d.', era: 'typology',
+    supports: 'enclosed front porches on the 1920s "sunlight day-parlor" houses of Waverly; two-storey, two-bay rows', confidence: 'medium', rights: 'facts only', discrepancy: '' }
 ];
 
-/* claims: every modelled thing points to one of these, so the EVIDENCE view can colour it */
 export const CLAIMS = [
-  { id: 0,  key: 'sky',        label: 'Sky and air (overcast drizzle)',               status: 'approx',     src: ['S07'], note: 'drizzle 49 °F from S07; cloud form, haze amount and brightness are fitted, not recorded' },
+  { id: 0,  key: 'sky',        label: 'Sky and air (overcast drizzle, wet surfaces)', status: 'approx', src: ['S07'], note: 'drizzle 49 °F from S07; cloud form, haze, wetness and reflections are fitted, not recorded' },
   { id: 1,  key: 'orientation',label: 'Horseshoe open to the north, home plate at the south', status: 'documented', src: ['S02','S05','S10'], note: 'CF due north; diamond at the south end since 1950' },
   { id: 2,  key: 'bowl',       label: 'Lower-deck horseshoe plan (front wall curve)',   status: 'approx',     src: ['S01','S02','S10'], note: 'circle fitted through the 72 ft backstop (1957) and the 309 ft foul poles; real plan not traced' },
   { id: 3,  key: 'lowerdeck',  label: 'Lower deck rows and rake (36 rows, 8 ft front wall)', status: 'approx', src: ['S01','S02'], note: '46 lifetime rows minus ~10 rows of 1961 boxes; tread/riser assumed (0.84 / 0.38 m)' },
@@ -121,14 +132,21 @@ export const CLAIMS = [
   { id: 14, key: 'outfield',   label: 'Outfield wings, wall and centre-field opening',  status: 'approx',     src: ['S01','S02'], note: '14 ft corner walls receding at 135°, wire fence and terrace in CF, LF/RF bleachers; plan fitted to 445/446 ft' },
   { id: 15, key: 'foulpoles',  label: 'Foul poles at 309 ft',                           status: 'documented', src: ['S01','S02'], note: 'height assumed' },
   { id: 16, key: 'pressbox',   label: 'Press box on the rim behind home plate',        status: 'creative',   src: [], note: 'placeholder; 1959 press box form and position not yet researched' },
-  { id: 17, key: 'neighbour',  label: 'Waverly / Ednor Gardens rowhouses and bare trees round the site', status: 'creative', src: ['S05'], note: 'streets documented; houses are generic two-storey massing' },
+  { id: 17, key: 'neighbour',  label: 'Rowhouses round the site: Ednor Gardens Tudor rows (north), porch-front daylight rows (elsewhere), bare trees', status: 'creative', src: ['S22','S23','S24'], note: 'house types documented for the neighbourhoods (S22, S24); every individual house, its position and the tree layout are generated' },
   { id: 18, key: 'ground',     label: 'Ground outside the bowl',                        status: 'creative',   src: [], note: 'flat plane; real grades not modelled' },
   { id: 19, key: 'aisles',     label: 'Aisles and portals in the stands',               status: 'creative',   src: [], note: 'rhythm assumed (12° aisles, 24° portals)' },
   { id: 20, key: 'lighttowers',label: 'Light towers (late 1950s)',                      status: 'creative',   src: ['S02'], note: 'NOT MODELLED: S02 says big towers were added later in the 1950s; date and positions unknown, and it was a day game' },
   { id: 21, key: 'facade',     label: 'Memorial façade on 33rd Street: 116 ft, concrete panel in brick, seal, entrance gates', status: 'approx', src: ['S03','S05','S12','S18','S19'], note: 'height, materials, seal, letters and position documented; width (44 m panel), proud of the curve by 2.75 m, seal position and gate rhythm assumed' },
   { id: 22, key: 'inscription',label: 'The dedication, in stainless-steel letters', status: 'documented', src: ['S12','S16','S17','S18'], note: 'text agreed by three transcriptions; line breaks partly documented (S16, S12); letter sizes fitted inside the documented 12 in – 10 ft range; bitmap letterforms are not the originals' },
   { id: 23, key: 'exterior',   label: 'Brick shell round the horseshoe', status: 'approx', src: ['S02','S03','S19'], note: 'massive reddish-brown brick wall documented; concrete bands, vents and portals are invented; external ramps left out (most were added later)' },
-  { id: 24, key: 'streets',    label: '33rd Street boulevard, Ellerslie Ave, Ednor Rd, 36th Street', status: 'approx', src: ['S05'], note: 'which street bounds which side is documented; positions and widths (33rd St as a divided boulevard) are not traced' }
+  { id: 24, key: 'streets',    label: '33rd Street boulevard (tree-lined), Ellerslie Ave, Ednor Rd, 36th Street', status: 'approx', src: ['S05','S22'], note: 'which street bounds which side is documented, and 33rd St was a wide tree-lined boulevard (S22); positions, widths and tree spacing are not traced' },
+  { id: 25, key: 'dugouts',    label: 'Baseball dugouts in the front wall, between home and the bases', status: 'approx', src: ['S02'], note: 'dugouts documented (1958 temporary boxes ran "between the dugouts and the foul poles"); position on the wall and size assumed' },
+  { id: 26, key: 'railings',   label: 'Rails on the field wall and the upper-deck fascia', status: 'creative', src: [], note: 'rails surely existed; height and form assumed' },
+  { id: 27, key: 'clockface',  label: 'Longines clock showing the scene time', status: 'approx', src: ['S01'], note: 'the clock is documented; its face design is assumed; the hands follow ?hour= (default 15:10)' },
+  { id: 28, key: 'cornerstone',label: '1954 cornerstone at the foot of the façade', status: 'approx', src: ['S21'], note: 'a 1954 cornerstone with a time capsule was set in the brick wall; position and size assumed' },
+  { id: 29, key: 'cars',       label: 'Game-day parked cars along the streets', status: 'creative', src: [], note: 'a sell-out (S08) implies full streets, but no source places cars; generic late-1950s bodies and colours' },
+  { id: 30, key: 'streetlamps',label: 'Street lamps on 33rd Street', status: 'creative', src: [], note: 'type and spacing invented; unlit (daytime)' },
+  { id: 31, key: 'citycollege',label: 'Baltimore City College ("the Castle on the Hill") across 33rd Street', status: 'approx', src: ['S23'], note: 'documented across 33rd St; placed from its address about 400 m WSW; Gothic massing and tower are generic' }
 ];
 
 /* the 1954 dedication (S16, S17, S12). Line breaks: S12 for the opening and close, S16 for the middle.

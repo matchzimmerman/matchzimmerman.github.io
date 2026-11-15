@@ -7,7 +7,7 @@ SETS = {
   'interior': [('cam0 · drizzle (S07) · REVIEW VIEW', 'clean-cam0-drizzle-{}'), ('cam0 · clear (alternate)', 'clean-cam0-clear-{}'),
                ('cam1 · west upper deck near the 50', 'cam1-drizzle-{}'), ('cam2 · upper deck behind home plate', 'cam2-drizzle-{}')],
   'exterior': [('cam3 · 33rd Street, the memorial façade', 'cam3-drizzle-{}'), ('cam4 · 33rd St & Ellerslie Ave', 'cam4-drizzle-{}'),
-               ('cam5 · overview from the south-east (model view)', 'cam5-drizzle-{}')]}
+               ('cam5 · overview from the south-east (model view)', 'cam5-drizzle-{}'), ('cam6 · north lawn near 36th St, into the open end', 'cam6-drizzle-{}')]}
 WHICH = sys.argv[2] if len(sys.argv) > 2 else 'interior'
 rows = SETS[WHICH]
 cols = [('NEUTRAL BASELINE 960×540', 'neutral'), ('SIX-INK PRINT 320×180 (HARBOUR LIGHT v3)', 'ink'), ('EVIDENCE MAP', 'evidence')]

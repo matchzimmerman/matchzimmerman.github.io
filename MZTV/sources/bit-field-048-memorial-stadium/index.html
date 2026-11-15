@@ -64,7 +64,7 @@ const SUN = solar(SCENE.lat, SCENE.lon, sceneMs);
 const T0 = performance.now();
 const G = buildStadium({ seed: OPT.seed }), CUT = makeCut(G);
 const STATS = { tris: G.n, lines: G.lines.length, buildMs: performance.now() - T0, raster: {}, print: {} };
-let ENV = makeEnv({ wx: OPT.wx, sun: SUN }), SH = null;
+let ENV = makeEnv({ wx: OPT.wx, sun: SUN, hour: OPT.hour }), SH = null;
 const needShadow = () => ENV.dif > .2 && SUN.el > 0;
 function ensureShadow() { if (!SH && needShadow()) { const t = performance.now(); SH = shadowMap(G, ENV.sunDir, 1024); STATS.shadowMs = performance.now() - t; } }
 
@@ -151,7 +151,7 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === '1') OPT.view = 'ink'; else if (k === '2') OPT.view = 'neutral'; else if (k === '3') OPT.view = 'evidence';
   else if (k === 'c') OPT.cam = (OPT.cam + 1) % STATIONS.length;
-  else if (k === 'w') { OPT.wx = OPT.wx === 'clear' ? 'drizzle' : 'clear'; ENV = makeEnv({ wx: OPT.wx, sun: SUN }); }
+  else if (k === 'w') { OPT.wx = OPT.wx === 'clear' ? 'drizzle' : 'clear'; ENV = makeEnv({ wx: OPT.wx, sun: SUN, hour: OPT.hour }); }
   else if (k === 'i') OPT.info = !OPT.info; else return;
   lastStatic = ''; draw(); paintChrome();
 });
@@ -160,7 +160,7 @@ addEventListener('keydown', e => {
 window.MZ = {
   OPT, DIM, STATS, SUN, get G() { return { n: G.n, lines: G.lines.length }; },
   get share() { return SHARE; }, get frames() { return frames; },
-  set(o) { Object.assign(OPT, o); if (o.wx) ENV = makeEnv({ wx: OPT.wx, sun: SUN }); if (o.t != null) simT = o.t; lastStatic = ''; draw(); paintChrome(); return this.state; },
+  set(o) { Object.assign(OPT, o); if (o.wx) ENV = makeEnv({ wx: OPT.wx, sun: SUN, hour: OPT.hour }); if (o.t != null) simT = o.t; lastStatic = ''; draw(); paintChrome(); return this.state; },
   get state() { return { view: OPT.view, cam: STATIONS[OPT.cam].id, wx: ENV.wx, simT, sun: { el: SUN.el / D2R, az: SUN.az / D2R }, W: cv.width, H: cv.height, share: SHARE, stats: STATS }; }
 };
 </script>

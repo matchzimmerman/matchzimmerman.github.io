@@ -35,6 +35,8 @@ index.html: params, layout, info box, loop, window.MZ          tests/: capture.p
 ```
 
 - **One frame, three prints.** The G-buffer is rendered once per camera and resolution. Only the ink print redraws (drizzle and cloud drift, 12 fps target), so the fixed camera costs about 20–35 ms a frame on a software path.
+- **Per-triangle variant.** `geometry.js` also emits a small variant id per triangle (house style, car paint), so the printers can vary surfaces without extra materials.
+- **Scale after the detail pass:** about 51k triangles and 87k line primitives (mostly bare-tree twigs). Geometry builds in about 0.15 s; a camera's G-buffer takes 0.1–0.45 s once; the live ink print stays at 20–50 ms a frame.
 - **Deterministic.** No `Math.random`: geometry is seeded (`?seed=`), surface patterns are hashed from world position, and `?t=` freezes time. Same params give byte-identical captures (tested).
 - **No dependencies.** Plain ES modules and Canvas 2D, served as static files from GitHub Pages like every other MZTV piece. The only network request is the JetBrains Mono webfont, with a monospace fallback.
 
@@ -48,6 +50,6 @@ For one fixed camera, the CPU path keeps the print bit-exact with HARBOUR LIGHT,
 
 ## Params and keys
 
-`?view=ink|neutral|evidence` · `?cam=0…5` (0–2 stands, 3–5 exterior) · `?wx=drizzle|clear` · `?t=` (freeze time, s) · `?hour=` (EST, default 15.1667) · `?lines=` (ink resolution, default 180) · `?nh=` (neutral height, default 540) · `?seed=` · `?claim=N` (isolate one claim in the evidence view) · `?info=0` · `?stamp=0` · `?capture=1` · `?fps=`
+`?view=ink|neutral|evidence` · `?cam=0…6` (0–2 stands, 3–6 exterior) · `?wx=drizzle|clear` · `?t=` (freeze time, s) · `?hour=` (EST, default 15.1667) · `?lines=` (ink resolution, default 180) · `?nh=` (neutral height, default 540) · `?seed=` · `?claim=N` (isolate one claim in the evidence view) · `?info=0` · `?stamp=0` · `?capture=1` · `?fps=`
 Keys: `1` ink · `2` neutral · `3` evidence · `c` camera · `w` weather · `i` info.
 `window.MZ` exposes `state`, `share`, `STATS`, `set({...})` for tests.

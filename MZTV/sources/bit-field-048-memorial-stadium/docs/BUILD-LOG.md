@@ -23,4 +23,9 @@ Question → Evidence → Approximation → Build → Comparison → Revision.
 - *Approximation.* A 44 m concrete panel framed in brick; the name's 10-ft letters force a panel of at least about 42 m. Lettering sizes are fitted inside the documented range. A plain brick shell round the 1954 horseshoe, with invented bands, vents and portals. Streets on their documented sides at assumed positions.
 - *Revision driven by the exterior.* The documented façade height now constrains the upper deck. With a 0.50 m riser the rim stood 1.4 m above the 116 ft wall; at 0.46 m it lands within 0.2 m. Median trees on 33rd Street were removed because no source supports them.
 
+**Detail pass (requested by MZ.Human, 2026-11-14): "another layer of detail across the board".**
+- *New evidence.* The Ednor Gardens National Register nomination (S22) documents the neighbourhood types (Tudor/Norman/Colonial rows with terraced gardens; daylight porch-fronts in red brick with stone trim and white-painted porches) and "the wide, tree-lined 33rd Street boulevard". That overturns the earlier removal of 33rd Street trees, so they are back as an approximation. City College across 33rd St (S23) and the 1954 cornerstone (S21) were added.
+- *Added.* Branching bare trees; Tudor and porch-front rowhouses with bays, porches, gables, gardens and chimneys; parked cars and street lamps (creative); City College massing; façade joints, grilles, letter shadows and cornerstone; coursed brick; crowd coats, hats and pose shifts; dugouts and rails; scoreboard zones and a clock at the scene time; wet reflections in drizzle.
+- *Revision.* The first crowd pass showed faces from behind. Spectators face the field, so the shader now checks each seat's facing against the camera and shows hair and hat brims from behind. Trees were kept off the façade axis so the wall stays visible (a composition choice, logged).
+
 **Next (pending review).** See `REVIEW-QUEUE.md`.

@@ -75,6 +75,24 @@ Lines are 4 in wide. The ink print draws them with pixel-footprint coverage, exa
 | Ellerslie Ave / Ednor Rd / 36th St | 12 m streets at x = −150 m, x = +150 m and z = 200 m | sides documented (S05); positions not traced | approximation |
 | neighbourhood | generic two-storey rowhouse terraces and bare street trees on every side | creative | creative |
 
+## Detail layer (pass 3)
+
+| element | value | basis | status |
+|---|---|---|---|
+| crowd | per seat: coat, shoulders, collar/scarf (30%), hat or cap (42%), head; seen from behind as hair and hat brims, from the front as faces; a few seats shift pose every ~3 s in the live print | sell-out (S08, S14); appearance generated | creative (claim 12) |
+| dugouts | dark openings in the field wall 58°–73° either side of the axis, under a 0.3 m lintel | dugouts documented (S02); placement assumed | approximation (claim 25) |
+| rails | 0.95 m above the field wall and the upper fascia | assumed | creative (claim 26) |
+| scoreboard | face divided into zones by dark bands; lamp cells inside; no text or score | structure assumed; content deliberately blank | approximation (claim 13) |
+| Longines clock | ticks and hands at the scene time (`?hour=`, default 15:10) | clock documented (S01) | approximation (claim 27) |
+| façade | concrete panel joints (3.05 × 4.4 m), letters standing off the wall with a soft shadow, iron grilles in the gates, lintel band, 1954 cornerstone at the foot of the east side | cornerstone documented (S21); joint grid, grilles and cornerstone position assumed | approximation / creative |
+| brick | coursed brick with mortar drawn at close range, grime at the foot of the wall | Baltimore brick (S19); texture generated | approximation |
+| neighbourhood | Ednor Gardens north of 36th St as Tudor rows (steep roofs, front gables, half-timbered upper storeys, terraced front gardens); porch-front daylight rows elsewhere (flat roofs, stone-trim cornice, deep porches with white posts); 5.5 m house bays with windows and doors; chimneys | house types documented (S22, S24); every house generated | creative (claim 17) |
+| trees | bare winter trees as branching line primitives; 33rd St lined on the median and both verges at ~15–20 m spacing, with a gap on the façade axis | "wide, tree-lined 33rd Street boulevard" (S22); spacing and the gap assumed | approximation (claim 24) |
+| cars | late-1950s cars parked on the modelled streets (none in front of the plaza or within 24 m of a corner) | a sell-out implies it; no source | creative (claim 29) |
+| street lamps | every 36 m on both outer verges of 33rd St, unlit | invented | creative (claim 30) |
+| City College | Gothic stone massing with a 40 m tower and pinnacles on a 7 m hill, ~400 m WSW across 33rd St | documented across 33rd St (S23); position from its address; massing generic | approximation (claim 31) |
+| wet surfaces | in drizzle, roads, paving, concrete, car roofs and the field darken and take a sky reflection by Fresnel angle | weather documented (S07); amounts assumed | approximation (claim 0) |
+
 ## Not modelled (on purpose)
 
 - **Light towers.** S02 says big towers came "later in the 1950s", but no date or positions yet, and it was a day game (claim 20).
@@ -91,5 +109,6 @@ Lines are 4 in wide. The ink print draws them with pixel-footprint coverage, exa
 | cam3 `33rd-street` | south side of 33rd Street, eye 1.6 m, 50 m from the façade | up at the memorial wall | 70° |
 | cam4 `ellerslie` | corner of 33rd St and Ellerslie Ave | east along the façade and the brick shell | 64° |
 | cam5 `overview-se` | 175 m up, south-east of the site (a model view, not a 1959 vantage) | the whole bowl in its blocks | 46° |
+| cam6 `north-lawn` | open ground inside the block just south of 36th Street, eye 1.6 m | south-west into the open end past the scoreboard | 68° |
 
 Scene sun (15:10 EST, 27 Dec 1959): elevation 14.2°, azimuth 222.6° (SW), from the NOAA approximation shared with 046/047.

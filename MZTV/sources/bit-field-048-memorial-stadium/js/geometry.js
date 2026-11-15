@@ -37,7 +37,9 @@ export const DIM = (() => {
     // exterior (S12: 116 ft; width, depth, pylons assumed)
     facade: { h: 116 * FT, w: 44, depth: 5.5, z: -62.5, pylon: 7, sealY: 26.2 },
     // streets (S05: which side; positions and widths assumed)
-    streets: { n33: -72, ellerslie: -150, ednor: 150, z36: 200 }
+    streets: { n33: -72, ellerslie: -150, ednor: 150, z36: 200 },
+    // Baltimore City College, ~400 m WSW across 33rd St (S23; from its address; footprint and hill assumed)
+    cityCollege: { x0: -470, x1: -330, z0: -300, z1: -230, hill: 7 }
   };
   d.lowBackR = R0 + d.lowRows * d.lowTread;
   d.lowBackY = d.wallH + (d.lowRows - 1) * d.lowRise;
@@ -55,14 +57,15 @@ export const pol = (th, r, y) => [Math.sin(th) * r, y, DIM.cz - Math.cos(th) * r
 export const softUnder = r => DIM.fasciaLow + (r - DIM.upFrontR) * (DIM.upRise / DIM.upTread);
 
 export const MAT = { GROUND:1, FIELD:2, WALL:3, CONCRETE:4, CROWD_L:5, CROWD_U:6, SOFFIT:7, COLUMN:8, FASCIA:9,
-  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25 };
+  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25, CAR:26, STONE:27, PORCH:28, LAMP:29 };
 export const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));
 
 export function buildStadium(opt = {}) {
   const seg = opt.segDeg || 3, D = DIM;
-  const P = [], M = [], C = [], A = [], U = [];   // positions(9/tri), material, claim, ambient occlusion, unfinished
+  const P = [], M = [], C = [], A = [], U = [], V = [];   // positions(9/tri), material, claim, ambient occlusion, unfinished, variant
   const L = [];                                   // line primitives: [x1,y1,z1,x2,y2,z2,mat,claim,widthM]
-  const tri = (a, b, c, mat, cl, ao = 1, unf = 0) => { P.push(...a, ...b, ...c); M.push(mat); C.push(cl); A.push(ao); U.push(unf); };
+  let VAR = 0;   // variant applied to triangles emitted while set (house style, car colour)
+  const tri = (a, b, c, mat, cl, ao = 1, unf = 0) => { P.push(...a, ...b, ...c); M.push(mat); C.push(cl); A.push(ao); U.push(unf); V.push(VAR); };
   const quad = (a, b, c, d, mat, cl, ao, unf) => { tri(a, b, c, mat, cl, ao, unf); tri(a, c, d, mat, cl, ao, unf); };
   const line = (a, b, mat, cl, w) => L.push([...a, ...b, mat, cl, w]);
   const box = (x0, y0, z0, x1, y1, z1, mat, cl, ao = 1, unf = 0, top = true) => {
@@ -98,6 +101,8 @@ export function buildStadium(opt = {}) {
       quad(pol(b, r + 1.5, 0), pol(a, r + 1.5, 0), pol(a, r + 1.5, y + 1.4), pol(b, r + 1.5, y + 1.4), MAT.EXTERIOR, K.exterior.id, .8, 0);
     }
   }
+  // rails: field wall and upper-deck fascia (claim 'railings', creative)
+  for (let s2 = 0; s2 < lowTh.length - 1; s2++) line(pol(lowTh[s2], D.R0 + .15, D.wallH + .95), pol(lowTh[s2 + 1], D.R0 + .15, D.wallH + .95), MAT.FENCE, K.railings.id, .05);
   // lower-deck end caps at the foul poles
   for (const sgn of [-1, 1]) {
     const th = sgn * D.thPole;
@@ -122,6 +127,7 @@ export function buildStadium(opt = {}) {
     quad(pol(b, D.upFrontR, D.fasciaLow), pol(a, D.upFrontR, D.fasciaLow), pol(a, D.lowBackR, softUnder(D.lowBackR)), pol(b, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .3, 1);
     quad(pol(a, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, softUnder(D.lowBackR)), pol(a, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .2, 1);
   }
+  for (let s2 = 0; s2 < upTh.length - 1; s2++) line(pol(upTh[s2], D.upFrontR + .15, D.upY0 + .95), pol(upTh[s2 + 1], D.upFrontR + .15, D.upY0 + .95), MAT.FENCE, K.railings.id, .05);
   // upper-deck end caps
   for (const sgn of [-1, 1]) {
     const th = sgn * D.thUp, rf = D.upFrontR, rb = D.upBackR + .4, rl = D.lowBackR;
@@ -217,32 +223,104 @@ export function buildStadium(opt = {}) {
     quad([-620, .02, S.z36], [620, .02, S.z36], [620, .02, S.z36 + 12], [-620, .02, S.z36 + 12], MAT.ROAD, K.streets.id, 1, 0);
   }
 
-  /* ---- the neighbourhood: rowhouse terraces and bare street trees on every side ---- */
+  /* ---- the neighbourhood (S22, S23, S24): Ednor Gardens Tudor rows north of 36th St,
+          porch-front daylight rows elsewhere; bare winter trees; game-day cars; lamps; City College ---- */
   {
     let seed = (opt.seed || 48) * 9301 + 49297; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const terraces = (X0, X1, Z0, Z1, treeStep) => {
-      for (let z = Z0; z < Z1; z += 32 + rnd() * 10) {
+    const S = DIM.streets, CC = DIM.cityCollege;
+    const nrm = v => { const l = Math.hypot(...v) || 1; return v.map(c => c / l); };
+    // a bare tree as branching line primitives (trunk + 3 limbs, recursive)
+    const bareTree = (x, z, h, cl, depth) => {
+      const tH = h * .36; line([x, 0, z], [x, tH, z], MAT.TREE, cl, .34);
+      const grow = (p, d, len, w, k) => {
+        const e = [p[0] + d[0] * len, p[1] + d[1] * len, p[2] + d[2] * len]; line(p, e, MAT.TREE, cl, w);
+        if (!k) return; const nb = 2 + (rnd() > .55 ? 1 : 0);
+        for (let i = 0; i < nb; i++) { const az = rnd() * 6.283, tl = .5 + rnd() * .45;
+          grow(e, nrm([d[0] + Math.cos(az) * tl, d[1] + .28 + rnd() * .2, d[2] + Math.sin(az) * tl]), len * (.6 + rnd() * .14), Math.max(.03, w * .58), k - 1); }
+      };
+      const l0 = rnd() * 6.283;
+      for (let i = 0; i < 3; i++) { const az = l0 + i * 2.094 + rnd() * .6; grow([x, tH, z], nrm([Math.cos(az) * .55, 1, Math.sin(az) * .55]), h * .3, .2, depth); }
+    };
+    const inCampus = (x0, z0, x1, z1) => x1 > CC.x0 - 20 && x0 < CC.x1 + 20 && z1 > CC.z0 - 20 && z0 < CC.z1 + 20;
+    // a terrace of rowhouses. style 1 = daylight porch-front (flat roof, cornice, deep porch, white posts);
+    // style 2 = Ednor Gardens Tudor (steep roof, front gables, terraced garden). front = -1 faces south, +1 faces north
+    const terrace = (x, len, z, style, front) => {
+      const dep = 10.5, h = style === 2 ? 6.6 + rnd() * .8 : 7.2 + rnd() * 1.1, fz = front < 0 ? z : z + dep, out = front < 0 ? -1 : 1;
+      VAR = style;
+      box(x, 0, z, x + len, h, z + dep, MAT.HOUSE, K.neighbour.id, .9, 1, style === 1);
+      if (style === 2) {   // steep gable roof running along the row, with front-facing gables every other house
+        const rh = 4.2;
+        quad([x, h, z], [x + len, h, z], [x + len, h + rh, z + dep / 2], [x, h + rh, z + dep / 2], MAT.ROOF, K.neighbour.id, 1, 1);
+        quad([x, h + rh, z + dep / 2], [x + len, h + rh, z + dep / 2], [x + len, h, z + dep], [x, h, z + dep], MAT.ROOF, K.neighbour.id, 1, 1);
+        for (let gx = x + 1.5; gx + 4 < x + len; gx += 11) {
+          const fz2 = fz + out * .25;
+          tri([gx, h - .4, fz2], [gx + 4, h - .4, fz2], [gx + 2, h + 3.2, fz2], MAT.HOUSE, K.neighbour.id, .95, 1);
+          quad([gx, h - .4, fz2], [gx + 2, h + 3.2, fz2], [gx + 2, h + 3.2, fz - out * 2.5], [gx, h - .4, fz - out * 2.5], MAT.ROOF, K.neighbour.id, 1, 1);
+          quad([gx + 4, h - .4, fz2], [gx + 2, h + 3.2, fz2], [gx + 2, h + 3.2, fz - out * 2.5], [gx + 4, h - .4, fz - out * 2.5], MAT.ROOF, K.neighbour.id, 1, 1);
+        }
+        // terraced front garden (raised lawn with a low wall)
+        const gz0 = fz + out * 1.2, gz1 = fz + out * 6;
+        box(x, 0, Math.min(gz0, gz1), x + len, .7, Math.max(gz0, gz1), MAT.GRASS, K.neighbour.id, 1, 1);
+      } else {              // deep front porch across the whole row, white-painted posts (S22)
+        const pz0 = fz, pz1 = fz + out * 2.6;
+        box(x, 2.85, Math.min(pz0, pz1), x + len, 3.1, Math.max(pz0, pz1), MAT.PORCH, K.neighbour.id, .9, 1);
+        for (let px = x + .2; px < x + len; px += 2.75) line([px, 0, pz1], [px, 2.85, pz1], MAT.PORCH, K.neighbour.id, .16);
+        box(x, 0, Math.min(pz0, pz1), x + len, .5, Math.max(pz0, pz1), MAT.PAVING, K.neighbour.id, 1, 1);     // porch floor
+      }
+      for (let cx = x + 2.7; cx < x + len; cx += 11) line([cx, h + (style === 2 ? 2.4 : 0), z + dep * .7], [cx, h + (style === 2 ? 5.4 : 1.4), z + dep * .7], MAT.HOUSE, K.neighbour.id, .7);   // chimneys
+      VAR = 0;
+    };
+    const terraces = (X0, X1, Z0, Z1, treeStep, style, front) => {
+      for (let z = Z0; z < Z1; z += 36 + rnd() * 8) {
         for (let x = X0; x < X1;) {
-          const len = Math.min(X1 - x, 36 + rnd() * 54), h = 6.8 + rnd() * 2.2, dep = 11;
-          if (len > 12 && rnd() > .18) { box(x, 0, z, x + len, h, z + dep, MAT.HOUSE, K.neighbour.id, .9, 1, false);
-            quad([x, h, z], [x + len, h, z], [x + len, h + 1.6, z + dep * .5], [x, h + 1.6, z + dep * .5], MAT.ROOF, K.neighbour.id, 1, 1);
-            quad([x, h + 1.6, z + dep * .5], [x + len, h + 1.6, z + dep * .5], [x + len, h, z + dep], [x, h, z + dep], MAT.ROOF, K.neighbour.id, 1, 1); }
-          x += len + 6 + rnd() * 14;
+          const units = 4 + Math.floor(rnd() * 9), len = Math.min(X1 - x, units * 5.5);
+          if (len > 16 && rnd() > .12 && !inCampus(x, z - 8, x + len, z + 18)) terrace(x, len, z, style, front);
+          x += len + 5 + rnd() * 10;
         }
-        for (let x = X0; x < X1; x += treeStep + rnd() * treeStep) {
-          const h = 9 + rnd() * 7, w = 3 + rnd() * 3, tz = z - 6;
-          quad([x - w, 2.5, tz], [x + w, 2.5, tz], [x + w, h, tz], [x - w, h, tz], MAT.TREE, K.neighbour.id, 1, 1);
-          quad([x, 2.5, tz - w], [x, 2.5, tz + w], [x, h, tz + w], [x, h, tz - w], MAT.TREE, K.neighbour.id, 1, 1);
-          line([x, 0, tz], [x, 3, tz], MAT.TREE, K.neighbour.id, .3);
-        }
+        const tz = front < 0 ? z - 9 : z + 19.5, far = Math.hypot(0, z - 40) > 360 ? 2 : 3;
+        for (let x = X0; x < X1; x += treeStep + rnd() * treeStep) if (!inCampus(x - 4, tz - 4, x + 4, tz + 4)) bareTree(x, tz, 9 + rnd() * 7, K.neighbour.id, far);
       }
     };
-    const S = DIM.streets;
-    terraces(-520, 520, S.z36 + 26, 760, 9);                  // north of 36th Street (Ednor Gardens / Waverly)
-    terraces(-560, 560, -560, S.n33 - 44, 16);                 // south of 33rd Street
-    terraces(-540, S.ellerslie - 16, S.n33 + 8, S.z36 - 6, 18); // west of Ellerslie Avenue
-    terraces(S.ednor + 16, 540, S.n33 + 8, S.z36 - 6, 18);      // east of Ednor Road
-    // (no trees drawn on the 33rd Street median: none are documented for 1959)
+    terraces(-520, 520, S.z36 + 26, 760, 12, 2, -1);                    // Ednor Gardens: Tudor rows facing south
+    terraces(-560, 560, -580, S.n33 - 50, 20, 1, 1);                    // south of 33rd St: porch fronts facing north
+    terraces(-540, S.ellerslie - 18, S.n33 + 10, S.z36 - 10, 22, 1, -1); // west of Ellerslie Ave
+    terraces(S.ednor + 18, 540, S.n33 + 10, S.z36 - 10, 22, 1, -1);      // east of Ednor Rd
+
+    // the tree-lined 33rd Street boulevard (S22): trees on the median and both outer verges (spacing assumed)
+    for (const tz of [S.n33 - 14, S.n33 - 1.8, S.n33 - 30.2]) for (let x = -560; x < 560; x += 15 + rnd() * 5) {
+      if ((tz === S.n33 - 1.8 && Math.abs(x) < 46) || Math.abs(x) < 26) continue;   // plaza clear; a gap on the façade axis (assumed, keeps the wall in view)
+      bareTree(x, tz, 11 + rnd() * 5, K.streets.id, Math.abs(x) > 300 ? 2 : 3);
+    }
+    // street lamps on 33rd Street (creative, unlit)
+    for (const [lz, dir] of [[S.n33 - .9, -1], [S.n33 - 27.1, 1]]) for (let x = -560; x < 560; x += 36) {
+      line([x, 0, lz], [x, 7.6, lz], MAT.LAMP, K.streetlamps.id, .2); line([x, 7.6, lz], [x, 7.6, lz + dir * 1.7], MAT.LAMP, K.streetlamps.id, .14);
+      line([x, 7.55, lz + dir * 1.7], [x, 7.25, lz + dir * 1.7], MAT.LAMP, K.streetlamps.id, .45);
+    }
+    // game-day parked cars along the modelled streets (creative). Variant = paint (1..9)
+    const car = (cx, cz, alongX) => {
+      VAR = 1 + Math.floor(rnd() * 9);
+      const L = 5.2, W = 1.95, hl = alongX ? L / 2 : W / 2, hw = alongX ? W / 2 : L / 2, ox = alongX ? -.35 : 0, oz = alongX ? 0 : -.35;
+      box(cx - hl, .34, cz - hw, cx + hl, .92, cz + hw, MAT.CAR, K.cars.id, .9, 1);
+      const cl = alongX ? 1.3 : .78, cw = alongX ? .78 : 1.3;
+      box(cx + ox - cl, .92, cz + oz - cw, cx + ox + cl, 1.42, cz + oz + cw, MAT.CAR, K.cars.id, .9, 1);
+      VAR = 0;
+    };
+    for (const cz of [S.n33 - 1.2, S.n33 - 26.8]) for (let x = -420; x < 420; x += 6.4 + rnd() * 1.2) {
+      if (rnd() < .14 || (cz === S.n33 - 1.2 && Math.abs(x) < 50) || Math.abs(Math.abs(x) - 150) < 24) continue; car(x, cz, true); }   // no parking near corners
+    for (const sx of [S.ellerslie, S.ednor]) for (const off of [-4.9, 4.9]) for (let z = S.n33 + 6; z < 440; z += 6.4 + rnd() * 1.2) {
+      if (rnd() < .14 || Math.abs(z - S.z36 - 6) < 24 || z < S.n33 + 18) continue; car(sx + off, z, false); }
+    for (const cz of [S.z36 + 1.2, S.z36 + 10.8]) for (let x = -420; x < 420; x += 6.4 + rnd() * 1.2) {
+      if (rnd() < .14 || Math.abs(Math.abs(x) - 150) < 24) continue; car(x, cz, true); }
+
+    // Baltimore City College on its hill across 33rd Street (S23; placed from its address, massing generic)
+    box(CC.x0 - 25, 0, CC.z0 - 25, CC.x1 + 25, CC.hill, CC.z1 + 20, MAT.GRASS, K.citycollege.id, 1, 1);
+    box(CC.x0, CC.hill, CC.z0, CC.x1, CC.hill + 17, CC.z0 + 22, MAT.STONE, K.citycollege.id, .9, 1);
+    box(CC.x0, CC.hill, CC.z0, CC.x0 + 22, CC.hill + 15, CC.z1, MAT.STONE, K.citycollege.id, .9, 1);
+    box(CC.x1 - 22, CC.hill, CC.z0, CC.x1, CC.hill + 15, CC.z1, MAT.STONE, K.citycollege.id, .9, 1);
+    const tx = (CC.x0 + CC.x1) / 2, tz2 = CC.z0 + 11;
+    box(tx - 6, CC.hill + 17, tz2 - 6, tx + 6, CC.hill + 40, tz2 + 6, MAT.STONE, K.citycollege.id, .9, 1);
+    for (const [px, pz] of [[-6, -6], [6, -6], [6, 6], [-6, 6]]) line([tx + px, CC.hill + 40, tz2 + pz], [tx + px, CC.hill + 44.5, tz2 + pz], MAT.STONE, K.citycollege.id, .9);   // pinnacles
+
     // trees on the terrace behind the centre-field fence (the 1954 "hedgeline", S02)
     for (let x = -60; x <= 60; x += 7) { quad([x - 3.5, 0, D.cf + 6], [x + 3.5, 0, D.cf + 6], [x + 3.5, 2.6, D.cf + 6], [x - 3.5, 2.6, D.cf + 6], MAT.TREE, K.outfield.id, 1, 1); }
   }
@@ -253,7 +331,7 @@ export function buildStadium(opt = {}) {
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1;
     N[t * 3] = nx / l; N[t * 3 + 1] = ny / l; N[t * 3 + 2] = nz / l;
   }
-  return { n, P: Pt, N, mat: Uint8Array.from(M), claim: Uint8Array.from(C), ao: Float32Array.from(A), unf: Uint8Array.from(U), lines: L };
+  return { n, P: Pt, N, mat: Uint8Array.from(M), claim: Uint8Array.from(C), ao: Float32Array.from(A), unf: Uint8Array.from(U), vari: Uint8Array.from(V), lines: L };
 }
 
 /* camera stations (all in the stands; Phase 01 reviews station 0) */
@@ -270,5 +348,7 @@ export const STATIONS = [
   { id: 'ellerslie', label: 'Exterior: corner of 33rd Street and Ellerslie Avenue, looking east along the façade and the brick shell',
     at: () => ({ pos: [DIM.streets.ellerslie - 8, 1.6, DIM.streets.n33 - 12], look: [-20, 16, -32], fov: 64 }) },
   { id: 'overview-se', label: 'Exterior overview from the south-east (a model view, not a 1959 vantage)',
-    at: () => ({ pos: [270, 175, -240], look: [0, 4, 36], fov: 46 }) }
+    at: () => ({ pos: [270, 175, -240], look: [0, 4, 36], fov: 46 }) },
+  { id: 'north-lawn', label: 'Exterior: the open ground inside the block near 36th Street, looking south-west into the open end',
+    at: () => ({ pos: [95, 1.6, 186], look: [8, 12, 112], fov: 68 }) }
 ];
