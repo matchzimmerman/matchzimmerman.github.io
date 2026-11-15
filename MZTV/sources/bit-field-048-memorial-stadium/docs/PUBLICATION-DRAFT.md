@@ -16,7 +16,7 @@ Memorial Stadium, 33rd Street, 27 Dec 1959. NFL Championship, Giants at Colts, 5
 
 ## Longer note (site / archive)
 
-Memorial Stadium stood on 33rd Street from 1950 until its demolition in 2001. This is not a photograph and not a replica. It is a model built from dated evidence. The horseshoe is fitted to the 1957 backstop distance and the 309 ft foul poles. The roofless upper deck stops where it stopped before the 1964 extensions. The Gunther scoreboard of 1954 stands beyond the north end zone. The light is the sun over Baltimore at 3:10 that afternoon, behind the drizzle the box score records. Where the record is silent (the underside of the deck, the houses beyond the open end, the crowd), the work says so: an evidence view colours each surface by what it rests on. The image is printed in HARBOUR LIGHT's six-ink language. The scene is provisional and will change as better sources arrive.
+Memorial Stadium stood on 33rd Street from 1950 until its demolition in 2001. This is not a photograph and not a replica. It is a model built from dated evidence. The horseshoe is fitted to the 1957 backstop distance and the 309 ft foul poles. The roofless upper deck stops where it stopped before the 1964 extensions. The Gunther scoreboard of 1954 stands beyond the north end zone. The light is the sun over Baltimore at 3:10 that afternoon, behind the drizzle the box score records. Outside, the 116-foot memorial wall on 33rd Street carries the 1954 dedication word for word, set in bitmap capitals rather than the original letterforms. Where the record is silent (the underside of the deck, the houses beyond the open end, the crowd), the work says so: an evidence view colours each surface by what it rests on. The image is printed in HARBOUR LIGHT's six-ink language. The scene is provisional and will change as better sources arrive.
 
 ## Required wording in every post
 
@@ -28,10 +28,13 @@ Memorial Stadium stood on 33rd Street from 1950 until its demolition in 2001. Th
 
 Pixel-printed view from the upper deck of a horseshoe-shaped stadium on a grey afternoon: rows of spectators in the foreground, a football field marked in white running away to the right, a large scoreboard and bare trees beyond the open north end, rowhouses on the horizon. A provisional reconstruction of Memorial Stadium, Baltimore, 27 December 1959.
 
+Exterior (cam3): Pixel-printed view from across 33rd Street of a tall concrete wall set in a curved brick stadium on a grey afternoon. Large letters across the top read MEMORIAL STADIUM above a round seal, a block of smaller dedication text and the line TIME WILL NOT DIM THE GLORY OF THEIR DEEDS; seven dark entrance gates line the base. A provisional reconstruction of Memorial Stadium, Baltimore, 27 December 1959.
+
 ## Assets (after approval)
 
 - `captures/clean-cam0-drizzle-ink.png`: the print
 - `captures/contact-sheet.png`: neutral / print / evidence, for the process post
+- `captures/cam3-drizzle-ink.png` and `captures/contact-sheet-exterior.png`: the memorial wall
 - a short capture of the ink loop (drizzle drift), to be recorded with the mztv-promo workflow once R1 and R5 are settled
 
 ## Rights note

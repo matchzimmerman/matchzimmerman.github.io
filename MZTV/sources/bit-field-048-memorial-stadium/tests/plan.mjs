@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { DIM as D, pol, STATIONS, softUnder } from '../js/geometry.js';
 mkdirSync('docs', { recursive: true });
 const D2R = Math.PI / 180, f = v => v.toFixed(1);
-const S = 3.2, OX = 560, OZ = 760;               // px per metre; origin (home plate) on the page
+const S = 3.2, OX = 560, OZ = 720;               // px per metre; origin (home plate) on the page
 const X = x => OX + x * S, Y = z => OZ - z * S;   // north up
 const arc = (r, a0, a1, n = 80) => Array.from({ length: n + 1 }, (_, i) => { const t = a0 + (a1 - a0) * i / n, p = pol(t, r, 0); return `${f(X(p[0]))},${f(Y(p[2]))}`; }).join(' ');
 const C = { doc: '#8fd694', apx: '#f0b54a', cre: '#e2664f', ink: '#f3f1ea', dim: '#9aa3b8', bg: '#181c2e' };
@@ -31,6 +31,13 @@ for (const s of [-1, 1]) {
   g.push(`<polyline points="${[[s * D.pole, D.pole], [s * D.pole, 108], rc, [s * 26, D.cf - 2], [0, D.cf]].map(([x, z]) => `${f(X(x))},${f(Y(z))}`).join(' ')}" fill="none" stroke="${C.apx}" stroke-width="1.4"/>`);
   g.push(`<rect x="${f(X(s > 0 ? D.pole : -D.pole - 16))}" y="${f(Y(108))}" width="${f(16 * S)}" height="${f((108 - D.pole - 2) * S)}" fill="${C.apx}" opacity=".18" stroke="${C.apx}"/>`);
 }
+// exterior: brick shell, memorial façade, streets
+g.push(`<polyline points="${arc(D.upBackR + .4, -D.thUp, D.thUp)}" fill="none" stroke="#b5654a" stroke-width="3"/>`);
+const Fd = D.facade; g.push(`<rect x="${f(X(-Fd.w / 2))}" y="${f(Y(Fd.z + Fd.depth))}" width="${f(Fd.w * S)}" height="${f(Fd.depth * S)}" fill="${C.apx}" stroke="${C.doc}" stroke-width="1.5"/>`);
+const St = D.streets;
+for (const [z0, z1] of [[St.n33, St.n33 - 10], [St.n33 - 18, St.n33 - 28]]) g.push(`<rect x="${f(X(-170))}" y="${f(Y(z0))}" width="${f(340 * S)}" height="${f((z0 - z1) * S)}" fill="${C.dim}" opacity=".18"/>`);
+g.push(T(X(0), Y(St.n33 - 14) + 4, `33rd Street (divided boulevard; widths assumed)`, C.dim, 'middle'));
+g.push(T(X(0), Y(Fd.z) + 14, `memorial façade · 116 ft · 44 m panel (width assumed)`, C.doc, 'middle'));
 // scoreboard, columns, stations
 g.push(`<rect x="${f(X(D.sbX - D.sbW / 2))}" y="${f(Y(D.sbZ + 2.4))}" width="${f(D.sbW * S)}" height="${f(2.4 * S)}" fill="${C.apx}"/>`);
 for (let th = -D.thUp + 3 * D2R; th < D.thUp - 2 * D2R; th += D.colStep * D2R) { const p = pol(th, D.R0 + D.colR, 0); g.push(`<rect x="${f(X(p[0]) - 1.5)}" y="${f(Y(p[2]) - 1.5)}" width="3" height="3" fill="${C.apx}"/>`); }
@@ -45,14 +52,14 @@ g.push(T(X(-D.pole) - 8, Y(D.pole) + 4, `foul pole 309 ft`, C.doc, 'end'));
 g.push(T(X(hx + 34), Y(far40) - 4, `far 40 · 1954 upper deck ends z=${f(Math.sin(D.thUp) * 0 + D.cz - Math.cos(D.thUp) * D.upFrontR)} m`, C.apx));
 g.push(T(X(0), Y(D.sbZ + 2.4) - 8, `Gunther scoreboard 1954 · 65 ft · position/width assumed`, C.apx, 'middle'));
 g.push(T(X(0), Y(D.cf) + 16, `CF 445 ft · wire fence`, C.apx, 'middle'));
-g.push(T(24, 160, `grey arcs = 1964 upper-deck extensions (not in 1959)`, C.dim));
+g.push(T(24, 178, `grey arcs = 1964 upper-deck extensions (not in 1959)`, C.dim));
 g.push(T(X(0), Y(D.goalS) - 6, `S goal line`, C.doc, 'middle'), T(X(0), Y(D.goalN) + 14, `N goal line`, C.doc, 'middle'));
-g.push(T(X(0), Y(-D.R0 * 0 - 40), `33rd Street (south) · memorial façade`, C.dim, 'middle'));
+
 g.push(`<line x1="${f(X(-150))}" y1="${f(Y(-80))}" x2="${f(X(-150))}" y2="${f(Y(-50))}" stroke="${C.ink}" stroke-width="2" marker-end="url(#a)"/>`, T(X(-150), Y(-86), 'N', C.ink, 'middle', 13));
 g.push(`<line x1="${f(X(100))}" y1="${f(Y(-90))}" x2="${f(X(150))}" y2="${f(Y(-90))}" stroke="${C.ink}" stroke-width="2"/>`, T(X(125), Y(-90) - 6, '50 m', C.ink, 'middle'));
-const legend = [[C.doc, 'documented for 1959'], [C.apx, 'approximation fitted to sources'], [C.cre, 'creative'], [C.ink, 'review camera (cam0) and its field of view']]
+const legend = [[C.doc, 'documented for 1959'], [C.apx, 'approximation fitted to sources'], [C.cre, 'creative'], [C.ink, 'review camera (cam0) and its field of view'], ['#b5654a', 'brick shell (1954 extent)']]
   .map(([c, s], i) => `<rect x="24" y="${70 + i * 18}" width="10" height="10" fill="${c}"/>` + T(42, 79 + i * 18, s));
-writeFileSync('docs/plan.svg', `<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1060" viewBox="0 0 1120 1060" font-family="JetBrains Mono, DejaVu Sans Mono, monospace">
+writeFileSync('docs/plan.svg', `<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1140" viewBox="0 0 1120 1140" font-family="JetBrains Mono, DejaVu Sans Mono, monospace">
 <defs><marker id="a" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${C.ink}"/></marker></defs>
 <rect width="100%" height="100%" fill="${C.bg}"/>
 ${T(24, 34, 'MEMORIAL STADIUM · 1959 · PLAN (Phase 01 model, provisional)', C.ink, 'start', 15)}

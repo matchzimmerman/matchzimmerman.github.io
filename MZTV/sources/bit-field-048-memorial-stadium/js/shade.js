@@ -6,7 +6,7 @@
      neutral   the same frame in plain colour at 960×540, no dither: the baseline to judge the print against.
      evidence  every surface coloured by the status of its claim; unfinished geometry hatched.      */
 import { MAT, DIM } from './geometry.js';
-import { CLAIMS } from './evidence.js';
+import { CLAIMS, INSCRIPTION } from './evidence.js';
 
 export const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + .5) / 16); // as 046/047
 const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -57,10 +57,44 @@ export function fieldLineCover(x, z, fp) {
   }
   return c;
 }
+
+/* ---------- a 5×7 bitmap face for the façade lettering (not the original letterforms: see claim 22) ---------- */
+const GLYPH = {
+  A:'01110100011000111111100011000110001', B:'11110100011000111110100011000111110', C:'01110100011000010000100001000101110',
+  D:'11110100011000110001100011000111110', E:'11111100001000011110100001000011111', F:'11111100001000011110100001000010000',
+  G:'01110100011000010111100011000101111', H:'10001100011000111111100011000110001', I:'01110001000010000100001000010001110',
+  J:'00111000100001000010000101001001100', K:'10001100101010011000101001001010001', L:'10000100001000010000100001000011111',
+  M:'10001110111010110101100011000110001', N:'10001100011100110101100111000110001', O:'01110100011000110001100011000101110',
+  P:'11110100011000111110100001000010000', Q:'01110100011000110001101011001001101', R:'11110100011000111110101001001010001',
+  S:'01111100001000001110000010000111110', T:'11111001000010000100001000010000100', U:'10001100011000110001100011000101110',
+  V:'10001100011000110001100010101000100', W:'10001100011000110101101011010101010', X:'10001100010101000100010101000110001',
+  Y:'10001100010101000100001000010000100', Z:'11111000010001000100010001000011111',
+  '1':'00100011000010000100001000010001110', '4':'00010001100101010010111110001000010', '5':'11111100001111000001000011000101110', '9':'01110100011000101111000010001001100'
+};
+const GDENS = Object.fromEntries(Object.entries(GLYPH).map(([k, v]) => [k, v.split('').filter(c => c === '1').length / 42]));
+/* coverage (0..1) of the dedication letters at façade point (x, y) for a pixel of footprint fp metres */
+export function facadeTextAt(x, y, fp = .02) {
+  for (const L of INSCRIPTION) {
+    const h = L.size, u = h / 7;
+    if (Math.abs(y - L.y) > h / 2 + fp) continue;
+    const n = L.t.length, adv = 6 * u, w = n * adv - u, x0 = -w / 2;
+    if (x < x0 - fp || x > x0 + w + fp) return 0;
+    const ci = Math.floor((x - x0) / adv); if (ci < 0 || ci >= n) return 0;
+    const ch = L.t[ci]; if (ch === ' ') return 0;
+    const g = GLYPH[ch]; if (!g) return 0;
+    if (fp > u * .8) return Math.min(1, GDENS[ch] * 1.15);       // too small to resolve: average tone
+    const col = Math.floor((x - x0 - ci * adv) / u), row = Math.floor((L.y + h / 2 - y) / u);
+    if (col < 0 || col > 4 || row < 0 || row > 6) return 0;
+    return g[row * 5 + col] === '1' ? 1 : 0;
+  }
+  return 0;
+}
+
 /* the claim a pixel rests on: geometry claim, refined on the playing surface */
 export function claimAt(G, gb, i) {
   const id = gb.id[i]; if (id < 0) return 0;
   if (id >= G.n) return G.lines[id - G.n][7];
+  if (G.mat[id] === MAT.FACADE_FACE) return facadeTextAt(gb.wx[i], gb.wy[i], .05) > 0 ? CLAIMS.find(c => c.key === 'inscription').id : G.claim[id];
   if (G.mat[id] !== MAT.FIELD) return G.claim[id];
   const x = gb.wx[i], z = gb.wz[i], D = DIM;
   if (fieldLineCover(x, z, .05) > 0) return CLAIMS.find(c => c.key === 'field').id;
@@ -73,10 +107,11 @@ export function claimAt(G, gb, i) {
 const ALB = {
   [MAT.GROUND]: [.27, .30, .29, .25], [MAT.FIELD]: [.30, .27, .33, .19], [MAT.WALL]: [.40, .44, .43, .40],
   [MAT.CONCRETE]: [.52, .56, .55, .51], [MAT.SOFFIT]: [.42, .47, .46, .43], [MAT.COLUMN]: [.50, .55, .54, .50],
-  [MAT.FASCIA]: [.62, .66, .65, .60], [MAT.EXTERIOR]: [.46, .52, .48, .44], [MAT.SCOREBOARD]: [.18, .20, .22, .20],
+  [MAT.FASCIA]: [.62, .66, .65, .60], [MAT.EXTERIOR]: [.27, .44, .26, .20], [MAT.SCOREBOARD]: [.18, .20, .22, .20],
   [MAT.SB_FACE]: [.10, .10, .12, .11], [MAT.POST]: [.86, .88, .88, .84], [MAT.HOUSE]: [.30, .45, .27, .22],
   [MAT.ROOF]: [.20, .22, .21, .22], [MAT.TREE]: [.22, .26, .23, .20], [MAT.FENCE]: [.30, .32, .33, .33],
-  [MAT.PRESSBOX]: [.50, .54, .54, .52], [MAT.CLOCK]: [.85, .88, .87, .82]
+  [MAT.PRESSBOX]: [.50, .54, .54, .52], [MAT.CLOCK]: [.85, .88, .87, .82],
+  [MAT.FACADE]: [.50, .55, .54, .50], [MAT.FACADE_FACE]: [.50, .55, .54, .50], [MAT.ROAD]: [.15, .17, .17, .18], [MAT.PAVING]: [.40, .43, .42, .39], [MAT.GRASS]: [.24, .27, .29, .18]
 };
 const COATS = [[.10, .11, .16], [.16, .13, .11], [.22, .22, .23], [.07, .07, .08], [.28, .22, .16], [.12, .16, .26], [.34, .33, .31], [.40, .14, .12]];
 const FACE = [[.62, .48, .40], [.50, .37, .30], [.30, .22, .18], [.24, .24, .26], [.70, .70, .66]];
@@ -142,7 +177,31 @@ function surface(mat, x, y, z, out, fp = .02) {
   } else if (mat === MAT.HOUSE) {
     const fl = Math.floor(y / 3.1), wv = (x * .55) % 1, win = y > 1 && y % 3.1 > 1 && y % 3.1 < 2.3 && ((wv + 1) % 1) > .55;
     if (win && fl < 3) { out[0] = .14; out[1] = .14; out[2] = .15; out[3] = .17; }
-  } else if (mat === MAT.CONCRETE || mat === MAT.EXTERIOR || mat === MAT.WALL) {
+  } else if (mat === MAT.FACADE_FACE) {
+    // weathered concrete panel; city seal (a plain disc: the seal's artwork is not drawn); entrance gates; stainless letters
+    const n = vn(x * .4, y * .25) * .07; let L = .50 + n, r = .55 + n, g = .54 + n, b = .50 + n;
+    const sx = x, sy = y - DIM.facade.sealY, sr = Math.hypot(sx, sy);
+    if (sr < 2.7) { const ring = sr > 2.25; L = ring ? .78 : .36; r = ring ? .82 : .45; g = ring ? .82 : .38; b = ring ? .80 : .28; }
+    const pitch = 5.6, gi = Math.round(x / pitch), gx = x - gi * pitch;
+    if (y < 4.6 && Math.abs(gi) <= 3 && Math.abs(gx) < 1.6) { L = .06; r = g = b = .06; }
+    const t = facadeTextAt(x, y, fp);
+    if (t > 0) { L += (.86 - L) * t; r += (.88 - r) * t; g += (.89 - g) * t; b += (.90 - b) * t; }
+    out[0] = L; out[1] = r; out[2] = g; out[3] = b;
+  } else if (mat === MAT.EXTERIOR) {
+    // reddish-brown brick (S03, S19) with invented concrete bands, vents and ground portals
+    const dx = x, dz = z - DIM.cz, rr = Math.hypot(dx, dz), arc = Math.atan2(dx, -dz) * rr, deg = Math.atan2(dx, -dz) * 180 / Math.PI;
+    const course = Math.floor(y / .075), bv = (h2(course, Math.floor(arc / .2 + (course & 1) * .5)) - .5) * .06 + (vn(arc * .05, y * .08) - .5) * .06;
+    let L = .27 + bv, r = .44 + bv, g = .26 + bv * .8, b = .20 + bv * .6;
+    const band = (y > 16.6 && y < 17.9) || y > DIM.upTopY + .2;
+    const vent = ((y > 9.2 && y < 10.5) || (y > 24.6 && y < 25.9)) && Math.abs(((arc % 4.5) + 4.5) % 4.5 - 2.25) < .55;
+    const portal = y < 3.9 && Math.abs(((deg % 12) + 12) % 12 - 6) * rr * Math.PI / 180 < 1.9 && rr > DIM.upBackR - 2;
+    if (band) { L = .55; r = .59; g = .58; b = .54; }
+    if (vent) { L = .09; r = .09; g = .08; b = .08; }
+    if (portal) { L = .05; r = g = b = .05; }
+    out[0] = L; out[1] = r; out[2] = g; out[3] = b;
+  } else if (mat === MAT.ROAD || mat === MAT.PAVING || mat === MAT.GRASS) {
+    const n = (vn(x * .3, z * .3) - .5) * .05; out[0] += n; out[1] += n; out[2] += n; out[3] += n;
+  } else if (mat === MAT.CONCRETE || mat === MAT.WALL || mat === MAT.FACADE) {
     const n = vn(x * .6 + z * .6, y * .9) * .08; out[0] += n - .04; out[1] += n - .04; out[2] += n - .04; out[3] += n - .04;
   }
   return out;
@@ -171,7 +230,9 @@ function lightAt(G, gb, i, cam, env, sh) {
   const s = env.sunDir, ndl = Math.max(0, nx * s[0] + ny * s[1] + nz * s[2]);
   const lit = env.dif > .2 && ndl > 0 && sh ? sh.test(x + nx * .2, y + ny * .2, z + nz * .2) : 1;
   const skyV = .62 + .38 * Math.max(0, ny);
-  return [env.amb * ao * skyV + env.dif * ndl * lit, mat, claim, unf, x, y, z];
+  const vx = cam.pos[0] - x, vy = cam.pos[1] - y, vz = cam.pos[2] - z, vl = Math.hypot(vx, vy, vz) || 1;
+  const ndv = Math.abs(nx * vx + ny * vy + nz * vz) / vl;
+  return [env.amb * ao * skyV + env.dif * ndl * lit, mat, claim, unf, x, y, z, ndv];
 }
 
 const SB = [0, 0, 0, 0, 0];
@@ -189,7 +250,7 @@ export function printInk(G, gb, cam, env, sh, px32, t) {
       const la = lightAt(G, gb, i, cam, env, sh);
       if (!la) L = skyL(env, dx, dy, dz, t);
       else {
-        const dist = 1 / gb.iz[i]; surface(la[1], la[4], la[5], la[6], SB, dist / F / Math.sqrt(Math.max(.05, Math.abs(dy))));
+        const dist = 1 / gb.iz[i]; surface(la[1], la[4], la[5], la[6], SB, dist / F / Math.sqrt(Math.max(.05, la[7])));   // pixel footprint on the surface
         const hz = 1 - Math.exp(-dist / env.vis), horizon = skyL(env, dx, .02, dz, t);
         L = SB[0] * la[0] * 1.12; L = L + (horizon - L) * hz; lamp = SB[4];
       }
@@ -215,7 +276,7 @@ export function printNeutral(G, gb, cam, env, sh, px32, t) {
     const la = lightAt(G, gb, i, cam, env, sh);
     let c;
     if (!la) { const L = skyL(env, dx, dy, dz, t); c = skyC.map(v => v * L / .75); }
-    else { const dist = 1 / gb.iz[i]; surface(la[1], la[4], la[5], la[6], SB, dist / F / Math.sqrt(Math.max(.05, Math.abs(dy))));
+    else { const dist = 1 / gb.iz[i]; surface(la[1], la[4], la[5], la[6], SB, dist / F / Math.sqrt(Math.max(.05, la[7])));   // pixel footprint on the surface
       const hz = 1 - Math.exp(-dist / env.vis), hl = skyL(env, dx, .02, dz, t);
       c = [SB[1], SB[2], SB[3]].map((v, k) => { const lv = SB[4] ? v : v * la[0] * 1.12; return lv + (skyC[k] * hl / .75 - lv) * hz; }); }
     px32[i] = (255 << 24) | (g(c[2]) << 16) | (g(c[1]) << 8) | g(c[0]);

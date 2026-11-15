@@ -51,6 +51,10 @@ with sync_playwright() as p:
     for c in (1, 2):
         for v in ('ink', 'neutral', 'evidence'):
             shot(f'cam{c}-drizzle-{v}', f'view={v}&cam={c}&t=12&seed=48&capture=1&stamp=0')
+    # exterior stations
+    for c in (3, 4, 5):
+        for v in ('ink', 'neutral', 'evidence'):
+            shot(f'cam{c}-drizzle-{v}', f'view={v}&cam={c}&t=12&seed=48&capture=1&stamp=0')
     # reproducibility: same params twice must give the same pixels
     a = shot('repro-a', 'view=ink&cam=0&t=30&seed=48&capture=1&stamp=0', wait=.6)
     bb = shot('repro-b', 'view=ink&cam=0&t=30&seed=48&capture=1&stamp=0', wait=.6)

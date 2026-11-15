@@ -21,7 +21,7 @@ export const DIM = (() => {
     lowRows: 36, lowTread: 0.84, lowRise: 0.38,         // 46 lifetime rows − ~10 rows of 1961 boxes (S02)
     over: 11,                              // upper deck front 11 m out over the lower deck ("shaded most of it", S02)
     fasciaLow: 17.6, upY0: 19.6,
-    upRows: 33, upTread: 0.80, upRise: 0.50,            // 33 rows (S02, lifetime)
+    upRows: 33, upTread: 0.80, upRise: 0.46,            // 33 rows (S02, lifetime); rise set so the rim meets the 116 ft façade (S12)
     upShort: 50 * FT,                      // 1954 deck ended ~50 ft short of the poles each side (1964 extension, S02)
     colR: 19, colStep: 6,                  // columns: radius from front wall, every 6°  (assumed)
     // football (S15): 120 yd × 160 ft
@@ -33,7 +33,11 @@ export const DIM = (() => {
     cornerWall: 14 * FT, cf: 445 * FT, rcf: 446 * FT,
     // scoreboard (S01): 65 ft tall; width and offset assumed
     sbH: 65 * FT, sbW: 28, sbZ: 152, sbX: 0,
-    poleH: 20
+    poleH: 20,
+    // exterior (S12: 116 ft; width, depth, pylons assumed)
+    facade: { h: 116 * FT, w: 44, depth: 5.5, z: -62.5, pylon: 7, sealY: 26.2 },
+    // streets (S05: which side; positions and widths assumed)
+    streets: { n33: -72, ellerslie: -150, ednor: 150, z36: 200 }
   };
   d.lowBackR = R0 + d.lowRows * d.lowTread;
   d.lowBackY = d.wallH + (d.lowRows - 1) * d.lowRise;
@@ -51,7 +55,7 @@ export const pol = (th, r, y) => [Math.sin(th) * r, y, DIM.cz - Math.cos(th) * r
 export const softUnder = r => DIM.fasciaLow + (r - DIM.upFrontR) * (DIM.upRise / DIM.upTread);
 
 export const MAT = { GROUND:1, FIELD:2, WALL:3, CONCRETE:4, CROWD_L:5, CROWD_U:6, SOFFIT:7, COLUMN:8, FASCIA:9,
-  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20 };
+  EXTERIOR:10, SCOREBOARD:11, SB_FACE:12, POST:13, HOUSE:14, ROOF:15, TREE:16, BLEACHER:17, FENCE:18, PRESSBOX:19, CLOCK:20, FACADE:21, FACADE_FACE:22, ROAD:23, PAVING:24, GRASS:25 };
 export const MAT_NAME = Object.fromEntries(Object.entries(MAT).map(([k, v]) => [v, k]));
 
 export function buildStadium(opt = {}) {
@@ -91,7 +95,7 @@ export function buildStadium(opt = {}) {
       const r = D.lowBackR, y = D.lowBackY;
       quad(pol(a, r, y), pol(b, r, y), pol(b, r, y + 1.4), pol(a, r, y + 1.4), MAT.CONCRETE, K.lowerdeck.id, .9);
       quad(pol(a, r, y + 1.4), pol(b, r, y + 1.4), pol(b, r + 1.5, y + 1.4), pol(a, r + 1.5, y + 1.4), MAT.CONCRETE, K.lowerdeck.id, .9);
-      quad(pol(b, r + 1.5, 0), pol(a, r + 1.5, 0), pol(a, r + 1.5, y + 1.4), pol(b, r + 1.5, y + 1.4), MAT.EXTERIOR, K.lowerdeck.id, .8, 1);
+      quad(pol(b, r + 1.5, 0), pol(a, r + 1.5, 0), pol(a, r + 1.5, y + 1.4), pol(b, r + 1.5, y + 1.4), MAT.EXTERIOR, K.exterior.id, .8, 0);
     }
   }
   // lower-deck end caps at the foul poles
@@ -113,7 +117,7 @@ export function buildStadium(opt = {}) {
     const rb = D.upBackR, yt = D.upTopY;
     quad(pol(a, rb, yt), pol(b, rb, yt), pol(b, rb, yt + 1.2), pol(a, rb, yt + 1.2), MAT.CONCRETE, K.upperdeck.id, 1);               // rear rail
     quad(pol(a, rb, yt + 1.2), pol(b, rb, yt + 1.2), pol(b, rb + .4, yt + 1.2), pol(a, rb + .4, yt + 1.2), MAT.CONCRETE, K.upperdeck.id, 1);
-    quad(pol(b, rb + .4, 0), pol(a, rb + .4, 0), pol(a, rb + .4, yt + 1.2), pol(b, rb + .4, yt + 1.2), MAT.EXTERIOR, K.upperdeck.id, .8, 1);
+    quad(pol(b, rb + .4, 0), pol(a, rb + .4, 0), pol(a, rb + .4, yt + 1.2), pol(b, rb + .4, yt + 1.2), MAT.EXTERIOR, K.exterior.id, .8, 0);
     // underside and the concourse wall behind the lower deck (invented section: claim 'soffit')
     quad(pol(b, D.upFrontR, D.fasciaLow), pol(a, D.upFrontR, D.fasciaLow), pol(a, D.lowBackR, softUnder(D.lowBackR)), pol(b, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .3, 1);
     quad(pol(a, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, D.lowBackY), pol(b, D.lowBackR, softUnder(D.lowBackR)), pol(a, D.lowBackR, softUnder(D.lowBackR)), MAT.SOFFIT, K.soffit.id, .2, 1);
@@ -156,7 +160,7 @@ export function buildStadium(opt = {}) {
       quad([xa, y, D.pole + 2], [xa, y, zWingEnd], [xb, y, zWingEnd], [xb, y, D.pole + 2], MAT.CROWD_L, K.outfield.id, 1);
     }
     const xo = x + sx * rows * tr, yt = D.cornerWall + rows * rs;
-    quad([xo, 0, D.pole + 2], [xo, 0, zWingEnd], [xo, yt + 1.2, zWingEnd], [xo, yt + 1.2, D.pole + 2], MAT.EXTERIOR, K.outfield.id, .8, 1);
+    quad([xo, 0, D.pole + 2], [xo, 0, zWingEnd], [xo, yt + 1.2, zWingEnd], [xo, yt + 1.2, D.pole + 2], MAT.EXTERIOR, K.exterior.id, .8, 0);
     // north end of the wing
     tri([x, 0, zWingEnd], [xo, 0, zWingEnd], [xo, yt + 1.2, zWingEnd], MAT.CONCRETE, K.outfield.id, .8, 1);
     tri([x, 0, zWingEnd], [xo, yt + 1.2, zWingEnd], [x, D.cornerWall, zWingEnd], MAT.CONCRETE, K.outfield.id, .8, 1);
@@ -194,25 +198,51 @@ export function buildStadium(opt = {}) {
     line([-g, D.barH, gz], [g, D.barH, gz], MAT.POST, K.goalposts.id, .14);
   }
 
-  /* ---- the neighbourhood to the north: rowhouse terraces and bare trees ---- */
+  /* ---- the memorial façade on 33rd Street (S03, S12, S18): 116 ft, concrete panel framed in brick ---- */
+  {
+    const F = DIM.facade, x0 = -F.w / 2, x1 = F.w / 2, zf = F.z, zb = F.z + F.depth, H = F.h;
+    box(x0, 0, zf, x1, H, zb, MAT.FACADE, K.facade.id, .9, 0);
+    quad([x0, 0, zf - .03], [x1, 0, zf - .03], [x1, H, zf - .03], [x0, H, zf - .03], MAT.FACADE_FACE, K.facade.id, .95, 0);
+    // brick pylons either side (composition assumed: "brick and stone façade")
+    for (const sx of [-1, 1]) { const a = sx > 0 ? x1 : x0 - F.pylon, b = sx > 0 ? x1 + F.pylon : x0;
+      box(a, 0, zf + .6, b, H - .8, zb + 1.5, MAT.EXTERIOR, K.facade.id, .85, 0); }
+    // entrance plaza (finished 1954, S05) and 33rd Street as a divided boulevard (widths assumed)
+    const S = DIM.streets;
+    quad([-70, .03, zf], [70, .03, zf], [70, .03, S.n33], [-70, .03, S.n33], MAT.PAVING, K.facade.id, 1, 0);
+    quad([-620, .025, S.n33], [620, .025, S.n33], [620, .025, S.n33 - 10], [-620, .025, S.n33 - 10], MAT.ROAD, K.streets.id, 1, 0);
+    quad([-620, .03, S.n33 - 10], [620, .03, S.n33 - 10], [620, .03, S.n33 - 18], [-620, .03, S.n33 - 18], MAT.GRASS, K.streets.id, 1, 0);
+    quad([-620, .025, S.n33 - 18], [620, .025, S.n33 - 18], [620, .025, S.n33 - 28], [-620, .025, S.n33 - 28], MAT.ROAD, K.streets.id, 1, 0);
+    quad([-620, .03, S.n33 - 28], [620, .03, S.n33 - 28], [620, .03, S.n33 - 32], [-620, .03, S.n33 - 32], MAT.PAVING, K.streets.id, 1, 0);
+    for (const x of [S.ellerslie, S.ednor]) quad([x - 6, .02, S.n33], [x + 6, .02, S.n33], [x + 6, .02, 780], [x - 6, .02, 780], MAT.ROAD, K.streets.id, 1, 0);
+    quad([-620, .02, S.z36], [620, .02, S.z36], [620, .02, S.z36 + 12], [-620, .02, S.z36 + 12], MAT.ROAD, K.streets.id, 1, 0);
+  }
+
+  /* ---- the neighbourhood: rowhouse terraces and bare street trees on every side ---- */
   {
     let seed = (opt.seed || 48) * 9301 + 49297; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let z = 226; z < 760; z += 32 + rnd() * 10) {
-      for (let x = -520; x < 520;) {
-        const len = 36 + rnd() * 54, h = 6.8 + rnd() * 2.2, dep = 11;
-        if (rnd() > .18) { box(x, 0, z, x + len, h, z + dep, MAT.HOUSE, K.neighbour.id, .9, 1, false);
-          quad([x, h, z], [x + len, h, z], [x + len, h + 1.6, z + dep * .5], [x, h + 1.6, z + dep * .5], MAT.ROOF, K.neighbour.id, 1, 1);
-          quad([x, h + 1.6, z + dep * .5], [x + len, h + 1.6, z + dep * .5], [x + len, h, z + dep], [x, h, z + dep], MAT.ROOF, K.neighbour.id, 1, 1); }
-        x += len + 6 + rnd() * 14;
+    const terraces = (X0, X1, Z0, Z1, treeStep) => {
+      for (let z = Z0; z < Z1; z += 32 + rnd() * 10) {
+        for (let x = X0; x < X1;) {
+          const len = Math.min(X1 - x, 36 + rnd() * 54), h = 6.8 + rnd() * 2.2, dep = 11;
+          if (len > 12 && rnd() > .18) { box(x, 0, z, x + len, h, z + dep, MAT.HOUSE, K.neighbour.id, .9, 1, false);
+            quad([x, h, z], [x + len, h, z], [x + len, h + 1.6, z + dep * .5], [x, h + 1.6, z + dep * .5], MAT.ROOF, K.neighbour.id, 1, 1);
+            quad([x, h + 1.6, z + dep * .5], [x + len, h + 1.6, z + dep * .5], [x + len, h, z + dep], [x, h, z + dep], MAT.ROOF, K.neighbour.id, 1, 1); }
+          x += len + 6 + rnd() * 14;
+        }
+        for (let x = X0; x < X1; x += treeStep + rnd() * treeStep) {
+          const h = 9 + rnd() * 7, w = 3 + rnd() * 3, tz = z - 6;
+          quad([x - w, 2.5, tz], [x + w, 2.5, tz], [x + w, h, tz], [x - w, h, tz], MAT.TREE, K.neighbour.id, 1, 1);
+          quad([x, 2.5, tz - w], [x, 2.5, tz + w], [x, h, tz + w], [x, h, tz - w], MAT.TREE, K.neighbour.id, 1, 1);
+          line([x, 0, tz], [x, 3, tz], MAT.TREE, K.neighbour.id, .3);
+        }
       }
-      // a line of street trees (bare in December), drawn as cut-out crowns
-      for (let x = -520; x < 520; x += 9 + rnd() * 10) {
-        const h = 9 + rnd() * 7, w = 3 + rnd() * 3, tz = z - 6;
-        quad([x - w, 2.5, tz], [x + w, 2.5, tz], [x + w, h, tz], [x - w, h, tz], MAT.TREE, K.neighbour.id, 1, 1);
-        quad([x, 2.5, tz - w], [x, 2.5, tz + w], [x, h, tz + w], [x, h, tz - w], MAT.TREE, K.neighbour.id, 1, 1);
-        line([x, 0, tz], [x, 3, tz], MAT.TREE, K.neighbour.id, .3);
-      }
-    }
+    };
+    const S = DIM.streets;
+    terraces(-520, 520, S.z36 + 26, 760, 9);                  // north of 36th Street (Ednor Gardens / Waverly)
+    terraces(-560, 560, -560, S.n33 - 44, 16);                 // south of 33rd Street
+    terraces(-540, S.ellerslie - 16, S.n33 + 8, S.z36 - 6, 18); // west of Ellerslie Avenue
+    terraces(S.ednor + 16, 540, S.n33 + 8, S.z36 - 6, 18);      // east of Ednor Road
+    // (no trees drawn on the 33rd Street median: none are documented for 1959)
     // trees on the terrace behind the centre-field fence (the 1954 "hedgeline", S02)
     for (let x = -60; x <= 60; x += 7) { quad([x - 3.5, 0, D.cf + 6], [x + 3.5, 0, D.cf + 6], [x + 3.5, 2.6, D.cf + 6], [x - 3.5, 2.6, D.cf + 6], MAT.TREE, K.outfield.id, 1, 1); }
   }
@@ -234,5 +264,11 @@ export const STATIONS = [
   { id: 'w-upper-50', label: 'Upper deck, west side, row 14 near the 50 — looking east across the field',
     at: () => { const th = -86 * D2R, r = DIM.upFrontR + 14 * DIM.upTread + .4, y = DIM.upY0 + 14 * DIM.upRise + 1.15; return { pos: pol(th, r, y), look: [0, 0, DIM.fifty + 6], fov: 66 }; } },
   { id: 'home-rim', label: 'Upper deck behind home plate, top rows — the horseshoe and the open end',
-    at: () => { const r = DIM.upFrontR + 26 * DIM.upTread + .4, y = DIM.upY0 + 26 * DIM.upRise + 1.15; return { pos: pol(0, r, y), look: [0, 0, 70], fov: 70 }; } }
+    at: () => { const r = DIM.upFrontR + 26 * DIM.upTread + .4, y = DIM.upY0 + 26 * DIM.upRise + 1.15; return { pos: pol(0, r, y), look: [0, 0, 70], fov: 70 }; } },
+  { id: '33rd-street', label: 'Exterior: south sidewalk of 33rd Street, looking up at the memorial façade',
+    at: () => ({ pos: [-12, 1.6, DIM.streets.n33 - 40], look: [0, 17, DIM.facade.z], fov: 70 }) },
+  { id: 'ellerslie', label: 'Exterior: corner of 33rd Street and Ellerslie Avenue, looking east along the façade and the brick shell',
+    at: () => ({ pos: [DIM.streets.ellerslie - 8, 1.6, DIM.streets.n33 - 12], look: [-20, 16, -32], fov: 64 }) },
+  { id: 'overview-se', label: 'Exterior overview from the south-east (a model view, not a 1959 vantage)',
+    at: () => ({ pos: [270, 175, -240], look: [0, 4, 36], fov: 46 }) }
 ];

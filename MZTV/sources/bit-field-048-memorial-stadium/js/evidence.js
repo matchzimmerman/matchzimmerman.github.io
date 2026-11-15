@@ -28,12 +28,12 @@ export const SOURCES = [
     discrepancy: 'pre-1961 outfield wall: NYT says 14 ft, Bready says 8 ft; scoreboard cost $172k vs $152k' },
   { id: 'S02', title: 'Memorial Stadium (diagrams and history)', creator: 'Andrew G. Clem, Clem\'s Baseball',
     url: 'https://www.andrewclem.com/Baseball/MemorialStadium.html', date: 'n.d. (hobbyist site, updated over years)', era: 'lifetime, with 1950/1954/1964/1986 diagrams',
-    supports: 'CF orientation N; lifetime rows (lower 46, upper 33); upper deck on reinforced-concrete columns that obstructed lower-deck views; upper deck shaded most of the lower deck; mostly bench seats in the upper deck; 1964 upper deck extended ~50 ft at both ends near the foul poles; 1961 ~10 rows of boxes added, cutting 20 ft behind home; gridiron position shifted over years; light towers built later in the 1950s',
+    supports: 'CF orientation N; lifetime rows (lower 46, upper 33); upper deck on reinforced-concrete columns that obstructed lower-deck views; upper deck shaded most of the lower deck; mostly bench seats in the upper deck; 1964 upper deck extended ~50 ft at both ends near the foul poles; 1961 ~10 rows of boxes added, cutting 20 ft behind home; gridiron position shifted over years; light towers built later in the 1950s; a massive brick exterior wall and the memorial on the south side; additional exit ramps built round the periphery by the 1970s (so fewer, or none, in 1959)',
     confidence: 'medium (careful but unfootnoted; rows are lifetime figures)', rights: 'facts only; diagrams not copied',
     discrepancy: 'row counts are for the stadium\'s later life, not 1959' },
   { id: 'S03', title: 'Memorial Stadium', creator: 'Ballparks of Baseball',
     url: 'https://www.ballparksofbaseball.com/?p=226', date: 'n.d.', era: 'lifetime; football note undated',
-    supports: 'for football the upper deck ran ~60 yd from the horseshoe\'s end zone to about the far 40 on both sides; 1964 upper deck lengthened; Gunther scoreboard replaced 1970',
+    supports: 'for football the upper deck ran ~60 yd from the horseshoe\'s end zone to about the far 40 on both sides; 1964 upper deck lengthened; Gunther scoreboard replaced 1970; outside, a reddish-brown brick façade, and a tall concrete wall with the inscription at the home-plate entrance',
     confidence: 'medium-low', rights: 'facts only',
     discrepancy: 'puts the Gunther scoreboard in right-centre; S01 (NYT) says centre field. The 60-yard football note is undated and may describe the post-1964 deck' },
   { id: 'S04', title: 'Memorial Stadium', creator: 'Stadiums of Pro Football',
@@ -42,7 +42,7 @@ export const SOURCES = [
     confidence: 'medium-low', rights: 'facts only', discrepancy: '' },
   { id: 'S05', title: 'Memorial Stadium (Baltimore)', creator: 'Wikipedia contributors',
     url: 'https://en.wikipedia.org/wiki/Memorial_Stadium_(Baltimore)', date: 'accessed 2026-11-12', era: 'lifetime',
-    supports: 'horseshoe open to the north; site bounded by 33rd St (S), Ellerslie Ave (W), 36th St (N), Ednor Rd (E); coordinates 39.3294 N, 76.6014 W; diamond moved to the south end for 1950',
+    supports: 'horseshoe open to the north; site bounded by 33rd St (S), Ellerslie Ave (W), 36th St (N), Ednor Rd (E); coordinates 39.3294 N, 76.6014 W; diamond moved to the south end for 1950; new entrance plaza and the large memorial plaque over the entrance finished by early summer 1954',
     confidence: 'medium (tertiary; cross-checked with S01/S02)', rights: 'CC BY-SA text; facts only used', discrepancy: '' },
   { id: 'S06', title: 'Championship – New York Giants at Baltimore Colts – December 27th, 1959', creator: 'Pro-Football-Reference',
     url: 'https://www.pro-football-reference.com/boxscores/195912270clt.htm', date: 'database', era: '1959-12-27',
@@ -71,7 +71,7 @@ export const SOURCES = [
     discrepancy: 'must not be presented as 1959 evidence: upper deck was extended in 1964, seats replaced, boxes added 1961, scoreboards replaced 1970/1985' },
   { id: 'S12', title: 'Forgotten Stadiums: Baltimore\'s Memorial Stadium', creator: 'Stadium Journey',
     url: 'https://www.stadiumjourney.com/stadiums/forgotten-stadiums-baltimores-memorial-stadium', date: 'n.d.', era: 'lifetime',
-    supports: 'the 33rd Street façade and memorial wall stood 116 ft tall (brick and stone)', confidence: 'medium-low (unsourced figure)', rights: 'facts only; its HABS photo credits noted', discrepancy: '' },
+    supports: 'the 33rd Street façade and memorial wall stood 116 ft tall (brick and stone), "ten stories"; city seal; stainless-steel letters from 12 in to 10 ft; dedication text (partial); formal dedication 30 May 1956', confidence: 'medium (unsourced figures, consistent with others)', rights: 'facts only; its HABS photo credits noted', discrepancy: '' },
   { id: 'S13', title: '1963 Baltimore Colts media guide (PDF)', creator: 'Baltimore Colts / NFL',
     url: 'https://static.clubs.nfl.com/image/upload/colts/drzp8anyx4wdwuwsbgtq.pdf', date: '1963', era: '1963 (four seasons after the scene)',
     supports: 'not yet inspected (not reachable from the build environment). May hold a seating chart; any chart must be checked against 1959 (no 1961 boxes, no 1964 deck extensions)',
@@ -85,6 +85,21 @@ export const SOURCES = [
     url: '', date: '', era: 'rule in force in 1959',
     supports: 'H-shaped goalposts standing on the goal line; inbounds lines 20 yd in from each sideline; 100-yd field with 10-yd end zones, 160 ft wide',
     confidence: 'medium (well known; primary citation still to add)', rights: 'n/a', discrepancy: '' }
+  ,
+  { id: 'S16', title: 'Loverro: Stadiums once reminded of sacrifices in war', creator: 'Thom Loverro, The Washington Times',
+    url: 'https://www.washingtontimes.com/news/2016/may/29/loverro-stadiums-once-reminded-of-sacrifices-in-wa/', date: '2016-05-29', era: 'describes the wall as fans saw it',
+    supports: 'full dedication text, with its line breaks marked in the middle section; the wall greeted fans at the home-plate entrance', confidence: 'medium-high (agrees with S17 and S12)', rights: 'facts only; the 1954 civic inscription itself is public', discrepancy: 'writes "Serve" for "Served" (typo)' },
+  { id: 'S17', title: 'Memorial Stadium (transcription of the façade)', creator: 'History Thru the Lens (blog)',
+    url: 'https://historythruthelens.blogspot.com/2009/06/memorial-stadium.html', date: '2009-06', era: 'façade text',
+    supports: 'full dedication text in one run: ERECTED BY THE CITY OF BALTIMORE 1954 / DEDICATED BY THE MAYOR AND THE CITY COUNCIL AND THE PEOPLE OF BALTIMORE CITY IN THE STATE OF MARYLAND / AS A MEMORIAL … / TIME WILL NOT DIM THE GLORY OF THEIR DEEDS', confidence: 'medium (agrees with S16)', rights: 'facts only', discrepancy: '' },
+  { id: 'S18', title: 'Memorial Stadium (BR Bullpen)', creator: 'Baseball-Reference Bullpen contributors',
+    url: 'https://www.baseball-reference.com/bullpen/Memorial_Stadium', date: 'n.d.', era: 'lifetime',
+    supports: 'a sign above the entrance, dedicated 1954, carried the inscription; the letters spelling the park\'s name were on that sign (later leased to Cal Ripken Jr.)', confidence: 'medium', rights: 'facts only', discrepancy: '' },
+  { id: 'S19', title: 'Common Ground (NPS), Summer 2004: "Artifact" (Memorial Stadium HABS documentation)', creator: 'National Park Service',
+    url: 'https://www.nps.gov/crps/commonground/Summer2004/artifact.pdf', date: '2004', era: 'retrospective',
+    supports: 'local labour and materials; the signature Baltimore brick of the façade marked it as a city institution', confidence: 'medium', rights: 'US Government text; facts only', discrepancy: '' },
+  { id: 'S20', title: 'Memorial Stadium lettering', creator: 'typeoff.de', url: 'https://www.typeoff.de/2006/11/memorial-stadium-lettering/', date: '2006-11', era: 'façade letters',
+    supports: 'the last line\'s letters were wider and rounder than the first line\'s; façade attributed to L. P. Kooken (spelled "Cook") and Company', confidence: 'medium-low', rights: 'not reused (its redrawn letters are not copied)', discrepancy: 'architect credited to Kooken here, to Hall, Border and Donaldson on Wikipedia' }
 ];
 
 /* claims: every modelled thing points to one of these, so the EVIDENCE view can colour it */
@@ -93,7 +108,7 @@ export const CLAIMS = [
   { id: 1,  key: 'orientation',label: 'Horseshoe open to the north, home plate at the south', status: 'documented', src: ['S02','S05','S10'], note: 'CF due north; diamond at the south end since 1950' },
   { id: 2,  key: 'bowl',       label: 'Lower-deck horseshoe plan (front wall curve)',   status: 'approx',     src: ['S01','S02','S10'], note: 'circle fitted through the 72 ft backstop (1957) and the 309 ft foul poles; real plan not traced' },
   { id: 3,  key: 'lowerdeck',  label: 'Lower deck rows and rake (36 rows, 8 ft front wall)', status: 'approx', src: ['S01','S02'], note: '46 lifetime rows minus ~10 rows of 1961 boxes; tread/riser assumed (0.84 / 0.38 m)' },
-  { id: 4,  key: 'upperdeck',  label: 'Upper deck: 1954 extent, 33 rows, roofless',     status: 'approx',     src: ['S01','S02','S03','S04'], note: 'ends ~50 ft short of the foul poles (before the 1964 extensions); rake assumed (0.8 / 0.5 m); top ≈ 36 m checks against the 116 ft façade (S12)' },
+  { id: 4,  key: 'upperdeck',  label: 'Upper deck: 1954 extent, 33 rows, roofless',     status: 'approx',     src: ['S01','S02','S03','S04'], note: 'ends ~50 ft short of the foul poles (before the 1964 extensions); tread assumed (0.8 m); riser 0.46 m set so the rim (35.5 m) meets the documented 116 ft façade (S12)' },
   { id: 5,  key: 'columns',    label: 'Concrete columns under the upper deck',          status: 'approx',     src: ['S02'], note: 'documented that they existed and blocked views; spacing (6°) and radius are assumed' },
   { id: 6,  key: 'soffit',     label: 'Upper-deck underside, fascia and concourse wall',status: 'creative',   src: [], note: 'needed to close the section; shape invented' },
   { id: 7,  key: 'field',      label: 'Football field 1959 (lines, hash marks 20 yd in, end zones)', status: 'documented', src: ['S15'], note: 'rule dimensions; placement along the axis is approximate (see gridiron)' },
@@ -106,10 +121,29 @@ export const CLAIMS = [
   { id: 14, key: 'outfield',   label: 'Outfield wings, wall and centre-field opening',  status: 'approx',     src: ['S01','S02'], note: '14 ft corner walls receding at 135°, wire fence and terrace in CF, LF/RF bleachers; plan fitted to 445/446 ft' },
   { id: 15, key: 'foulpoles',  label: 'Foul poles at 309 ft',                           status: 'documented', src: ['S01','S02'], note: 'height assumed' },
   { id: 16, key: 'pressbox',   label: 'Press box on the rim behind home plate',        status: 'creative',   src: [], note: 'placeholder; 1959 press box form and position not yet researched' },
-  { id: 17, key: 'neighbour',  label: 'Waverly / Ednor Gardens rowhouses and bare trees to the north', status: 'creative', src: ['S05'], note: 'streets documented; houses are generic two-storey massing' },
+  { id: 17, key: 'neighbour',  label: 'Waverly / Ednor Gardens rowhouses and bare trees round the site', status: 'creative', src: ['S05'], note: 'streets documented; houses are generic two-storey massing' },
   { id: 18, key: 'ground',     label: 'Ground outside the bowl',                        status: 'creative',   src: [], note: 'flat plane; real grades not modelled' },
   { id: 19, key: 'aisles',     label: 'Aisles and portals in the stands',               status: 'creative',   src: [], note: 'rhythm assumed (12° aisles, 24° portals)' },
-  { id: 20, key: 'lighttowers',label: 'Light towers (late 1950s)',                      status: 'creative',   src: ['S02'], note: 'NOT MODELLED: S02 says big towers were added later in the 1950s; date and positions unknown, and it was a day game' }
+  { id: 20, key: 'lighttowers',label: 'Light towers (late 1950s)',                      status: 'creative',   src: ['S02'], note: 'NOT MODELLED: S02 says big towers were added later in the 1950s; date and positions unknown, and it was a day game' },
+  { id: 21, key: 'facade',     label: 'Memorial façade on 33rd Street: 116 ft, concrete panel in brick, seal, entrance gates', status: 'approx', src: ['S03','S05','S12','S18','S19'], note: 'height, materials, seal, letters and position documented; width (44 m panel), proud of the curve by 2.75 m, seal position and gate rhythm assumed' },
+  { id: 22, key: 'inscription',label: 'The dedication, in stainless-steel letters', status: 'documented', src: ['S12','S16','S17','S18'], note: 'text agreed by three transcriptions; line breaks partly documented (S16, S12); letter sizes fitted inside the documented 12 in – 10 ft range; bitmap letterforms are not the originals' },
+  { id: 23, key: 'exterior',   label: 'Brick shell round the horseshoe', status: 'approx', src: ['S02','S03','S19'], note: 'massive reddish-brown brick wall documented; concrete bands, vents and portals are invented; external ramps left out (most were added later)' },
+  { id: 24, key: 'streets',    label: '33rd Street boulevard, Ellerslie Ave, Ednor Rd, 36th Street', status: 'approx', src: ['S05'], note: 'which street bounds which side is documented; positions and widths (33rd St as a divided boulevard) are not traced' }
+];
+
+/* the 1954 dedication (S16, S17, S12). Line breaks: S12 for the opening and close, S16 for the middle.
+   size = cap height in metres (documented range 12 in – 10 ft; individual sizes fitted). */
+export const INSCRIPTION = [
+  { t: 'MEMORIAL STADIUM', size: 3.05, y: 31.4 },
+  { t: 'ERECTED BY THE CITY OF BALTIMORE 1954', size: .62, y: 21.4 },
+  { t: 'DEDICATED BY THE MAYOR AND THE CITY COUNCIL', size: .62, y: 20.3 },
+  { t: 'AND THE PEOPLE OF BALTIMORE CITY IN THE STATE OF MARYLAND', size: .62, y: 19.2 },
+  { t: 'AS A MEMORIAL TO ALL WHO SO VALIANTLY FOUGHT', size: .62, y: 17.7 },
+  { t: 'AND SERVED IN THE WORLD WARS WITH ETERNAL', size: .62, y: 16.6 },
+  { t: 'GRATITUDE TO THOSE WHO MADE THE SUPREME', size: .62, y: 15.5 },
+  { t: 'SACRIFICE TO PRESERVE EQUALITY AND FREEDOM', size: .62, y: 14.4 },
+  { t: 'THROUGHOUT THE WORLD', size: .62, y: 13.3 },
+  { t: 'TIME WILL NOT DIM THE GLORY OF THEIR DEEDS', size: 1.15, y: 10.6 }
 ];
 
 export const STATUS = {

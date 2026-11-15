@@ -48,6 +48,6 @@ For one fixed camera, the CPU path keeps the print bit-exact with HARBOUR LIGHT,
 
 ## Params and keys
 
-`?view=ink|neutral|evidence` · `?cam=0|1|2` · `?wx=drizzle|clear` · `?t=` (freeze time, s) · `?hour=` (EST, default 15.1667) · `?lines=` (ink resolution, default 180) · `?nh=` (neutral height, default 540) · `?seed=` · `?claim=N` (isolate one claim in the evidence view) · `?info=0` · `?stamp=0` · `?capture=1` · `?fps=`
+`?view=ink|neutral|evidence` · `?cam=0…5` (0–2 stands, 3–5 exterior) · `?wx=drizzle|clear` · `?t=` (freeze time, s) · `?hour=` (EST, default 15.1667) · `?lines=` (ink resolution, default 180) · `?nh=` (neutral height, default 540) · `?seed=` · `?claim=N` (isolate one claim in the evidence view) · `?info=0` · `?stamp=0` · `?capture=1` · `?fps=`
 Keys: `1` ink · `2` neutral · `3` evidence · `c` camera · `w` weather · `i` info.
 `window.MZ` exposes `state`, `share`, `STATS`, `set({...})` for tests.

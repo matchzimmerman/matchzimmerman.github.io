@@ -13,6 +13,10 @@ Decisions only Match can make, in rough priority order. Nothing here blocks read
 | **R7** | **Public wording** | see `PUBLICATION-DRAFT.md` | approve or edit before anything is posted |
 | **R8** | **Publish or keep private** | the branch adds the piece under `MZTV/sources/` but does not touch `MZTV/README.md` or link it anywhere | add the README entry only after R1–R7 |
 | **R9** | **MZ CAM** | promote the camera stations to a shared MZ WORLDS module now · wait for Phase 03 | wait |
-| **R10** | **Research access** | HABS (LoC) pages and the 1963 Colts media guide could not be fetched from the build environment | a short session in a browser (Claude in Chrome or by hand) to pull the HABS data pages and any 1959 photos with rights noted |
+| **R10** | **Research access** | HABS (LoC) pages and the 1963 Colts media guide could not be fetched from the build environment | a short session in a browser (Claude in Chrome or by hand) to pull the HABS data pages and any 1959 photos with rights noted. HABS photographed the façade, so it is the best fix for R11–R13 |
+| **R11** | **Façade composition** | the 44 m concrete panel framed by brick pylons is fitted, not traced. Height, materials, seal, letters and text are documented | check against a HABS or period photograph before anything public shows the façade close up |
+| **R12** | **Lettering** | bitmap capitals (current, honest about not being the originals) · draw the original letterforms from photographs (the closing line was wider and rounder) | keep bitmap until photographs are in hand; the evidence view already marks the text as documented and the forms as not |
+| **R13** | **Brick shell articulation** | plain brick with invented bands, vents and portals (current) · plain brick with no articulation · wait for photographs | keep, labelled creative; replace from HABS |
+| **R14** | **Exterior review frame** | cam3 (33rd Street, the memorial wall) · cam4 (corner of 33rd and Ellerslie) · cam5 (overview, a model view) | cam3 for the piece's exterior; cam5 only for explaining the model |
 
 Approval is on MZ.Human. No merge or deploy happens until then.

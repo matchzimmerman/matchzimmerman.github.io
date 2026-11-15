@@ -17,4 +17,10 @@ Question → Evidence → Approximation → Build → Comparison → Revision.
 2. *Framing.* The first cam0 frame looked over the near stands and missed the west arm. Re-aimed (yaw 20°, pitch −15°, FOV 74°) so the foreground rows, west arm, open end and scoreboard are all in frame.
 3. *Print legibility.* 4-in lines vanished at 320 px. Added pixel-footprint coverage (×2.4, logged as a print choice). Faces were clamped into the crowd's tone, depth haze added for drizzle (visibility 1.4 km), and a gentle S-curve applied before quantising.
 
+**Exterior pass (requested by MZ.Human, 2026-11-14).**
+- *Question.* Can the outside be reconstructed to the same standard, above all the 33rd Street memorial wall?
+- *Evidence.* 116 ft brick-and-stone façade and memorial wall, with the city seal and stainless-steel letters from 12 in to 10 ft (S12). A tall concrete wall at the home-plate entrance and reddish-brown brick (S03), in Baltimore brick (S19). The full dedication text agrees across three transcriptions (S16, S17, S12), and the park's name was on the sign (S18). The plaque and entrance plaza were finished by summer 1954 (S05), so all of it stood in 1959. Most exterior ramps came later (S02). No source gives the wall's width, its panel layout or the seal's position.
+- *Approximation.* A 44 m concrete panel framed in brick; the name's 10-ft letters force a panel of at least about 42 m. Lettering sizes are fitted inside the documented range. A plain brick shell round the 1954 horseshoe, with invented bands, vents and portals. Streets on their documented sides at assumed positions.
+- *Revision driven by the exterior.* The documented façade height now constrains the upper deck. With a 0.50 m riser the rim stood 1.4 m above the 116 ft wall; at 0.46 m it lands within 0.2 m. Median trees on 33rd Street were removed because no source supports them.
+
 **Next (pending review).** See `REVIEW-QUEUE.md`.
