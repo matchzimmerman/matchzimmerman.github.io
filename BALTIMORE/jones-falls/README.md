@@ -11,3 +11,5 @@ is not in either repo. Ask MZ.Human for it.
 To update: rebuild the Field page, then
 `JF_PASSWORD=... python3 tools/build_gate.py --page field/index.html --out <this folder>/index.html`.
 Each rebuild makes a new salt, so a device that ticked "remember" will be asked once more.
+
+`shot-tower/index.html` is the Shot Tower model viewer (haril-studio `ground-survey/sites/jones-falls/landmarks/shot-tower/viewer.html`), gated with the same password.
