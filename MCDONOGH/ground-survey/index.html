@@ -1471,7 +1471,8 @@ $('pasteApply').onclick=()=>{
   try{ const j=JSON.parse($('pasteBox').value);
     if(Array.isArray(j.pins)){ const have=new Set(S.pins.map(p=>p.id)); j.pins.forEach(p=>{ if(!have.has(p.id)) S.pins.push(p); }); }
     let applied=0, waiting=0;
-    (j.placements||[]).forEach(pl=>{ if(pl.kind==='mass' && !S.objs.find(x=>x.id===pl.id)){ const r={...pl, id:pl.id||('m'+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), visible:true}; S.objs.push(r); realizeMass(r); applied++; return; }
+    (j.placements||[]).forEach(pl=>{ if(pl.kind==='mass'){ let ex=S.objs.find(x=>x.kind==='mass'&&x.id===pl.id); if(!ex&&Array.isArray(pl.near)){ let bd=pl.near[2]||20; for(const x of S.objs){ if(x.kind!=='mass') continue; const dd=Math.hypot(x.E-pl.near[0],x.N-pl.near[1]); if(dd<=bd){ bd=dd; ex=x; } } } if(ex){ const {near,id,...rest}=pl; Object.assign(ex,rest); realizeMass(ex); placeObject(ex); applyLook(ex); applied++; return; } }
+      if(pl.kind==='mass' && !S.objs.find(x=>x.id===pl.id)){ const {near:_nr,...pl2}=pl; const r={name:'Footprint', heading:0, scale:1, units:1, up:'Y', opacity:0.92, xray:false, ghost:false, height:3, roof:'flat', rise:0, ...pl2, id:pl.id||('m'+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), visible:true}; S.objs.push(r); realizeMass(r); applied++; return; }
       const o=S.objs.find(x=>x.name===pl.name); if(o){ Object.assign(o,pl); placeObject(o); applyLook(o); applied++; } else { S.pending[pl.name]=pl; waiting++; } });
     renderPins(); renderObjs(); fillEditor(); save(); req(); $('pasteGrp').hidden=true; $('pasteBox').value='';
     toast(`Loaded ${j.pins?.length||0} pins${applied?`, placed ${applied} models`:''}${waiting?`; ${waiting} placements wait for their files`:''}`, 3600);
@@ -1805,7 +1806,7 @@ function renderCands(){
     it.querySelector('.acts').onclick=e=>{ const a=e.target.closest('button')?.dataset.a; if(!a) return;
       if(a==='go'){ flyTo(c.E,c.N,Math.max(45,c.l*4)); if(sheetSmall()) setSheet(false); }
       if(a==='pin'){ const w=toWorld(c.E,c.N); addPinNamed({x:w.x,z:w.z,h:heightAt(w.x,w.z)}, `${c.id} ${c.kind}`); dismiss(c.id); }
-      if(a==='build'){ const pts=c.poly.map(([E,N])=>toWorld(E,N)); createMass(pts, {name:`${c.id} rebuild`, height:5, roof:'gable', rise:2.5}); }
+      if(a==='build'){ const pts=c.poly.map(([E,N])=>toWorld(E,N)); createMass(pts, {name:`${c.id} rebuild`, height:5, roof:'flat', rise:2.5}); }
       if(a==='no') dismiss(c.id); };
     L.appendChild(it);
   }
@@ -1824,7 +1825,7 @@ function updateTraceLine(){ const arr=[]; for(const p of trace.pts) arr.push(p.x
 $('tTrace').onclick=()=>setTool(tool==='trace'?null:'trace');
 $('hintUndo').onclick=()=>{ trace.pts.pop(); updateTraceLine(); hint(trace.pts.length?`${trace.pts.length} corners`:'Tap each corner of the footprint, then Finish'); req(); };
 $('hintFinish').onclick=()=>{ if(trace.pts.length<3){ toast('Tap at least three corners'); return; } const pts=trace.pts.slice(); setTool(null);
-  createMass(pts,{name:`Footprint ${S.objs.filter(o=>o.kind==='mass').length+1}`, height:6, roof:pts.length===4?'gable':'flat', rise:3}); };
+  createMass(pts,{name:`Footprint ${S.objs.filter(o=>o.kind==='mass').length+1}`, height:6, roof:'flat', rise:3}); };
 
 function createMass(worldPts, opts){
   let cx=0,cz=0; worldPts.forEach(p=>{cx+=p.x;cz+=p.z;}); cx/=worldPts.length; cz/=worldPts.length;
