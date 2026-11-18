@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0b0b0b" />
+<title>MZ / WALSH BASS LAB 001 / MOBILE FIX</title>
+<style>
+  :root{color-scheme:dark;--bg:#0b0b0b;--panel:#141414;--line:#303030;--muted:#929292;--ink:#f0eee9;--accent:#ff6b25;--cream:#ffdf9b}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.015em}
+  .shell{max-width:1120px;margin:0 auto;padding:24px 24px 58px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid #393939;padding-bottom:22px}
+  .eyebrow{font-size:11px;color:var(--accent);font-weight:800;letter-spacing:.18em}.top h1{font-size:clamp(30px,6vw,58px);font-weight:900;letter-spacing:-.065em;line-height:1;margin:12px 0 10px}.sub{max-width:660px;color:#b6b4af;font-size:13px}.edition{text-align:right;font-size:11px;color:#aaa;white-space:nowrap}
+  .toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:18px 0}.button{appearance:none;border:1px solid #606060;color:#eee;background:#1e1e1e;min-height:44px;padding:10px 15px;cursor:pointer;font:700 12px ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;border-radius:3px}.button:hover,.button:focus-visible{border-color:var(--accent)}.button.primary{background:var(--accent);border-color:var(--accent);color:#16100b;min-width:146px;font-size:14px}.button.primary.running{background:#e6e0d6;border-color:#e6e0d6}.status{font-size:11px;color:#999;margin-left:auto}.status.live{color:var(--accent)}
+  .canvasbox{position:relative;background:#111;border:1px solid #393939;min-height:236px;overflow:hidden}.canvasbox canvas{display:block;width:100%;height:236px}.legend{display:flex;gap:20px;flex-wrap:wrap;margin:10px 0 22px;font-size:11px;color:#a9a9a9}.dot{display:inline-block;width:8px;height:8px;margin-right:7px;background:var(--accent)}.dot.b{background:#f7e1ae}.dot.c{background:#888}
+  .sectionhead{display:flex;justify-content:space-between;align-items:end;gap:15px;border-top:1px solid #404040;padding-top:15px;margin-top:22px;margin-bottom:13px}.sectionhead strong{letter-spacing:.12em;color:#e2ded5}.sectionhead small{color:#777;letter-spacing:0}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.cell{padding:15px;background:var(--panel);border:1px solid #333;min-height:94px}.cell label{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:700;letter-spacing:.09em}.cell output{color:var(--accent);letter-spacing:0}.cell input[type=range]{width:100%;margin:19px 0 2px;accent-color:var(--accent)}.cell select{display:block;width:100%;margin-top:14px;padding:9px;background:#080808;color:var(--ink);border:1px solid #555;border-radius:2px;font:inherit}.helper{font-size:10px;color:#888;margin-top:4px;min-height:14px}
+  .previewwarning{border:1px solid #a04924;background:#2c1a10;color:#ffbf91;padding:12px 14px;margin:12px 0 18px;font-size:12px;line-height:1.5}.previewwarning b{color:#fff0d8}.description{border-top:1px solid #3d3d3d;margin-top:30px;padding-top:19px;display:grid;grid-template-columns:1fr 1fr;gap:26px;font-size:12px;color:#b4b1ac}.description b{color:#f0eee9}.description code{color:#ff9b66}.footer{margin-top:30px;font-size:10px;color:#727272;letter-spacing:.08em}.pill{display:inline-block;color:#ffb480;border:1px solid #70452e;padding:2px 6px;font-size:10px;letter-spacing:.05em}
+  @media(max-width:700px){.shell{padding:18px 14px 48px}.top h1{font-size:39px}.edition{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cell{padding:12px;min-height:90px}.description{grid-template-columns:1fr;gap:7px}.status{width:100%;margin-left:0}.canvasbox canvas{height:225px}}
+  @media(max-width:410px){.grid{grid-template-columns:1fr 1fr}.button{padding:10px 11px}}
+  @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="top"><div><div class="eyebrow">MZ AUDIO / PROCEDURAL INSTRUMENTS / EXPERIMENT 001</div><h1>WALSH<br>BASS LAB</h1><div class="sub">A sequency-driven bass synthesizer. Mobile playback diagnostics included. Two mathematical square-wave patterns shape the notes, filter, and effect sends. No samples. No libraries. One file.</div></div><div class="edition">ORIGINAL PROTOTYPE<br>v0.2 / WEB AUDIO<br><span class="pill">HEADPHONES ADVISED</span></div></header>
+<div class="toolbar"><button id="play" class="button primary" aria-pressed="false">▶ PLAY BASS</button><button id="testTone" class="button">♪ TEST AUDIO</button><button id="mutate" class="button">↻ MUTATE</button><button id="reset" class="button">RESET</button><span id="status" role="status" class="status">READY · TAP PLAY TO ENABLE AUDIO</span></div>
+<div id="previewWarning" class="previewwarning"><b>STATIC PREVIEW — AUDIO DISABLED</b><br>This screen is showing the HTML without executing JavaScript. The controls cannot work here. Open this file in a browser that runs scripts (or an HTML viewer in Safari), then press PLAY BASS. This warning disappears when JavaScript is running.</div><div class="canvasbox"><canvas id="scope" role="img" aria-label="Walsh function A and B, resulting pulse pattern, and moving playhead"></canvas></div>
+<div class="legend"><span><i class="dot"></i>FUNCTION A / MODULATION</span><span><i class="dot b"></i>FUNCTION B / SENDS</span><span><i class="dot c"></i>COMBINED / AMPLITUDE</span></div>
+<div class="sectionhead"><strong>01 / SEQUENCE ENGINE</strong><small>32 STEPS PER LOOP</small></div>
+<div class="grid">
+  <div class="cell"><label for="seqA">WALSH A <output id="seqAVal">3</output></label><input id="seqA" type="range" min="1" max="31" step="1" value="3"><div class="helper">Sequency → filter and pulse</div></div>
+  <div class="cell"><label for="seqB">WALSH B <output id="seqBVal">7</output></label><input id="seqB" type="range" min="1" max="31" step="1" value="7"><div class="helper">Sequency → sends and pulse</div></div>
+  <div class="cell"><label for="combine">COMBINATION</label><select id="combine"><option value="product">MULTIPLY / XNOR</option><option value="union">UNION / OR</option><option value="intersect">INTERSECT / AND</option><option value="a">A ONLY</option><option value="b">B ONLY</option></select><div class="helper">How the two signals combine</div></div>
+  <div class="cell"><label for="bpm">TEMPO <output id="bpmVal">136 BPM</output></label><input id="bpm" type="range" min="65" max="190" step="1" value="136"><div class="helper">16th-note clock</div></div>
+  <div class="cell"><label for="root">ROOT NOTE</label><select id="root"><option value="40">E1 / 41 Hz</option><option value="43">G1 / 49 Hz</option><option value="45">A1 / 55 Hz</option><option value="48">C2 / 65 Hz</option><option value="52">E2 / 82 Hz</option></select><div class="helper">Sub oscillator follows root</div></div>
+  <div class="cell"><label for="swing">SWING <output id="swingVal">0%</output></label><input id="swing" type="range" min="0" max="55" step="1" value="0"><div class="helper">Late offbeat steps</div></div>
+</div>
+<div class="sectionhead"><strong>02 / BASS VOICE</strong><small>DUAL SAW + SUB / FILTER / WAVESHAPER</small></div>
+<div class="grid">
+  <div class="cell"><label for="cutoff">CUTOFF <output id="cutoffVal">850 Hz</output></label><input id="cutoff" type="range" min="120" max="5500" step="10" value="850"><div class="helper">Walsh A opens / closes filter</div></div>
+  <div class="cell"><label for="res">RESONANCE <output id="resVal">12</output></label><input id="res" type="range" min="0" max="22" step="0.5" value="12"><div class="helper">Higher values = sharper peaks</div></div>
+  <div class="cell"><label for="drive">DRIVE <output id="driveVal">44%</output></label><input id="drive" type="range" min="0" max="100" step="1" value="44"><div class="helper">Nonlinear saturation</div></div>
+</div>
+<div class="sectionhead"><strong>03 / EFFECT SEND MATRIX</strong><small>WALSH B CONTROLS THE BURSTS</small></div>
+<div class="grid">
+  <div class="cell"><label for="delay">DELAY SEND <output id="delayVal">32%</output></label><input id="delay" type="range" min="0" max="100" step="1" value="32"><div class="helper">Tempo-synced echoes</div></div>
+  <div class="cell"><label for="feedback">DELAY FEEDBACK <output id="feedbackVal">36%</output></label><input id="feedback" type="range" min="0" max="75" step="1" value="36"><div class="helper">Echo regeneration</div></div>
+  <div class="cell"><label for="reverb">REVERB SEND <output id="reverbVal">12%</output></label><input id="reverb" type="range" min="0" max="65" step="1" value="12"><div class="helper">Generated impulse / no files</div></div>
+</div>
+<div class="description"><div><b>HOW IT WORKS</b><p>Walsh functions are two-valued signals (<code>+1 / −1</code>). A and B are evaluated over a repeating 32-step loop. Their sign patterns combine to determine which bass notes hit hard or ghost. A changes the filter; B routes selected hits into the delay and reverb sends.</p></div><div><b>STARTING POINT, NOT A REPLICA</b><p>The screenshot shows Walsh mathematics but not the original reel's audio signal chain. This is an original interpretation of the bass-plus-sends concept. Try A = <code>3</code>, B = <code>7</code>, then raise DRIVE and DELAY SEND. Use MUTATE for a new pairing.</p></div></div>
+<div class="footer">MZ WORLDS / MZ AUDIO · BROWSER PROTOTYPE · USE AT A COMFORTABLE LISTENING VOLUME · TAP STOP TO SILENCE THE ENGINE</div>
+</main>
+<script>
+(()=>{'use strict';
+const $ = id=>document.getElementById(id);
+$('previewWarning').style.display='none';
+const N=32, BITS=5;
+const fields=['seqA','seqB','bpm','swing','cutoff','res','drive','delay','feedback','reverb'];
+const state={};
+fields.forEach(id=>state[id]=Number($(id).value));
+state.combine=$('combine').value;state.root=Number($('root').value);
+const labels={seqA:v=>v,seqB:v=>v,bpm:v=>v+' BPM',swing:v=>v+'%',cutoff:v=>v+' Hz',res:v=>v,drive:v=>v+'%',delay:v=>v+'%',feedback:v=>v+'%',reverb:v=>v+'%'};
+function reverseBits(v,n){let o=0;for(let i=0;i<n;i++){o=(o<<1)|(v&1);v>>=1;}return o;}
+function walsh(s,step){const gray=s^(s>>1), mask=reverseBits(gray,BITS);let v=mask&step,parity=0;while(v){parity^=(v&1);v>>=1;}return parity?-1:1;}
+function combine(a,b){switch(state.combine){case'union':return a>0||b>0?1:-1;case'intersect':return a>0&&b>0?1:-1;case'a':return a;case'b':return b;default:return a*b;}}
+let ac=null, nodes=null, playing=false, nextStepTime=0, stepIndex=0, timer=null, lastVisualStep=0;
+function makeCurve(){const count=4096,curve=new Float32Array(count);for(let i=0;i<count;i++){const x=(i*2/(count-1))-1;curve[i]=Math.tanh(x*2.8)/Math.tanh(2.8);}return curve;}
+function impulse(ctx,duration=1.75,decay=3.0){const len=Math.floor(ctx.sampleRate*duration),buf=ctx.createBuffer(2,len,ctx.sampleRate);for(let c=0;c<2;c++){const dest=buf.getChannelData(c);for(let i=0;i<len;i++){const x=i/len;dest[i]=(Math.random()*2-1)*Math.pow(1-x,decay)*.45;}}return buf;}
+function midiToHz(n){return 440*Math.pow(2,(n-69)/12);}
+function initAudio(){
+  ac=new (window.AudioContext||window.webkitAudioContext)();const ctx=ac;
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  const mix=ctx.createGain();mix.gain.value=.27;
+  const osc1=ctx.createOscillator(),osc2=ctx.createOscillator(),sub=ctx.createOscillator();osc1.type='sawtooth';osc2.type='sawtooth';sub.type='square';osc2.detune.value=7;
+  const o1=ctx.createGain(),o2=ctx.createGain(),os=ctx.createGain();o1.gain.value=.38;o2.gain.value=.28;os.gain.value=.21;
+  osc1.connect(o1);osc2.connect(o2);sub.connect(os);o1.connect(mix);o2.connect(mix);os.connect(mix);
+  const filter=ctx.createBiquadFilter();filter.type='lowpass';filter.Q.value=state.res;mix.connect(filter);
+  const pregain=ctx.createGain();filter.connect(pregain);const shaper=ctx.createWaveShaper();shaper.curve=makeCurve();shaper.oversample='4x';pregain.connect(shaper);
+  const amp=ctx.createGain();amp.gain.value=0;shaper.connect(amp);
+  const dry=ctx.createGain();dry.gain.value=.58;amp.connect(dry);
+  const delaySend=ctx.createGain();delaySend.gain.value=0;amp.connect(delaySend);
+  const delay=ctx.createDelay(2);delay.delayTime.value=60/state.bpm*0.75;delaySend.connect(delay);
+  const damp=ctx.createBiquadFilter();damp.type='lowpass';damp.frequency.value=2100;delay.connect(damp);
+  const feedback=ctx.createGain();feedback.gain.value=state.feedback/100*.75;damp.connect(feedback);feedback.connect(delay);
+  const delayReturn=ctx.createGain();delayReturn.gain.value=.42;damp.connect(delayReturn);
+  const revSend=ctx.createGain();revSend.gain.value=0;amp.connect(revSend);
+  const verb=ctx.createConvolver();verb.buffer=impulse(ctx);revSend.connect(verb);
+  const verbReturn=ctx.createGain();verbReturn.gain.value=.30;verb.connect(verbReturn);
+  const compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-18;compressor.knee.value=10;compressor.ratio.value=7;compressor.attack.value=.006;compressor.release.value=.13;
+  const master=ctx.createGain();master.gain.value=.68;dry.connect(compressor);delayReturn.connect(compressor);verbReturn.connect(compressor);compressor.connect(master);master.connect(ctx.destination);
+  osc1.start();osc2.start();sub.start();
+  nodes={osc1,osc2,sub,filter,pregain,amp,delay,feedback,delaySend,revSend,master};
+}
+function scheduleStep(idx,t){
+  const {osc1,osc2,sub,filter,pregain,amp,delaySend,revSend}=nodes;
+  const a=walsh(state.seqA,idx),b=walsh(state.seqB,idx),out=combine(a,b);
+  const pitch=[0,0,0,7,0,0,3,0,0,-5,0,7,0,0,10,0][idx%16];
+  const base=midiToHz(state.root+pitch),dur=60/state.bpm/4;
+  [osc1,osc2,sub].forEach((osc,i)=>{osc.frequency.setValueAtTime(i===2?base/2:base,t);});
+  filter.Q.setValueAtTime(state.res,t);
+  const baseCut=state.cutoff, modCut=a>0?2.3:.48;
+  const target=Math.max(90,Math.min(15000,baseCut*modCut));
+  filter.frequency.setValueAtTime(Math.max(80,baseCut*.55),t);filter.frequency.exponentialRampToValueAtTime(target,t+.012);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(80,Math.min(9000,baseCut*.68)),t+dur*.92);
+  pregain.gain.setValueAtTime(1+state.drive/100*9,t);
+  const loud=out>0?(idx%4===0?.85:.68):.14;
+  amp.gain.cancelScheduledValues(t);amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(loud,t+.006);amp.gain.exponentialRampToValueAtTime(.001,t+dur*.88);
+  delaySend.gain.setValueAtTime((state.delay/100)*(b>0?.85:.09),t);
+  revSend.gain.setValueAtTime((state.reverb/100)*(b>0?.50:.07),t);
+}
+function scheduler(){if(!ac||!playing)return;const ahead=.13;while(nextStepTime<ac.currentTime+ahead){const swing=state.swing/100;const t=nextStepTime+((stepIndex%2)===1?swing*(60/state.bpm/4)*.72:0);scheduleStep(stepIndex,t);lastVisualStep=stepIndex;stepIndex=(stepIndex+1)%N;nextStepTime+=60/state.bpm/4;}}
+async function toggle(){const btn=$('play'),s=$('status');try{if(!ac)initAudio();await ac.resume();if(playing){playing=false;clearInterval(timer);timer=null;const t=ac.currentTime;nodes.amp.gain.cancelScheduledValues(t);nodes.amp.gain.setTargetAtTime(0,t,.012);nodes.delaySend.gain.setTargetAtTime(0,t,.01);nodes.revSend.gain.setTargetAtTime(0,t,.01);btn.textContent='▶ PLAY BASS';btn.classList.remove('running');btn.setAttribute('aria-pressed','false');s.textContent='STOPPED · FX TAIL MAY DECAY';s.classList.remove('live');}else{playing=true;stepIndex=0;nextStepTime=ac.currentTime+.045;btn.textContent='■ STOP BASS';btn.classList.add('running');btn.setAttribute('aria-pressed','true');s.textContent='ENGINE LIVE · AUDIO ENABLED';s.classList.add('live');timer=setInterval(scheduler,25);scheduler();}}catch(e){s.textContent='AUDIO BLOCKED · TRY SAFARI/CHROME AND TAP PLAY';console.error(e);}}
+$('play').addEventListener('click',toggle);
+$('testTone').addEventListener('click', async()=>{const status=$('status');try{if(!ac)initAudio();await ac.resume();const t=ac.currentTime;const osc=ac.createOscillator();const gain=ac.createGain();osc.type='sine';osc.frequency.value=220;gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.15,t+.02);gain.gain.setValueAtTime(.15,t+.35);gain.gain.exponentialRampToValueAtTime(.001,t+.65);osc.connect(gain).connect(ac.destination);osc.start(t);osc.stop(t+.68);status.textContent='TEST TONE TRIGGERED · 220 Hz';status.classList.add('live');}catch(e){status.textContent='WEB AUDIO UNAVAILABLE · USE SAFARI / CHECK SILENT MODE';console.error(e);}});
+fields.forEach(id=>$(id).addEventListener('input',()=>{state[id]=Number($(id).value);$(id+'Val').textContent=labels[id](state[id]);if(ac&&nodes){if(id==='feedback')nodes.feedback.gain.setTargetAtTime(state.feedback/100*.75,ac.currentTime,.02);if(id==='bpm')nodes.delay.delayTime.setTargetAtTime(60/state.bpm*.75,ac.currentTime,.02);}draw();}));
+['combine','root'].forEach(id=>$(id).addEventListener('change',()=>{state[id]=id==='root'?Number($(id).value):$(id).value;draw();}));
+$('mutate').addEventListener('click',()=>{state.seqA=1+Math.floor(Math.random()*31);state.seqB=1+Math.floor(Math.random()*31);['seqA','seqB'].forEach(id=>{$(id).value=state[id];$(id+'Val').textContent=state[id];});draw();});
+$('reset').addEventListener('click',()=>{const defaults={seqA:3,seqB:7,bpm:136,swing:0,cutoff:850,res:12,drive:44,delay:32,feedback:36,reverb:12,combine:'product',root:40};for(const [id,v] of Object.entries(defaults)){state[id]=v;$(id).value=String(v);if(labels[id])$(id+'Val').textContent=labels[id](v);}if(ac&&nodes){nodes.feedback.gain.setTargetAtTime(state.feedback/100*.75,ac.currentTime,.02);nodes.delay.delayTime.setTargetAtTime(60/state.bpm*.75,ac.currentTime,.02);}draw();});
+const canvas=$('scope'),ctx=canvas.getContext('2d');
+function draw(){const rect=canvas.getBoundingClientRect();if(!rect.width)return;const dpr=Math.min(2,window.devicePixelRatio||1);const w=rect.width,h=rect.height;const rw=Math.round(w*dpr),rh=Math.round(h*dpr);if(canvas.width!==rw||canvas.height!==rh){canvas.width=rw;canvas.height=rh;}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);
+  const pad=15,x0=pad,xW=w-pad*2,stepW=xW/N;const traces=[{color:'#ff6b25',y:46,values:Array.from({length:N},(_,i)=>walsh(state.seqA,i))},{color:'#f7e1ae',y:114,values:Array.from({length:N},(_,i)=>walsh(state.seqB,i))},{color:'#999',y:182,values:Array.from({length:N},(_,i)=>combine(walsh(state.seqA,i),walsh(state.seqB,i)))}];
+  ctx.lineWidth=1;ctx.strokeStyle='#292929';for(let i=0;i<=N;i+=4){const x=x0+i*stepW;ctx.beginPath();ctx.moveTo(x,10);ctx.lineTo(x,h-10);ctx.stroke();}
+  traces.forEach((tr,j)=>{ctx.fillStyle='#777';ctx.font='10px ui-monospace,monospace';ctx.fillText(['A','B','A×B'][j],x0+1,tr.y-24);ctx.beginPath();ctx.strokeStyle=tr.color;ctx.lineWidth=2;for(let i=0;i<N;i++){const x=x0+i*stepW,y=tr.y+(tr.values[i]>0?-12:12);if(i===0)ctx.moveTo(x,y);else{ctx.lineTo(x,y);ctx.lineTo(x,tr.y+(tr.values[i-1]>0?-12:12));ctx.lineTo(x,y);}ctx.lineTo(x+stepW,y);}ctx.stroke();});
+  if(playing){const x=x0+lastVisualStep*stepW;ctx.fillStyle='rgba(255,107,37,.16)';ctx.fillRect(x,10,stepW,h-20);ctx.strokeStyle='#ff6b25';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,10);ctx.lineTo(x,h-10);ctx.stroke();}
+}
+function animate(){if(playing)draw();requestAnimationFrame(animate);}window.addEventListener('resize',draw);draw();animate();
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();toggle();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){toggle();}});
+})();
+</script>
+</body>
+</html>
