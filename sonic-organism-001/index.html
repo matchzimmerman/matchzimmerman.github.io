@@ -101,9 +101,20 @@ function initAudio(){
   const verb=ctx.createConvolver();verb.buffer=impulse(ctx);revSend.connect(verb);
   const verbReturn=ctx.createGain();verbReturn.gain.value=.30;verb.connect(verbReturn);
   const compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-18;compressor.knee.value=10;compressor.ratio.value=7;compressor.attack.value=.006;compressor.release.value=.13;
-  const master=ctx.createGain();master.gain.value=.68;dry.connect(compressor);delayReturn.connect(compressor);verbReturn.connect(compressor);compressor.connect(master);master.connect(ctx.destination);
-  osc1.start();osc2.start();sub.start();
-  nodes={osc1,osc2,sub,filter,pregain,amp,delay,feedback,delaySend,revSend,master};
+  const masterHP=ctx.createBiquadFilter();masterHP.type='highpass';masterHP.frequency.value=28;masterHP.Q.value=.707;
+  const masterLP=ctx.createBiquadFilter();masterLP.type='lowpass';masterLP.frequency.value=14000;masterLP.Q.value=.707;
+  const haloOsc1=ctx.createOscillator(),haloOsc2=ctx.createOscillator();
+  haloOsc1.type='triangle';haloOsc1.detune.value=-7;haloOsc2.type='sawtooth';haloOsc2.detune.value=11;
+  const h1=ctx.createGain(),h2=ctx.createGain();h1.gain.value=.07;h2.gain.value=.035;
+  const haloFilter=ctx.createBiquadFilter();haloFilter.type='lowpass';haloFilter.frequency.value=350;haloFilter.Q.value=1.1;
+  const haloGain=ctx.createGain();haloGain.gain.value=0;
+  haloOsc1.connect(h1);haloOsc2.connect(h2);h1.connect(haloFilter);h2.connect(haloFilter);haloFilter.connect(haloGain);haloGain.connect(masterHP);
+  const shardOsc=ctx.createOscillator();shardOsc.type='triangle';const shardGain=ctx.createGain();shardGain.gain.value=0;shardOsc.connect(shardGain);shardGain.connect(masterHP);
+  const master=ctx.createGain();master.gain.value=.48;
+  dry.connect(masterHP);delayReturn.connect(masterHP);verbReturn.connect(masterHP);
+  masterHP.connect(masterLP);masterLP.connect(compressor);compressor.connect(master);master.connect(ctx.destination);
+  osc1.start();osc2.start();sub.start();haloOsc1.start();haloOsc2.start();shardOsc.start();
+  nodes={osc1,osc2,sub,filter,pregain,amp,delay,feedback,delaySend,revSend,delayReturn,verbReturn,haloOsc1,haloOsc2,haloGain,haloFilter,shardOsc,shardGain,master,masterHP,masterLP};
 }
 function scheduleStep(idx,t){
   const {osc1,osc2,sub,filter,pregain,amp,delaySend,revSend}=nodes;
@@ -117,15 +128,22 @@ function scheduleStep(idx,t){
   filter.frequency.setValueAtTime(Math.max(80,baseCut*.55),t);filter.frequency.exponentialRampToValueAtTime(target,t+.012);
   filter.frequency.exponentialRampToValueAtTime(Math.max(80,Math.min(9000,baseCut*.68)),t+dur*.92);
   pregain.gain.setValueAtTime(1+state.drive/100*9,t);
-  const loud=out>0?(idx%4===0?.85:.68):.14;
+  const loud=out>0?(idx%4===0?.75:.58):(.11+(composer.enabled?.08*composer.energy:0));
   amp.gain.cancelScheduledValues(t);amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(loud,t+.006);amp.gain.exponentialRampToValueAtTime(.001,t+dur*.88);
   delaySend.gain.setValueAtTime((state.delay/100)*(b>0?.85:.09),t);
   revSend.gain.setValueAtTime((state.reverb/100)*(b>0?.50:.07),t);
+  if(composer.enabled){
+    const g=composer.energy,hz=Math.min(7000,base*(3+((idx%4)*.5)));
+    nodes.shardOsc.frequency.setValueAtTime(hz,t);
+    const sg=nodes.shardGain.gain;sg.cancelScheduledValues(t);sg.setValueAtTime(0,t);
+    if(g>.23&&(idx%8===2||(g>.67&&idx%4===2))){sg.linearRampToValueAtTime(.009+.027*g,t+.01);sg.exponentialRampToValueAtTime(.001,t+dur*.74);}
+    if(idx%8===0){nodes.haloOsc1.frequency.setTargetAtTime(Math.min(2000,base*2),t,.05);nodes.haloOsc2.frequency.setTargetAtTime(Math.min(2000,base*2.01),t,.05);}
+  }
 }
-function scheduler(){if(!ac||!playing)return;const ahead=.13;while(nextStepTime<ac.currentTime+ahead){const swing=state.swing/100;const t=nextStepTime+((stepIndex%2)===1?swing*(60/state.bpm/4)*.72:0);scheduleStep(stepIndex,t);lastVisualStep=stepIndex;stepIndex=(stepIndex+1)%N;nextStepTime+=60/state.bpm/4;}}
-async function toggle(){const btn=$('play'),s=$('status');try{if(!ac)initAudio();await ac.resume();if(playing){playing=false;clearInterval(timer);timer=null;const t=ac.currentTime;nodes.amp.gain.cancelScheduledValues(t);nodes.amp.gain.setTargetAtTime(0,t,.012);nodes.delaySend.gain.setTargetAtTime(0,t,.01);nodes.revSend.gain.setTargetAtTime(0,t,.01);btn.textContent='▶ PLAY BASS';btn.classList.remove('running');btn.setAttribute('aria-pressed','false');s.textContent='STOPPED · FX TAIL MAY DECAY';s.classList.remove('live');}else{playing=true;stepIndex=0;nextStepTime=ac.currentTime+.045;btn.textContent='■ STOP BASS';btn.classList.add('running');btn.setAttribute('aria-pressed','true');s.textContent='ENGINE LIVE · AUDIO ENABLED';s.classList.add('live');timer=setInterval(scheduler,25);scheduler();}}catch(e){s.textContent='AUDIO BLOCKED · TRY SAFARI/CHROME AND TAP PLAY';console.error(e);}}
+function scheduler(){if(!ac||!playing)return;composerTick();const ahead=.13;while(nextStepTime<ac.currentTime+ahead){const swing=state.swing/100;const t=nextStepTime+((stepIndex%2)===1?swing*(60/state.bpm/4)*.72:0);scheduleStep(stepIndex,t);lastVisualStep=stepIndex;stepIndex=(stepIndex+1)%N;nextStepTime+=60/state.bpm/4;}}
+async function toggle(){const btn=$('play'),s=$('status');try{if(!ac)initAudio();await ac.resume();if(playing){playing=false;clearInterval(timer);timer=null;const t=ac.currentTime;nodes.amp.gain.cancelScheduledValues(t);nodes.amp.gain.setTargetAtTime(0,t,.012);nodes.delaySend.gain.setTargetAtTime(0,t,.01);nodes.revSend.gain.setTargetAtTime(0,t,.01);nodes.haloGain.gain.setTargetAtTime(0,t,.02);nodes.shardGain.gain.setTargetAtTime(0,t,.01);btn.textContent='▶ PLAY ORGANISM';btn.classList.remove('running');btn.setAttribute('aria-pressed','false');s.textContent='STOPPED · FX TAIL MAY DECAY';s.classList.remove('live');composerStop();}else{playing=true;stepIndex=0;nextStepTime=ac.currentTime+.045;composerStart();btn.textContent='■ STOP ORGANISM';btn.classList.add('running');btn.setAttribute('aria-pressed','true');s.textContent=composer.enabled?'ORGANISM LIVE · AUTONOMOUS SCORE':'ENGINE LIVE · MANUAL MODE';s.classList.add('live');timer=setInterval(scheduler,25);scheduler();}}catch(e){s.textContent='AUDIO BLOCKED · TRY SAFARI/CHROME AND TAP PLAY';console.error(e);}}
 $('play').addEventListener('click',toggle);
-$('testTone').addEventListener('click', async()=>{const status=$('status');try{if(!ac)initAudio();await ac.resume();const t=ac.currentTime;const osc=ac.createOscillator();const gain=ac.createGain();osc.type='sine';osc.frequency.value=220;gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.15,t+.02);gain.gain.setValueAtTime(.15,t+.35);gain.gain.exponentialRampToValueAtTime(.001,t+.65);osc.connect(gain).connect(ac.destination);osc.start(t);osc.stop(t+.68);status.textContent='TEST TONE TRIGGERED · 220 Hz';status.classList.add('live');}catch(e){status.textContent='WEB AUDIO UNAVAILABLE · USE SAFARI / CHECK SILENT MODE';console.error(e);}});
+$('testTone').addEventListener('click', async()=>{const status=$('status');try{if(!ac)initAudio();await ac.resume();const t=ac.currentTime;const osc=ac.createOscillator();const gain=ac.createGain();osc.type='sine';osc.frequency.value=220;gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.08,t+.02);gain.gain.setValueAtTime(.08,t+.35);gain.gain.exponentialRampToValueAtTime(.001,t+.65);osc.connect(gain).connect(nodes.masterHP);osc.start(t);osc.stop(t+.68);status.textContent='TEST TONE TRIGGERED · 220 Hz';status.classList.add('live');}catch(e){status.textContent='WEB AUDIO UNAVAILABLE · USE SAFARI / CHECK SILENT MODE';console.error(e);}});
 fields.forEach(id=>$(id).addEventListener('input',()=>{state[id]=Number($(id).value);$(id+'Val').textContent=labels[id](state[id]);if(ac&&nodes){if(id==='feedback')nodes.feedback.gain.setTargetAtTime(state.feedback/100*.75,ac.currentTime,.02);if(id==='bpm')nodes.delay.delayTime.setTargetAtTime(60/state.bpm*.75,ac.currentTime,.02);}draw();}));
 ['combine','root'].forEach(id=>$(id).addEventListener('change',()=>{state[id]=id==='root'?Number($(id).value):$(id).value;draw();}));
 $('mutate').addEventListener('click',()=>{state.seqA=1+Math.floor(Math.random()*31);state.seqB=1+Math.floor(Math.random()*31);['seqA','seqB'].forEach(id=>{$(id).value=state[id];$(id+'Val').textContent=state[id];});draw();});
