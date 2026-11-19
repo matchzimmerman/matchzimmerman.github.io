@@ -21,11 +21,23 @@
 
   .composer{border:1px solid #444;margin-top:22px;padding:18px;background:#131313}.composer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.composer-head h2{margin:9px 0 15px;font-weight:900;letter-spacing:-.04em;line-height:1.05;font-size:clamp(19px,3.2vw,31px)}.composer-head .pill{max-width:200px;text-align:right}.composer-controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.composer-controls label{font-size:10px;letter-spacing:.09em;color:#aaa;font-weight:700}.composer-controls select{display:block;margin-top:6px;min-height:44px;padding:8px 12px;background:#070707;color:#eee;border:1px solid #555;border-radius:2px;font:700 12px ui-monospace,monospace}.telemetry{margin-top:20px;display:flex;gap:15px;justify-content:space-between;color:#ff9a57;font-size:11px;font-weight:700;letter-spacing:.04em}.arcborder{margin-top:8px;border:1px solid #373737;background:#0a0a0a}.arcborder canvas{display:block;width:100%;height:128px}.arc-foot{margin-top:9px;color:#828282;font-size:10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;line-height:1.5}.composer-controls .button{white-space:normal}.composer-controls #mode[aria-pressed=false]{color:#999}.composer-controls select:focus-visible{outline:2px solid #ff6b25;outline-offset:2px}
   @media(max-width:700px){.composer{padding:12px}.composer-head{display:block}.composer-head .pill{display:inline-block;margin-bottom:12px}.telemetry{font-size:9px;gap:6px}.arc-foot{font-size:9px}}
+
+  .chamber{margin:20px 0 0;border:1px solid #5a3a50;background:radial-gradient(ellipse at center,#251321 0%,#100c15 46%,#09090e 100%);overflow:hidden}
+  .chamber canvas{width:100%;height:clamp(310px,46vw,510px);display:block;touch-action:pan-y}
+  .chamber-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#dba9ca;font-size:10px;font-weight:700;letter-spacing:.11em;padding:12px 15px 3px}
+  .chamber-meta label{display:flex;gap:8px;align-items:center}.chamber-meta select{background:#170e1b;color:#f1c9e8;border:1px solid #684760;min-height:38px;font:700 10px ui-monospace,monospace;padding:4px;max-width:215px}
+  .chamber-meta select:focus-visible{outline:2px solid #ed8ac8}.chamber-base{border-top:1px solid #3b263b;padding:8px 15px 12px}
+  @media(max-width:700px){.chamber-meta{font-size:9px;padding:9px 8px 2px;letter-spacing:0}.chamber-meta label{gap:3px}.chamber-meta select{font-size:9px;max-width:162px}.chamber canvas{height:370px}}
 </style>
 </head>
 <body>
 <main class="shell">
 <header class="top"><div><div class="eyebrow">MZ AUDIO / SONIC ORGANISM / EXPERIMENT 001</div><h1>SONIC<br>ORGANISM</h1><div class="sub">An autonomous composition built from Walsh-pattern bass. Sound grows gradually, gathering harmonic detail and spatial depth, until a sudden subtraction reveals its accumulated scale.</div></div><div class="edition">COMPOSITION STUDY<br>v0.1 / WEB AUDIO<br><span class="pill">HEADPHONES ADVISED</span></div></header>
+<section class="chamber" aria-label="Sonic organism and floating MZ CAM">
+  <div class="chamber-meta"><span>MZTV / LIVING SIGNAL / SONIC ORGANISM 001</span><label for="camMode">MZ CAM <select id="camMode"><option value="orbit">ORBIT / FLOATING CREW</option><option value="drift">DRIFT / SLOW DIVE</option><option value="lock">LOCKED / OBSERVE</option></select></label></div>
+  <canvas id="organismScene" role="img" aria-label="A glowing translucent pink orb sprouting branching tentacles and purple-veined knuckles, viewed from inside a larger plasma globe"></canvas>
+  <div class="chamber-meta chamber-base"><span id="scenePhase">SEED / IDLE</span><span>ONE SCORE → SOUND + BODY + CAMERA</span></div>
+</section>
 <section class="composer" aria-label="Autonomous composition engine">
   <div class="composer-head"><div><div class="eyebrow">AUTONOMOUS SCORE / ACCUMULATION + REVELATORY SUBTRACTION</div><h2>THE GROWTH IS THE COMPOSITION.</h2></div><span class="pill">SEED → SWELL → VOID → AFTERIMAGE</span></div>
   <div class="composer-controls">
@@ -155,7 +167,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(!rect.width)return;
   traces.forEach((tr,j)=>{ctx.fillStyle='#777';ctx.font='10px ui-monospace,monospace';ctx.fillText(['A','B','A×B'][j],x0+1,tr.y-24);ctx.beginPath();ctx.strokeStyle=tr.color;ctx.lineWidth=2;for(let i=0;i<N;i++){const x=x0+i*stepW,y=tr.y+(tr.values[i]>0?-12:12);if(i===0)ctx.moveTo(x,y);else{ctx.lineTo(x,y);ctx.lineTo(x,tr.y+(tr.values[i-1]>0?-12:12));ctx.lineTo(x,y);}ctx.lineTo(x+stepW,y);}ctx.stroke();});
   if(playing){const x=x0+lastVisualStep*stepW;ctx.fillStyle='rgba(255,107,37,.16)';ctx.fillRect(x,10,stepW,h-20);ctx.strokeStyle='#ff6b25';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,10);ctx.lineTo(x,h-10);ctx.stroke();}
 }
-function animate(){if(playing)draw();requestAnimationFrame(animate);}window.addEventListener('resize',draw);draw();animate();
+function animate(){if(playing)draw();drawScene();requestAnimationFrame(animate);}window.addEventListener('resize',draw);draw();
 
 const composer={enabled:true,startTime:0,elapsed:0,energy:0,phase:'SEED',lastTick:-1,finished:false};
 function scoreAt(u){
@@ -242,7 +254,109 @@ $('restartArc').addEventListener('click',()=>{
  else{composer.elapsed=0;composer.energy=0;composer.phase='SEED';$('arcPhase').textContent='PHASE / SEED';$('arcTime').textContent='0:00 / '+formatTime(Number($('arcDuration').value));$('arcDensity').textContent='GROWTH / 0%';drawArc();}
 });
 $('arcDuration').addEventListener('change',()=>{if(playing&&composer.enabled)composerStart();else{$('arcTime').textContent='0:00 / '+formatTime(Number($('arcDuration').value));drawArc();}});
-window.addEventListener('resize',drawArc);drawArc();
+window.addEventListener('resize',drawArc);drawArc();animate();
+
+
+// MZ CAM renders the SAME mathematical score and clock as the synth.
+// No analyser and no audio-reactive mapping are used.
+function drawScene(){
+ const canvas=$('organismScene'),ctx=canvas.getContext('2d'),rect=canvas.getBoundingClientRect();
+ if(!rect.width||!rect.height)return;
+ const dpr=Math.min(1.6,window.devicePixelRatio||1);
+ const W=rect.width,H=rect.height;
+ if(canvas.width!==Math.round(W*dpr)||canvas.height!==Math.round(H*dpr)){canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);}
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+ const cx=W*.5,cy=H*.50,R=Math.min(H*.45,W*.455),scale=R/3.07;
+ const duration=Number($('arcDuration').value);
+ const t=playing&&ac?Math.max(0,ac.currentTime-composer.startTime):0;
+ const score=composer.enabled?scoreAt(t/duration):{energy:Math.max(.02,Math.min(.9,(state.drive+state.delay+state.reverb)/265)),phase:'MANUAL'};
+ const g=score.energy,phase=score.phase;
+ const beat=t*state.bpm/60,beatPulse=Math.pow(Math.max(0,Math.sin(Math.PI*beat*4)),10);
+ const cam=$('camMode').value,yaw=cam==='lock'?.18:cam==='drift'?.2+t*.046: t*.13+.18;
+ const pitch=cam==='lock'?.16:cam==='drift'?.28+Math.sin(t*.037)*.16:Math.sin(t*.07)*.24+.10;
+ const cyaw=Math.cos(yaw),syaw=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+ function rotate(v){const x=v.x*cyaw-v.z*syaw,z=v.x*syaw+v.z*cyaw;return {x,y:v.y*cp-z*sp,z:v.y*sp+z*cp};}
+ function project(v){const r=rotate(v),k=1+r.z*.095;return {x:cx+r.x*scale*k,y:cy+r.y*scale*k,z:r.z,k};}
+ function norm(v){const l=Math.hypot(v.x,v.y,v.z)||1;return {x:v.x/l,y:v.y/l,z:v.z/l};}
+ const dark=ctx.createRadialGradient(cx,cy,R*.14,cx,cy,R*1.34);
+ dark.addColorStop(0,'rgba(52,19,46,.9)');dark.addColorStop(.7,'rgba(14,8,22,.55)');dark.addColorStop(1,'rgba(5,5,12,0)');
+ ctx.fillStyle=dark;ctx.fillRect(cx-R*1.4,cy-R*1.4,R*2.8,R*2.8);
+ // Outer chamber: MZ CAM floats INSIDE this glass-like sphere.
+ const glow=ctx.createRadialGradient(cx,cy,R*.64,cx,cy,R*1.06);
+ glow.addColorStop(0,'rgba(155,64,119,0)');glow.addColorStop(.92,'rgba(193,83,174,.035)');glow.addColorStop(1,'rgba(250,180,235,.13)');
+ ctx.fillStyle=glow;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();
+ ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='rgba(244,177,240,.28)';ctx.lineWidth=1.4;ctx.stroke();
+ ctx.beginPath();ctx.ellipse(cx,cy,R*.97,R*.33,yaw*.27,0,Math.PI*2);ctx.strokeStyle='rgba(242,134,220,.13)';ctx.stroke();
+ // Surface fibers evolve through a deterministic point set indexed by Walsh signals.
+ const strands=[];
+ const NUM=42;
+ const golden=Math.PI*(3-Math.sqrt(5));
+ for(let i=0;i<NUM;i++){
+   const v=1-2*(i+.5)/NUM,ring=Math.sqrt(Math.max(0,1-v*v)),angle=i*golden;
+   const d=norm({x:Math.cos(angle)*ring,y:v,z:Math.sin(angle)*ring});
+   const polarity=walsh(state.seqA,i%32),secondary=walsh(state.seqB,(i*3)%32);
+   const length=(.47+1.55*g)*(.86+.16*Math.sin(i*2.13));
+   const pts=[];
+   for(let j=0;j<=7;j++){
+     const f=j/7,r=.94+length*f;
+     const curl=(.05+.12*g)*f*f;
+     const motion=playing?Math.sin(t*.72+i*2.8+j*.46)*curl:Math.sin(i*2.8+j*.46)*curl;
+     pts.push({x:d.x*r+motion*(d.y+.32),y:d.y*r+(.12*secondary*g*Math.sin(t*.31+i))*f+motion*(d.z+.20),z:d.z*r+motion*(d.x+.4)*polarity});
+   }
+   strands.push({i,pts,front:rotate(pts[4]).z>0,polarity,secondary});
+ }
+ function filament(st,front){
+   const pts=st.pts.map(project),wide=(2.5+4*g)*(R/205);
+   ctx.lineCap='round';ctx.lineJoin='round';
+   ctx.beginPath();pts.forEach((p,j)=>j?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+   ctx.strokeStyle=front?'rgba(248,121,179,.16)':'rgba(208,103,181,.09)';ctx.lineWidth=wide*4.5;ctx.stroke();
+   ctx.strokeStyle=front?'rgba(252,166,191,.78)':'rgba(195,107,160,.47)';ctx.lineWidth=wide*2.0;ctx.stroke();
+   ctx.strokeStyle=front?'rgba(255,212,216,.5)':'rgba(249,151,210,.2)';ctx.lineWidth=Math.max(.7,wide*.42);ctx.stroke();
+   // Veins and purple spotting appear from the penultimate knuckle to the tip.
+   for(let j=5;j<8;j++){
+     const a=pts[j-1],b=pts[j],v=j/7;
+     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+     ctx.strokeStyle=front?'rgba(92,27,111,.82)':'rgba(82,25,104,.48)';ctx.lineWidth=wide*(.68+.32*v);ctx.stroke();
+     const dotR=Math.max(1,wide*(.52+.2*Math.sin(st.i+j)));
+     ctx.fillStyle=front?'rgba(83,26,111,.84)':'rgba(82,24,106,.4)';
+     ctx.beginPath();ctx.ellipse(b.x,b.y,dotR,dotR*.83,0,0,Math.PI*2);ctx.fill();
+   }
+   for(let j=2;j<7;j+=2){const p=pts[j],r=Math.max(1.3,wide*(1.1-j*.08));
+     ctx.fillStyle=front?'rgba(245,163,195,.85)':'rgba(204,121,160,.48)';
+     ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+   }
+   if(front&&g>.18&&st.secondary>0){
+     const a=pts[6],b=pts[7],vx=b.x-a.x,vy=b.y-a.y;
+     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(b.x+vy*.26,b.y-vx*.26,b.x+vy*.48,b.y-vx*.48);
+     ctx.lineWidth=Math.max(.6,wide*.45);ctx.strokeStyle='rgba(124,48,155,.6)';ctx.stroke();
+   }
+ }
+ strands.filter(x=>!x.front).forEach(st=>filament(st,false));
+ // Translucent central body and layered shell.
+ const cr=scale*.93,body=ctx.createRadialGradient(cx-cr*.26,cy-cr*.31,cr*.04,cx,cy,cr*1.05);
+ body.addColorStop(0,'rgba(255,220,225,.94)');body.addColorStop(.30,'rgba(246,162,194,.82)');
+ body.addColorStop(.64,'rgba(225,104,163,.76)');body.addColorStop(.89,'rgba(123,44,117,.7)');body.addColorStop(1,'rgba(104,36,118,.24)');
+ ctx.fillStyle=body;ctx.beginPath();ctx.arc(cx,cy,cr*(1+.017*beatPulse),0,Math.PI*2);ctx.fill();
+ for(let i=0;i<11;i++){
+   const a=(i/11)*Math.PI*2+t*.055;
+   ctx.beginPath();ctx.arc(cx+Math.cos(a)*cr*.52,cy+Math.sin(a)*cr*.54,cr*(.04+.06*(i%3)),0,Math.PI*2);
+   ctx.fillStyle='rgba(78,22,108,.14)';ctx.fill();
+ }
+ ctx.beginPath();ctx.arc(cx,cy,cr*.94,0,Math.PI*2);ctx.strokeStyle='rgba(255,208,230,.38)';ctx.lineWidth=1.5;ctx.stroke();
+ strands.filter(x=>x.front).forEach(st=>filament(st,true));
+ // Interior plasma filaments touch an outer globe in sync with the SCORE, not microphone input.
+ if(g>.3){
+  const count=Math.round(2+g*9);
+  for(let i=0;i<count;i++){
+    const a=i*2.399+t*.15,from=scale*(2.0+g*.35),to=R*.98;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*from,cy+Math.sin(a)*from);
+    ctx.quadraticCurveTo(cx+Math.cos(a+.13)*R*.89,cy+Math.sin(a+.13)*R*.83,cx+Math.cos(a+.09)*to,cy+Math.sin(a+.09)*to);
+    ctx.strokeStyle='rgba(204,119,243,'+(.035+.1*g)+')';ctx.lineWidth=.7+g*.8;ctx.stroke();
+  }
+ }
+ ctx.beginPath();ctx.arc(cx-R*.44,cy-R*.41,R*.035,0,Math.PI*2);ctx.fillStyle='rgba(255,210,248,.12)';ctx.fill();
+ $('scenePhase').textContent=(playing?'LIVE':'IDLE')+' / '+phase+' / '+Math.round(g*100)+'% GROWTH';
+}
 
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();toggle();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){toggle();}});
