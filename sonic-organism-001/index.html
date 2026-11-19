@@ -156,6 +156,94 @@ function draw(){const rect=canvas.getBoundingClientRect();if(!rect.width)return;
   if(playing){const x=x0+lastVisualStep*stepW;ctx.fillStyle='rgba(255,107,37,.16)';ctx.fillRect(x,10,stepW,h-20);ctx.strokeStyle='#ff6b25';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,10);ctx.lineTo(x,h-10);ctx.stroke();}
 }
 function animate(){if(playing)draw();requestAnimationFrame(animate);}window.addEventListener('resize',draw);draw();animate();
+
+const composer={enabled:true,startTime:0,elapsed:0,energy:0,phase:'SEED',lastTick:-1,finished:false};
+function scoreAt(u){
+ u=Math.max(0,Math.min(1,u));
+ let energy,phase;
+ if(u<.08){energy=.015+.065*u/.08;phase='SEED';}
+ else if(u<.68){energy=.08+.78*Math.pow((u-.08)/.60,1.3);phase='ACCUMULATION';}
+ else if(u<.80){energy=.86+.14*(u-.68)/.12;phase='SATURATION';}
+ else if(u<.92){energy=.018;phase='REVELATION';}
+ else{energy=.05+.09*(u-.92)/.08;phase='AFTERIMAGE';}
+ return {energy,phase};
+}
+function setAutomated(id,value){
+ const el=$(id);if(!el)return;
+ const step=Number(el.step||1),v=step===.5?Math.round(value*2)/2:Math.round(value);
+ state[id]=v;el.value=String(v);const out=$(id+'Val');if(out)out.textContent=labels[id](v);
+}
+function formatTime(sec){const n=Math.max(0,Math.floor(sec));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
+function composerStart(){
+ composer.startTime=ac?ac.currentTime:0;composer.elapsed=0;composer.energy=0;composer.phase='SEED';composer.lastTick=-1;composer.finished=false;
+ if(composer.enabled)composerTick(true);
+}
+function composerStop(){
+ composer.elapsed=0;composer.lastTick=-1;composer.energy=0;
+ if(ac&&nodes){nodes.haloGain.gain.setTargetAtTime(0,ac.currentTime,.03);nodes.shardGain.gain.setTargetAtTime(0,ac.currentTime,.01);}
+ drawArc();
+}
+function composerTick(force=false){
+ if(!composer.enabled||!ac||!playing)return;
+ const elapsed=Math.max(0,ac.currentTime-composer.startTime),duration=Number($('arcDuration').value);
+ if(!force&&elapsed-composer.lastTick<.12)return;
+ composer.lastTick=elapsed;composer.elapsed=elapsed;
+ const u=Math.min(1,elapsed/duration),sc=scoreAt(u),g=sc.energy,stable=u>=.80;
+ composer.energy=g;composer.phase=sc.phase;
+ const wobble=stable?1:1+(.025+g*.17)*Math.sin(elapsed*.17);
+ setAutomated('cutoff',Math.min(5500,(260+2500*g)*wobble));
+ setAutomated('res',stable?4:5+11*g);
+ setAutomated('drive',stable?22:24+68*g);
+ setAutomated('delay',stable?0:7+54*g);
+ setAutomated('feedback',stable?0:20+42*g);
+ setAutomated('reverb',stable?0:2+48*g);
+ setAutomated('swing',stable?0:Math.min(25,g*17));
+ const pairs=[[3,7],[3,7],[3,11],[5,11],[5,19],[9,19],[11,23]];
+ const pair=stable?[3,7]:pairs[Math.min(6,Math.floor(g*7))];
+ setAutomated('seqA',pair[0]);setAutomated('seqB',pair[1]);
+ const t=ac.currentTime;
+ nodes.feedback.gain.setTargetAtTime((state.feedback/100)*.75,t,.035);
+ nodes.haloGain.gain.setTargetAtTime(stable?0:Math.max(0,(g-.14)*.18),t,stable?.035:.25);
+ nodes.haloFilter.frequency.setTargetAtTime(Math.min(4300,210+2800*g),t,.1);
+ nodes.delayReturn.gain.setTargetAtTime(stable?.003:.42,t,stable?.07:.2);
+ nodes.verbReturn.gain.setTargetAtTime(stable?.003:.30,t,stable?.07:.2);
+ $('arcPhase').textContent='PHASE / '+sc.phase;
+ $('arcTime').textContent=formatTime(Math.min(elapsed,duration))+' / '+formatTime(duration);
+ $('arcDensity').textContent='GROWTH / '+Math.round(g*100)+'%';
+ drawArc();
+ if(u>=1&&!composer.finished){composer.finished=true;toggle().then(()=>{$('status').textContent='PERFORMANCE COMPLETE · RESTART TO HEAR AGAIN';});}
+}
+function drawArc(){
+ const canvas=$('arc'),ctx=canvas.getContext('2d'),rect=canvas.getBoundingClientRect();
+ if(!rect.width)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=rect.width,h=128;
+ if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#0a0a0a';ctx.fillRect(0,0,w,h);
+ for(let i=0;i<=10;i++){const x=14+(w-28)*i/10;ctx.strokeStyle='#262626';ctx.beginPath();ctx.moveTo(x,12);ctx.lineTo(x,h-16);ctx.stroke();}
+ ctx.lineWidth=2.3;ctx.strokeStyle='#ff6b25';ctx.beginPath();
+ for(let i=0;i<=256;i++){const u=i/256,x=14+(w-28)*u,y=h-18-scoreAt(u).energy*(h-34);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
+ const duration=Number($('arcDuration').value),u=playing&&composer.enabled?Math.min(1,composer.elapsed/duration):0;
+ const x=14+(w-28)*u;ctx.strokeStyle='#f7e1ae';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,8);ctx.lineTo(x,h-12);ctx.stroke();
+ ctx.fillStyle='#f7e1ae';ctx.beginPath();ctx.arc(x,h-18-scoreAt(u).energy*(h-34),4,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#888';ctx.font='10px ui-monospace,monospace';ctx.fillText('INITIAL MOTIF',14,h-5);ctx.textAlign='right';ctx.fillText('RETURN',w-14,h-5);ctx.textAlign='left';
+}
+$('mode').addEventListener('click',()=>{
+ composer.enabled=!composer.enabled;
+ const button=$('mode');button.setAttribute('aria-pressed',String(composer.enabled));button.textContent=composer.enabled?'AUTONOMOUS / ON':'AUTONOMOUS / OFF';
+ if(playing&&composer.enabled)composerStart();
+ if(!composer.enabled&&ac&&nodes){
+  const t=ac.currentTime;nodes.haloGain.gain.setTargetAtTime(0,t,.03);nodes.shardGain.gain.setTargetAtTime(0,t,.01);
+  nodes.delayReturn.gain.setTargetAtTime(.42,t,.1);nodes.verbReturn.gain.setTargetAtTime(.30,t,.1);
+ }
+ $('status').textContent=composer.enabled?(playing?'ORGANISM LIVE · AUTONOMOUS SCORE':'READY · AUTONOMOUS MODE'):(playing?'ENGINE LIVE · MANUAL MODE':'READY · MANUAL MODE');
+ drawArc();
+});
+$('restartArc').addEventListener('click',()=>{
+ if(playing&&composer.enabled){composerStart();$('status').textContent='COMPOSITION RESTARTED · SEED REINTRODUCED';}
+ else{composer.elapsed=0;composer.energy=0;composer.phase='SEED';$('arcPhase').textContent='PHASE / SEED';$('arcTime').textContent='0:00 / '+formatTime(Number($('arcDuration').value));$('arcDensity').textContent='GROWTH / 0%';drawArc();}
+});
+$('arcDuration').addEventListener('change',()=>{if(playing&&composer.enabled)composerStart();else{$('arcTime').textContent='0:00 / '+formatTime(Number($('arcDuration').value));drawArc();}});
+window.addEventListener('resize',drawArc);drawArc();
+
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();toggle();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){toggle();}});
 })();
