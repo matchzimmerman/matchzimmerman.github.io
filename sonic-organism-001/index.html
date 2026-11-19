@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#0b0b0b" />
-<title>MZ / WALSH BASS LAB 001 / MOBILE FIX</title>
+<title>MZ AUDIO / SONIC ORGANISM 001</title>
 <style>
   :root{color-scheme:dark;--bg:#0b0b0b;--panel:#141414;--line:#303030;--muted:#929292;--ink:#f0eee9;--accent:#ff6b25;--cream:#ffdf9b}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.015em}
@@ -18,15 +18,29 @@
   @media(max-width:700px){.shell{padding:18px 14px 48px}.top h1{font-size:39px}.edition{display:none}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cell{padding:12px;min-height:90px}.description{grid-template-columns:1fr;gap:7px}.status{width:100%;margin-left:0}.canvasbox canvas{height:225px}}
   @media(max-width:410px){.grid{grid-template-columns:1fr 1fr}.button{padding:10px 11px}}
   @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+
+  .composer{border:1px solid #444;margin-top:22px;padding:18px;background:#131313}.composer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.composer-head h2{margin:9px 0 15px;font-weight:900;letter-spacing:-.04em;line-height:1.05;font-size:clamp(19px,3.2vw,31px)}.composer-head .pill{max-width:200px;text-align:right}.composer-controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.composer-controls label{font-size:10px;letter-spacing:.09em;color:#aaa;font-weight:700}.composer-controls select{display:block;margin-top:6px;min-height:44px;padding:8px 12px;background:#070707;color:#eee;border:1px solid #555;border-radius:2px;font:700 12px ui-monospace,monospace}.telemetry{margin-top:20px;display:flex;gap:15px;justify-content:space-between;color:#ff9a57;font-size:11px;font-weight:700;letter-spacing:.04em}.arcborder{margin-top:8px;border:1px solid #373737;background:#0a0a0a}.arcborder canvas{display:block;width:100%;height:128px}.arc-foot{margin-top:9px;color:#828282;font-size:10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;line-height:1.5}.composer-controls .button{white-space:normal}.composer-controls #mode[aria-pressed=false]{color:#999}.composer-controls select:focus-visible{outline:2px solid #ff6b25;outline-offset:2px}
+  @media(max-width:700px){.composer{padding:12px}.composer-head{display:block}.composer-head .pill{display:inline-block;margin-bottom:12px}.telemetry{font-size:9px;gap:6px}.arc-foot{font-size:9px}}
 </style>
 </head>
 <body>
 <main class="shell">
-<header class="top"><div><div class="eyebrow">MZ AUDIO / PROCEDURAL INSTRUMENTS / EXPERIMENT 001</div><h1>WALSH<br>BASS LAB</h1><div class="sub">A sequency-driven bass synthesizer. Mobile playback diagnostics included. Two mathematical square-wave patterns shape the notes, filter, and effect sends. No samples. No libraries. One file.</div></div><div class="edition">ORIGINAL PROTOTYPE<br>v0.2 / WEB AUDIO<br><span class="pill">HEADPHONES ADVISED</span></div></header>
-<div class="toolbar"><button id="play" class="button primary" aria-pressed="false">▶ PLAY BASS</button><button id="testTone" class="button">♪ TEST AUDIO</button><button id="mutate" class="button">↻ MUTATE</button><button id="reset" class="button">RESET</button><span id="status" role="status" class="status">READY · TAP PLAY TO ENABLE AUDIO</span></div>
+<header class="top"><div><div class="eyebrow">MZ AUDIO / SONIC ORGANISM / EXPERIMENT 001</div><h1>SONIC<br>ORGANISM</h1><div class="sub">An autonomous composition built from Walsh-pattern bass. Sound grows gradually, gathering harmonic detail and spatial depth, until a sudden subtraction reveals its accumulated scale.</div></div><div class="edition">COMPOSITION STUDY<br>v0.1 / WEB AUDIO<br><span class="pill">HEADPHONES ADVISED</span></div></header>
+<section class="composer" aria-label="Autonomous composition engine">
+  <div class="composer-head"><div><div class="eyebrow">AUTONOMOUS SCORE / ACCUMULATION + REVELATORY SUBTRACTION</div><h2>THE GROWTH IS THE COMPOSITION.</h2></div><span class="pill">SEED → SWELL → VOID → AFTERIMAGE</span></div>
+  <div class="composer-controls">
+    <label for="arcDuration">PERFORMANCE LENGTH <select id="arcDuration"><option value="90">90 SEC / PREVIEW</option><option value="240">4 MIN / SONG</option><option value="420">7 MIN / LONG FORM</option></select></label>
+    <button id="mode" class="button" aria-pressed="true">AUTONOMOUS / ON</button>
+    <button id="restartArc" class="button">↺ RESTART ARC</button>
+  </div>
+  <div class="telemetry"><span id="arcPhase">PHASE / SEED</span><span id="arcTime">0:00 / 1:30</span><span id="arcDensity">GROWTH / 0%</span></div>
+  <div class="arcborder"><canvas id="arc" height="128" aria-label="Composition growth curve with sudden collapse"></canvas></div>
+  <div class="arc-foot"><span>THE ORIGINAL MOTIF PERSISTS WHILE THE SOUND EXPANDS AROUND IT.</span><span>THE SEED RETURNS AFTER THE DROP.</span></div>
+</section>
+<div class="toolbar"><button id="play" class="button primary" aria-pressed="false">▶ PLAY ORGANISM</button><button id="testTone" class="button">♪ TEST AUDIO</button><button id="mutate" class="button">↻ MUTATE</button><button id="reset" class="button">RESET</button><span id="status" role="status" class="status">READY · TAP PLAY TO ENABLE AUDIO</span></div>
 <div id="previewWarning" class="previewwarning"><b>STATIC PREVIEW — AUDIO DISABLED</b><br>This screen is showing the HTML without executing JavaScript. The controls cannot work here. Open this file in a browser that runs scripts (or an HTML viewer in Safari), then press PLAY BASS. This warning disappears when JavaScript is running.</div><div class="canvasbox"><canvas id="scope" role="img" aria-label="Walsh function A and B, resulting pulse pattern, and moving playhead"></canvas></div>
 <div class="legend"><span><i class="dot"></i>FUNCTION A / MODULATION</span><span><i class="dot b"></i>FUNCTION B / SENDS</span><span><i class="dot c"></i>COMBINED / AMPLITUDE</span></div>
-<div class="sectionhead"><strong>01 / SEQUENCE ENGINE</strong><small>32 STEPS PER LOOP</small></div>
+<div class="sectionhead"><strong>01 / WALSH PATTERN ENGINE</strong><small>32 STEPS PER LOOP</small></div>
 <div class="grid">
   <div class="cell"><label for="seqA">WALSH A <output id="seqAVal">3</output></label><input id="seqA" type="range" min="1" max="31" step="1" value="3"><div class="helper">Sequency → filter and pulse</div></div>
   <div class="cell"><label for="seqB">WALSH B <output id="seqBVal">7</output></label><input id="seqB" type="range" min="1" max="31" step="1" value="7"><div class="helper">Sequency → sends and pulse</div></div>
@@ -35,20 +49,20 @@
   <div class="cell"><label for="root">ROOT NOTE</label><select id="root"><option value="40">E1 / 41 Hz</option><option value="43">G1 / 49 Hz</option><option value="45">A1 / 55 Hz</option><option value="48">C2 / 65 Hz</option><option value="52">E2 / 82 Hz</option></select><div class="helper">Sub oscillator follows root</div></div>
   <div class="cell"><label for="swing">SWING <output id="swingVal">0%</output></label><input id="swing" type="range" min="0" max="55" step="1" value="0"><div class="helper">Late offbeat steps</div></div>
 </div>
-<div class="sectionhead"><strong>02 / BASS VOICE</strong><small>DUAL SAW + SUB / FILTER / WAVESHAPER</small></div>
+<div class="sectionhead"><strong>02 / BASS VOICE / EVOLVING</strong><small>DUAL SAW + SUB / FILTER / WAVESHAPER</small></div>
 <div class="grid">
   <div class="cell"><label for="cutoff">CUTOFF <output id="cutoffVal">850 Hz</output></label><input id="cutoff" type="range" min="120" max="5500" step="10" value="850"><div class="helper">Walsh A opens / closes filter</div></div>
   <div class="cell"><label for="res">RESONANCE <output id="resVal">12</output></label><input id="res" type="range" min="0" max="22" step="0.5" value="12"><div class="helper">Higher values = sharper peaks</div></div>
   <div class="cell"><label for="drive">DRIVE <output id="driveVal">44%</output></label><input id="drive" type="range" min="0" max="100" step="1" value="44"><div class="helper">Nonlinear saturation</div></div>
 </div>
-<div class="sectionhead"><strong>03 / EFFECT SEND MATRIX</strong><small>WALSH B CONTROLS THE BURSTS</small></div>
+<div class="sectionhead"><strong>03 / EFFECT SEND MATRIX / EVOLVING</strong><small>WALSH B CONTROLS THE BURSTS</small></div>
 <div class="grid">
   <div class="cell"><label for="delay">DELAY SEND <output id="delayVal">32%</output></label><input id="delay" type="range" min="0" max="100" step="1" value="32"><div class="helper">Tempo-synced echoes</div></div>
   <div class="cell"><label for="feedback">DELAY FEEDBACK <output id="feedbackVal">36%</output></label><input id="feedback" type="range" min="0" max="75" step="1" value="36"><div class="helper">Echo regeneration</div></div>
   <div class="cell"><label for="reverb">REVERB SEND <output id="reverbVal">12%</output></label><input id="reverb" type="range" min="0" max="65" step="1" value="12"><div class="helper">Generated impulse / no files</div></div>
 </div>
-<div class="description"><div><b>HOW IT WORKS</b><p>Walsh functions are two-valued signals (<code>+1 / −1</code>). A and B are evaluated over a repeating 32-step loop. Their sign patterns combine to determine which bass notes hit hard or ghost. A changes the filter; B routes selected hits into the delay and reverb sends.</p></div><div><b>STARTING POINT, NOT A REPLICA</b><p>The screenshot shows Walsh mathematics but not the original reel's audio signal chain. This is an original interpretation of the bass-plus-sends concept. Try A = <code>3</code>, B = <code>7</code>, then raise DRIVE and DELAY SEND. Use MUTATE for a new pairing.</p></div></div>
-<div class="footer">MZ WORLDS / MZ AUDIO · BROWSER PROTOTYPE · USE AT A COMFORTABLE LISTENING VOLUME · TAP STOP TO SILENCE THE ENGINE</div>
+<div class="description"><div><b>COMPOSITIONAL MEMORY</b><p>The original Walsh pattern becomes a recurring seed. Under autonomous control, new harmonics, pulse ornaments, filtering, echoes and reverberant space accumulate across the arc. The collapse deliberately restores the original motif, with nearly everything else removed.</p></div><div><b>PLAY OR PERFORM</b><p>Start with <code>90 SEC / PREVIEW</code> to hear the whole form. Switch to <code>4 MIN</code> or <code>7 MIN</code> for more gradual accumulation. Turn <code>AUTONOMOUS / OFF</code> to take over the controls manually. While autonomous, the sliders display the real parameters being played.</p></div></div>
+<div class="footer">MZ WORLDS / MZ AUDIO · EXPERIMENTAL COMPOSITION ENGINE · START LOW · LOCAL WEB AUDIO · NO RECORDING OR UPLOAD</div>
 </main>
 <script>
 (()=>{'use strict';
