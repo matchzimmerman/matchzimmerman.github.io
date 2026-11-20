@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08141a">
+<meta name="robots" content="noindex,follow">
+<meta name="description" content="MZ WORLDS / Ground Survey — a direct index of publicly hosted worlds, viewers, and MZTV projects.">
+<title>MZW / Match Zimmerman — Worlds &amp; Ground Survey</title>
+<link rel="canonical" href="https://www.matchzimmerman.com/MZW/">
+<link rel="icon" href="/favicon.ico">
+<style>
+:root{--bg:#08141a;--paper:#e4ede8;--muted:#a9bcb8;--line:#314951;--accent:#dfaa62;--glow:#a9dbbb;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--paper);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;line-height:1.5;font-size:13px}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 95% 0%,#23434b5b,transparent 50%),linear-gradient(135deg,transparent 80%,#203a4025)}
+a{color:inherit}a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.shell{max-width:1140px;margin:auto;padding:0 clamp(18px,4vw,48px) 90px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:24px 0}
+.brand{font-weight:900;letter-spacing:.16em;text-decoration:none;font-size:15px}
+.top-right{color:var(--muted);font-size:10px;letter-spacing:.13em;text-align:right}
+.hero{padding:clamp(46px,8vw,98px) 0 38px;display:grid;gap:15px}
+.kicker{color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.19em}
+h1{font-family:Impact,"Arial Narrow",Haettenschweiler,sans-serif;font-size:clamp(88px,17vw,210px);line-height:.78;letter-spacing:-.055em;margin:8px 0 16px;font-weight:900}
+.intro{font-size:clamp(14px,1.6vw,18px);max-width:650px;color:var(--paper);margin:0}
+.subline{color:var(--muted);max-width:670px;margin:0;font-size:12px}
+.tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 52px}
+.search-wrap{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:#0d2027;padding:11px 16px;flex:1;min-width:230px;max-width:510px}
+.search-wrap span{color:var(--accent);white-space:nowrap}
+.search-wrap input{min-width:0;flex:1;color:var(--paper);background:transparent;border:0;outline:none;font:inherit}
+.search-wrap input::placeholder{color:#98aaa6}
+.jump{display:flex;flex-wrap:wrap;gap:7px}
+.jump a{padding:10px 12px;border:1px solid var(--line);text-decoration:none;font-size:11px;letter-spacing:.08em}
+.jump a:hover{border-color:var(--accent);color:var(--accent)}
+.section{scroll-margin-top:24px;margin-bottom:52px}
+.section-heading{display:grid;grid-template-columns:1fr auto;gap:4px 20px;align-items:end;border-bottom:1px solid var(--accent);padding-bottom:13px;margin-bottom:6px}
+.section-id{color:var(--accent);font-size:18px;font-weight:800;letter-spacing:.08em}
+.section-heading p{grid-row:2;margin:0;color:var(--muted);font-size:12px}
+.counter{grid-column:2;grid-row:1/3;color:var(--muted);font-size:10px;letter-spacing:.1em;white-space:nowrap}
+.entry{display:grid;grid-template-columns:45px minmax(0,1fr) minmax(120px,185px);gap:14px;align-items:center;padding:18px 15px 18px 8px;border-bottom:1px solid var(--line);text-decoration:none;transition:background .15s ease,border-color .15s ease}
+.entry:hover,.entry:focus-visible{background:#17303a;border-color:var(--glow)}
+.entry-no{color:#68898c;font-size:10px}
+.entry-body{display:flex;flex-direction:column;gap:5px;min-width:0}
+.entry-head{font-size:clamp(14px,1.75vw,18px);font-weight:750;letter-spacing:.04em;line-height:1.25}
+.entry-desc{color:var(--muted);font-size:11px;line-height:1.5}
+.entry-meta{display:flex;align-items:center;justify-content:space-between;gap:9px;font-size:10px;letter-spacing:.02em;color:var(--muted)}
+.entry-meta span:last-child{font-size:22px;line-height:1;color:var(--accent);font-weight:400}
+.entry:hover .entry-head{color:var(--glow)}
+.entry[hidden],.section[hidden]{display:none}
+.empty{padding:24px 0;color:var(--muted);display:none}
+.empty.visible{display:block}
+.foot{border-top:1px solid var(--line);padding-top:26px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:18px;color:var(--muted);font-size:11px;line-height:1.8}
+.foot p{margin:0;max-width:700px}
+.foot a{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+@media(max-width:680px){
+.top{padding:19px 0}
+.hero{padding:55px 0 29px}
+.tools{margin-bottom:35px}
+.jump{width:100%}
+.jump a{flex:1;text-align:center}
+.section{margin-bottom:39px}
+.section-id{font-size:16px}
+.entry{grid-template-columns:24px 1fr auto;gap:10px;padding:15px 2px}
+.entry-meta{max-width:75px;align-self:center;flex-direction:column;align-items:flex-end;text-align:right;gap:6px;font-size:9px}
+.entry-meta span:last-child{font-size:20px}
+.entry-desc{font-size:10.5px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.entry{transition:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="top"><a class="brand" href="https://www.matchzimmerman.com/" target="_blank" rel="noopener noreferrer" aria-label="Open Match Zimmerman home in a new tab">MZ / HOME ↗</a><span class="top-right">MZ WORLDS · DIRECT LINKS<br>INDEX 001 / NOV 2026</span></header>
+<main>
+<div class="hero"><div class="kicker">MATCH ZIMMERMAN / WORLD DIRECTORY</div><h1>MZW<span style="color:var(--accent)">.</span></h1><p class="intro">MZ WORLDS, GROUND SURVEY, AND MZTV.<br>One place to launch the published builds.</p><p class="subline">All project links open in a new tab. Entries point to the current public default page rather than older version snapshots.</p></div>
+<div class="tools"><label class="search-wrap"><span>FIND /</span><input id="search" type="search" autocomplete="off" placeholder="Search the index…" aria-label="Filter links by project name"></label><nav class="jump" aria-label="Jump to category"><a href="#survey">GROUND SURVEY</a><a href="#worlds">WORLDS</a><a href="#broadcast">MZTV</a></nav></div>
+<div id="listing"><section id="survey" class="section"><div class="section-heading"><div class="section-id">01 / GROUND SURVEY</div><p>Evidence, terrain and reconstructed places</p><span class="counter">4 LINKS</span></div><div class="entries"><a class="entry" href="https://www.matchzimmerman.com/BALTIMORE/jones-falls/" target="_blank" rel="noopener noreferrer" data-search="jones falls field viewer baltimore corridor · evolving ground survey"><span class="entry-no">01</span><span class="entry-body"><span class="entry-head">JONES FALLS</span><span class="entry-desc">Baltimore corridor · evolving ground survey</span></span><span class="entry-meta"><span>FIELD VIEWER</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/BALTIMORE/jones-falls/shot-tower/" target="_blank" rel="noopener noreferrer" data-search="phoenix shot tower jones falls · model measured reconstruction · standalone viewer"><span class="entry-no">02</span><span class="entry-body"><span class="entry-head">PHOENIX SHOT TOWER</span><span class="entry-desc">Measured reconstruction · standalone viewer</span></span><span class="entry-meta"><span>JONES FALLS · MODEL</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MCDONOGH/ground-survey/" target="_blank" rel="noopener noreferrer" data-search="mcdonogh ground survey usgs 3dep lidar · terrain exploration"><span class="entry-no">03</span><span class="entry-body"><span class="entry-head">MCDONOGH</span><span class="entry-desc">USGS 3DEP LiDAR · terrain exploration</span></span><span class="entry-meta"><span>GROUND SURVEY</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MCDONOGH/foxleigh/" target="_blank" rel="noopener noreferrer" data-search="foxleigh field study 001 provisional location and camera alignment study"><span class="entry-no">04</span><span class="entry-body"><span class="entry-head">FOXLEIGH</span><span class="entry-desc">Provisional location and camera alignment study</span></span><span class="entry-meta"><span>FIELD STUDY 001</span><span aria-hidden="true">↗</span></span></a></div></section>
+<section id="worlds" class="section"><div class="section-heading"><div class="section-id">02 / MZ WORLDS</div><p>Autonomous worlds and walkable environments</p><span class="counter">12 LINKS</span></div><div class="entries"><a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/mz-world-inverin/" target="_blank" rel="noopener noreferrer" data-search="inverland / inverin shared territory current published inverin integration · inverland in development"><span class="entry-no">01</span><span class="entry-body"><span class="entry-head">INVERLAND / INVERIN</span><span class="entry-desc">Current published INVERIN integration · Inverland in development</span></span><span class="entry-meta"><span>SHARED TERRITORY</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-031-headland/" target="_blank" rel="noopener noreferrer" data-search="headland bit field 031 galway coast · autonomous observation"><span class="entry-no">02</span><span class="entry-body"><span class="entry-head">HEADLAND</span><span class="entry-desc">Galway coast · autonomous observation</span></span><span class="entry-meta"><span>BIT FIELD 031</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-033-sruthan/" target="_blank" rel="noopener noreferrer" data-search="sruthán bit field 033 · v4 the little stream · latest index version"><span class="entry-no">03</span><span class="entry-body"><span class="entry-head">SRUTHÁN</span><span class="entry-desc">The little stream · latest index version</span></span><span class="entry-meta"><span>BIT FIELD 033 · V4</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/" target="_blank" rel="noopener noreferrer" data-search="twisted tree bit field 035 · study 003 woodland, moving light and original story"><span class="entry-no">04</span><span class="entry-body"><span class="entry-head">TWISTED TREE</span><span class="entry-desc">Woodland, moving light and original story</span></span><span class="entry-meta"><span>BIT FIELD 035 · STUDY 003</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-035-twisted-tree/walk/" target="_blank" rel="noopener noreferrer" data-search="twisted tree / walk visitor view first-person walk through the woodland"><span class="entry-no">05</span><span class="entry-body"><span class="entry-head">TWISTED TREE / WALK</span><span class="entry-desc">First-person walk through the woodland</span></span><span class="entry-meta"><span>VISITOR VIEW</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-036-seals-see/" target="_blank" rel="noopener noreferrer" data-search="to see what seals see bit field 036 inverin shoreline · seal's-eye studies"><span class="entry-no">06</span><span class="entry-body"><span class="entry-head">TO SEE WHAT SEALS SEE</span><span class="entry-desc">Inverin shoreline · seal's-eye studies</span></span><span class="entry-meta"><span>BIT FIELD 036</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-037-skate-garden/" target="_blank" rel="noopener noreferrer" data-search="skate garden bit field 037 painted skater world"><span class="entry-no">07</span><span class="entry-body"><span class="entry-head">SKATE GARDEN</span><span class="entry-desc">Painted skater world</span></span><span class="entry-meta"><span>BIT FIELD 037</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-039-flower-field/" target="_blank" rel="noopener noreferrer" data-search="flower field bit field 039 painted field and shifting light"><span class="entry-no">08</span><span class="entry-body"><span class="entry-head">FLOWER FIELD</span><span class="entry-desc">Painted field and shifting light</span></span><span class="entry-meta"><span>BIT FIELD 039</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-040-outbuilding/" target="_blank" rel="noopener noreferrer" data-search="outbuilding bit field 040 weather, rust, memory and compressed night"><span class="entry-no">09</span><span class="entry-body"><span class="entry-head">OUTBUILDING</span><span class="entry-desc">Weather, rust, memory and compressed night</span></span><span class="entry-meta"><span>BIT FIELD 040</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-042-breakwater/" target="_blank" rel="noopener noreferrer" data-search="breakwater bit field 042 stone, water and conflicting readings"><span class="entry-no">10</span><span class="entry-body"><span class="entry-head">BREAKWATER</span><span class="entry-desc">Stone, water and conflicting readings</span></span><span class="entry-meta"><span>BIT FIELD 042</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-046-harbour-light/" target="_blank" rel="noopener noreferrer" data-search="harbour light bit field 046 · v3 living harbour painting · turner studies"><span class="entry-no">11</span><span class="entry-body"><span class="entry-head">HARBOUR LIGHT</span><span class="entry-desc">Living harbour painting · Turner studies</span></span><span class="entry-meta"><span>BIT FIELD 046 · V3</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sources/bit-field-047-harbour-light-baltimore/" target="_blank" rel="noopener noreferrer" data-search="harbour light / baltimore bit field 047 working harbor around 1957"><span class="entry-no">12</span><span class="entry-body"><span class="entry-head">HARBOUR LIGHT / BALTIMORE</span><span class="entry-desc">Working harbor around 1957</span></span><span class="entry-meta"><span>BIT FIELD 047</span><span aria-hidden="true">↗</span></span></a></div></section>
+<section id="broadcast" class="section"><div class="section-heading"><div class="section-id">03 / MZTV / SONIC</div><p>Live broadcast and longer-form work</p><span class="counter">3 LINKS</span></div><div class="entries"><a class="entry" href="https://www.twitch.tv/matchzimmerman" target="_blank" rel="noopener noreferrer" data-search="mztv / stream twitch live channel · watch when on air"><span class="entry-no">01</span><span class="entry-body"><span class="entry-head">MZTV / STREAM</span><span class="entry-desc">Live channel · watch when on air</span></span><span class="entry-meta"><span>TWITCH</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/cinema/short-001-the-water-keeps/" target="_blank" rel="noopener noreferrer" data-search="the water keeps mz cinema 001 15-minute procedural browser film"><span class="entry-no">02</span><span class="entry-body"><span class="entry-head">THE WATER KEEPS</span><span class="entry-desc">15-minute procedural browser film</span></span><span class="entry-meta"><span>MZ CINEMA 001</span><span aria-hidden="true">↗</span></span></a>
+<a class="entry" href="https://www.matchzimmerman.com/MZTV/sonic/worlds-album-001/" target="_blank" rel="noopener noreferrer" data-search="the field between worlds mz sonic · album 001 three-movement generative album prototype"><span class="entry-no">03</span><span class="entry-body"><span class="entry-head">THE FIELD BETWEEN WORLDS</span><span class="entry-desc">Three-movement generative album prototype</span></span><span class="entry-meta"><span>MZ SONIC · ALBUM 001</span><span aria-hidden="true">↗</span></span></a></div></section></div>
+<p class="empty" id="empty" role="status">No matching published links in this index.</p>
+</main>
+<footer class="foot"><p><strong style="color:var(--paper)">PUBLIC PATHS ONLY.</strong> The newest WARREN Ground Survey build remains private; no confirmed, approved public viewer URL is available for this index. INVERLAND currently opens the published INVERIN integration.</p><p>19 LINKS · 20 NOV 2026<br><a href="https://github.com/matchzimmerman/matchzimmerman.github.io/tree/main/MZW" target="_blank" rel="noopener noreferrer">VIEW INDEX SOURCE ↗</a></p></footer>
+</div>
+<script>
+(function(){
+ const input=document.getElementById('search'),sections=[...document.querySelectorAll('.section')],empty=document.getElementById('empty');
+ function filter(){const q=input.value.toLowerCase().trim();let shown=0;sections.forEach(section=>{let n=0;section.querySelectorAll('.entry').forEach(card=>{const yes=card.dataset.search.includes(q);card.hidden=!yes;if(yes){n++;shown++;}});section.hidden=!n;});empty.classList.toggle('visible',shown===0);}
+ input.addEventListener('input',filter);
+})();
+</script>
+</body>
+</html>
