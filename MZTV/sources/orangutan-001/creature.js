@@ -21,14 +21,19 @@
    Units: metres, Y up, the studio floor at y = 0.
    ===================================================================== */
 
-export const VERSION = 'orangutan-001 · g1 · 2026-11-22';
+export const VERSION = 'orangutan-001 · g1.1 (#63 calibration) · 2026-11-22';
 
-// adult female Bornean orangutan, blockout proportions (cm-level guesses, see README: missing references)
+// adult female Bornean orangutan.
+// Limb segments: adult female Pongo group-mean bone lengths (humerus, radius, femur, tibia), Kralick et al. 2023,
+// via the #63 reference package v1 — osteological proxies for joint-centre lengths (Inferred).
+// Trunk, hands, feet, head: still MZ.Claude estimates (no sourced values yet); the trunk is scaled with the limbs
+// (trunkScale ≈ the limbs' 0.906 reduction from G1) so proportions stay coherent (Inferred).
 export const ANATOMY = {
-  spine: 0.40, shoulderHalf: 0.16, hipHalf: 0.095,
-  upperArm: 0.37, foreArm: 0.35, palm: 0.10, finger: [0.042, 0.034, 0.024], thumb: [0.03, 0.022],
-  thigh: 0.27, shank: 0.25, sole: 0.11, toe: [0.045, 0.035], hallux: [0.028, 0.02],
+  spine: 0.40, shoulderHalf: 0.16, hipHalf: 0.086, trunkScale: 0.9,   // spine / shoulderHalf are in trunk-local units (× trunkScale in the world)
+  upperArm: 0.325, foreArm: 0.328, palm: 0.10, finger: [0.042, 0.034, 0.024], thumb: [0.03, 0.022],
+  thigh: 0.253, shank: 0.218, sole: 0.11, toe: [0.045, 0.035], hallux: [0.028, 0.02],
   wristFist: 0.11, wristPalm: 0.035, ankle: 0.06,
+  palmStepP: 0.12,   // share of walking hand contacts made with a modified palm instead of a fist (43 fist / 6 palm of 49, Orlikoff et al. 2026, #63)
 };
 
 const COL = {
@@ -95,13 +100,13 @@ export function createCreature(THREE, config = {}) {
   const root = new THREE.Group(); root.name = 'ORANGUTAN 001';
   const body = new THREE.Group(); root.add(body);          // heading frame on the floor under the pelvis
   const pelvis = new THREE.Group(); body.add(pelvis);
-  const chest = new THREE.Group(); pelvis.add(chest);
+  const chest = new THREE.Group(); chest.scale.setScalar(A.trunkScale); pelvis.add(chest);
   const neck = new THREE.Group(); neck.position.set(0, A.spine + 0.01, 0.035); chest.add(neck);
   const head = new THREE.Group(); head.position.set(0, 0.05, 0.015); neck.add(head);
   const bodyMeshes = []; const track = o => { bodyMeshes.push(o); return o; };
 
   // trunk (chest frame: origin at the lumbar joint, +Y up the spine, +Z the belly side)
-  track(mesh(shaggy(0.135, 0.085, 0.12, 11, 0.16), M.coat, pelvis, V3(0, 0.02, -0.035)));           // hips / seat
+  track(mesh(shaggy(0.135, 0.085, 0.12, 11, 0.16), M.coat, pelvis, V3(0, 0.02, -0.035))).scale.setScalar(A.trunkScale); // hips / seat
   const belly = track(mesh(shaggy(0.15, 0.16, 0.15, 12, 0.14), M.coat, chest, V3(0, 0.13, 0.035)));  // pot belly
   const thorax = track(mesh(shaggy(0.17, 0.13, 0.125, 13, 0.16), M.coat, chest, V3(0, 0.29, 0.0)));
   track(mesh(shaggy(0.19, 0.075, 0.105, 14, 0.2), M.coatDeep, chest, V3(0, 0.365, -0.025)));        // shoulder hump
@@ -213,10 +218,14 @@ export function createCreature(THREE, config = {}) {
   const left = () => V3(Math.cos(S.heading), 0, -Math.sin(S.heading));
   const toWorld = (lx, ly, lz, pos = S.pos, hd = S.heading) => V3(pos.x + lx * Math.cos(hd) + lz * Math.sin(hd), ly, pos.z - lx * Math.sin(hd) + lz * Math.cos(hd));
   const toLocal = (w) => { const dx = w.x - S.pos.x, dz = w.z - S.pos.z, c = Math.cos(S.heading), s = Math.sin(S.heading); return V3(dx * c - dz * s, w.y, dx * s + dz * c); };
+  // contact layout scales with the limbs (G1 values were set for 0.72 m arms and 0.52 m legs)
+  const AS = (A.upperArm + A.foreArm) / 0.72, LS = (A.thigh + A.shank) / 0.52;
+  const QUAD_PY = 0.44 * LS, SIT_PY = 0.12, VMAX = 0.32 * LS;
   const NEUTRAL = {
-    quad: { arm: (s) => [0.22 * s, A.wristFist, 0.5], leg: (s) => [0.16 * s, A.ankle, -0.02] },
-    sit: { arm: (s) => [0.3 * s, A.wristPalm, 0.1], leg: (s) => [0.2 * s, A.ankle, 0.3] },
+    quad: { arm: (s) => [0.21 * s, A.wristFist, 0.47 * AS], leg: (s) => [0.15 * s, A.ankle, -0.02] },
+    sit: { arm: (s) => [0.29 * s, A.wristPalm, 0.1], leg: (s) => [0.19 * s, A.ankle, 0.3 * LS] },
   };
+  const TRAVEL = 0.3 * LS + 0.02; // how far the body moves over planted feet when rising / sitting
   const neutralLocal = (l, pose) => NEUTRAL[pose][l.kind](l.side);
 
   // ---------- limb controllers ----------
@@ -243,7 +252,7 @@ export function createCreature(THREE, config = {}) {
       const a = w.clone().sub(l.freeP).multiplyScalar(wgt * wgt).addScaledVector(l.freeV, -2 * wgt); l.freeV.addScaledVector(a, dt); l.freeP.addScaledVector(l.freeV, dt); l.p.copy(l.freeP);
     } else l.p.copy(l.plant);
     const want = l.mode === 'swing' ? (l.kind === 'arm' ? (l.nextGrip === 'fist' ? 0.85 : 0.55) : 0.7)
-      : l.grip === 'fist' ? 1 : l.grip === 'palm' ? 0.1 : l.grip === 'inspect' ? 0.25 + 0.5 * (0.5 + 0.5 * Math.sin(S.t * 1.7 + l.side)) : l.grip === 'walk' ? 0.35 : 0.3;
+      : l.grip === 'fist' ? 1 : l.grip === 'palm' ? 0.1 : l.grip === 'inspect' ? 0.25 + 0.5 * (0.5 + 0.5 * Math.sin(S.t * 1.7 + l.side)) : l.grip === 'walk' ? 0.6 : 0.3;
     l.curl.g = want; stepSpring(l.curl, 9, dt);
   }
 
@@ -319,7 +328,7 @@ export function createCreature(THREE, config = {}) {
       if (!S.plan && T('hand', 5, 11)) {
         resetT('hand', 6, 14); const l = rnd() < 0.5 ? L.handL : L.handR;
         if (rnd() < 0.45) { // bring a hand up and look at it
-          freeLimb(l, [0.07 * l.side, 0.52, 0.32], 'inspect', 'inspect');
+          freeLimb(l, [0.07 * l.side, 0.47, 0.32], 'inspect', 'inspect');
           S.plan = { kind: 'inspect', l, until: S.t + rr(3, 5.5) }; S.activity = 'looking at its hand';
           S.gaze.lockOn = null; lookAt(l.p.clone(), 'its own hand', [99, 99]); S.gaze.lockOn = () => l.end.g.getWorldPosition(V3()).add(V3(0, 0.0, 0));
         } else { const n = NEUTRAL.sit.arm(l.side); swing(l, toWorld(n[0] + rr(-0.06, 0.05) * l.side, A.wristPalm, n[2] + rr(-0.08, 0.12)), rr(0.6, 0.9), 0.07, 'palm', 'reposition'); }
@@ -337,12 +346,12 @@ export function createCreature(THREE, config = {}) {
       P.pitch.g = mt < 0.9 ? 0.62 : 0.87; P.chestPitch.g = 0; P.roll.g = 0; P.px.g = 0;
       if (mt > 0.15 && S.plan.hands === 0) { swing(L.handL, toWorld(...NEUTRAL.quad.arm(1)), 0.65, 0.09, 'fist', 'reach forward'); S.plan.hands = 1; }
       if (mt > 0.5 && S.plan.hands === 1) { swing(L.handR, toWorld(...NEUTRAL.quad.arm(-1)), 0.65, 0.09, 'fist', 'reach forward'); S.plan.hands = 2; }
-      if (mt > 1.15) { const k = smoother((mt - 1.15) / 1.5); P.py.g = lerp(0.12, 0.44, k); S.pos.copy(S.plan.start).addScaledVector(fwd(), 0.32 * k); if (!S.plan.moved) { S.plan.moved = true; ev('lift-off', {}); } }
+      if (mt > 1.15) { const k = smoother((mt - 1.15) / 1.5); P.py.g = lerp(SIT_PY, QUAD_PY, k); S.pos.copy(S.plan.start).addScaledVector(fwd(), TRAVEL * k); if (!S.plan.moved) { S.plan.moved = true; ev('lift-off', {}); } }
       if (mt > 2.75) { for (const l of LIMBS) if (l.kind === 'leg') l.grip = 'walk'; setMode('quad', 'up'); }
     }
     // ----- QUADRUPEDAL STANCE -----
     else if (m === 'quad') {
-      Object.assign(gs(), { py: 0.44, pz: 0, pitch: 0.87, chestPitch: 0, roll: 0, px: 0 }); S.activity = 'standing on fists and feet';
+      Object.assign(gs(), { py: QUAD_PY, pz: 0, pitch: 0.87, chestPitch: 0, roll: 0, px: 0 }); S.activity = 'standing on fists and feet';
       if (settle()) return;
       if (!S.gaze.lockOn && S.t > S.gaze.next) { const [p, lb] = studioPoint(); lookAt(p, lb, [0.8, 2.5]); }
       if (mt > (S.plan && S.plan.hold || (S.plan = { hold: rr(1.5, 3.5) }).hold)) {
@@ -355,9 +364,9 @@ export function createCreature(THREE, config = {}) {
     else if (m === 'sitdown') {
       S.activity = 'sitting down';
       if (!S.plan) { S.plan = { start: S.pos.clone(), hands: 0 }; lookAt(toWorld(0, 0.02, 0.6), 'the floor ahead', [3, 3]); ev('sit-down', {}); }
-      const k = smoother(mt / 1.7); P.py.g = lerp(0.44, 0.12, k); P.pitch.g = lerp(0.87, 0.24, smoother(mt / 2.0)); S.pos.copy(S.plan.start).addScaledVector(fwd(), -0.32 * k);
-      if (mt > 0.35 && S.plan.hands === 0) { const n = NEUTRAL.sit.arm(1); swing(L.handL, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -0.32), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 1; }
-      if (mt > 0.8 && S.plan.hands === 1) { const n = NEUTRAL.sit.arm(-1); swing(L.handR, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -0.32), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 2; }
+      const k = smoother(mt / 1.7); P.py.g = lerp(QUAD_PY, SIT_PY, k); P.pitch.g = lerp(0.87, 0.24, smoother(mt / 2.0)); S.pos.copy(S.plan.start).addScaledVector(fwd(), -TRAVEL * k);
+      if (mt > 0.35 && S.plan.hands === 0) { const n = NEUTRAL.sit.arm(1); swing(L.handL, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -TRAVEL), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 1; }
+      if (mt > 0.8 && S.plan.hands === 1) { const n = NEUTRAL.sit.arm(-1); swing(L.handR, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -TRAVEL), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 2; }
       if (mt > 2.3) { for (const l of LIMBS) if (l.kind === 'leg') l.grip = 'sit'; setMode('sit', 'down'); S.walked = 0; }
     }
     // safety: a planted limb that would be stretched past its reach is lifted and re-placed rather than dragged
@@ -376,21 +385,23 @@ export function createCreature(THREE, config = {}) {
     let g; for (let i = 0; i < 12; i++) { const a = rr(0, Math.PI * 2), r = rr(0.2, 1.15); g = V3(Math.cos(a) * r, 0, Math.sin(a) * r); if (g.distanceTo(S.pos) > 0.7) break; }
     S.goal = g; S.walked = (S.walked || 0) + 1; S.gait.phase = 0; for (const l of LIMBS) l.gaitSwing = false; setMode('walk', 'goes somewhere'); ev('goal', { x: +g.x.toFixed(2), z: +g.z.toFixed(2) });
   }
-  const TD = { footL: 0, handL: 0.25, footR: 0.5, handR: 0.75 }; // lateral sequence footfalls
+  // diagonal-sequence walk: each hind footfall is followed by the opposite hand (predominant in wild P. pygmaeus, Orlikoff et al. 2026, #63).
+  // The phase offsets themselves are not published; evenly spaced quarters are a placeholder (Inferred).
+  const TD = { footL: 0, handR: 0.25, footR: 0.5, handL: 0.75 };
   function walkTick(dt) {
     const P = S.P, G = S.gait; S.activity = 'walking';
     Object.assign(gs(), { pz: 0, pitch: 0.87, chestPitch: 0 });
     const to = S.goal.clone().sub(S.pos); to.y = 0; const dist = to.length();
     const want = Math.atan2(to.x, to.z), dh = wrapPi(want - S.heading);
     const arriving = dist < 0.12;
-    const vWant = arriving ? 0 : Math.min(0.32, dist * 0.6) * (Math.abs(dh) > 1.2 ? 0.35 : 1);
+    const vWant = arriving ? 0 : Math.min(VMAX, dist * 0.6) * (Math.abs(dh) > 1.2 ? 0.35 : 1);
     S.speed += clamp(vWant - S.speed, -0.35 * dt, 0.3 * dt);
     S.yawRate = clamp(dh * 1.2, -0.45, 0.45) * clamp(S.speed / 0.12 + 0.3, 0, 1);
     S.heading = wrapPi(S.heading + S.yawRate * dt); S.pos.addScaledVector(fwd(), S.speed * dt);
     // gait clock advances with distance travelled, so slow walking keeps each foot down longer
     // the gait clock counts turning as travel too (a limb ~0.45 m from the pivot moves with the turn)
     const ve = S.speed + Math.abs(S.yawRate) * 0.45;
-    const stride = 0.32 * G.T; const dph = (Math.max(ve, arriving ? 0 : 0.06) / stride) * dt; G.phase = (G.phase + dph) % 1;
+    const stride = VMAX * G.T; const dph = (Math.max(ve, arriving ? 0 : 0.06) / stride) * dt; G.phase = (G.phase + dph) % 1;
     const cycleT = stride / Math.max(ve, 0.06), swingT = clamp((1 - G.duty) * cycleT, 0.4, 0.8);
     for (const l of LIMBS) {
       const ph = ((G.phase - TD[l.name]) % 1 + 1) % 1;
@@ -399,13 +410,14 @@ export function createCreature(THREE, config = {}) {
         // place the limb at its neutral contact for where the body will be at mid-stance (forward travel and turning both)
         const tm = Math.min(swingT + G.duty * cycleT * 0.5, 2.5); let hd = S.heading, pos = S.pos.clone();
         for (let k = 0; k < 10; k++) { hd += S.yawRate * tm / 10; pos.addScaledVector(V3(Math.sin(hd), 0, Math.cos(hd)), S.speed * tm / 10); }
-        const n = neutralLocal(l, 'quad');
-        swing(l, toWorld(n[0], n[1], n[2], pos, hd), swingT, l.kind === 'arm' ? 0.08 : 0.06, l.kind === 'arm' ? 'fist' : 'walk', 'step');
+        const n = neutralLocal(l, 'quad'); let grip = l.kind === 'arm' ? 'fist' : 'walk';
+        if (l.kind === 'arm') { if (rnd() < A.palmStepP) { grip = 'palm'; n[1] = A.wristPalm + 0.01; } l.wristExt = rnd() < 0.45 ? 0.15 : 0.4; } // 19 extended / 23 neutral fist wrists (#63)
+        swing(l, toWorld(n[0], n[1], n[2], pos, hd), swingT, l.kind === 'arm' ? 0.08 : 0.06, grip, 'step');
       }
       if (ph < G.duty) l.gaitSwing = false;
     }
     // a slight roll toward whichever side bears weight, a small bob twice a cycle
-    P.roll.g = 0.035 * Math.sin(G.phase * Math.PI * 2) * clamp(S.speed / 0.25, 0, 1); P.py.g = 0.44 + 0.012 * Math.cos(G.phase * Math.PI * 4) * clamp(S.speed / 0.25, 0, 1);
+    P.roll.g = 0.035 * Math.sin(G.phase * Math.PI * 2) * clamp(S.speed / 0.25, 0, 1); P.py.g = QUAD_PY + 0.012 * Math.cos(G.phase * Math.PI * 4) * clamp(S.speed / 0.25, 0, 1);
     S.breath.rate.g = 22;
     if (!S.gaze.lockOn && S.t > S.gaze.next) { if (rnd() < 0.7) lookAt(S.pos.clone().addScaledVector(fwd(), rr(0.9, 1.8)).setY(0.02), 'the way ahead', [0.8, 2]); else { const [p, lb] = studioPoint(); lookAt(p, lb, [0.6, 1.4]); } }
     if (arriving && S.speed < 0.02 && !LIMBS.some(l => l.mode === 'swing')) { S.speed = 0; S.yawRate = 0; setMode('quad', 'arrived'); }
@@ -446,14 +458,16 @@ export function createCreature(THREE, config = {}) {
       // end segment orientation
       let dir, dorsal;
       if (l.kind === 'arm') {
-        if (l.grip === 'fist' || (l.mode === 'swing' && l.nextGrip === 'fist')) { dir = DOWN.clone().addScaledVector(F, 0.35); dorsal = F.clone().addScaledVector(Lf, 0.2 * l.side); }
+        if ((l.mode !== 'swing' && l.grip === 'fist') || (l.mode === 'swing' && l.nextGrip === 'fist')) { dir = DOWN.clone().addScaledVector(F, l.wristExt ?? 0.35); dorsal = F.clone().addScaledVector(Lf, 0.2 * l.side); }
         else if (l.grip === 'inspect') { const toFace = headPivot().sub(r.wrist).normalize(); dir = UP.clone().addScaledVector(F, 0.25).addScaledVector(Lf, -0.3 * l.side); dorsal = toFace.multiplyScalar(-1); }
         else { dir = F.clone().addScaledVector(Lf, 0.55 * l.side).addScaledVector(DOWN, 0.12); dorsal = UP.clone(); }
         if (l.mode === 'swing') dir.lerp(r.wrist.clone().sub(r.elbow).normalize(), 0.5 * Math.sin(Math.PI * clamp((S.t - l.t0) / l.dur, 0, 1)));
       } else {
-        const out = l.grip === 'sit' || S.mode === 'sit' || S.mode === 'sitdown' ? 0.6 : 0.32;
-        dir = F.clone().addScaledVector(Lf, out * l.side).addScaledVector(DOWN, 0.05); dorsal = UP.clone();
-        if (l.mode === 'swing') dir.addScaledVector(DOWN, 0.25 * Math.sin(Math.PI * clamp((S.t - l.t0) / l.dur, 0, 1)));
+        const seated = l.grip === 'sit' || S.mode === 'sit' || S.mode === 'sitdown', out = seated ? 0.6 : 0.32;
+        dir = F.clone().addScaledVector(Lf, out * l.side).addScaledVector(DOWN, 0.05);
+        // up on fists and feet the foot is inverted onto its outer edge (#63: inversion variable, toes curled when visible)
+        dorsal = seated ? UP.clone() : UP.clone().addScaledVector(Lf, 0.4 * l.side);
+        if (l.mode === 'swing') { const k = clamp((S.t - l.t0) / l.dur, 0, 1); dir.addScaledVector(DOWN, 0.25 * Math.sin(Math.PI * Math.min(1, k / 0.6))); dir.addScaledVector(UP, 0.35 * smooth((k - 0.6) / 0.4)); } // toes down off the ground, heel first into contact (34/37 heel strikes, #63)
       }
       const tmp = new THREE.Object3D(); orient(tmp, r.wrist, dir, dorsal);
       const e = l.end.g; e.position.copy(r.wrist); if (!l.q) l.q = tmp.quaternion.clone(); else l.q.slerp(tmp.quaternion, 0.18); e.quaternion.copy(l.q);

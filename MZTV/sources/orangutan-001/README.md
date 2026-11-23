@@ -70,6 +70,14 @@ Contract (new, as proposed in #62): `createCreature(THREE, {seed}) → { root, u
    - no page errors
 3. Performance: in software GL, about 10 fps at 960×540 (render 4–10 ms/frame, simulation about 1.5 ms/frame). That is a lower bound, not a GPU figure. Raw-geometry mode: about 85 draw calls and 26k triangles. **Needs a measurement on a real GPU and OBS.**
 
+## G1.1 · calibration from the #63 reference package v1 (MZ.GPT, 2026-11-22)
+- **Limbs:** upper arm 0.325, forearm 0.328, thigh 0.253, shank 0.218 m. These are adult female *Pongo* group-mean bone lengths (Kralick et al. 2023), used as joint-centre proxies (Inferred). The arm-to-leg ratio barely moves (138.5 → 138.6). The trunk, neck and head are scaled 0.9 with the limbs, and contact layout, stance heights, travel and walk speed scale with limb length.
+- **Gait:** now **diagonal-sequence** (hind foot, then the opposite hand), predominant in wild *P. pygmaeus* (Orlikoff et al. 2026). Phase offsets, duty factor and cycle time remain unpublished placeholders.
+- **Hands:** each walking step is a fist about 88% of the time and a modified palm about 12% (43/6 of 49 contacts). The fist wrist is extended or neutral per step (19/23).
+- **Feet:** inverted onto the outer edge when up, toes curled, heel leads into contact (34/37 heel strikes).
+- **Still unsourced** (the package returned null): trunk, hand, foot and head dimensions; posture angles and contacts; gait timing; bout durations and transitions; blink, breathing and eye/head timing; hair lengths and colours; documentary holds.
+- Life test after calibration: all 5 seeds pass; peak reach 0.94–0.96; slip ≈ 1e-16 m; peak limb speed 2.3 m/s.
+
 ## Known gaps and errors (G1)
 - **Missing biological references:** the proportions are estimates. Needed:
   - limb segment lengths and girths for adult female *Pongo pygmaeus*, and for the flanged male (cheek pads and throat sac are not modelled)
