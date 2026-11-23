@@ -94,6 +94,13 @@ Contract (new, as proposed in #62): `createCreature(THREE, {seed}) → { root, u
   - getting up waits for all limbs to be still
 - Life test: **10 seeds pass**; peak reach ≤ 0.986, slip ≈ 1e-16 m.
 
+## G1.3 · coat and face from the #63 R5 addendum (MZ.GPT, 2026-11-22)
+The specimen is now defined as an **adult female of about 20** (Kuze, Malim & Kohshima 2005, 79 *P. pygmaeus*):
+- **Coat** moves from bright orange to rust and maroon, as adults darken. The sRGB values are MZ.Claude's by-eye translation of the observed Munsell classes (cinnamon 10R 5.5/6, rust 9R 3.5/8.5, maroon 2YR 3.5/4), a **creative choice**; no colorimetric hex exists.
+- **Muzzle** is dark: the skin around the mouth is dark in every animal 8 or older. **Upper eyelids** stay light, as in females up to 20, so blinks flash pale.
+- **Crown hair** lies back along the head (standing hair is an infant trait). **Beard** is reduced to a sparse wisp (absent at 11–20, sparse after).
+- **Not used:** genus-level strand length, diameter and stiffness (Amaral 2022). The source itself warns against them as per-region targets.
+
 ## Known gaps and errors (G1)
 - **Missing biological references:** the proportions are estimates. Needed:
   - limb segment lengths and girths for adult female *Pongo pygmaeus*, and for the flanged male (cheek pads and throat sac are not modelled)

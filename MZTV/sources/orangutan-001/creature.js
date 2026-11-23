@@ -21,7 +21,7 @@
    Units: metres, Y up, the studio floor at y = 0.
    ===================================================================== */
 
-export const VERSION = 'orangutan-001 · g1.2 (#63 v2 calibration) · 2026-11-22';
+export const VERSION = 'orangutan-001 · g1.3 (#63 R5 coat/face) · 2026-11-22';
 
 // adult female Bornean orangutan.
 // Limb segments: adult female P. pygmaeus mean maximum bone lengths, n = 15 (Powell et al. 2024, #63 package v2),
@@ -38,9 +38,14 @@ export const ANATOMY = {
   palmStepP: 0.12,   // share of walking hand contacts made with a modified palm instead of a fist (43 fist / 6 palm of 49, Orlikoff et al. 2026, #63)
 };
 
+// The specimen: an adult female of about 20 (#63 R5 addendum, Kuze, Malim & Kohshima 2005, n = 79 P. pygmaeus).
+// Coat: adults move from orange/cinnamon toward maroon/rust (observed Munsell classes: cinnamon 10R 5.5/6, rust 9R 3.5/8.5,
+// maroon 2YR 3.5/4). The sRGB values below are MZ.Claude's by-eye translation of those classes for the print pass (a creative
+// choice; no colorimetric hex exists). Face: skin around eyes and mouth dark in adults (all ≥ 8 yrs dark at the mouth);
+// eyelids still light in females ≤ 20; head hair lies flat in adults; beard absent at 11–20, sparse later (one wisp here).
 const COL = {
-  coat: '#c0612c', coatDeep: '#9a4a22', lock: '#a8502a', lockTip: '#b85a2c',
-  skin: '#45362e', skinPale: '#6a5244', lip: '#2f2520', eye: '#1c1512', nail: '#5b4a3e',
+  coat: '#a24e2c', coatDeep: '#74402c', lock: '#9a4a2a', lockTip: '#a85834',
+  skin: '#3e3029', skinPale: '#4a3a31', lid: '#b89a86', lip: '#2a211c', eye: '#1c1512', nail: '#5b4a3e',
 };
 
 export function createCreature(THREE, config = {}) {
@@ -64,7 +69,7 @@ export function createCreature(THREE, config = {}) {
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 1, metalness: 0, flatShading: true }, o));
   const M = {
     coat: mat(COL.coat), coatDeep: mat(COL.coatDeep), skin: mat(COL.skin, { roughness: 0.85 }), skinPale: mat(COL.skinPale, { roughness: 0.85 }),
-    lip: mat(COL.lip), eye: mat(COL.eye, { roughness: 0.35, flatShading: false }), nail: mat(COL.nail),
+    lid: mat(COL.lid, { roughness: 0.85 }), lip: mat(COL.lip), eye: mat(COL.eye, { roughness: 0.35, flatShading: false }), nail: mat(COL.nail),
   };
 
   // ---------- constructed shapes ----------
@@ -116,14 +121,15 @@ export function createCreature(THREE, config = {}) {
   // head (head frame: origin at the top of the neck, +Z the face, +Y up)
   track(mesh(shaggy(0.088, 0.095, 0.088, 21, 0.2), M.coatDeep, head, V3(0, 0.085, -0.012)));        // cranium, hair cap
   track(mesh(ell(0.072, 0.083, 0.04, 3), M.skin, head, V3(0, 0.07, 0.05)));                         // facial disc
-  track(mesh(ell(0.052, 0.04, 0.05, 3), M.skinPale, head, V3(0, 0.03, 0.078)));                    // prognathic muzzle
+  track(mesh(ell(0.052, 0.04, 0.05, 3), M.skinPale, head, V3(0, 0.03, 0.078)));                    // prognathic muzzle (dark in adults)
   track(mesh(ell(0.04, 0.008, 0.02, 2), M.lip, head, V3(0, 0.012, 0.118)));                         // mouth line
   track(mesh(ell(0.06, 0.012, 0.025, 2), M.skin, head, V3(0, 0.098, 0.078)));                       // low brow
   track(mesh(ell(0.022, 0.012, 0.014, 2), M.skinPale, head, V3(0, 0.062, 0.12)));                   // nostrils / nose pad
   for (const s of [1, -1]) track(mesh(ell(0.01, 0.019, 0.016, 2), M.skin, head, V3(0.083 * s, 0.075, 0.0)));   // small ears
-  track(mesh(shaggy(0.05, 0.035, 0.04, 22, 0.3), M.coat, head, V3(0, -0.005, 0.075)));              // chin beard
+  track(mesh(shaggy(0.03, 0.02, 0.025, 22, 0.3), M.coat, head, V3(0, -0.002, 0.082)));              // a sparse chin wisp (females ≤ 20 lack beards; sparse after)
+  for (const s of [1, -1]) track(mesh(ell(0.014, 0.006, 0.008, 2), M.lid, head, V3(0.026 * s, 0.091, 0.092))); // light upper-eyelid skin, still pale in females ≤ 20
   const eyes = [1, -1].map(s => { const e = new THREE.Group(); e.position.set(0.026 * s, 0.077, 0.088); head.add(e);
-    track(mesh(ell(0.011, 0.011, 0.011, 2), M.eye, e)); const lid = mesh(ell(0.0125, 0.0125, 0.0125, 2), M.skin, e); lid.scale.set(1, 0.05, 1); lid.position.set(0, 0.004, 0.002); return { g: e, lid }; });
+    track(mesh(ell(0.011, 0.011, 0.011, 2), M.eye, e)); const lid = mesh(ell(0.0125, 0.0125, 0.0125, 2), M.lid, e); lid.scale.set(1, 0.05, 1); lid.position.set(0, 0.004, 0.002); return { g: e, lid }; });
 
   // limbs are placed in the creature's own space each step by IK (no parenting below the trunk)
   const limbSpace = new THREE.Group(); root.add(limbSpace);
@@ -185,7 +191,7 @@ export function createCreature(THREE, config = {}) {
     }
     addLocks(56, chest, 0.05, 0.12, () => { const a = rr(-Math.PI, Math.PI); return V3(Math.sin(a) * 0.16, rr(0.06, 0.36), Math.cos(a) * 0.13); });
     addLocks(16, pelvis, 0.05, 0.11, () => { const a = rr(-Math.PI, Math.PI); return V3(Math.sin(a) * 0.13, rr(-0.03, 0.06), Math.cos(a) * 0.1 - 0.03); });
-    addLocks(22, head, 0.025, 0.05, () => { const a = rr(-2.4, 2.4); return V3(Math.sin(a) * 0.06, rr(0.12, 0.17), Math.cos(a) * -0.05); }, 1); // hair standing up and forward on the crown
+    addLocks(22, head, 0.03, 0.06, () => { const a = rr(-2.4, 2.4); return V3(Math.sin(a) * 0.06, rr(0.12, 0.17), Math.cos(a) * -0.05); }, 1); // adult crown hair lies back along the head (standing hair is an infant trait)
   }
   rs = 777; seedLocks();
   const lockMat = mat('#ffffff', { flatShading: false }); // instance colours carry the coat colour; smooth normals (flat shading breaks on sub-pixel locks)
@@ -515,7 +521,7 @@ export function createCreature(THREE, config = {}) {
     lockAnchors.forEach((a, i) => {
       _lp.copy(a.local).applyMatrix4(a.parent.matrixWorld);
       const vel = a.prev ? _lp.clone().sub(a.prev).divideScalar(dt) : V3(); a.prev = a.prev ? a.prev.copy(_lp) : _lp.clone();
-      const tgt = a.bias ? V3(0, 1, 0).applyQuaternion(a.parent.getWorldQuaternion(_lq)).add(V3(0, 0.6, 0)).normalize() : DOWN.clone().add(wind).addScaledVector(vel, -1.4).normalize();
+      const tgt = a.bias ? V3(0, -0.35, -1).applyQuaternion(a.parent.getWorldQuaternion(_lq)).add(V3(0, -0.25, 0)).normalize() : DOWN.clone().add(wind).addScaledVector(vel, -1.4).normalize();
       const w = a.bias ? 14 : 7; const acc = tgt.sub(a.d).multiplyScalar(w * w).addScaledVector(a.v, -1.1 * w); a.v.addScaledVector(acc, dt); a.d.addScaledVector(a.v, dt).normalize();
       _lq.setFromUnitVectors(DOWN, a.d); _ls.set(a.w, a.len, a.w); _lm.compose(_lp, _lq, _ls); locks.setMatrixAt(i, _lm);
     });
