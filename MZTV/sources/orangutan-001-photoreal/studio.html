@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ORANGUTAN 001 · PHOTOREAL · Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#2b2a33; --paper:#f5f4f0; }
+  html,body { margin:0; height:100%; background:var(--paper); overflow:hidden; color:var(--ink); font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; }
+  canvas#view { position:fixed; inset:0; width:100vw; height:100vh; display:block; touch-action:none; }
+  .card { position:fixed; padding:0.6em 0.85em; background:rgba(251,250,247,0.78); border:1px solid rgba(43,42,51,0.4); font-size:12px; line-height:1.45; letter-spacing:0.02em; }
+  #tag { left:16px; top:16px; max-width:min(420px, calc(100vw - 32px)); }
+  #tag .t { font-weight:700; letter-spacing:0.12em; }
+  #help { right:16px; top:16px; max-width:min(320px, calc(100vw - 32px)); }
+  #help.off { display:none; }
+  .dim { opacity:0.62; }
+  #label { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); text-align:center; font-size:11px; letter-spacing:0.12em; white-space:nowrap; max-width:calc(100vw - 32px); overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
+  #label .t { font-weight:700; font-size:13px; }
+  #status { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; letter-spacing:0.14em; pointer-events:none; }
+  #status.off { display:none; }
+  button { font:inherit; color:var(--ink); background:#fbfaf7; border:1px solid rgba(43,42,51,0.55); padding:0.25em 0.6em; margin:0.35em 0.35em 0 0; cursor:pointer; }
+  button:hover { background:#efede8; }
+  #flash { position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity 0.5s; }
+  #bay { position:fixed; inset:0; pointer-events:none; }
+  #bay .m { position:absolute; font-size:10px; letter-spacing:0.08em; line-height:1.3; padding:2px 4px; background:rgba(251,250,247,0.72); border:1px solid rgba(43,42,51,0.4); white-space:nowrap; overflow:hidden; }
+  #bay .m.on { border-color:#ff3d8b; box-shadow:inset 0 0 0 1px #ff3d8b; }
+  #bay .m b { font-weight:700; }
+  #bay.off { display:none; }
+  @media (max-width:640px) { #label { display:none; } #help { font-size:11px; } }
+</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div class="card" id="tag">
+  <div class="t">MZTV · ORANGUTAN 001 · PHOTOREAL · STUDIO</div>
+  <div id="spec">SPECIMEN —</div>
+  <div class="dim" id="src">loading</div>
+  <div><button id="bPrint">depth of field: on</button><button id="bWind">wind: on</button><button id="bCrew">crew: off</button><button id="bShot">photograph</button><button id="bHelp">?</button></div>
+</div>
+<div class="card" id="help" title="press H to hide">
+  <div><b>drag</b> walk around the animal · <b>scroll / pinch</b> step in or out</div>
+  <div><b>right-drag / two fingers</b> slide sideways · <b>double-click</b> look at that point</div>
+  <div><b>W A S D</b> walk · <b>Q E</b> lower / raise your eye · <b>F</b> back to the full view</div>
+  <div><b>P</b> depth of field · <b>V</b> wind in the coat · <b>C</b> photograph (PNG)</div>
+  <div><b>[ ]</b> aperture · <b>- =</b> focal length</div>
+  <div><b>B</b> the MZCAM crew films it (four drones) · <b>M</b> crew monitors</div>
+</div>
+<div id="label"></div>
+<div id="status">BUILDING THE ANIMAL FROM ITS CODE …</div>
+<div id="flash"></div>
+<div id="bay" class="off"></div>
+<script src="../../lib/mzcam.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { createBrain, VERSION } from './brain.js';
+import { createBody, BODY_VERSION } from './body.js';
+
+const Q = new URLSearchParams(location.search);
+const SEED = Math.max(1, parseInt(Q.get('seed') || '1', 10) || 1);
+const SUBJECT = Q.get('subject') === 'test' ? 'test' : 'orangutan';
+const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));
+const HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '120000', 10)));
+const AO = Q.get('ao') !== '0';
+const $ = id => document.getElementById(id);
+const status = t => { $('status').textContent = t; $('status').classList.toggle('off', !t); };
+$('spec').textContent = SUBJECT === 'test' ? 'TEST SUBJECT · studio check' : `SPECIMEN 001 · ORANGUTAN · PHOTOREAL · seed ${SEED}`;
+
+/* ---------- where the body comes from: built here, from code, every time (no files are loaded) ---------- */
+function testSubject() { // neutral lathe form: checks the cyclorama, light, print pass and inspector around a still object
+  const g = new THREE.Group(); const prof = [[0, 0], [0.22, 0], [0.24, 0.03], [0.12, 0.1], [0.1, 0.55], [0.2, 0.75], [0.16, 0.95], [0, 1.0]].map(([x, y]) => new THREE.Vector2(x, y));
+  const m = new THREE.Mesh(new THREE.LatheGeometry(prof, 48), new THREE.MeshStandardMaterial({ color: '#9e9b95', roughness: 0.9 })); m.castShadow = m.receiveShadow = true; g.add(m);
+  const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 3), new THREE.MeshStandardMaterial({ color: '#c4520e', roughness: 0.8 })); b.position.set(0.32, 0.11, 0.1); b.castShadow = true; g.add(b);
+  return { root: g, update() {}, bounds: () => new THREE.Box3().setFromObject(g), observe: () => null, reset() {}, log: [], metrics: {}, version: 'test' };
+}
+
+/* ---------- renderer, studio, light ---------- */
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+const PR = Math.max(0.5, Math.min(2, +(Q.get('pr') || Math.min(devicePixelRatio, 1.25))));
+renderer.setPixelRatio(PR);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = +(Q.get('exposure') || 1.0);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#f5f4f0');
+const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 60);
+const SENSOR_H = 0.024; // a full-frame 36 × 24 mm sensor: focal length (mm) <-> vertical field of view
+const fovFor = mm => THREE.MathUtils.radToDeg(2 * Math.atan(SENSOR_H * 500 / mm)), mmFor = fov => SENSOR_H * 500 / Math.tan(THREE.MathUtils.degToRad(fov) / 2);
+
+// white cyclorama: floor that sweeps up into a curved wall behind, open toward the viewer's side
+const studio = new THREE.Group(); scene.add(studio);
+{
+  const R = 7, curve = 1.6, H = 6, segA = 96, segR = 40, P = [], I = [];
+  const prof = []; // radial profile: flat floor, then a quarter-circle cove, then a straight wall
+  for (let i = 0; i <= segR; i++) { const u = i / segR; const r = u * (R - curve); prof.push([r, 0]); }
+  for (let i = 1; i <= 16; i++) { const a = i / 16 * Math.PI / 2; prof.push([R - curve + Math.sin(a) * curve, curve - Math.cos(a) * curve]); }
+  for (let i = 1; i <= 8; i++) prof.push([R, curve + i / 8 * (H - curve)]);
+  for (let j = 0; j <= segA; j++) { const t = j / segA * Math.PI * 2; for (const [r, y] of prof) P.push(Math.cos(t) * r, y, Math.sin(t) * r); }
+  const n = prof.length; for (let j = 0; j < segA; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + n; I.push(a, a + 1, b, b, a + 1, b + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
+  const m = new THREE.MeshStandardMaterial({ color: '#efede8', roughness: 0.92, metalness: 0, side: THREE.BackSide, emissive: '#ebe9e3', emissiveIntensity: 0.18 });
+  const cyc = new THREE.Mesh(g, m); cyc.receiveShadow = true; studio.add(cyc);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(R - curve + 0.01, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#eeece7', roughness: 0.88, emissive: '#ebe9e3', emissiveIntensity: 0.08 }));
+  floor.position.y = 0.0005; floor.receiveShadow = true; studio.add(floor);
+}
+const hemi = new THREE.HemisphereLight('#ffffff', '#cfc9bd', 0.45); scene.add(hemi);
+// image-based light: prebuilt studio environment (MZ.Human 2026-11-22: lighting may be prebuilt, the animal may not).
+// Default: three's RoomEnvironment (a generated softbox room). ?hdri=<url to a .hdr> swaps in a licensed HDRI for light and reflections only.
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = +(Q.get('env') || 0.55);
+if (Q.get('hdri')) new RGBELoader().load(Q.get('hdri'), t => { t.mapping = THREE.EquirectangularReflectionMapping; scene.environment = pmrem.fromEquirectangular(t).texture; t.dispose(); }, undefined, e => console.warn('hdri failed', e));
+const key = new THREE.DirectionalLight('#fffaf0', 2.3); // the piece's studio key light: (-0.4, 0.85, 0.35)
+key.position.set(-0.4, 0.85, 0.35).normalize().multiplyScalar(6); key.castShadow = true;
+key.shadow.mapSize.set(4096, 4096); key.shadow.radius = 3; key.shadow.bias = -0.0003; key.shadow.normalBias = 0.006;
+Object.assign(key.shadow.camera, { left: -1.3, right: 1.3, top: 1.3, bottom: -1.3, near: 2, far: 10 }); key.shadow.camera.updateProjectionMatrix();
+const KEY_DIR = new THREE.Vector3(-0.4, 0.85, 0.35).normalize(); // the shadow frustum follows the animal, so the coat's shadows stay sharp
+scene.add(key); scene.add(key.target);
+const fill = new THREE.DirectionalLight('#f0f4ff', 0.45); fill.position.set(0.6, 0.4, -0.7).multiplyScalar(5); scene.add(fill);
+
+/* ---------- wind: the same gusts as 48 PLANT's afterlife, felt only by the coat's hanging locks (never by the animal's body) ---------- */
+const WIND = { on: true, amt: 1 };
+
+/* ---------- the photographic pipeline: linear HDR, ambient occlusion, depth of field from a real lens, AgX, a little grain ---------- */
+// DOF reads the depth of the beauty render (so the coat, which has its own shader, is in it). Thin-lens circle of confusion.
+let DOF = Q.get('dof') !== '0', FSTOP = +(Q.get('f') || 2.8), FOCUS = 2;
+let BEAUTY = null;
+class BeautyPass extends RenderPass { render(r, w, read, dt, m) { BEAUTY = read; super.render(r, w, read, dt, m); } }
+class DofPass extends Pass {
+  constructor() { super(); this.u = { tColor: { value: null }, tDepth: { value: null }, uNear: { value: 0.01 }, uFar: { value: 60 }, uFocus: { value: 2 }, uF: { value: 0.042 }, uN: { value: 2.8 }, uRes: { value: new THREE.Vector2(1, 1) }, uSensor: { value: SENSOR_H } };
+    this.q = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: this.u, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `precision highp float; varying vec2 v; uniform sampler2D tColor, tDepth; uniform float uNear, uFar, uFocus, uF, uN, uSensor; uniform vec2 uRes;
+        float lin(float d){ return uNear * uFar / (uFar - d * (uFar - uNear)); }
+        float coc(float z){ float c = (uF * uF / uN) * abs(z - uFocus) / (z * max(uFocus - uF, 1e-3)); return min(c / uSensor * uRes.y, 16.0); }
+        void main(){ float zc = lin(texture2D(tDepth, v).x), cc = coc(zc); vec4 acc = vec4(texture2D(tColor, v).rgb, 1.0);
+          if (cc > 0.6) { for (int i = 1; i < 48; i++) { float r = sqrt(float(i) / 48.0) * cc, a = float(i) * 2.39996;
+              vec2 o = vec2(cos(a), sin(a)) * r / uRes; float zs = lin(texture2D(tDepth, v + o).x), cs = coc(zs);
+              float w = zs > zc ? smoothstep(r - 1.0, r, min(cs, cc)) : smoothstep(r - 1.0, r, cs);
+              acc += vec4(texture2D(tColor, v + o).rgb, 1.0) * w; } }
+          gl_FragColor = vec4(acc.rgb / acc.a, 1.0); }` })); }
+  render(r, w, read) { this.u.tColor.value = read.texture; this.u.tDepth.value = BEAUTY.depthTexture; this.u.uRes.value.set(read.width, read.height); r.setRenderTarget(this.renderToScreen ? null : w); this.q.render(r); }
+}
+const GrainPass = class extends Pass { // film grain + a soft vignette, applied after the tone curve
+  constructor() { super(); this.u = { tColor: { value: null }, uT: { value: 0 }, uAmt: { value: +(Q.get('grain') || 0.018) } };
+    this.q = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: this.u, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `precision highp float; varying vec2 v; uniform sampler2D tColor; uniform float uT, uAmt;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + uT) * 43758.5453); }
+        void main(){ vec3 c = texture2D(tColor, v).rgb; float g = (h(gl_FragCoord.xy) + h(gl_FragCoord.xy + 17.0) - 1.0) * uAmt;
+          float vg = 1.0 - 0.18 * pow(length(v - 0.5) * 1.35, 2.5); gl_FragColor = vec4(c * vg + g, 1.0); }` })); }
+  render(r, w, read) { this.u.tColor.value = read.texture; this.u.uT.value = (this.u.uT.value + 0.618) % 100; r.setRenderTarget(this.renderToScreen ? null : w); this.q.render(r); }
+};
+const RT = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, samples: +(Q.get('msaa') ?? 4), depthTexture: new THREE.DepthTexture(16, 16, THREE.UnsignedIntType) });
+const composer = new EffectComposer(renderer, RT);
+composer.renderTarget2.depthTexture = new THREE.DepthTexture(16, 16, THREE.UnsignedIntType); // its own depth (a clone would share the beauty's and overwrite it)
+const beauty = new BeautyPass(scene, camera); composer.addPass(beauty);
+const gtao = new GTAOPass(scene, camera, 16, 16); gtao.blendIntensity = 0.85; gtao.updateGtaoMaterial({ radius: 0.12, distanceExponent: 1.4, thickness: 1.2, scale: 1.0 }); gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6 }); gtao.enabled = AO; composer.addPass(gtao);
+const dof = new DofPass(); dof.enabled = DOF; composer.addPass(dof);
+composer.addPass(new OutputPass());
+const grain = new GrainPass(); composer.addPass(grain);
+let PRINT = false; // kept so the 48PLANT plumbing below still reads; there is no print pass in this fork
+
+/* ---------- controls: walk around it, step in close, slide, raise your eye ---------- */
+const controls = new OrbitControls(camera, canvas);
+Object.assign(controls, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.06, maxDistance: 5.2, maxPolarAngle: Math.PI * 0.5 - 0.02, zoomSpeed: 0.9, rotateSpeed: 0.55, panSpeed: 0.7, screenSpacePanning: true, zoomToCursor: true });
+let BOX = new THREE.Box3(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1.4, 0.5));
+function frameAll(instant) {
+  const c = BOX.getCenter(new THREE.Vector3()), s = BOX.getSize(new THREE.Vector3());
+  const d = Math.max(s.y, s.x * 0.9, s.z * 0.9) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) * (camera.aspect < 1 ? 1.6 : 1.12) + Math.max(s.x, s.z) * 0.5;
+  const goalT = new THREE.Vector3(c.x, s.y * 0.5, c.z), az = Math.atan2(c.z, c.x) + Math.PI / 2;
+  const goalP = new THREE.Vector3(goalT.x + Math.cos(az) * d, s.y * 0.42, goalT.z + Math.sin(az) * d);
+  if (instant) { controls.target.copy(goalT); camera.position.copy(goalP); controls.update(); return; }
+  FLY = { t0: performance.now(), p0: camera.position.clone(), t0v: controls.target.clone(), p1: goalP, t1: goalT };
+}
+let FLY = null;
+const keys = new Set();
+addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; const k = e.key.toLowerCase(); keys.add(k);
+  if (k === 'f') frameAll(false); if (k === 'p') togglePrint(); if (k === 'v') toggleWind(); if (k === 'c') photograph(); if (k === 'b') toggleCrew(); if (k === 'm') toggleBay(); if (k === 'h' || k === '?') $('help').classList.toggle('off'); });
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+const ray = new THREE.Raycaster();
+let helped = false; canvas.addEventListener('pointerdown', () => { if (!helped) { helped = true; setTimeout(() => $('help').classList.add('off'), 6000); } });
+canvas.addEventListener('dblclick', e => { if (!SUBJ || CREW.on) return; const r = canvas.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const hit = ray.intersectObject(SUBJ.root, true)[0]; if (!hit) return; const off = camera.position.clone().sub(controls.target);
+  const dist = Math.min(off.length(), Math.max(0.25, hit.distance * 0.6)); FLY = { t0: performance.now(), p0: camera.position.clone(), t0v: controls.target.clone(), t1: hit.point.clone(), p1: hit.point.clone().add(off.setLength(dist)) }; });
+function walk(dt) {
+  if (!keys.size) return; const v = new THREE.Vector3(); const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize(); const r = new THREE.Vector3().crossVectors(f, camera.up).normalize();
+  const sp = 0.9 * dt * (keys.has('shift') ? 2.2 : 1);
+  if (keys.has('w') || keys.has('arrowup')) v.addScaledVector(f, sp);
+  if (keys.has('s') || keys.has('arrowdown')) v.addScaledVector(f, -sp); if (keys.has('a') || keys.has('arrowleft')) v.addScaledVector(r, -sp); if (keys.has('d') || keys.has('arrowright')) v.addScaledVector(r, sp);
+  if (keys.has('q')) v.y -= sp * 0.6; if (keys.has('e')) v.y += sp * 0.6;
+  if (!v.lengthSq()) return; camera.position.add(v); controls.target.add(v);
+  if (camera.position.y < 0.03) { const d = 0.03 - camera.position.y; camera.position.y += d; controls.target.y += d; }
+}
+
+/* ---------- toggles ---------- */
+function togglePrint() { DOF = !DOF; dof.enabled = DOF; $('bPrint').textContent = 'depth of field: ' + (DOF ? 'on' : 'off'); }
+function toggleWind() { WIND.on = !WIND.on; $('bWind').textContent = 'wind: ' + (WIND.on ? 'on' : 'off'); }
+function toggleCrew(on) { CREW.on = on === undefined ? !CREW.on : !!on; $('bCrew').textContent = 'crew: ' + (CREW.on ? 'on' : 'off'); controls.enabled = !CREW.on; if (CREW.on) $('help').classList.add('off'); $('bay').classList.toggle('off', !(CREW.on && BAY.on)); for (const m of DRONES) m.visible = CREW.on; }
+function toggleBay() { BAY.on = !BAY.on; $('bay').classList.toggle('off', !(CREW.on && BAY.on)); }
+WIND.on = Q.get('wind') !== '0'; if (!WIND.on) $('bWind').textContent = 'wind: off';
+$('bPrint').onclick = togglePrint; $('bWind').onclick = toggleWind; $('bCrew').onclick = () => toggleCrew(); $('bShot').onclick = photograph; $('bHelp').onclick = () => $('help').classList.toggle('off');
+if (!DOF) $('bPrint').textContent = 'depth of field: off';
+addEventListener('keydown', e => { const k = e.key; if (k === '[') FSTOP = Math.min(22, FSTOP * 1.414); if (k === ']') FSTOP = Math.max(1.4, FSTOP / 1.414);
+  if (k === '-' || k === '=') { const mm = Math.max(18, Math.min(200, mmFor(camera.fov) * (k === '=' ? 1.25 : 0.8))); camera.fov = fovFor(mm); camera.updateProjectionMatrix(); } });
+let LABEL = '';
+function photograph() {
+  render(); const a = document.createElement('a'); a.download = `orangutan-001-photoreal-${SUBJECT === 'test' ? 'test' : 's' + SEED}${CREW.on ? '-' + crew.liveDrone.name.replace(' ', '') : ''}-studio-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click(); $('flash').style.transition = 'none'; $('flash').style.opacity = 0.7; requestAnimationFrame(() => { $('flash').style.transition = 'opacity 0.6s'; $('flash').style.opacity = 0; });
+}
+
+/* ---------- size + render ---------- */
+function resize() {
+  const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setPixelRatio(PR); renderer.setSize(w, h, false); composer.setPixelRatio(PR); composer.setSize(w, h); gtao.setSize(Math.round(w * PR), Math.round(h * PR));
+}
+addEventListener('resize', resize); resize();
+const _c = new THREE.Vector3(), _res = new THREE.Vector2();
+function render() {
+  renderer.shadowMap.needsUpdate = true;
+  const cam = CREW.on ? lensCam(crew.liveDrone, PROG, camera.aspect) : camera;
+  if (CREW.on) DRONES.forEach((m, i) => { m.visible = i !== crew.live; });
+  // key light and its shadow frustum ride with the animal
+  BOX.getCenter(_c); key.target.position.set(_c.x, 0.4, _c.z); key.position.copy(key.target.position).addScaledVector(KEY_DIR, 6); key.target.updateMatrixWorld();
+  if (BODY) BODY.syncLights({ key, fill, hemi, res: renderer.getDrawingBufferSize(_res) });
+  // focus: on what the operator is looking at (free view: the orbit target; crew: the live lens's aim)
+  const want = CREW.on && crew.liveDrone && crew.liveDrone.cam ? Math.hypot(crew.liveDrone.cam.look.x - cam.position.x, crew.liveDrone.cam.look.y - cam.position.y, crew.liveDrone.cam.look.z - cam.position.z) : camera.position.distanceTo(controls.target);
+  FOCUS += (want - FOCUS) * 0.15;
+  Object.assign(dof.u.uNear, { value: cam.near }); dof.u.uFar.value = cam.far; dof.u.uFocus.value = FOCUS; dof.u.uF.value = mmFor(cam.fov) / 1000; dof.u.uN.value = FSTOP;
+  beauty.camera = cam; gtao.camera = cam; if (gtao.enabled) gtao.gtaoMaterial.uniforms.cameraNear.value = cam.near;
+  composer.render();
+  if (CREW.on && BAY.on) { if (BODY) BODY.direct(true); bay(innerWidth, innerHeight, false); if (BODY) BODY.direct(false); }
+}
+
+const CAPTURE = { on: Q.get('capture') === '1', dt: 1 / 30 };
+let last = performance.now(), windT = 0;
+const GOV = { on: Q.get('auto') !== '0' && Q.get('capture') !== '1', hair: 1, win: [], at: 0, floor: 24, aim: 27, log: [] };
+function govern(now, dt) {
+  if (!GOV.on || !BODY) return; GOV.win.push(dt); if (GOV.win.length > 90) GOV.win.shift(); if (now - GOV.at < 2500 || GOV.win.length < 60) return;
+  const fps = GOV.win.length / GOV.win.reduce((a, b) => a + b, 0); GOV.at = now;
+  if (fps < GOV.aim && GOV.hair > 0.25) { GOV.hair = Math.max(0.25, GOV.hair * Math.min(0.85, fps / GOV.aim)); BODY.setHairFraction(GOV.hair); GOV.log.push({ t: +(now / 1000).toFixed(1), fps: +fps.toFixed(1), hair: +GOV.hair.toFixed(2) }); GOV.win.length = 0; }
+  else if (fps < GOV.floor && renderer.getPixelRatio() > 0.75) { const pr = Math.max(0.75, renderer.getPixelRatio() * 0.85); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); gtao.setSize(Math.round(innerWidth * pr), Math.round(innerHeight * pr)); GOV.log.push({ t: +(now / 1000).toFixed(1), fps: +fps.toFixed(1), pr: +pr.toFixed(2) }); GOV.win.length = 0; }
+  else if (fps > GOV.aim * 1.6 && GOV.hair < 1) { GOV.hair = Math.min(1, GOV.hair * 1.15); BODY.setHairFraction(GOV.hair); GOV.win.length = 0; }
+}
+function loop(now) {
+  if (!CAPTURE.on) requestAnimationFrame(loop); const dt = CAPTURE.on ? CAPTURE.dt : Math.min(0.1, (now - last) / 1000); last = now;
+  windT += dt; WIND.amt += ((WIND.on ? 1 : 0) - WIND.amt) * Math.min(1, dt * 0.8);
+  if (SUBJ) { const t0 = performance.now(); SUBJ.update(dt * RATE, windT, { t: windT, amt: WIND.amt }); PERF.sim += performance.now() - t0; BOX = SUBJ.bounds(); }
+  if (CREW.on && SUBJ) crewTick(dt * RATE);
+  if (FLY) { const k = Math.min(1, (now - FLY.t0) / 1400), e = k * k * (3 - 2 * k); camera.position.lerpVectors(FLY.p0, FLY.p1, e); controls.target.lerpVectors(FLY.t0v, FLY.t1, e); if (k >= 1) FLY = null; }
+  walk(dt); govern(now, dt); if (!CREW.on) controls.update(); { const t0 = performance.now(); render(); PERF.render += performance.now() - t0; } PERF.frames++; PERF.dt.push(dt); if (PERF.dt.length > 240) PERF.dt.shift(); hud(now);
+}
+
+/* ---------- MZCAM: the four-drone documentary crew from 48 PLANT, filming through real Three lenses ---------- */
+// lens adapter, the same mapping BIT FIELD 037 / 039 use: a crew lens {pos, look, fov (vertical, degrees)} -> THREE.PerspectiveCamera.
+// The crew is presentation only: it reads the animal's observe() points and never writes to the animal.
+const PROG = new THREE.PerspectiveCamera(32, 1, 0.01, 60);
+const TILES = [0, 1, 2, 3].map(() => new THREE.PerspectiveCamera(32, 16 / 9, 0.01, 60));
+function lensCam(d, cam, aspect) {
+  if (!d || !d.cam) return camera;
+  cam.position.set(d.cam.pos.x, d.cam.pos.y, d.cam.pos.z); cam.up.set(0, 1, 0); cam.lookAt(d.cam.look.x, d.cam.look.y, d.cam.look.z);
+  cam.fov = d.cam.fov; cam.aspect = aspect; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); return cam;
+}
+const CREW = { on: false }, BAY = { on: Q.get('bay') !== '0' }, BAYR = [];
+// 48 PLANT's crew: CAM 1 pink close, CAM 2 yellow orbit, CAM 3 turquoise wide, CAM 4 orange low crane
+const DRONE_SPEC = [{ name: 'CAM 1', role: 'close', col: '#ff3d8b' }, { name: 'CAM 2', role: 'orbit', col: '#f4dc2a' }, { name: 'CAM 3', role: 'wide', col: '#18c2bb' }, { name: 'CAM 4', role: 'low', col: '#ff7a1a' }];
+const DRONES = DRONE_SPEC.map(sp => {
+  const g = new THREE.Group(), ink = new THREE.MeshStandardMaterial({ color: '#2b2a33', roughness: 0.6 });
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.035, 0.08), ink));
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.093, 0.012, 0.083), new THREE.MeshStandardMaterial({ color: sp.col, roughness: 0.7 })));
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.019, 0.022, 12).rotateX(Math.PI / 2), ink); lens.position.z = 0.05; g.add(lens);
+  const tally = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), new THREE.MeshStandardMaterial({ color: '#ff3d8b', emissive: '#ff3d8b', emissiveIntensity: 0 })); tally.position.set(0, 0.024, 0.03); g.add(tally);
+  for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.003, 14), ink); r.position.set(x * 0.062, 0.022, z * 0.056); g.add(r); }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; }); g.visible = false; g.userData.tally = tally; scene.add(g); return g;
+});
+const MV = (x, y, z) => MZCam.V(x, y, z), C3 = v => MZCam.V(v.x, v.y, v.z);
+let OBS = null, simT = 0, crew = null;
+const crand = (() => { let s = (SEED * 7919 + 13) % 2147483647; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; })(); // the crew's own dice, separate from the animal's
+const rr = (a, b) => a + (b - a) * crand(), cl = (v, a, b) => Math.max(a, Math.min(b, v));
+function avoid(p) { // inside the cyc, above the floor, and never closer than ~half a metre to the animal
+  let x = p.x, y = cl(p.y, 0.1, 3.2), z = p.z; const r = Math.hypot(x, z); if (r > 4.6) { x *= 4.6 / r; z *= 4.6 / r; }
+  if (OBS) { const c = OBS.chest, dx = x - c.x, dy = y - c.y, dz = z - c.z, d = Math.hypot(dx, dy, dz), R = 0.8; if (d < R) { const k = R / Math.max(d, 1e-3); x = c.x + dx * k; y = c.y + dy * k; z = c.z + dz * k; } }
+  return MV(x, y, z);
+}
+const around = (p, hd, ang, dist, y) => MV(p.x + Math.sin(hd + ang) * dist, y, p.z + Math.cos(hd + ang) * dist);
+// operator framing: pick the lens angle that keeps a subject of `size` metres filling the frame height at the current distance
+const frame = (d, look, size, lo = 9, hi = 55) => { const r = Math.hypot(look.x - d.pos.x, look.y - d.pos.y, look.z - d.pos.z); return cl(2 * Math.atan(size / 2 / Math.max(r, 0.05)) * 180 / Math.PI, lo, hi); };
+const near = (d, p, r = 0.8) => Math.hypot(p.x - d.pos.x, p.y - d.pos.y, p.z - d.pos.z) < r; // the animal has come too close for this setup
+const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
+const side = () => (crand() < 0.5 ? 1 : -1);
+// the shot grammar: marks are chosen from where the animal is when the shot is set up; aims follow it live
+const KINDS = {
+  'FACE · CLOSE': { base: o => 1.1 + (o.state === 'sit' ? 0.7 : 0) + (o.state === 'quad' ? 0.3 : 0), make(o) { const t0 = simT, life = rr(14, 26);
+    const still = o.state === 'sit'; return { label: 'FACE · CLOSE', pan: 1.3, minHold: 3, maxHold: 13, mark: { pos: avoid(around(o.face, o.heading, still ? rr(-0.75, 0.75) : side() * rr(1.3, 1.9), still ? rr(0.9, 1.25) : rr(1.4, 1.8), o.face.y + rr(-0.04, 0.12))) },
+      aim: (t, d) => ({ look: C3(OBS.face), fov: frame(d, OBS.face, 0.36) }), want: (t, d) => near(d, OBS.face) ? 0 : KINDS['FACE · CLOSE'].base(OBS), done: (t, d) => simT - t0 > life || near(d, OBS.face, 0.85) }; } },
+  'HANDS': { base: o => (o.inspecting ? 3.2 : o.state === 'sit' ? 0.8 : 0.4), make(o) { const t0 = simT, life = rr(10, 18), k = o.inspecting ? o.inspecting.slice(-1) : (crand() < 0.5 ? 'L' : 'R'), h = o.hands[k];
+    return { label: o.inspecting ? 'HANDS · WHAT IT IS LOOKING AT' : 'HANDS', pan: 2, minHold: 4, maxHold: 11, mark: { pos: avoid(around(h, o.heading, side() * rr(0.4, 1.3), rr(0.7, 0.95), h.y + rr(0.05, 0.2))) },
+      aim: (t, d) => ({ look: C3(OBS.hands[k]), fov: frame(d, OBS.hands[k], 0.42) }), want: (t, d) => near(d, OBS.hands[k]) ? 0 : KINDS.HANDS.base(OBS) + (OBS.inspecting && OBS.inspecting.slice(-1) === k ? 0.6 : 0), done: () => simT - t0 > life }; } },
+  'CONTACT · LOW': { base: o => (o.state === 'walk' ? 2.0 : o.state === 'rise' || o.state === 'sitdown' ? 1.8 : 0.45), make(o) { const t0 = simT, life = rr(10, 20);
+    return { label: 'CONTACT · LOW', pan: 1.6, minHold: 3, maxHold: 12, mark: { pos: avoid(around(o.pelvis, o.heading, side() * rr(1.4, 2.2), rr(1.5, 1.9), rr(0.1, 0.16))) },
+      aim: (t, d) => { const f = mid(OBS.feet.L, OBS.feet.R), h = mid(OBS.hands.L, OBS.hands.R), look = MV((f.x + h.x) / 2, 0.1, (f.z + h.z) / 2); return { look, fov: frame(d, look, 1.2, 20, 60) }; }, want: (t, d) => near(d, OBS.pelvis, 1.0) ? 0 : KINDS['CONTACT · LOW'].base(OBS), done: (t, d) => simT - t0 > life || near(d, OBS.pelvis, 0.95) }; } },
+  'PROFILE': { base: () => 0.9, make(o) { const t0 = simT, life = rr(12, 22);
+    return { label: 'PROFILE', pan: 1.1, minHold: 5, maxHold: 13, mark: { pos: avoid(around(o.head, o.heading, side() * Math.PI / 2, rr(1.4, 1.8), o.head.y)) }, aim: (t, d) => ({ look: C3(OBS.head), fov: frame(d, OBS.head, 0.9) }), want: (t, d) => near(d, OBS.head) ? 0 : 0.9, done: () => simT - t0 > life }; } },
+  'WIDE · THE STUDIO': { base: o => 1.0 + (o.state === 'walk' ? 0.9 : 0), make() { const t0 = simT, life = rr(16, 28), a = rr(0, Math.PI * 2);
+    return { label: 'WIDE · THE STUDIO', pan: 0.8, minHold: 6, maxHold: 15, mark: { pos: avoid(MV(Math.sin(a) * 3.9, rr(0.9, 1.4), Math.cos(a) * 3.9)) }, aim: () => ({ look: C3(OBS.pelvis), fov: 30 }), want: () => KINDS['WIDE · THE STUDIO'].base(OBS), done: () => simT - t0 > life }; } },
+  'ORBIT': { base: () => 1.0, make(o) { const t0 = simT, life = rr(18, 30), dir = side(), a0 = o.heading + rr(-1, 1);
+    return { label: 'ORBIT', pan: 1.2, minHold: 6, maxHold: 16, pose: t => ({ pos: avoid(around(OBS.pelvis, 0, a0 + (t - t0) * 0.09 * dir, 1.9, 0.85)) }), aim: () => ({ look: C3(OBS.chest), fov: 26 }), want: () => 1.0, done: () => simT - t0 > life }; } },
+  'LOW · CRANE': { base: () => 0.95, make(o) { const t0 = simT, life = rr(14, 24), a = o.heading + side() * rr(0.3, 1.2), base = around(o.pelvis, 0, a, 1.5, 0.14); const sh = { label: 'LOW · CRANE', pan: 1.0, minHold: 6, maxHold: 14, airAt: -1, onAir: () => { sh.airAt = simT; },
+      pose: t => ({ pos: avoid(MV(base.x, 0.14 + 0.95 * cl(sh.airAt < 0 ? 0 : (t - sh.airAt) / 14, 0, 1), base.z)) }), aim: () => ({ look: C3(OBS.head), fov: 24 }), want: () => 0.95, done: () => simT - t0 > life }; return sh; } },
+  'OVERHEAD': { base: () => 0.55, make(o) { const t0 = simT, life = rr(10, 18);
+    return { label: 'OVERHEAD', pan: 0.9, minHold: 5, maxHold: 11, mark: { pos: avoid(MV(o.pelvis.x + rr(-0.35, 0.35), 2.7, o.pelvis.z + rr(-0.35, 0.35))) }, aim: () => ({ look: C3(OBS.pelvis), fov: 34 }), want: () => 0.55, done: () => simT - t0 > life }; } },
+};
+const ROLE_KINDS = { close: ['FACE · CLOSE', 'HANDS', 'PROFILE'], orbit: ['ORBIT', 'PROFILE', 'OVERHEAD'], wide: ['WIDE · THE STUDIO', 'OVERHEAD'], low: ['LOW · CRANE', 'CONTACT · LOW'] };
+function crewAssign() {
+  for (const d of crew.free()) {
+    const busy = new Set(crew.drones.filter(x => x.shot && x !== d).map(x => x.shot.kind));
+    let best = null, bw = -1; for (const k of ROLE_KINDS[d.role]) { if (busy.has(k)) continue; const w = KINDS[k].base(OBS) + crand() * 0.9; if (w > bw) { bw = w; best = k; } }
+    if (best) { const sh = KINDS[best].make(OBS); sh.kind = best; crew.assign(d, sh); }
+  }
+}
+const CUTS = [];
+function initCrew() {
+  OBS = SUBJ.observe();
+  crew = new MZCam.Crew({ drones: DRONE_SPEC.map((d, i) => ({ ...d, pos: MV(Math.cos(i * 1.57 + 0.4) * 3.6, 1.2, Math.sin(i * 1.57 + 0.4) * 3.6) })),
+    speed: 1.4, accel: 1.1, cruise: 1.6, minAlt: 0.1, arrive: 0.04, clearDist: 4, avoid,
+    onCut: (from, to) => { CUTS.push({ t: +simT.toFixed(2), from: from.name, to: to.name, shot: to.shot ? to.shot.label : '' }); if (CUTS.length > 500) CUTS.shift(); } });
+  crewAssign(); for (const d of crew.drones) { const g = crew._goal(d, simT); if (g) { d.pos = g.pos; d.arrivedAt = 0; } } crew.update(0.02, simT);
+}
+const _fw = new THREE.Vector3();
+function crewTick(dt) {
+  simT += dt; OBS = SUBJ.observe(); crewAssign(); crew.update(dt, simT);
+  crew.drones.forEach((d, i) => { const m = DRONES[i]; m.position.set(d.pos.x, d.pos.y, d.pos.z); if (d.cam) { _fw.set(d.pos.x + d.cam.f.x, d.pos.y + d.cam.f.y, d.pos.z + d.cam.f.z); m.lookAt(_fw); } m.userData.tally.material.emissiveIntensity = i === crew.live ? 1.6 : 0; });
+}
+// the four monitors: drawn into the same frame before the print pass, so they carry the same inks and dither
+function bay(W, H, isRT) { // the four monitors: straight renders (no post), drawn over the programme
+  const w = Math.round(W * 0.2), h = Math.round(w * 9 / 16), m = Math.max(4, Math.round(W * 0.012));
+  crew.drones.forEach((d, i) => {
+    const x = W - w - m, y = H - (m + (i + 1) * h + i * m); if (y < 0) return;
+    const cam = lensCam(d, TILES[i], w / h); DRONES.forEach((g, k) => { g.visible = k !== i; });
+    if (isRT) { rt.viewport.set(x, y, w, h); rt.scissor.set(x, y, w, h); rt.scissorTest = true; renderer.setRenderTarget(rt); }
+    else { renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); renderer.setScissorTest(true); }
+    renderer.render(scene, cam); BAYR[i] = { x: x / W, y: y / H, w: w / W, h: h / H };
+  });
+  if (isRT) { rt.scissorTest = false; rt.viewport.set(0, 0, rt.width, rt.height); renderer.setRenderTarget(rt); } else { renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight); }
+  DRONES.forEach((g, k) => { g.visible = k !== crew.live; });
+}
+
+/* ---------- labels ---------- */
+let hudAt = 0;
+function hud(now) {
+  if (now - hudAt < 250 || !SUBJ || SUBJECT === 'test') return; hudAt = now;
+  const o = SUBJ.observe(), S = SUBJ.state, br = Math.round(S.breath.rate.p);
+  $('src').textContent = `${o.activity} · breathing ${br}/min · looking at ${o.gazeLabel}`;
+  if (CREW.on) {
+    const d = crew.liveDrone; $('label').innerHTML = `<div class="t">ON AIR · ${d.name} · ${d.shot ? d.shot.label : ''}</div><div class="dim">ORANGUTAN 001 · ${o.activity}</div>`;
+    if (BAY.on) $('bay').innerHTML = crew.drones.map((x, i) => { const r = BAYR[i]; if (!r) return ''; return `<div class="m${i === crew.live ? ' on' : ''}" style="left:calc(${(r.x * 100).toFixed(2)}vw + 3px);top:calc(${((1 - r.y - r.h) * 100).toFixed(2)}vh + 3px);max-width:calc(${(r.w * 100).toFixed(2)}vw - 14px)"><b style="color:${x.col}">■</b> <b>${x.name}</b> · ${x.shot ? x.shot.label : ''} · ${x.status}</div>`; }).join('');
+  } else $('label').innerHTML = `<div class="t">ORANGUTAN 001 · PHOTOREAL</div><div class="dim">source-built · ${o.activity} · ${Math.round(mmFor(camera.fov))} mm f/${FSTOP.toFixed(1)}</div>`;
+}
+
+/* ---------- build the subject ---------- */
+let SUBJ = null, BODY = null; const PERF = { sim: 0, render: 0, frames: 0, dt: [] };
+function makeAnimal(seed) { // the brain lives; the body follows it
+  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1) });
+  const g = new THREE.Group(); g.name = 'ORANGUTAN 001 · photoreal'; g.add(brain.root, BODY.root);
+  return { root: g, brain, body: BODY, update(dt, t, wind) { brain.update(dt, t, wind); BODY.update(dt); }, bounds: () => BODY.bounds(), observe: () => brain.observe(), reset: s => brain.reset(s),
+    log: brain.log, metrics: brain.metrics, version: VERSION + ' · ' + BODY_VERSION, get state() { return brain.state; } };
+}
+(async () => {
+  frameAll(true); requestAnimationFrame(loop);
+  try {
+    status(SUBJECT === 'test' ? 'PLACING THE TEST SUBJECT …' : 'BUILDING THE ANIMAL FROM ITS CODE …'); await new Promise(r => setTimeout(r, 30));
+    SUBJ = SUBJECT === 'test' ? testSubject() : makeAnimal(SEED);
+    scene.add(SUBJ.root);
+    const ff = Math.min(1800, +(Q.get('t') || 0)); if (ff > 0 && SUBJECT !== 'test') { for (let k = 1; k <= ff * 60; k++) SUBJ.brain.update(1 / 60, k / 60, { t: k / 60, amt: 1 }); BODY.update(0); }
+    BOX = SUBJ.bounds();
+    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands · ${Math.round(BODY.stats.buildMs)} ms`; } else { $('src').textContent = 'a still test form · no animal'; $('bCrew').disabled = true; }
+    frameAll(true); status('');
+    if (Q.get('crew') === '1' && crew) toggleCrew(true);
+    window.STUDIO_READY = true;
+  } catch (e) { console.error(e); status('THE ANIMAL COULD NOT BE BUILT'); }
+})();
+// for tests and OBS: read-only views plus the same toggles the keys use
+window.MZ = {
+  get creature() { return SUBJ; }, get view() { return { pos: camera.position.toArray(), target: controls.target.toArray(), flying: !!FLY, crew: CREW.on, dof: DOF, f: FSTOP, mm: mmFor(camera.fov) }; }, get crew() { return crew; }, cuts: CUTS, observe: () => SUBJ && SUBJ.observe(),
+  crew_on: v => toggleCrew(v), frame: (dt = 1 / 30) => { CAPTURE.dt = dt; loop(performance.now()); }, dof: () => togglePrint(), photograph: () => photograph(), get body() { return BODY; }, direct() { if (BODY) BODY.direct(true); renderer.setRenderTarget(null); renderer.render(scene, camera); if (BODY) BODY.direct(false); }, look(pos, target) { FLY = null; camera.position.set(...pos); controls.target.set(...target); controls.update(); FOCUS = camera.position.distanceTo(controls.target); },
+  perf() { const a = PERF.dt.length ? PERF.dt.reduce((x, y) => x + y, 0) / PERF.dt.length : 0, n = Math.max(1, PERF.frames); return { fps: a ? 1 / a : 0, simMsPerFrame: PERF.sim / n, renderMsPerFrame: PERF.render / n, strands: BODY ? BODY.stats.strands : 0, hairDrawn: BODY ? BODY.hair.geometry.instanceCount : 0, governor: GOV.log, pixelRatio: renderer.getPixelRatio(), frames: PERF.frames, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles }; },
+};
+</script>
+</body>
+</html>
