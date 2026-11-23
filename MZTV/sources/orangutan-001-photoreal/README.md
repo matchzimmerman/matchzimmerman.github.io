@@ -16,7 +16,7 @@ HARIL STUDIO [#64](https://github.com/matchzimmerman/haril-studio/issues/64) (su
 ## Files
 | file | what it is |
 |---|---|
-| `brain.js` | the life engine split out of the 48PLANT `creature.js` (G1.3, `8f08852`). Behaviour unchanged: the behaviour log and every joint position are identical to the original for the same seed. Visuals removed; the joint hierarchy stays as the skeleton. Exposes `skeleton`, `signals` (breath, blink, eye pitch, wind) and `bindPose()`. |
+| `brain.js` | the life engine split out of the 48PLANT `creature.js` (G1.3, `8f08852`). Identical to the original at P1. **P1.1 change (MZ.Human 2026-11-23):** sitting down is now a drop. The rump falls on a cubic from rest, so it falls ever faster, lands at about 0.6 m/s and is caught by a stiff, critically damped spring (about 2 mm of soft-tissue give). Before, the pelvis height went through a slow spring, which made the descent read as linear. Visuals removed; the joint hierarchy stays as the skeleton. Exposes `skeleton`, `signals` (breath, blink, eye pitch, wind) and `bindPose()`. |
 | `body.js` | everything you see (P1, below). Follows the brain's joints, never writes to them. |
 | `studio.html` | the 48PLANT studio with the print pass replaced by a photographic pipeline. Generated: `python3 tools/make_studio.py ../orangutan-001/studio.html studio.html` |
 | `tools/life-test.mjs` | the brain guard (unchanged checks): `npm i three@0.170.0`, then `node MZTV/sources/orangutan-001-photoreal/tools/life-test.mjs 300 1,2,3,4,5,6,7,8,9,10` |

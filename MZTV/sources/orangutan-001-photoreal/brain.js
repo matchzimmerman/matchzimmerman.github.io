@@ -141,7 +141,7 @@ export function createBrain(THREE, config = {}) {
   const toLocal = (w) => { const dx = w.x - S.pos.x, dz = w.z - S.pos.z, c = Math.cos(S.heading), s = Math.sin(S.heading); return V3(dx * c - dz * s, w.y, dx * s + dz * c); };
   // contact layout scales with the limbs (G1 values were set for 0.72 m arms and 0.52 m legs)
   const AS = (A.upperArm + A.foreArm) / 0.72, LS = (A.thigh + A.shank) / 0.52;
-  const QUAD_PY = 0.44 * LS, SIT_PY = 0.12, VMAX = 0.32 * LS;
+  const QUAD_PY = 0.44 * LS, SIT_PY = 0.12, VMAX = 0.32 * LS, SIT_DROP_T = 1.45;
   const NEUTRAL = {
     quad: { arm: (s) => [0.21 * s, A.wristFist, 0.47 * AS], leg: (s) => [0.15 * s, A.ankle, -0.02] },
     sit: { arm: (s) => [0.29 * s, A.wristPalm, 0.1], leg: (s) => [0.19 * s, A.ankle, 0.3 * LS] },
@@ -310,7 +310,12 @@ export function createBrain(THREE, config = {}) {
     else if (m === 'sitdown') {
       S.activity = 'sitting down';
       if (!S.plan) { S.plan = { start: S.pos.clone(), hands: 0 }; lookAt(toWorld(0, 0.02, 0.6), 'the floor ahead', [3, 3]); ev('sit-down', {}); }
-      const k = smoother(mt / 1.7); P.py.g = lerp(QUAD_PY, SIT_PY, k); P.pitch.g = lerp(0.87, 0.24, smoother(mt / 2.0)); S.pos.copy(S.plan.start).addScaledVector(fwd(), -TRAVEL * k);
+      const k = smoother(mt / 1.7); P.pitch.g = lerp(0.87, 0.24, smoother(mt / 2.0)); S.pos.copy(S.plan.start).addScaledVector(fwd(), -TRAVEL * k);
+      // the drop: the legs give way progressively, so the rump falls ever faster and lands (photoreal fork, MZ.Human 2026-11-23).
+      // Height follows a cubic from rest (accelerating all the way); on contact the soft tissue takes the impact (a stiff, critically damped spring).
+      if (!S.plan.landed) { const T = SIT_DROP_T, u = clamp(mt / T, 0, 1), D = QUAD_PY - SIT_PY;
+        P.py.p = P.py.g = QUAD_PY - D * u * u * u; P.py.v = -3 * D * u * u / T; S.plan.pyDirect = true;
+        if (u >= 1) { S.plan.landed = true; S.plan.pyDirect = false; S.landT = S.t; P.py.g = SIT_PY; ev('rump contact', { v: +P.py.v.toFixed(2) }); } }
       if (mt > 0.35 && S.plan.hands === 0) { const n = NEUTRAL.sit.arm(1); swing(L.handL, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -TRAVEL), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 1; }
       if (mt > 0.8 && S.plan.hands === 1) { const n = NEUTRAL.sit.arm(-1); swing(L.handR, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -TRAVEL), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 2; }
       if (mt > 2.3) { for (const l of LIMBS) if (l.kind === 'leg') l.grip = 'sit'; setMode('sit', 'down'); S.walked = 0; }
@@ -431,7 +436,8 @@ export function createBrain(THREE, config = {}) {
   function step(h) {
     S.t += h;
     behave(h);
-    for (const k in S.P) stepSpring(S.P[k], S.mode === 'rise' || S.mode === 'sitdown' ? 3.4 : 2.6, h);
+    const pyDirect = S.mode === 'sitdown' && S.plan && S.plan.pyDirect, landing = S.t - (S.landT ?? -9) < 0.9;
+    for (const k in S.P) { if (k === 'py' && pyDirect) continue; stepSpring(S.P[k], k === 'py' && landing ? 24 : S.mode === 'rise' || S.mode === 'sitdown' ? 3.4 : 2.6, h); }
     const b = S.breath; if (S.mode !== 'walk') b.rate.g = 14; stepSpring(b.rate, 0.25, h); b.depth.g = S.mode === 'walk' ? 1.6 : 1; stepSpring(b.depth, 0.8, h); b.phase = (b.phase + b.rate.p / 60 * h) % 1;
     if (S.t >= S.blink.next) { S.blink.t = S.t; S.blink.next = S.t + rr(2.5, 7); }
     for (const l of LIMBS) limbTick(l, h);

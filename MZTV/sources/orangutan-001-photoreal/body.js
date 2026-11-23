@@ -493,9 +493,15 @@ export function createBody(THREE, brain, opts = {}) {
     hairGeo.instanceCount = N; }
 
   const NB = BONES.length;
+  // body capsules the coat drapes over (bone-local ends, radius in that bone's units): ARTISTIC, a little inside the skin
+  const CAPS = [[bPelvis, [-0.07, 0, -0.035], [0.07, 0, -0.035], 0.085], [bChest, [0, 0.07, 0.03], [0, 0.2, 0.04], 0.122], [bChest, [-0.1, 0.33, -0.02], [0.1, 0.33, -0.02], 0.098], [bHead, [0, 0.075, 0.0], [0, 0.11, -0.01], 0.07]];
+  for (const name in LB) { const r = LB[name], arm = r.l.kind === 'arm';
+    CAPS.push([r.up, [0, 0, 0], [0, -r.up.len, 0], arm ? 0.036 : 0.05], [r.lo, [0, 0, 0], [0, -r.lo.len, 0], arm ? 0.029 : 0.034]); }
+  const NC = CAPS.length, capA = CAPS.map(() => V3()), capB = CAPS.map(() => V3()), capR = new Float32Array(NC);
+  function updateCaps() { CAPS.forEach(([b, a, c, r], i) => { const M = b.obj.matrixWorld; capA[i].set(...a).applyMatrix4(M); capB[i].set(...c).applyMatrix4(M); capR[i] = r * V3().setFromMatrixScale(M).x; }); }
   const lag = Array.from({ length: NB }, () => V3());
   const HU = {
-    boneTexture: { value: null }, uGrav: { value: V3(0, -1, 0) }, uWind: { value: V3() }, uLag: { value: lag }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1920, 1080) },
+    boneTexture: { value: null }, uGrav: { value: V3(0, -1, 0) }, uCapA: { value: capA }, uCapB: { value: capB }, uCapR: { value: capR }, uWind: { value: V3() }, uLag: { value: lag }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1920, 1080) },
     uRoot: { value: lin(LOOK.hairRoot) }, uMid: { value: lin(LOOK.hairMid) }, uTip: { value: lin(LOOK.hairTip) },
     uKeyDir: { value: V3(-0.4, 0.85, 0.35).normalize() }, uKeyCol: { value: new THREE.Color(2.3, 2.25, 2.1) }, uFillDir: { value: V3(0.6, 0.4, -0.7).normalize() }, uFillCol: { value: new THREE.Color(0.45, 0.46, 0.5) },
     uSky: { value: new THREE.Color(1.1, 1.1, 1.1) }, uGround: { value: new THREE.Color(0.7, 0.66, 0.6) },
@@ -504,8 +510,9 @@ export function createBody(THREE, brain, opts = {}) {
   const HAIR_VS_COMMON = `
     #define SEG ${SEG}
     #define NB ${NB}
+    #define NC ${NC}
     attribute vec2 strand; attribute vec3 rootP, rootN, comb, clumpO; attribute vec4 prm, prm2, sIdx, sW;
-    uniform highp sampler2D boneTexture; uniform vec3 uGrav, uWind, uLag[NB]; uniform float uTime; uniform vec2 uRes;
+    uniform highp sampler2D boneTexture; uniform vec3 uGrav, uWind, uLag[NB], uCapA[NC], uCapB[NC]; uniform float uCapR[NC]; uniform float uTime; uniform vec2 uRes;
     mat4 bm(float i){ int size = textureSize(boneTexture, 0).x; int j = int(i) * 4; int x = j % size; int y = j / size;
       return mat4(texelFetch(boneTexture, ivec2(x, y), 0), texelFetch(boneTexture, ivec2(x + 1, y), 0), texelFetch(boneTexture, ivec2(x + 2, y), 0), texelFetch(boneTexture, ivec2(x + 3, y), 0)); }
     vec3 hairPoint(out vec3 T, out vec3 N0, out float tt, out float cov, out vec3 W) {
@@ -513,16 +520,22 @@ export function createBody(THREE, brain, opts = {}) {
       vec3 R = (modelMatrix * S * vec4(rootP, 1.0)).xyz; mat3 S3 = mat3(modelMatrix) * mat3(S);
       vec3 N = normalize(S3 * rootN), C = S3 * comb, O = S3 * clumpO; C = normalize(C - N * dot(C, N) + 1e-5);
       float len = prm.x, seed = prm.z, lift = prm2.x, clumpK = prm2.y, cs = prm2.w; tt = strand.x;
-      float stiff = clamp(len / 0.16, 0.08, 1.0); // short hair keeps its comb
+      float stiff = clamp(len / 0.16, 0.08, 1.0);
+      // how readily the strand gives to gravity, per metre of its length: long coat hangs, short hair keeps its comb (ARTISTIC)
+      float give = mix(3.0, 36.0, smoothstep(0.03, 0.13, len));
       vec3 d = normalize(C + N * lift), p = R; float segL = len / float(SEG); int kk = int(strand.x * float(SEG) + 0.5);
       vec3 kinkA = normalize(cross(N, C) + 1e-4), lagV = uLag[int(sIdx.x)];
       float ph = seed * 6.2831 + prm2.z * 3.0, sway = sin(uTime * (1.3 + seed) + ph) * 0.5 + sin(uTime * 0.53 + ph * 2.1) * 0.5;
       T = d;
-      for (int i = 0; i < SEG; i++) { if (i >= kk) break; float ti = float(i) / float(SEG);
-        vec3 force = uGrav * (0.35 + ti * 1.1) * stiff + (uWind * (0.6 + 0.4 * sway) + lagV) * ti * stiff;
-        d = normalize(d + force * 0.55 + kinkA * sin(ti * 7.0 + ph) * 0.035);
-        p += d * segL; float hgt = dot(p - R, N), minH = 0.016 * sqrt(ti) * stiff + 0.0006; if (hgt < minH) p += N * (minH - hgt); // stay off its own skin
-        T = d; }
+      for (int i = 0; i < SEG; i++) { if (i >= kk) break; float ti = float(i) / float(SEG), along = ti * len;
+        float g = give * segL * smoothstep(0.004, 0.018, along);                      // the follicle holds the first centimetre or so
+        d = normalize(d + uGrav * g + (uWind * (0.6 + 0.4 * sway) + lagV) * ti * 0.5 * stiff + kinkA * sin(ti * 7.0 + ph) * 0.03);
+        vec3 np = p + d * segL;
+        float hgt = dot(np - R, N), minH = 0.003 * sqrt(ti) * stiff + 0.0006; if (hgt < minH) np += N * (minH - hgt); // off its own skin
+        for (int c = 0; c < NC; c++) { vec3 a = uCapA[c], ab = uCapB[c] - a; float hh = clamp(dot(np - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);
+          vec3 q = a + ab * hh, e = np - q; float dl = length(e), r = uCapR[c] + 0.004;
+          if (dl < r) np = q + (dl > 1e-5 ? e / dl : N) * r; }                         // drape over the body, never through it
+        d = normalize(np - p + 1e-6); p = np; T = d; }
       float t = strand.x; p += O * clumpK * smoothstep(0.15, 1.0, t);           // clumps gather toward their tips
       N0 = N; W = p;
       // ribbon facing the camera, never thinner than a pixel (coverage carries the rest)
@@ -592,7 +605,7 @@ export function createBody(THREE, brain, opts = {}) {
       _p.setFromMatrixPosition(b.obj.matrixWorld);
       if (dt > 0) { if (prevP[i]) { const vel = _p.clone().sub(prevP[i]).divideScalar(dt); lagV[i].lerp(vel.multiplyScalar(-0.9), 1 - Math.exp(-dt * 6)); lag[i].copy(lagV[i]).clampLength(0, 1.5); } prevP[i] = (prevP[i] || V3()).copy(_p); }
     });
-    skeleton.update(); if (!skeleton.boneTexture) skeleton.computeBoneTexture(); HU.boneTexture.value = skeleton.boneTexture;
+    skeleton.update(); if (!skeleton.boneTexture) skeleton.computeBoneTexture(); HU.boneTexture.value = skeleton.boneTexture; updateCaps();
     // lids: blink, and the upper lid follows the eye's pitch a little
     for (const L of LIDS) { L.up.rotation.x = -0.42 - 0.6 * G.eyePitch + G.blink * 1.5; L.lo.rotation.x = 0.05 - 0.3 * G.eyePitch - G.blink * 0.15; } // open: the upper lid's edge just over the iris
     const w = G.wind, gust = 0.42 + 0.22 * Math.sin(w.t * 0.0648) + 0.16 * Math.sin(w.t * 0.153 + 1.3);
