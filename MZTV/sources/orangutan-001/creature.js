@@ -21,17 +21,19 @@
    Units: metres, Y up, the studio floor at y = 0.
    ===================================================================== */
 
-export const VERSION = 'orangutan-001 · g1.1 (#63 calibration) · 2026-11-22';
+export const VERSION = 'orangutan-001 · g1.2 (#63 v2 calibration) · 2026-11-22';
 
 // adult female Bornean orangutan.
-// Limb segments: adult female Pongo group-mean bone lengths (humerus, radius, femur, tibia), Kralick et al. 2023,
-// via the #63 reference package v1 — osteological proxies for joint-centre lengths (Inferred).
+// Limb segments: adult female P. pygmaeus mean maximum bone lengths, n = 15 (Powell et al. 2024, #63 package v2),
+// replacing v1's mixed-Pongo means (Kralick et al. 2023: 0.325 / 0.328 / 0.253 / 0.218). Osteological proxies
+// for joint-centre lengths (Inferred). Hand and foot: scaled from one adult male's external lengths (Isler et al.
+// 2006: hand 0.185, foot 0.28 m) by the female/male humerus ratio ≈ 0.9 (Inferred, single-case basis).
 // Trunk, hands, feet, head: still MZ.Claude estimates (no sourced values yet); the trunk is scaled with the limbs
 // (trunkScale ≈ the limbs' 0.906 reduction from G1) so proportions stay coherent (Inferred).
 export const ANATOMY = {
   spine: 0.40, shoulderHalf: 0.16, hipHalf: 0.086, trunkScale: 0.9,   // spine / shoulderHalf are in trunk-local units (× trunkScale in the world)
-  upperArm: 0.325, foreArm: 0.328, palm: 0.10, finger: [0.042, 0.034, 0.024], thumb: [0.03, 0.022],
-  thigh: 0.253, shank: 0.218, sole: 0.11, toe: [0.045, 0.035], hallux: [0.028, 0.02],
+  upperArm: 0.335, foreArm: 0.338, palm: 0.085, finger: [0.036, 0.029, 0.021], thumb: [0.026, 0.019],
+  thigh: 0.26, shank: 0.23, sole: 0.125, toe: [0.045, 0.035], hallux: [0.028, 0.02],
   wristFist: 0.11, wristPalm: 0.035, ankle: 0.06,
   palmStepP: 0.12,   // share of walking hand contacts made with a modified palm instead of a fist (43 fist / 6 palm of 49, Orlikoff et al. 2026, #63)
 };
@@ -102,11 +104,11 @@ export function createCreature(THREE, config = {}) {
   const pelvis = new THREE.Group(); body.add(pelvis);
   const chest = new THREE.Group(); chest.scale.setScalar(A.trunkScale); pelvis.add(chest);
   const neck = new THREE.Group(); neck.position.set(0, A.spine + 0.01, 0.035); chest.add(neck);
-  const head = new THREE.Group(); head.position.set(0, 0.05, 0.015); neck.add(head);
+  const head = new THREE.Group(); head.position.set(0, 0.05, 0.015); head.scale.setScalar(1 / A.trunkScale); neck.add(head); // head kept at G1 size: matches two female P. pygmaeus skulls (#63 v2)
   const bodyMeshes = []; const track = o => { bodyMeshes.push(o); return o; };
 
   // trunk (chest frame: origin at the lumbar joint, +Y up the spine, +Z the belly side)
-  track(mesh(shaggy(0.135, 0.085, 0.12, 11, 0.16), M.coat, pelvis, V3(0, 0.02, -0.035))).scale.setScalar(A.trunkScale); // hips / seat
+  track(mesh(shaggy(0.172, 0.088, 0.125, 11, 0.14), M.coat, pelvis, V3(0, 0.02, -0.035)));   // hips / seat: ~0.36 m across, the external pelvic breadth of captive females (Hammond et al. 2014, #63 v2)
   const belly = track(mesh(shaggy(0.15, 0.16, 0.15, 12, 0.14), M.coat, chest, V3(0, 0.13, 0.035)));  // pot belly
   const thorax = track(mesh(shaggy(0.17, 0.13, 0.125, 13, 0.16), M.coat, chest, V3(0, 0.29, 0.0)));
   track(mesh(shaggy(0.19, 0.075, 0.105, 14, 0.2), M.coatDeep, chest, V3(0, 0.365, -0.025)));        // shoulder hump
@@ -238,22 +240,25 @@ export function createCreature(THREE, config = {}) {
     }
   }
   function swing(l, toWorldP, dur, lift, grip, why) {
-    l.mode = 'swing'; l.p0 = l.p.clone(); l.p1 = toWorldP.clone(); l.t0 = S.t; l.dur = Math.max(0.2, dur); l.lift = lift; l.nextGrip = grip; l.why = why;
+    l.freeFn = null; l.mode = 'swing'; l.p0 = l.p.clone(); l.p1 = toWorldP.clone(); l.t0 = S.t; l.dur = Math.max(0.2, dur); l.lift = lift; l.nextGrip = grip; l.why = why;
     ev('swing', { limb: l.name, why, to: [+toWorldP.x.toFixed(3), +toWorldP.y.toFixed(3), +toWorldP.z.toFixed(3)] });
   }
-  function freeLimb(l, localTarget, grip, why) { l.mode = 'free'; l.free = V3(...localTarget); l.grip = grip; if (!l.freeP) l.freeP = l.p.clone(); else l.freeP.copy(l.p); l.freeV.set(0, 0, 0); ev('free', { limb: l.name, why }); }
+  function freeLimb(l, localTarget, grip, why, fn) { l.mode = 'free'; l.freeFn = fn || null; l.free = V3(...(localTarget || [0, 0, 0])); l.grip = grip; if (!l.freeP) l.freeP = l.p.clone(); else l.freeP.copy(l.p); l.freeV.set(0, 0, 0); ev('free', { limb: l.name, why }); }
   function limbTick(l, dt) {
     if (l.mode === 'swing') {
       const k = (S.t - l.t0) / l.dur, e = smoother(k);
       l.p.lerpVectors(l.p0, l.p1, e); l.p.y += l.lift * Math.sin(Math.PI * clamp(k, 0, 1));
       if (k >= 1) { l.mode = 'plant'; l.p.copy(l.p1); l.plant.copy(l.p1); l.grip = l.nextGrip || l.grip; S.contactsChanged++; ev('plant', { limb: l.name }); }
     } else if (l.mode === 'free') {
-      const w = toWorld(l.free.x, l.free.y, l.free.z), wgt = 7; // critically damped follow of a body-relative target
+      const w = l.freeFn ? l.freeFn() : toWorld(l.free.x, l.free.y, l.free.z), wgt = l.grip === 'scratch' ? 8 : 7; // critically damped follow of a body-relative target
+      if (l.grip === 'scratch' && l.freeP.distanceTo(w) < 0.06) { const ph = S.t * Math.PI * 2 * l.scratchHz; w.addScaledVector(UP, 0.016 * Math.sin(ph)).addScaledVector(fwd(), 0.008 * Math.cos(ph)); } // the to-and-fro of a scratch, once the hand has arrived
       const a = w.clone().sub(l.freeP).multiplyScalar(wgt * wgt).addScaledVector(l.freeV, -2 * wgt); l.freeV.addScaledVector(a, dt); l.freeP.addScaledVector(l.freeV, dt); l.p.copy(l.freeP);
     } else l.p.copy(l.plant);
     const want = l.mode === 'swing' ? (l.kind === 'arm' ? (l.nextGrip === 'fist' ? 0.85 : 0.55) : 0.7)
+      : l.grip === 'scratch' ? 0.75 + 0.2 * Math.sin(S.t * Math.PI * 2 * l.scratchHz)
+      : l.grip === 'fiddle' ? 0.08 + 0.2 * (0.5 + 0.5 * Math.sin(S.t * 2.3 + Math.sin(S.t * 0.7) * 2))
       : l.grip === 'fist' ? 1 : l.grip === 'palm' ? 0.1 : l.grip === 'inspect' ? 0.25 + 0.5 * (0.5 + 0.5 * Math.sin(S.t * 1.7 + l.side)) : l.grip === 'walk' ? 0.6 : 0.3;
-    l.curl.g = want; stepSpring(l.curl, 9, dt);
+    l.curl.g = want; if (l.grip === 'scratch') l.curl.p = want; else stepSpring(l.curl, 9, dt);
   }
 
   // ---------- two-bone IK (analytic) ----------
@@ -320,19 +325,41 @@ export function createCreature(THREE, config = {}) {
 
   function behave(dt) {
     const m = S.mode, mt = S.t - S.modeT, P = S.P;
+    // safety first: a planted limb that would be stretched past its reach is lifted and re-placed rather than dragged
+    for (const l of LIMBS) if (l.mode === 'plant' && l.reach > 0.965 && !(S.mode === 'walk' && LIMBS.some(o => o.mode === 'swing' && o.kind === l.kind))) {
+      const pose = S.mode === 'sit' || S.mode === 'sitdown' ? 'sit' : 'quad';
+      swing(l, toWorld(...neutralLocal(l, pose)), 0.5, 0.05, l.grip, 'out of reach');
+    }
     // ----- SIT -----
     if (m === 'sit') {
       sitTargets(); S.activity = 'sitting';
-      if (T('sitLen', 12, 24) && !S.plan) { delete S.timers.sitLen; setMode('rise', 'restless'); return; }
+      if (T('sitLen', 12, 24) && !S.plan && !LIMBS.some(l => l.mode === 'swing')) { delete S.timers.sitLen; setMode('rise', 'restless'); return; }
       if (T('shift', 3, 8)) { resetT('shift', 4, 9); P.roll.g = rr(-0.07, 0.07); P.px.g = P.roll.g * -0.25; S.sitPitch = 0.21 + rr(-0.05, 0.08); ev('weight-shift', { roll: +P.roll.g.toFixed(3) }); }
       if (!S.plan && T('hand', 5, 11)) {
         resetT('hand', 6, 14); const l = rnd() < 0.5 ? L.handL : L.handR;
-        if (rnd() < 0.45) { // bring a hand up and look at it
+        const roll = rnd();
+        if (roll < 0.3) { // scratch: head/face or torso/limbs; short (<5 s) or long (>5 s) bouts; attention need not follow the hand (#63 v2)
+          const other = l.side > 0 ? L.handR : L.handL, leg = l.side > 0 ? L.footL : L.footR, kind = rnd();
+          const site = kind < 0.4 ? ['head', () => head.localToWorld(V3(0.075 * l.side, 0.11, -0.01))]
+            : kind < 0.6 ? ['opposite arm', () => other.up.localToWorld(V3(0.02 * l.side, -0.13, 0.05))]
+            : kind < 0.8 ? ['belly', () => chest.localToWorld(V3(0.06 * l.side, 0.12, 0.17))]
+            : ['thigh', () => leg.up.localToWorld(V3(0, -0.12, 0.06))];
+          const long = rnd() < 0.3, dur = long ? rr(5.5, 11) : rr(1.6, 4.5);
+          l.scratchHz = rr(3.5, 5.5); freeLimb(l, null, 'scratch', 'scratch ' + site[0], site[1]);
+          S.plan = { kind: 'scratch', l, until: S.t + dur + 0.6, site: site[0] }; S.activity = 'scratching its ' + site[0];
+          ev('scratch', { limb: l.name, site: site[0], bout: long ? 'long' : 'short', s: +dur.toFixed(2) });
+          if (rnd() < 0.35) lookAt(l.p.clone(), 'its scratching hand', [0.6, 1.2]); // a glance, not a lock
+        } else if (roll < 0.45) { // fiddle: fingers work a little while the attention is elsewhere (#63 v2)
+          l.grip = 'fiddle'; S.plan = { kind: 'fiddle', l, until: S.t + rr(3, 8) }; S.activity = 'fiddling with its fingers'; ev('fiddle', { limb: l.name });
+        } else if (roll < 0.75) { // engaged inspection: bring a hand up and look at it
           freeLimb(l, [0.07 * l.side, 0.47, 0.32], 'inspect', 'inspect');
           S.plan = { kind: 'inspect', l, until: S.t + rr(3, 5.5) }; S.activity = 'looking at its hand';
           S.gaze.lockOn = null; lookAt(l.p.clone(), 'its own hand', [99, 99]); S.gaze.lockOn = () => l.end.g.getWorldPosition(V3()).add(V3(0, 0.0, 0));
         } else { const n = NEUTRAL.sit.arm(l.side); swing(l, toWorld(n[0] + rr(-0.06, 0.05) * l.side, A.wristPalm, n[2] + rr(-0.08, 0.12)), rr(0.6, 0.9), 0.07, 'palm', 'reposition'); }
       }
+      if (S.plan && S.plan.kind === 'scratch' && S.t > S.plan.until) { const l = S.plan.l, n = NEUTRAL.sit.arm(l.side); l.freeFn = null; swing(l, toWorld(n[0], A.wristPalm, n[2] + rr(-0.04, 0.08)), 0.8, 0.05, 'palm', 'done scratching'); S.plan = null; }
+      if (S.plan && S.plan.kind === 'fiddle' && S.t > S.plan.until) { S.plan.l.grip = 'palm'; S.plan = null; }
+      if (S.plan && S.plan.kind === 'scratch') S.activity = 'scratching its ' + S.plan.site; else if (S.plan && S.plan.kind === 'fiddle') S.activity = 'fiddling with its fingers';
       if (S.plan && S.plan.kind === 'inspect') {
         S.activity = 'looking at its hand';
         if (S.t > S.plan.until) { const l = S.plan.l, n = NEUTRAL.sit.arm(l.side); swing(l, toWorld(n[0], A.wristPalm, n[2] + rr(-0.04, 0.08)), 0.9, 0.05, 'palm', 'put down'); S.gaze.lockOn = null; S.plan = null; S.gaze.next = S.t + rr(0.4, 1); }
@@ -369,15 +396,10 @@ export function createCreature(THREE, config = {}) {
       if (mt > 0.8 && S.plan.hands === 1) { const n = NEUTRAL.sit.arm(-1); swing(L.handR, toWorld(n[0], n[1], n[2], S.plan.start.clone().addScaledVector(fwd(), -TRAVEL), S.heading), 1.0, 0.08, 'palm', 'sit'); S.plan.hands = 2; }
       if (mt > 2.3) { for (const l of LIMBS) if (l.kind === 'leg') l.grip = 'sit'; setMode('sit', 'down'); S.walked = 0; }
     }
-    // safety: a planted limb that would be stretched past its reach is lifted and re-placed rather than dragged
-    for (const l of LIMBS) if (l.mode === 'plant' && l.reach > 0.97 && !(S.mode === 'walk' && LIMBS.some(o => o.mode === 'swing' && o.kind === l.kind))) {
-      const pose = S.mode === 'sit' || S.mode === 'sitdown' ? 'sit' : 'quad';
-      swing(l, toWorld(...neutralLocal(l, pose)), 0.5, 0.05, l.grip, 'out of reach');
-    }
   }
   function settle() { // step any limb that ended far from its neutral contact, one at a time, hind limbs first
     if (LIMBS.some(l => l.mode === 'swing')) return true;
-    const order = [L.footL, L.footR, L.handL, L.handR];
+    const order = [L.footL, L.footR, L.handL, L.handR].sort((a, b) => (b.reach > 0.9 ? b.reach : 0) - (a.reach > 0.9 ? a.reach : 0)); // most strained first, else hind limbs first
     for (const l of order) { const n = toWorld(...neutralLocal(l, 'quad')); n.y = l.plant.y; if (l.plant.distanceTo(n) > 0.075) { swing(l, toWorld(...neutralLocal(l, 'quad')), 0.45, l.kind === 'arm' ? 0.07 : 0.05, l.kind === 'arm' ? 'fist' : 'walk', 'settle'); return true; } }
     return false;
   }
@@ -397,7 +419,10 @@ export function createCreature(THREE, config = {}) {
     const vWant = arriving ? 0 : Math.min(VMAX, dist * 0.6) * (Math.abs(dh) > 1.2 ? 0.35 : 1);
     S.speed += clamp(vWant - S.speed, -0.35 * dt, 0.3 * dt);
     S.yawRate = clamp(dh * 1.2, -0.45, 0.45) * clamp(S.speed / 0.12 + 0.3, 0, 1);
-    S.heading = wrapPi(S.heading + S.yawRate * dt); S.pos.addScaledVector(fwd(), S.speed * dt);
+    // the body can't outrun its feet: ease travel and turning when a planted limb nears the end of its reach
+    const strain = Math.max(...LIMBS.filter(l => l.mode === 'plant').map(l => l.reach), 0), hold = clamp((0.975 - strain) / 0.06, 0, 1);
+    S.yawRate *= hold; const vStep = S.speed * hold;
+    S.heading = wrapPi(S.heading + S.yawRate * dt); S.pos.addScaledVector(fwd(), vStep * dt);
     // gait clock advances with distance travelled, so slow walking keeps each foot down longer
     // the gait clock counts turning as travel too (a limb ~0.45 m from the pivot moves with the turn)
     const ve = S.speed + Math.abs(S.yawRate) * 0.45;
@@ -452,13 +477,14 @@ export function createCreature(THREE, config = {}) {
       }
       // wrist / ankle target is the contact; poles: elbows back and out, knees forward and out
       let pole = l.kind === 'arm' ? F.clone().multiplyScalar(-1).addScaledVector(Lf, 0.55 * l.side).addScaledVector(UP, -0.2) : F.clone().addScaledVector(Lf, 0.75 * l.side).addScaledVector(UP, S.mode === 'sit' ? 0.9 : 0.15);
-      if (l.kind === 'arm' && l.grip === 'inspect') pole = DOWN.clone().addScaledVector(Lf, 0.6 * l.side).addScaledVector(F, -0.3);
+      if (l.kind === 'arm' && (l.grip === 'inspect' || l.grip === 'scratch')) pole = DOWN.clone().addScaledVector(Lf, 0.6 * l.side).addScaledVector(F, -0.3);
       l.pole = l.pole ? l.pole.lerp(pole, 0.08) : pole.clone();
       const r = solve(l, base, l.p, l.pole);
       // end segment orientation
       let dir, dorsal;
       if (l.kind === 'arm') {
         if ((l.mode !== 'swing' && l.grip === 'fist') || (l.mode === 'swing' && l.nextGrip === 'fist')) { dir = DOWN.clone().addScaledVector(F, l.wristExt ?? 0.35); dorsal = F.clone().addScaledVector(Lf, 0.2 * l.side); }
+        else if (l.grip === 'scratch' && l.mode === 'free') { dir = (l.freeFn ? l.freeFn() : r.wrist.clone()).sub(r.elbow).normalize(); dorsal = r.wrist.clone().sub(chest.localToWorld(V3(0, A.spine * 0.5, 0))).normalize(); }
         else if (l.grip === 'inspect') { const toFace = headPivot().sub(r.wrist).normalize(); dir = UP.clone().addScaledVector(F, 0.25).addScaledVector(Lf, -0.3 * l.side); dorsal = toFace.multiplyScalar(-1); }
         else { dir = F.clone().addScaledVector(Lf, 0.55 * l.side).addScaledVector(DOWN, 0.12); dorsal = UP.clone(); }
         if (l.mode === 'swing') dir.lerp(r.wrist.clone().sub(r.elbow).normalize(), 0.5 * Math.sin(Math.PI * clamp((S.t - l.t0) / l.dur, 0, 1)));

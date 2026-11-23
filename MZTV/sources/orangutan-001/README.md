@@ -78,6 +78,22 @@ Contract (new, as proposed in #62): `createCreature(THREE, {seed}) → { root, u
 - **Still unsourced** (the package returned null): trunk, hand, foot and head dimensions; posture angles and contacts; gait timing; bout durations and transitions; blink, breathing and eye/head timing; hair lengths and colours; documentary holds.
 - Life test after calibration: all 5 seeds pass; peak reach 0.94–0.96; slip ≈ 1e-16 m; peak limb speed 2.3 m/s.
 
+## G1.2 · calibration from #63 package v2 (MZ.GPT, 2026-11-22)
+- **Limbs:** now *P. pygmaeus*-specific female bone means, n = 15 (Powell et al. 2024): 0.335 / 0.338 / 0.26 / 0.23 m. v1's mixed-*Pongo* values are kept in a code comment.
+- **Hands and feet:** hand 0.17 m and foot about 0.25 m, scaled from one adult male's external lengths (Isler et al. 2006) by the female/male humerus ratio (Inferred, single case).
+- **Head and hips:** the head stays at G1 size, which matches two female skulls (zygomatic 0.133 m, max length 0.206 m). The seat widens to about 0.36 m, the external pelvic breadth of three captive females (Hammond et al. 2014).
+- **Gait:** the bonobo duty-factor comparator (about 0.65) agrees with the 0.66 already in use; no change.
+- **New behaviors (from the v2 ethogram distinctions):**
+  - *scratching:* short (<5 s) or long (>5 s) bouts, to the head or to the opposite arm, belly or thigh; the hand oscillates at 3.5–5.5 Hz; gaze often elsewhere with an occasional glance
+  - *fiddling:* fingers work on a resting hand while attention wanders
+  - *engaged inspection:* the existing hand-to-face study with gaze locked
+  - No dominant scratching hand is assumed.
+- **Robustness:**
+  - the walk eases its travel and turning when a planted limb nears full reach
+  - the over-reach check runs before any state logic, and settling steps the most-strained limb first
+  - getting up waits for all limbs to be still
+- Life test: **10 seeds pass**; peak reach ≤ 0.986, slip ≈ 1e-16 m.
+
 ## Known gaps and errors (G1)
 - **Missing biological references:** the proportions are estimates. Needed:
   - limb segment lengths and girths for adult female *Pongo pygmaeus*, and for the flanged male (cheek pads and throat sac are not modelled)
