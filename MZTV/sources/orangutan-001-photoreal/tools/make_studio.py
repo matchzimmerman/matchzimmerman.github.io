@@ -137,11 +137,11 @@ rep("function bay(W, H, isRT) {", "function bay(W, H, isRT) { // the four monito
 rep("    SUBJ = SUBJECT === 'test' ? testSubject() : createCreature(THREE, { seed: SEED });",
     """    SUBJ = SUBJECT === 'test' ? testSubject() : makeAnimal(SEED);""")
 rep("    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = 'built from code · ' + VERSION; }",
-    "    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands${BODY.stats.buildings ? ` · ${BODY.stats.buildings} Baltimore buildings` : ''} · ${Math.round(BODY.stats.buildMs)} ms`; }")
+    "    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands${BODY.stats.buildings ? ` · ${BODY.stats.buildings} Baltimore buildings · ${BODY.stats.trees} trees` : ''} · ${Math.round(BODY.stats.buildMs)} ms`; }")
 rep("let SUBJ = null; const PERF = { sim: 0, render: 0, frames: 0, dt: [] };",
     """let SUBJ = null, BODY = null; const PERF = { sim: 0, render: 0, frames: 0, dt: [] };
 function makeAnimal(seed) { // the brain lives; the body follows it
-  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1), city: CITY });
+  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1), city: CITY, tone: Q.get('tone') || 'turquoise' });
   const g = new THREE.Group(); g.name = 'ORANGUTAN 001 · photoreal'; g.add(brain.root, BODY.root);
   return { root: g, brain, body: BODY, update(dt, t, wind) { brain.update(dt, t, wind); BODY.update(dt); }, bounds: () => BODY.bounds(), observe: () => brain.observe(), reset: s => brain.reset(s),
     log: brain.log, metrics: brain.metrics, version: VERSION + ' · ' + BODY_VERSION, get state() { return brain.state; } };

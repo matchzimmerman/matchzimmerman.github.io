@@ -9,10 +9,16 @@ Sources (both in haril-studio):
     permit footprints; proposed, not built). City buildings standing where the new Harborplace buildings go are dropped.
   Jones Falls field (branch claude/mzgs-jones-falls-field): today's buildings and streets in the valley north of the
     Harborplace frame. Where the two frames overlap, the Harborplace field wins (its buildings carry lidar tiers).
+Landmarks (P1.3, MZ.Human 2026-11-24):
+  trees (both fields: 2024 lidar crowns), USS Constellation (Harborplace field: hull outline, rail, masts, yards, bowsprit
+  from the 2024 point cloud), National Aquarium (Harborplace field height grid, 2 m, max-pooled to 6 m), Phoenix Shot
+  Tower (Jones Falls field: measured centre, 65.76 m to the tips, 12.32 m to 6.1 m diameter, 10 battlements), the Jones
+  Falls as surveyed in 1868 (open channel, now buried), and the Domino Sugars refinery and sign as built in HARBOUR LIGHT
+  (MZTV bit-field-047: boxes in metres from its origin 39.2748 N, 76.6003 W, converted with pyproj to UTM 18N).
 Coordinates: NAD83 / UTM 18N metres, written relative to ORIGIN (E 360500, N 4348600) and rounded to 0.1 m.
 Heights: metres above ground; each tier is a prism from z0 to z1.
 """
-import json, sys, argparse
+import json, sys, argparse, math
 
 ORIGIN = (360500.0, 4348600.0)
 HP_BOX = (360500.0, 4348600.0, 362100.0, 4350400.0)
@@ -70,6 +76,33 @@ def main():
         mid = l['c'][len(l['c']) // 2]
         if not in_hp(mid): S.append({'n': l.get('n', ''), 'c': loc(l['c'])})
     water = [e for e in HP['entities'] if e.get('type') == 'water_target'][0]['geometry']['coords']
+    O = ORIGIN; L = lambda x, y: [round(x - O[0], 1), round(y - O[1], 1)]
+    # trees: [x, y, height, crown radius]
+    trees = [[*L(t[0], t[1]), round(t[3], 1), round(t[4], 1)] for t in HP['context']['trees_now']['trees']]
+    trees += [[*L(t[0], t[1]), round(t[3], 1), round(t[4], 1)] for t in JF['context']['trees_now']['trees'] if not in_hp((t[0], t[1]))]
+    c = HP['context']['constellation']
+    con = {'name': c['name'], 'hull': [L(*p) for p in c['hull_outline']], 'layers': c['layers'], 'masts': [{'n': m['name'], 'at': L(*m['at']), 'top': m['top_above_water_m']} for m in c['masts']],
+           'yards': [{'a': L(*y['a']), 'b': L(*y['b']), 'z': y['z']} for y in c['yards']], 'bowsprit': {'a': L(*c['bowsprit']['a']), 'b': L(*c['bowsprit']['b']), 'za': c['bowsprit']['za'], 'zb': c['bowsprit']['zb']}, 'source': c['source'] + ' (Harborplace field)'}
+    st = [e for e in JF['entities'] if e.get('id') == 'shot-tower'][0]; sa = st['attributes']
+    shot = {'name': st['name'], 'at': L(*st['geometry']['coords']), 'height': sa['height_to_tips_m'], 'base_d': sa['base_diameter_m'], 'top_d': sa['top_diameter_m'], 'battlements': sa.get('battlements', 10), 'source': 'Jones Falls Field anchor (2024 point cloud circle fits)'}
+    g = HP['context']['aquarium']['grid']; k = 3; cells = []
+    for j in range(0, g['ny'], k):
+        for i in range(0, g['nx'], k):
+            hs = [g['h'][jj][ii] for jj in range(j, min(j + k, g['ny'])) for ii in range(i, min(i + k, g['nx'])) if g['h'][jj][ii] is not None]
+            if len(hs) >= 3: cells.append([round(g['e0'] + (i + k / 2) * g['step'] - O[0], 1), round(g['n0'] - (j + k / 2) * g['step'] - O[1], 1), round(max(hs), 1)])
+    aqua = {'name': HP['context']['aquarium']['name'], 'cell': g['step'] * k, 'cells': cells, 'source': 'Harborplace field height grid (2024 lidar), max-pooled'}
+    # Domino Sugars, from HARBOUR LIGHT (bit-field-047): addBox(x, z, half-north, half-east, z0, z1, ...), metres east (x) and north (z) of its origin
+    DE, DN = 361961.2, 4348492.7
+    HB = [(0, 140, 62, 34, 0, 40, 0, 'refinery house'), (96, 130, 34, 30, 0, 34, 0, 'char house'), (-110, 140, 50, 30, 0, 22, 4, 'raw sugar shed'), (-190, 150, 30, 28, 0, 16, 3, 'shed'),
+          (150, 95, 20, 16, 0, 26, 0, 'annex'), (0, 104, 30, 14, 40, 45, 0, 'roof house'), (0, 196, 150, 7, 0, 3, 0, 'wharf')]
+    dom = {'name': 'Domino Sugars refinery (1922) and sign (1951)', 'boxes': [{'c': L(DE + x, DN + z), 'hn': hn, 'he': he, 'z0': z0, 'z1': z1, 'gable': gb, 'n': nm} for x, z, hn, he, z0, z1, gb, nm in HB],
+           'stacks': [{'c': L(DE + 112, DN + 108), 'r': 2.6, 'z0': 34, 'z1': 70}, {'c': L(DE + 122, DN + 104), 'r': 2.4, 'z0': 34, 'z1': 66}],
+           'sign': {'c': L(DE, DN + 172), 'z0': 41, 'z1': 62.3, 'w': 36.6, 'faces': 'north (the harbour)'},
+           'source': 'MZTV bit-field-047 HARBOUR LIGHT (sign 120 x 70 ft, lit 1951, on the 1922 refinery on Key Highway); positions as built there, not surveyed'}
+    dom_boxes = [(DE + x - he, DN + z - hn, DE + x + he, DN + z + hn) for x, z, hn, he, *_ in HB]
+    before = len(B); B[:] = [b for b in B if not (b['s'] == 'hp' and any(x0 <= ORIGIN[0] + cen(b['tiers'][0]['r'])[0] <= x1 and y0 <= ORIGIN[1] + cen(b['tiers'][0]['r'])[1] <= y1 for x0, y0, x1, y1 in dom_boxes))]
+    rv = [e for e in JF['entities'] if e.get('id') == 'river-1868'][0]
+    rivers = [{'id': rv['id'], 'name': rv['name'], 'era': '1868', 'status': 'buried 1911-15 (conduits under the Fallsway)', 'r': loc(rv['geometry']['coords'])}]
     out = {
         'schema': 'orangutan-001.city-skin/1', 'origin_utm18n': ORIGIN, 'crs': 'EPSG:26918 (NAD83 / UTM 18N), metres relative to origin',
         'sources': {
@@ -78,9 +111,10 @@ def main():
                             'water': 'WT-1, 2024 DEM hydro-flattened', 'streets': HP['context']['streets']['source']},
             'jones_falls': {'repo': 'matchzimmerman/haril-studio', 'branch': 'claude/mzgs-jones-falls-field', 'ref': a.jf_ref, 'field': JF.get('built'),
                             'buildings': JF['context']['fabric_now']['source'], 'streets': JF['context']['streets']['source']}},
-        'counts': {'buildings': len(B), 'new_harborplace_buildings': len(by), 'hp_buildings_replaced_by_new': n_drop, 'jf_buildings_outside_hp_frame': n_jf, 'streets': len(S)},
+        'counts': {'trees': len(trees), 'buildings_under_domino_dropped': before - len(B), 'buildings': len(B), 'new_harborplace_buildings': len(by), 'hp_buildings_replaced_by_new': n_drop, 'jf_buildings_outside_hp_frame': n_jf, 'streets': len(S)},
         'keys': {'s': 'source: hp | jf | new', 'k': '0 masonry, 1 tower (>= 40 m), 2 new Harborplace', 'n': '1 = nominal height (no lidar / survey height)', 'g': 'glass part'},
-        'buildings': B, 'streets': S, 'water': loc(water),
+        'buildings': B, 'streets': S, 'water': loc(water), 'trees': trees, 'rivers': rivers,
+        'landmarks': {'constellation': con, 'shot_tower': shot, 'aquarium': aqua, 'domino': dom},
     }
     json.dump(out, open(a.out, 'w'), separators=(',', ':'))
     print(json.dumps(out['counts']))

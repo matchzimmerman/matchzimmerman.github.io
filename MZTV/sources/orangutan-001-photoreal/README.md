@@ -49,6 +49,21 @@ HARIL STUDIO [#64](https://github.com/matchzimmerman/haril-studio/issues/64) (su
 - **Coat:** grows from the streets only, as short fur (1.5–4.5 cm) so the city stands clear. Open land and plazas are bare skin, and the harbour is wet skin.
 - **Provenance:** Ground Survey data was private research. This build puts the derived city file on this repo's branch (public sources only: City GIS outlines, USGS lidar, the public permit plan).
 
+## P1.3: the whole city, turquoise (MZ.Human 2026-11-24)
+- **Skin is turquoise** (`?tone=natural` gives the animal's own colours back). The coat, eyes and city keep their colours.
+- **City everywhere with hair:** rump to neck, arms, legs (thigh to ankle), and the **crown**. The face, hands and feet carry none.
+  - **Head piece:** azimuthal, centred on the measured **Phoenix Shot Tower**, so the tower rises from the crown. North points toward the face.
+  - **Trunk:** returns to the Inner Harbor from the rump up through downtown.
+  - **Legs:** run hip to ankle.
+- **Water moves:** the Inner Harbor (WT-1) and the **Jones Falls as surveyed in 1868** (buried 1911–15). Both are bare wet skin with waves raised in the skin shader; the river runs downstream toward the wrist. The Falls crosses the crown and both arms.
+- **Landmarks**, each where it stands. Their footprints follow the skin and their walls lean toward the skin's own normal, so big ones wrap a thin limb.
+  - **USS Constellation** at Pier 1: hull, stripe, masts, yards and bowsprit, from the Harborplace field's 2024 point-cloud hints.
+  - **National Aquarium:** the field's 2 m lidar height grid, max-pooled to 6 m columns.
+  - **Phoenix Shot Tower:** measured, 65.76 m to the tips, tapering 12.32 m to 6.1 m, with 10 battlements.
+  - **Domino Sugars refinery, stacks, wharf and sign lattice,** as built in HARBOUR LIGHT (bit-field-047), converted from its origin with pyproj. It lands on the east shin. The neon glows as abstract tube strokes; the lettering itself is not reproduced.
+  - **3,531 trees** (2024 lidar crowns), about 1,700 of them on the body.
+- **Street fur is shorter on the head** (0.8–2.2 cm), to keep the crown city legible.
+
 ## What's evidence and what's art (#64 addendum)
 - **Measured:** none of the coat, skin or eye numbers are measurements of an adult female *P. pygmaeus*. None exist for this animal yet.
 - **Evidence-shaped:**

@@ -37,18 +37,24 @@
 
 import { createCitySkin } from './city.js';
 
-export const BODY_VERSION = 'orangutan-001 photoreal · body P1.2 (city skin) · 2026-11-24';
+export const BODY_VERSION = 'orangutan-001 photoreal · body P1.3 (city skin 2, turquoise) · 2026-11-24';
 
 // skin + coat colours: ARTISTIC (sRGB), chosen by eye against Batang (Smithsonian NZP, CC0, reference only)
-export const LOOK = {
+export const LOOK_NATURAL = {
   skin: '#2c231f', skinHair: '#30261f', face: '#2a201b', eyeRing: '#1d1612', lid: '#6f5546', mottle: '#76574a', lip: '#1f1714', nose: '#251c18',
   palm: '#3b302a', nail: '#463a32',
-  hairRoot: '#4a2216', undercoat: '#3a1d12', harbour: '#26221f', hairMid: '#86391e', hairTip: '#b8602f',
+  hairRoot: '#4a2216', undercoat: '#3a1d12', harbour: '#26221f', water: '#1f2a2e', hairMid: '#86391e', hairTip: '#b8602f',
   sclera: '#6a4e3c', scleraRing: '#33241b', irisEdge: '#6b6661', iris: '#3a2214', irisFleck: '#6a4122', pupil: '#060403',
 };
+// otherworldly skin (MZ.Human 2026-11-24): turquoise in place of the dark grey-brown; coat, eyes and city keep their colours. ?tone=natural restores the animal's own
+export const LOOK_TURQUOISE = { skin: '#1c7d7a', skinHair: '#1a7370', face: '#1a7371', eyeRing: '#10504e', lid: '#4fa79e', mottle: '#53b0a6', lip: '#0c3f3d', nose: '#155f5c',
+  palm: '#2a8c87', nail: '#386a66', water: '#0b3a4a' };
+export const LOOK = LOOK_NATURAL;
 
 export function createBody(THREE, brain, opts = {}) {
-  const Q = Object.assign({ hair: 120000, skinRes: 1, seed: 4242 }, opts);
+  const Q = Object.assign({ hair: 120000, skinRes: 1, seed: 4242, tone: 'turquoise' }, opts);
+  const TURQ = Q.tone !== 'natural', LOOK = TURQ ? { ...LOOK_NATURAL, ...LOOK_TURQUOISE } : LOOK_NATURAL;
+  const WAVE_T = { value: 0 };
   const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -296,7 +302,7 @@ export function createBody(THREE, brain, opts = {}) {
   function finishPart(M) {
     const nv = M.P.length / 3, bonesHere = [...new Set(M.prims.filter(p => p.op > 0).map(p => p.bone))];
     const sigma = M.part === 'torso' ? 0.02 : M.part === 'head' ? 0.012 : 0.0035;
-    const SI = new Uint16Array(nv * 4), SW = new Float32Array(nv * 4), COL = new Float32Array(nv * 3), SP = new Float32Array(nv * 4), RG = new Uint8Array(nv), PB = new Uint16Array(nv);
+    const SI = new Uint16Array(nv * 4), SW = new Float32Array(nv * 4), COL = new Float32Array(nv * 3), SP = new Float32Array(nv * 4), RG = new Uint8Array(nv), PB = new Uint16Array(nv), WT = new Float32Array(nv * 4);
     const ds = new Float32Array(BONES.length), c = new THREE.Color(), cm = lin(LOOK.mottle), cu = lin(LOOK.undercoat);
     for (let q = 0; q < nv; q++) {
       const x = M.P[q * 3], y = M.P[q * 3 + 1], z = M.P[q * 3 + 2];
@@ -310,17 +316,21 @@ export function createBody(THREE, brain, opts = {}) {
       RG[q] = reg; const L = REGLOOK[reg]; c.set(L[0]);
       if (reg === REG.muzzle || reg === REG.eyeRing || reg === REG.face) { const m = smooth(0.35, 0.85, vnoise(x * 55, y * 55, z * 55)) * (reg === REG.muzzle ? 0.22 : 0.08); c.lerp(cm, m); } // a few paler patches, not a uniformly black face (Kuze 2005)
       const ch = CITY && (reg === REG.body || reg === REG.back) ? CITY.chartAt(pb, x, y, z) : null; let wet = false;
-      if (ch) { if (CITY.inWater(ch.x, ch.y)) { c.set(LOOK.harbour); wet = true; } else { const sd = CITY.streetDist(ch.x, ch.y); if (sd < 3) c.lerp(cu, 0.6 * smooth(3, -3, sd)); } } // city skin: streets carry the coat, the harbour is bare and wet
+      if (ch) { const harbour = CITY.inWater(ch.x, ch.y), river = !harbour && CITY.inRiver(ch.x, ch.y);
+        if (harbour || river) { c.set(LOOK.water); wet = true; // water: bare, wet, and moving (the shader raises the waves); the river runs downstream, toward the wrist
+          const f = river ? V3(0, -1, 0).applyMatrix4(new THREE.Matrix4().extractRotation(pb.bind)) : V3(0.62, 0.15, 0.77); WT.set([f.x, f.y, f.z, river ? 2 : 1], q * 4); }
+        else { const sd = CITY.streetDist(ch.x, ch.y); if (sd < 3) c.lerp(cu, 0.6 * smooth(3, -3, sd)); } } // city skin: streets carry the coat
       else if (reg === REG.body || reg === REG.back) { const rule = coatAt(M.part, pb, reg, x, y, z); if (rule) c.lerp(cu, clamp(rule[2], 0, 1) * (rule[0] > 0.03 ? 0.55 : 0.25)); }
       const g = 0.92 + 0.16 * vnoise(x * 40 + 7, y * 40, z * 40); COL[q * 3] = c.r * g; COL[q * 3 + 1] = c.g * g; COL[q * 3 + 2] = c.b * g;
-      SP[q * 4] = wet ? 0.36 : L[1]; SP[q * 4 + 1] = wet ? 0.3 : L[2]; SP[q * 4 + 2] = L[3]; SP[q * 4 + 3] = L[4];
+      SP[q * 4] = wet ? 0.24 : L[1]; SP[q * 4 + 1] = wet ? 0 : L[2]; SP[q * 4 + 2] = L[3]; SP[q * 4 + 3] = L[4];
     }
-    Object.assign(M, { SI, SW, COL, SP, RG, PB });
+    Object.assign(M, { SI, SW, COL, SP, RG, PB, WT }); STATS['water_' + M.part] = WT.filter((v, i) => i % 4 === 3 && v > 0).length; STATS['river_' + M.part] = WT.filter((v, i) => i % 4 === 3 && v > 1.5).length;
     return M;
   }
 
   // the city skin (optional): Baltimore from the MZ GROUND SURVEY fields; head, face, hands and feet stay as they are
-  const CITY = Q.city ? createCitySkin(THREE, { BONES, LB, bPelvis, bChest, bNeck, PRIMS, sdPrim, smin, smax }, Q.city) : null;
+  const headHairy = (x, y, z) => headRegion(x, y, z) === REG.body && !!coatAt('head', bHead, REG.body, x, y, z) && localIn(bHead, x, y, z).y > 0.03; // the crown, not the face, ears or chin
+  const CITY = Q.city ? createCitySkin(THREE, { BONES, LB, bPelvis, bChest, bNeck, bHead, PRIMS, sdPrim, smin, headHairy }, Q.city) : null;
   const MESHES = {};
   for (const part in PARTS) { const M = finishPart(meshPart(part)); MESHES[part] = M; STATS['verts_' + part] = M.P.length / 3; STATS['tris_' + part] = M.I.length / 3; }
   STATS.skinMs = Math.round(performance.now() - t0);
@@ -337,7 +347,7 @@ export function createBody(THREE, brain, opts = {}) {
     `vec3 irradiance = dotNL * directLight.color;
 	// skin: light bleeds past the terminator and reddens (wrap + tint; an approximation, not a measured scattering profile)
 	float ndl = dot( geometryNormal, directLight.direction );
-	vec3 wrapW = vec3( 0.42, 0.22, 0.14 ) * vSkin.w;
+	vec3 wrapW = ${TURQ ? 'vec3( 0.16, 0.34, 0.32 )' : 'vec3( 0.42, 0.22, 0.14 )'} * vSkin.w;
 	vec3 wrapped = saturate( ( vec3( ndl ) + wrapW ) / ( 1.0 + wrapW ) );
 	vec3 irradianceSSS = wrapped * directLight.color;`).replace(
     'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );',
@@ -349,20 +359,27 @@ export function createBody(THREE, brain, opts = {}) {
       return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
                  mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
     float ridge(vec3 p){ return 1.0 - abs(vn(p) * 2.0 - 1.0); }`;
+  // waves on the water skin, in rest-pose metres: a 7 mm chop on the harbour, a faster run downstream on the river (ARTISTIC)
+  const WAVE_GLSL = `
+    float waveH(vec3 p, vec3 dir, float t, float kind){
+      vec3 d1 = normalize(dir + 1e-4), d2 = normalize(cross(d1, vec3(0.31, 0.93, 0.19)) + 1e-4); float k = 6.2831 / 0.007, sp = kind > 1.5 ? 2.4 : 1.0;
+      return 0.00032 * (sin(dot(p, d1) * k - t * 2.6 * sp) + 0.55 * sin(dot(p, normalize(d1 + d2 * 0.8)) * k * 1.7 - t * 3.7 * sp) + 0.35 * sin(dot(p, d2) * k * 2.9 + t * 2.1) + 0.2 * sin(dot(p, d1 - d2) * k * 4.3 - t * 5.3 * sp));
+    }`;
   function skinMaterial() {
-    const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.55, metalness: 0, specularIntensity: 0.55, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color('#5a3a2c') });
+    const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.55, metalness: 0, specularIntensity: 0.55, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color(TURQ ? '#2a706b' : '#5a3a2c') });
     m.onBeforeCompile = sh => {
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 skinP; varying vec4 vSkin; varying vec3 vBind;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = skinP; vBind = position;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vSkin; varying vec3 vBind;' + NOISE_GLSL)
+      sh.uniforms.uWaveT = WAVE_T;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 skinP; attribute vec4 wat; varying vec4 vSkin; varying vec4 vWat; varying vec3 vBind; uniform float uWaveT;' + WAVE_GLSL)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = skinP; vBind = position; vWat = wat; if (wat.w > 0.5) transformed += objectNormal * waveH(position, wat.xyz, uWaveT, wat.w);');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vSkin; varying vec4 vWat; varying vec3 vBind; uniform float uWaveT;' + NOISE_GLSL + WAVE_GLSL)
         .replace('#include <lights_physical_pars_fragment>', SSS_CHUNK)
         .replace('#include <roughnessmap_fragment>', `float roughnessFactor = roughness * vSkin.x / 0.55;
           float pores = vn(vBind * 2600.0) * 0.6 + vn(vBind * 5200.0) * 0.4;
           float creases = ridge(vBind * vec3(260.0, 420.0, 300.0)) * 0.7 + ridge(vBind * 900.0) * 0.3;
-          roughnessFactor = clamp(roughnessFactor + (pores - 0.5) * 0.12 * vSkin.y, 0.18, 1.0);`)
+          roughnessFactor = clamp(roughnessFactor + (pores - 0.5) * 0.12 * vSkin.y, 0.1, 1.0);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           { // procedural bump: pores everywhere skin shows, creases on palms, soles, lids and face (ARTISTIC scales)
-            float hgt = (pores - 0.5) * 0.000022 * vSkin.y - pow(creases, 6.0) * 0.00012 * vSkin.z;
+            float isW = step(0.5, vWat.w); float hgt = mix((pores - 0.5) * 0.000022 * vSkin.y - pow(creases, 6.0) * 0.00012 * vSkin.z, waveH(vBind, vWat.xyz, uWaveT, vWat.w) * 0.7, isW);
             vec3 sP = dFdx(-vViewPosition), tP = dFdy(-vViewPosition); vec3 R1 = cross(tP, normal), R2 = cross(normal, sP);
             float det = dot(sP, R1) * faceDirection; float dHx = dFdx(hgt), dHy = dFdy(hgt);
             vec3 grad = sign(det) * (dHx * R1 + dHy * R2); normal = normalize(abs(det) * normal - grad);
@@ -376,14 +393,15 @@ export function createBody(THREE, brain, opts = {}) {
   for (const part in MESHES) {
     const M = MESHES[part], g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(M.P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(M.N, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(M.COL, 3)); g.setAttribute('skinP', new THREE.BufferAttribute(M.SP, 4));
+    g.setAttribute('color', new THREE.BufferAttribute(M.COL, 3)); g.setAttribute('skinP', new THREE.BufferAttribute(M.SP, 4)); g.setAttribute('wat', new THREE.BufferAttribute(M.WT, 4));
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(M.SI, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(M.SW, 4));
     g.setIndex(new THREE.BufferAttribute(M.I, 1)); g.computeBoundingSphere();
     const sm = new THREE.SkinnedMesh(g, skinMat); sm.name = 'skin · ' + part; sm.castShadow = sm.receiveShadow = true; sm.frustumCulled = false;
     sm.bind(skeleton, new THREE.Matrix4()); root.add(sm); skinMeshes.push(sm);
   }
   let cityMesh = null;
-  if (CITY) { const t1 = performance.now(), cm = CITY.buildMesh(skeleton); cityMesh = cm.mesh; root.add(cityMesh); Object.assign(STATS, { buildings: cm.count, buildingsSkipped: cm.skipped, cityTris: cm.tris, cityMs: Math.round(performance.now() - t1) }); }
+  if (CITY) { const t1 = performance.now(), cm = CITY.buildMesh(skeleton); cityMesh = cm.mesh; root.add(cityMesh); if (cm.glow) root.add(cm.glow);
+    Object.assign(STATS, { buildings: cm.stats.buildings, buildingsSkipped: cm.stats.skipped, trees: cm.stats.trees, landmarks: cm.stats.landmarks, cityTris: cm.stats.tris, cityMs: Math.round(performance.now() - t1) }); }
 
   // =================================================================
   // 5. eyes and lids (rigid, hung on the brain's eye and head joints)
@@ -466,7 +484,7 @@ export function createBody(THREE, brain, opts = {}) {
         const area = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx); if (area <= 0) continue;
         const pb = BONES[M.PB[a]], cxp = ax + (ux + vx) / 3, cyp = ay + (uy + vy) / 3, czp = az + (uz + vz) / 3; let rule = coatAt(part, pb, M.RG[a], cxp, cyp, czp); if (!rule) continue;
         let boost = 1;
-        if (CITY) { const ch = CITY.chartAt(pb, cxp, cyp, czp); if (ch) { if (CITY.streetDist(ch.x, ch.y) > 5) continue; rule = [0.015, 0.045, 1, 0.45, 0.006]; boost = 2.5; } } // the coat grows from the streets: short fur lining them, so the city stands clear
+        if (CITY) { const ch = CITY.chartAt(pb, cxp, cyp, czp); if (ch) { if (CITY.streetDist(ch.x, ch.y) > 5) continue; rule = part === 'head' ? [0.008, 0.022, 1, 0.45, 0.004] : [0.015, 0.045, 1, 0.45, 0.006]; boost = 2.5; } } // the coat grows from the streets: short fur lining them, so the city stands clear
         const wgt = area * rule[2] * boost * (rule[0] < 0.03 ? 2.2 : 1); total += wgt; cand.push([M, a, b, c, wgt, rule, pb]); } }
     rs = Q.seed;
     for (const [M, a, b, c, wgt, rule, pb] of cand) {
@@ -623,7 +641,7 @@ export function createBody(THREE, brain, opts = {}) {
     for (const L of LIDS) { L.up.rotation.x = -0.42 - 0.6 * G.eyePitch + G.blink * 1.5; L.lo.rotation.x = 0.05 - 0.3 * G.eyePitch - G.blink * 0.15; } // open: the upper lid's edge just over the iris
     const w = G.wind, gust = 0.42 + 0.22 * Math.sin(w.t * 0.0648) + 0.16 * Math.sin(w.t * 0.153 + 1.3);
     HU.uWind.value.set(Math.sin(w.t * 0.52) + 0.4 * Math.sin(w.t * 1.31 + 1.0), 0, 0.6 * Math.sin(w.t * 0.41 + 2.0)).multiplyScalar(0.35 * w.amt * clamp(gust, 0.12, 0.95));
-    HU.uTime.value = w.t;
+    HU.uTime.value = w.t; WAVE_T.value = w.t;
   }
   // lights the coat shades with (the coat has its own shader; the studio tells it what the room looks like)
   function syncLights({ key, fill, hemi, res }) {
