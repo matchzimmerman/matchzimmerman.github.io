@@ -151,16 +151,16 @@ export function createCitySkin(THREE, env, city) {
     const at = (fr, e, n, z) => { const k = Math.round(e * 4) + ',' + Math.round(n * 4); let b = fr.cache.get(k);
       if (b === undefined) { const q = surfaceAt(fr.P, fr.ax + e, fr.ay + n); b = q ? [q, normalAt(primsOf(fr.P), q).lerp(fr.n, 0.45).normalize()] : [fr.p.clone().addScaledVector(fr.e, e * S).addScaledVector(fr.no, n * S), fr.n]; fr.cache.set(k, b); }
       return b[0].clone().addScaledVector(b[1], z * S); }; // up leans toward the skin's own normal, so big landmarks wrap a thin limb
-    function obox(B, fr, ce, cn, he, hn, z0, z1, col, kind = 0, gable = 0, yaw = 0) {
+    function obox(B, fr, ce, cn, he, hn, z0, z1, col, kind = 0, gable = 0, yaw = 0, plain_ = false) {
       const ca = Math.cos(yaw), sa = Math.sin(yaw), C = [[-he, -hn], [he, -hn], [he, hn], [-he, hn]].map(([a, b]) => [ce + a * ca - b * sa, cn + a * sa + b * ca]);
       const lo = C.map(([e, n]) => at(fr, e, n, z0)), hi = C.map(([e, n]) => at(fr, e, n, z1)), per = [0, 2 * he, 2 * he + 2 * hn, 4 * he + 2 * hn];
-      prism(B, lo, hi, fr.n, col, i => { const len = i % 2 ? 2 * hn : 2 * he; return [[z0, per[i], kind], [z0, per[i] + len, kind], [z1, per[i] + len, kind], [z1, per[i], kind]]; }, gable ? null : [[0, 1, 2], [0, 2, 3]], col.clone().multiplyScalar(0.6));
+      prism(B, lo, hi, fr.n, col, i => { if (plain_) return [[-1, 0, kind], [-1, 0, kind], [-1, 0, kind], [-1, 0, kind]]; const len = i % 2 ? 2 * hn : 2 * he; return [[z0, per[i], kind], [z0, per[i] + len, kind], [z1, per[i] + len, kind], [z1, per[i], kind]]; }, gable ? null : [[0, 1, 2], [0, 2, 3]], col.clone().multiplyScalar(0.6));
       if (gable) { const r0 = at(fr, ce, cn - hn, z1 + gable), r1 = at(fr, ce, cn + hn, z1 + gable), rc = col.clone().multiplyScalar(0.55); // ridge north-south
         quad(B, hi[0], hi[3], r1.clone(), r0.clone(), fr.n, rc); quad(B, hi[1], hi[2], r1.clone(), r0.clone(), fr.n, rc); }
     }
-    function ocyl(B, fr, ce, cn, r0, r1, z0, z1, col, seg = 16, kind = 0, cap = true) {
+    function ocyl(B, fr, ce, cn, r0, r1, z0, z1, col, seg = 16, kind = 0, cap = true, plain_ = false) {
       const lo = [], hi = []; for (let i = 0; i < seg; i++) { const a = i / seg * Math.PI * 2; lo.push(at(fr, ce + Math.cos(a) * r0, cn + Math.sin(a) * r0, z0)); hi.push(at(fr, ce + Math.cos(a) * r1, cn + Math.sin(a) * r1, z1)); }
-      const circ = 2 * Math.PI * r0; prism(B, lo, hi, fr.n, col, i => [[z0, i / seg * circ, kind], [z0, (i + 1) / seg * circ, kind], [z1, (i + 1) / seg * circ, kind], [z1, i / seg * circ, kind]], cap ? fanTri(seg) : null, col.clone().multiplyScalar(0.7));
+      const circ = 2 * Math.PI * r0; prism(B, lo, hi, fr.n, col, i => plain_ ? [[-1, 0, kind], [-1, 0, kind], [-1, 0, kind], [-1, 0, kind]] : [[z0, i / seg * circ, kind], [z0, (i + 1) / seg * circ, kind], [z1, (i + 1) / seg * circ, kind], [z1, i / seg * circ, kind]], cap ? fanTri(seg) : null, col.clone().multiplyScalar(0.7));
     }
     function obar(B, fr, a, b, th, col) { // a square bar between two local points (east, north, up)
       const A = at(fr, ...a), Bp = at(fr, ...b), d = Bp.clone().sub(A).normalize(); let u = V3().crossVectors(d, fr.n); if (u.lengthSq() < 1e-6) u = fr.e.clone(); u.normalize(); const w = V3().crossVectors(d, u).normalize(), h = th * S / 2;
@@ -215,28 +215,53 @@ export function createCitySkin(THREE, env, city) {
         for (const y of K.yards) obar(G, fr, [...loc(y.a), y.z], [...loc(y.b), y.z], 0.55, dark());
         obar(G, fr, [...loc(K.bowsprit.a), K.bowsprit.za], [...loc(K.bowsprit.b), K.bowsprit.zb], 0.6, dark());
       }); }
-    // Phoenix Shot Tower (1828), measured: tapering brick shaft, cornice and battlements
-    if (LM.shot_tower) { const T = LM.shot_tower, rb = T.base_d / 2, rt = T.top_d / 2, shaft = T.height - 4.2;
+    // Phoenix Shot Tower (1828), measured: plain brick shaft (no window pattern), cornice, battlements, and its recorded
+    // openings (12 windows, 3 doors; Jones Falls Field). The main door faces the recorded face bearing; the rest are spread (ARTISTIC placement)
+    if (LM.shot_tower) { const T = LM.shot_tower, rb = T.base_d / 2, rt = T.top_d / 2, shaft = T.height - 4.2, rAt = z => rb + (rt - rb) * z / shaft;
       landmark('Phoenix Shot Tower', T.at, fr => {
-        const brick = c.set('#8a4b37').clone(); ocyl(G, fr, 0, 0, rb, rt, 0, shaft, brick, 24, 0, true); ocyl(G, fr, 0, 0, rt + 0.45, rt + 0.45, shaft - 1.2, shaft, brick.clone().multiplyScalar(0.9), 24, 0, true);
-        for (let i = 0; i < T.battlements; i++) { const a = i / T.battlements * Math.PI * 2; obox(G, fr, Math.cos(a) * (rt + 0.1), Math.sin(a) * (rt + 0.1), 0.7, 0.55, shaft, T.height, brick, 0, 0, a); }
+        const brick = c.set('#8a4b37').clone(), hole = c.set('#1a1412').clone(), a0 = (90 - (T.face_bearing_deg || 0)) * Math.PI / 180;
+        ocyl(G, fr, 0, 0, rb, rt, 0, shaft, brick, 32, 0, true, true); ocyl(G, fr, 0, 0, rt + 0.45, rt + 0.45, shaft - 1.2, shaft, brick.clone().multiplyScalar(0.9), 32, 0, true, true);
+        for (let i = 0; i < T.battlements; i++) { const a = i / T.battlements * Math.PI * 2; obox(G, fr, Math.cos(a) * (rt + 0.1), Math.sin(a) * (rt + 0.1), 0.7, 0.55, shaft, T.height, brick, 0, 0, a, true); }
+        const op = T.openings || {}, nd = op.doors ?? 3, nw = op.windows ?? 12;
+        for (let i = 0; i < nd; i++) { const a = a0 + i * 2 * Math.PI / nd, r = rAt(1.5) + 0.05; obox(G, fr, Math.cos(a) * r, Math.sin(a) * r, 0.15, 0.8, 0, 3.0, hole, 0, 0, a, true); }
+        for (let i = 0; i < nw; i++) { const z = 8 + i * (shaft - 14) / (nw - 1), a = a0 + Math.PI / 4 + i * 2.4, r = rAt(z) + 0.05; obox(G, fr, Math.cos(a) * r, Math.sin(a) * r, 0.15, 0.5, z, z + 1.8, hole, 0, 0, a, true); }
       }); }
-    // National Aquarium: the lidar height grid as columns (glass where it rises into the pyramids)
+    // National Aquarium: the 1981 building and its neighbours as lidar columns (plain concrete), the south-end cylinder with the blue
+    // neon wave, and the glass pyramid roofs with their blue LED edges (added 2022), all fitted to the Harborplace field's lidar
     if (LM.aquarium) { const A = LM.aquarium, cs = A.cells, ce = cs.reduce((a, p) => [a[0] + p[0] / cs.length, a[1] + p[1] / cs.length], [0, 0]);
-      landmark('National Aquarium', ce, fr => { for (const [x, y, hh] of cs) obox(G, fr, x - ce[0], y - ce[1], A.cell / 2, A.cell / 2, 0, hh, c.set(hh > 20 ? '#6f8d99' : '#b7b1a6').clone(), hh > 20 ? 2 : 0); }); }
+      landmark('National Aquarium', ce, fr => {
+        const rel = ([x, y]) => [x - ce[0], y - ce[1]], conc = ['#b9b3a7', '#a9a397', '#c4beb2'];
+        cs.forEach(([x, y, hh], i) => obox(G, fr, x - ce[0], y - ce[1], A.cell / 2, A.cell / 2, 0, hh, c.set(conc[i % 3]).clone(), 0, 0, 0, true));
+        if (A.cylinder) { const C = A.cylinder, [cx, cy] = rel(C.c); ocyl(G, fr, cx, cy, C.r, C.r, 0, C.z1, c.set('#b4ad9f').clone(), 32, 0, true, true);
+          const blue = c.set('#2fa8ff').clone().multiplyScalar(5), W = C.wave.map(([x, y, z]) => { const [ex, ny] = rel([x, y]), d = Math.hypot(ex - cx, ny - cy) || 1, k = (C.r + 0.35) / d; return [cx + (ex - cx) * k, cy + (ny - cy) * k, z]; });
+          for (let i = 0; i + 1 < W.length; i++) obar(L, fr, W[i], W[i + 1], 0.55, blue); }
+        for (const Py of A.pyramids || []) { const K = Py.corners.map(rel), ax = K.reduce((a, q) => [a[0] + q[0] / 4, a[1] + q[1] / 4], [0, 0]);
+          const base = K.map(q => at(fr, q[0], q[1], Py.z0)), apex = at(fr, ax[0], ax[1], Py.z1), glass = c.set('#5e8fa4').clone(), led = c.set('#3ab0ff').clone().multiplyScalar(4);
+          for (let i = 0; i < 4; i++) { const j = (i + 1) % 4, fn = base[j].clone().sub(base[i]).cross(apex.clone().sub(base[i])).normalize(), mid = base[i].clone().add(base[j]).add(apex).divideScalar(3);
+            const out = mid.clone().sub(base.reduce((a, q) => a.add(q), V3()).divideScalar(4)); if (fn.dot(out) < 0) fn.negate();
+            const i0 = v(G, base[i], fn, glass, [-1, 0, 3]), i1 = v(G, base[j], fn, glass, [-1, 0, 3]), i2 = v(G, apex, fn, glass, [-1, 0, 3]);
+            const tn = base[j].clone().sub(base[i]).cross(apex.clone().sub(base[i])); if (tn.dot(fn) >= 0) G.I.push(i0, i1, i2); else G.I.push(i0, i2, i1);
+            obar(L, fr, [K[i][0], K[i][1], Py.z0], [ax[0], ax[1], Py.z1], 0.4, led); obar(L, fr, [K[i][0], K[i][1], Py.z0], [K[j][0], K[j][1], Py.z0], 0.4, led); } }
+      }); }
     // Domino Sugars: refinery, stacks, wharf (HARBOUR LIGHT) and the sign's steel lattice; the neon glows
     if (LM.domino) { const D = LM.domino, ce = D.boxes[0].c;
       landmark('Domino Sugars', ce, fr => {
         for (const b of D.boxes) obox(G, fr, b.c[0] - ce[0], b.c[1] - ce[1], b.he, b.hn, b.z0, b.z1, c.set(b.n === 'wharf' ? '#7a756c' : b.n === 'roof house' ? '#8d867b' : '#a79c8b').clone(), 0, b.gable);
         for (const s of D.stacks) ocyl(G, fr, s.c[0] - ce[0], s.c[1] - ce[1], s.r, s.r * 0.85, s.z0, s.z1, c.set('#5d5650').clone(), 12);
-        const sg = D.sign, sx = sg.c[0] - ce[0], sy = sg.c[1] - ce[1], hw = sg.w / 2, steel = c.set('#3a3734').clone();
-        for (const e of [-hw, -hw / 3, hw / 3, hw]) obar(G, fr, [sx + e, sy, 40], [sx + e, sy, sg.z1], 0.7, steel);
-        for (const z of [sg.z0, (sg.z0 + sg.z1) / 2, sg.z1]) obar(G, fr, [sx - hw, sy, z], [sx + hw, sy, z], 0.6, steel);
-        // neon on the harbour face: two rows of glowing tubes (abstract strokes; the lettering itself is not reproduced)
-        const neon = c.set('#ff5a1e').clone(), rows = [[sg.z0 + 12.2, sg.z1 - 1.2, 6], [sg.z0 + 1.0, sg.z0 + 9.2, 6]];
-        rows.forEach(([z0, z1, n], ri) => { for (let i = 0; i < n; i++) { const e0 = sx - hw + 2 + i * (sg.w - 4) / n, e1 = e0 + (sg.w - 4) / n - 1.6, q = hsh(i * 7 + ri * 13), y = sy + 0.8;
-          obar(L, fr, [e0, y, z0], [e0, y, z1], 0.55, neon); obar(L, fr, [e1, y, z0 + (z1 - z0) * q * 0.4], [e1, y, z1], 0.55, neon);
-          obar(L, fr, [e0, y, z1], [e1, y, z1 - (z1 - z0) * 0.25 * q], 0.55, neon); obar(L, fr, [e0, y, z0 + (z1 - z0) * (0.3 + 0.3 * q)], [e1, y, z0], 0.55, neon); } });
+        // the sign (120 x 70 ft, 1951; Artkraft Strauss): a steel lattice of 12 ft bays with cross-bracing, carrying two rows of
+        // red-orange neon, 6 letters over 6, letters 12-20 ft with the first of the top row about 40 ft. The rows and letter boxes are at
+        // those sizes; the letterforms themselves are not reproduced (each is drawn as a plain neon outline)
+        const sg = D.sign, sx = sg.c[0] - ce[0], sy = sg.c[1] - ce[1], hw = sg.w / 2, steel = c.set('#3a3734').clone(), FT = 0.3048;
+        for (let k = 0; k <= 10; k++) { const e = -hw + k * sg.w / 10; obar(G, fr, [sx + e, sy, 40], [sx + e, sy, sg.z1], 0.45, steel); }
+        for (const z of [sg.z0, sg.z0 + 7, sg.z0 + 14, sg.z1]) obar(G, fr, [sx - hw, sy, z], [sx + hw, sy, z], 0.4, steel);
+        for (const s2 of [-1, 1]) { obar(G, fr, [sx + s2 * hw, sy, sg.z0], [sx + s2 * (hw - sg.w / 10), sy, sg.z1], 0.35, steel); obar(G, fr, [sx + s2 * (hw - sg.w / 10), sy, sg.z0], [sx + s2 * hw, sy, sg.z1], 0.35, steel); }
+        const neon = c.set('#ff5a1e').clone().multiplyScalar(4), y = sy + 0.9;
+        const outline = (e0, e1, z0, z1) => { obar(L, fr, [e0, y, z0], [e1, y, z0], 0.5, neon); obar(L, fr, [e1, y, z0], [e1, y, z1], 0.5, neon); obar(L, fr, [e1, y, z1], [e0, y, z1], 0.5, neon); obar(L, fr, [e0, y, z1], [e0, y, z0], 0.5, neon); };
+        const rowW = sg.w - 2.4;
+        // top row: a 40 ft first letter, then five at 20 ft
+        { let e = sx - hw + 1.2; const z0 = sg.z0 + 8.4; const ws = [6.4, 5.4, 5.4, 5.4, 5.4, 5.4].map(w => w * rowW / 33.4); ws.forEach((w, i) => { const h = (i === 0 ? 40 : 20) * FT; outline(e, e + w - 0.9, z0 - (i === 0 ? 3.5 : 0), z0 - (i === 0 ? 3.5 : 0) + h); e += w; }); }
+        // bottom row: six at 12-14 ft
+        { let e = sx - hw + 3.5; const z0 = sg.z0 + 1.0, w = (sg.w - 7) / 6; for (let i = 0; i < 6; i++) { outline(e, e + w - 1.0, z0, z0 + (i === 0 ? 14 : 12) * FT); e += w; } }
       }); }
 
     const mk = (B, mat, name) => {
@@ -255,11 +280,11 @@ export function createCitySkin(THREE, env, city) {
           float win = wall * step(0.32, fl) * step(fl, 0.86) * step(0.2, bay) * step(bay, 0.8);
           win = max(win, step(0.5, vFac.z) * wall * step(0.1, fl));
           win = mix(win, wall * mix(0.35, 0.75, step(0.5, vFac.z)), smoothstep(0.25, 0.7, fwidth(vFac.x / 3.6)));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.042, 0.05), win * 0.8);`)
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.14, win);');
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.042, 0.05), win * 0.8); float glassK = step(2.5, vFac.z);`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(mix(roughnessFactor, 0.14, win), 0.06, glassK);');
     };
-    solid.customProgramCacheKey = () => 'orangutan-city-2';
-    const glowMat = new THREE.MeshStandardMaterial({ color: '#ff6a2a', emissive: '#ff4410', emissiveIntensity: 4, roughness: 0.4 });
+    solid.customProgramCacheKey = () => 'orangutan-city-3';
+    const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true }); // neon and LED: vertex colours above 1, so they bloom through the tone curve
     const mesh = mk(G, solid, 'city · Baltimore'), glow = L.P.length ? mk(L, glowMat, 'city · neon') : null; if (glow) glow.castShadow = false;
     return { mesh, glow, stats: Object.assign(stats, { tris: G.I.length / 3 + L.I.length / 3 }) };
   }

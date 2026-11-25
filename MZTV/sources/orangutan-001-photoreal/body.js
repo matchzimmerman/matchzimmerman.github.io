@@ -37,7 +37,7 @@
 
 import { createCitySkin } from './city.js';
 
-export const BODY_VERSION = 'orangutan-001 photoreal · body P1.3 (city skin 2, turquoise) · 2026-11-24';
+export const BODY_VERSION = 'orangutan-001 photoreal · body P1.4 (bare skin is water) · 2026-11-24';
 
 // skin + coat colours: ARTISTIC (sRGB), chosen by eye against Batang (Smithsonian NZP, CC0, reference only)
 export const LOOK_NATURAL = {
@@ -52,7 +52,7 @@ export const LOOK_TURQUOISE = { skin: '#1c7d7a', skinHair: '#1a7370', face: '#1a
 export const LOOK = LOOK_NATURAL;
 
 export function createBody(THREE, brain, opts = {}) {
-  const Q = Object.assign({ hair: 120000, skinRes: 1, seed: 4242, tone: 'turquoise' }, opts);
+  const Q = Object.assign({ hair: 120000, skinRes: 1, seed: 4242, tone: 'turquoise', bareWater: true, faceWater: true }, opts);
   const TURQ = Q.tone !== 'natural', LOOK = TURQ ? { ...LOOK_NATURAL, ...LOOK_TURQUOISE } : LOOK_NATURAL;
   const WAVE_T = { value: 0 };
   const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -316,10 +316,13 @@ export function createBody(THREE, brain, opts = {}) {
       RG[q] = reg; const L = REGLOOK[reg]; c.set(L[0]);
       if (reg === REG.muzzle || reg === REG.eyeRing || reg === REG.face) { const m = smooth(0.35, 0.85, vnoise(x * 55, y * 55, z * 55)) * (reg === REG.muzzle ? 0.22 : 0.08); c.lerp(cm, m); } // a few paler patches, not a uniformly black face (Kuze 2005)
       const ch = CITY && (reg === REG.body || reg === REG.back) ? CITY.chartAt(pb, x, y, z) : null; let wet = false;
-      if (ch) { const harbour = CITY.inWater(ch.x, ch.y), river = !harbour && CITY.inRiver(ch.x, ch.y);
-        if (harbour || river) { c.set(LOOK.water); wet = true; // water: bare, wet, and moving (the shader raises the waves); the river runs downstream, toward the wrist
-          const f = river ? V3(0, -1, 0).applyMatrix4(new THREE.Matrix4().extractRotation(pb.bind)) : V3(0.62, 0.15, 0.77); WT.set([f.x, f.y, f.z, river ? 2 : 1], q * 4); }
-        else { const sd = CITY.streetDist(ch.x, ch.y); if (sd < 3) c.lerp(cu, 0.6 * smooth(3, -3, sd)); } } // city skin: streets carry the coat
+      const distal = () => V3(0, -1, 0).applyMatrix4(new THREE.Matrix4().extractRotation(pb.bind));
+      const makeWet = (f, kind) => { c.set(LOOK.water); wet = true; WT.set([f.x, f.y, f.z, kind], q * 4); }; // water: bare, wet, moving (the shader raises the waves)
+      if (ch) { const harbour = CITY.inWater(ch.x, ch.y), river = !harbour && CITY.inRiver(ch.x, ch.y), sd = CITY.streetDist(ch.x, ch.y);
+        if (river) makeWet(distal(), 2);                                    // the Jones Falls runs downstream, toward the wrist
+        else if (harbour || (Q.bareWater && sd > 0)) makeWet(V3(0.62, 0.15, 0.77), 1); // the harbour, and (P1.4) all open ground: only streets carry fur
+        else if (sd < 3) c.lerp(cu, 0.6 * smooth(3, -3, sd)); }
+      else if (Q.bareWater && (reg === REG.body || reg === REG.back ? !coatAt(M.part, pb, reg, x, y, z) : (Q.faceWater || M.part !== 'head' || reg === REG.ear))) makeWet(pb.kind === 'head' || pb.kind === 'neck' ? V3(0, -1, 0.3) : distal(), 1); // (P1.4) every hairless patch is water
       else if (reg === REG.body || reg === REG.back) { const rule = coatAt(M.part, pb, reg, x, y, z); if (rule) c.lerp(cu, clamp(rule[2], 0, 1) * (rule[0] > 0.03 ? 0.55 : 0.25)); }
       const g = 0.92 + 0.16 * vnoise(x * 40 + 7, y * 40, z * 40); COL[q * 3] = c.r * g; COL[q * 3 + 1] = c.g * g; COL[q * 3 + 2] = c.b * g;
       SP[q * 4] = wet ? 0.24 : L[1]; SP[q * 4 + 1] = wet ? 0 : L[2]; SP[q * 4 + 2] = L[3]; SP[q * 4 + 3] = L[4];
@@ -425,8 +428,8 @@ export function createBody(THREE, brain, opts = {}) {
   const eyeGeo = new THREE.SphereGeometry(0.0112, 48, 32); eyeGeo.rotateX(Math.PI / 2); // the texture's front pole looks down +Z
   const eyeMat = new THREE.MeshPhysicalMaterial({ map: eyeTexture(), roughness: 0.5, clearcoat: 0.7, clearcoatRoughness: 0.05, specularIntensity: 0.25, envMapIntensity: 0.18 }); // wet, but a white studio must not wash the iris out
   const EYE_SET = -0.0035; // eyeballs sit a little deeper than the brain's gaze origin: deep-set under the brow
-  const lidMat = new THREE.MeshPhysicalMaterial({ color: LOOK.lid, roughness: 0.55, specularIntensity: 0.4 });
-  const lowerLidMat = new THREE.MeshPhysicalMaterial({ color: LOOK.eyeRing, roughness: 0.48 });
+  const lidMat = Q.bareWater && Q.faceWater ? new THREE.MeshPhysicalMaterial({ color: LOOK.water, roughness: 0.24, specularIntensity: 0.6 }) : new THREE.MeshPhysicalMaterial({ color: LOOK.lid, roughness: 0.55, specularIntensity: 0.4 });
+  const lowerLidMat = Q.bareWater && Q.faceWater ? lidMat : new THREE.MeshPhysicalMaterial({ color: LOOK.eyeRing, roughness: 0.48 });
   const LIDS = [];
   K.eyes.forEach((eg, i) => {
     const ball = new THREE.Mesh(eyeGeo, eyeMat); ball.position.z = EYE_SET; ball.receiveShadow = true; eg.add(ball);

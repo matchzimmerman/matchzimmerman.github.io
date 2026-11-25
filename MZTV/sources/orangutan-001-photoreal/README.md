@@ -64,6 +64,18 @@ HARIL STUDIO [#64](https://github.com/matchzimmerman/haril-studio/issues/64) (su
   - **3,531 trees** (2024 lidar crowns), about 1,700 of them on the body.
 - **Street fur is shorter on the head** (0.8–2.2 cm), to keep the crown city legible.
 
+## P1.4: bare skin is water, plus an accuracy pass (MZ.Human 2026-11-24)
+- **Every hairless patch is water:** open ground between the streets, the face, palms, soles, lids and lips are all wet skin with moving waves. Only the streets carry fur. `?face=skin` keeps a turquoise face; `?water=0` turns this off.
+- **Phoenix Shot Tower:** plain brick with no window pattern. It has its recorded openings from the Jones Falls Field measurement: **12 windows, 3 doors**, with the main door on the recorded face bearing (255.6°). The other openings are spread around the shaft (placement artistic).
+- **National Aquarium**, all fitted to the Harborplace field's 2024 lidar:
+  - the **glass pyramid roofs** (three, from the sloped cells: min-area rectangles, base at the lowest cell, apex at the highest: 37.7, 46.1 and 41.0 m), glossy glass with **blue LED edges** (added 2022)
+  - the **south-end cylinder** (r 8.5 m, 21.8 m, fitted to the field's neon-wave trace)
+  - the **blue neon wave** around it
+  - the rest of the building as plain concrete columns
+  - The wave is the field's stylised trace, not a survey.
+- **Domino Sugars sign:** 120 × 70 ft, on a steel lattice of 12 ft bays with cross-bracing. Two rows of red-orange neon, 6 letters over 6, at the recorded letter heights (12–20 ft, the first of the top row about 40 ft; Baltimore Sun, Baltimore Fishbowl, Chesapeake Bay Magazine). The letterforms are not reproduced; each letter is a plain neon outline at its size.
+- **Glow:** neon and LEDs use HDR vertex colours, so they read as light through the tone curve.
+
 ## What's evidence and what's art (#64 addendum)
 - **Measured:** none of the coat, skin or eye numbers are measurements of an adult female *P. pygmaeus*. None exist for this animal yet.
 - **Evidence-shaped:**

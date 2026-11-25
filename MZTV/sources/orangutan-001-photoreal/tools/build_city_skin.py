@@ -84,13 +84,40 @@ def main():
     con = {'name': c['name'], 'hull': [L(*p) for p in c['hull_outline']], 'layers': c['layers'], 'masts': [{'n': m['name'], 'at': L(*m['at']), 'top': m['top_above_water_m']} for m in c['masts']],
            'yards': [{'a': L(*y['a']), 'b': L(*y['b']), 'z': y['z']} for y in c['yards']], 'bowsprit': {'a': L(*c['bowsprit']['a']), 'b': L(*c['bowsprit']['b']), 'za': c['bowsprit']['za'], 'zb': c['bowsprit']['zb']}, 'source': c['source'] + ' (Harborplace field)'}
     st = [e for e in JF['entities'] if e.get('id') == 'shot-tower'][0]; sa = st['attributes']
-    shot = {'name': st['name'], 'at': L(*st['geometry']['coords']), 'height': sa['height_to_tips_m'], 'base_d': sa['base_diameter_m'], 'top_d': sa['top_diameter_m'], 'battlements': sa.get('battlements', 10), 'source': 'Jones Falls Field anchor (2024 point cloud circle fits)'}
-    g = HP['context']['aquarium']['grid']; k = 3; cells = []
+    shot = {'name': st['name'], 'at': L(*st['geometry']['coords']), 'height': sa['height_to_tips_m'], 'base_d': sa['base_diameter_m'], 'top_d': sa['top_diameter_m'], 'battlements': sa.get('battlements', 10),
+            'floors': sa.get('floors', 14), 'openings': sa.get('openings', {}), 'face_bearing_deg': sa.get('face_bearing_deg', 0), 'source': 'Jones Falls Field anchor (2024 point cloud circle fits); openings as recorded there'}
+    # National Aquarium (P1.4): the glass pyramid roofs fitted to the lidar's sloped cells (min-area rectangle, base = lowest cell,
+    # apex = highest), the south-end cylinder fitted to the field's neon-wave trace, and the rest as columns (2 m grid, 6 m cells)
+    import numpy as np
+    from scipy import ndimage as ndi
+    from shapely.geometry import MultiPoint
+    AQ = HP['context']['aquarium']; g = AQ['grid']; step = g['step']
+    H = np.array([[np.nan if v is None else v for v in row] for row in g['h']])
+    gy, gx = np.gradient(H, step); sl = np.degrees(np.arctan(np.hypot(gx, gy)))
+    lab, nlab = ndi.label((sl > 14) & (H > 15)); pyr = []; pmask = np.zeros(H.shape, bool)
+    for kk in range(1, nlab + 1):
+        jj, ii = np.nonzero(lab == kk)
+        if len(jj) < 120: continue  # the three pyramid roofs; small sloped patches are parapets and edges
+        pts = [(g['e0'] + i * step, g['n0'] - j * step) for j, i in zip(jj, ii)]
+        rect = MultiPoint(pts).minimum_rotated_rectangle; cs = list(rect.exterior.coords)[:4]
+        hv = H[jj, ii]; pyr.append({'corners': [L(*q) for q in cs], 'z0': round(float(np.percentile(hv, 3)), 1), 'z1': round(float(hv.max()), 1)})
+        pmask |= ndi.binary_dilation(lab == kk, iterations=1)
+    Wv = np.array(AQ['wave']); xs, ys = Wv[:, 0], Wv[:, 1]; A = np.c_[2 * xs, 2 * ys, np.ones(len(xs))]; cc = np.linalg.lstsq(A, xs * xs + ys * ys, rcond=None)[0]
+    cyl_c = (cc[0], cc[1]); cyl_r = float(np.sqrt(cc[2] + cc[0] ** 2 + cc[1] ** 2))
+    ci, cj = int(round((cyl_c[0] - g['e0']) / step)), int(round((g['n0'] - cyl_c[1]) / step))
+    ring = [H[j, i] for j in range(cj - 4, cj + 5) for i in range(ci - 4, ci + 5) if 0 <= j < H.shape[0] and 0 <= i < H.shape[1] and not np.isnan(H[j, i]) and math.hypot((i - ci) * step, (j - cj) * step) <= cyl_r]
+    cyl = {'c': L(*cyl_c), 'r': round(cyl_r, 2), 'z1': round(float(np.median([h for h in ring if h < 23.5] or [21.5])), 1), 'wave': [[*L(x, y), round(z, 2)] for x, y, z in AQ['wave']]}
+    k = 3; cells = []
     for j in range(0, g['ny'], k):
         for i in range(0, g['nx'], k):
-            hs = [g['h'][jj][ii] for jj in range(j, min(j + k, g['ny'])) for ii in range(i, min(i + k, g['nx'])) if g['h'][jj][ii] is not None]
-            if len(hs) >= 3: cells.append([round(g['e0'] + (i + k / 2) * g['step'] - O[0], 1), round(g['n0'] - (j + k / 2) * g['step'] - O[1], 1), round(max(hs), 1)])
-    aqua = {'name': HP['context']['aquarium']['name'], 'cell': g['step'] * k, 'cells': cells, 'source': 'Harborplace field height grid (2024 lidar), max-pooled'}
+            blk = [(jj, ii) for jj in range(j, min(j + k, g['ny'])) for ii in range(i, min(i + k, g['nx'])) if not np.isnan(H[jj, ii])]
+            if len(blk) < 3: continue
+            ex, nx_ = g['e0'] + (i + k / 2) * step, g['n0'] - (j + k / 2) * step
+            if math.hypot(ex - cyl_c[0], nx_ - cyl_c[1]) < cyl_r: continue          # the cylinder stands here
+            hs = [H[jj, ii] for jj, ii in blk if not pmask[jj, ii]] or [min(H[jj, ii] for jj, ii in blk)]  # under a pyramid: its base
+            cells.append([round(ex - O[0], 1), round(nx_ - O[1], 1), round(float(max(hs)), 1)])
+    aqua = {'name': AQ['name'], 'cell': step * k, 'cells': cells, 'pyramids': pyr, 'cylinder': cyl,
+            'source': 'Harborplace field (2024 lidar height grid; glass pyramids with blue LED edges added 2022; the blue neon wave on the 1981 building south end is the field\'s stylised trace, not surveyed)'}
     # Domino Sugars, from HARBOUR LIGHT (bit-field-047): addBox(x, z, half-north, half-east, z0, z1, ...), metres east (x) and north (z) of its origin
     DE, DN = 361961.2, 4348492.7
     HB = [(0, 140, 62, 34, 0, 40, 0, 'refinery house'), (96, 130, 34, 30, 0, 34, 0, 'char house'), (-110, 140, 50, 30, 0, 22, 4, 'raw sugar shed'), (-190, 150, 30, 28, 0, 16, 3, 'shed'),
