@@ -37,7 +37,7 @@
 
 import { createCitySkin } from './city.js';
 
-export const BODY_VERSION = 'orangutan-001 photoreal · body P1.4 (bare skin is water) · 2026-11-24';
+export const BODY_VERSION = 'orangutan-001 photoreal · body P1.5 (swell, surf, spray, thicker coat) · 2026-11-24';
 
 // skin + coat colours: ARTISTIC (sRGB), chosen by eye against Batang (Smithsonian NZP, CC0, reference only)
 export const LOOK_NATURAL = {
@@ -52,7 +52,7 @@ export const LOOK_TURQUOISE = { skin: '#1c7d7a', skinHair: '#1a7370', face: '#1a
 export const LOOK = LOOK_NATURAL;
 
 export function createBody(THREE, brain, opts = {}) {
-  const Q = Object.assign({ hair: 120000, skinRes: 1, seed: 4242, tone: 'turquoise', bareWater: true, faceWater: true }, opts);
+  const Q = Object.assign({ hair: 220000, skinRes: 1, seed: 4242, tone: 'turquoise', bareWater: true, faceWater: true }, opts);
   const TURQ = Q.tone !== 'natural', LOOK = TURQ ? { ...LOOK_NATURAL, ...LOOK_TURQUOISE } : LOOK_NATURAL;
   const WAVE_T = { value: 0 };
   const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -320,14 +320,24 @@ export function createBody(THREE, brain, opts = {}) {
       const makeWet = (f, kind) => { c.set(LOOK.water); wet = true; WT.set([f.x, f.y, f.z, kind], q * 4); }; // water: bare, wet, moving (the shader raises the waves)
       if (ch) { const harbour = CITY.inWater(ch.x, ch.y), river = !harbour && CITY.inRiver(ch.x, ch.y), sd = CITY.streetDist(ch.x, ch.y);
         if (river) makeWet(distal(), 2);                                    // the Jones Falls runs downstream, toward the wrist
-        else if (harbour || (Q.bareWater && sd > 0)) makeWet(V3(0.62, 0.15, 0.77), 1); // the harbour, and (P1.4) all open ground: only streets carry fur
-        else if (sd < 3) c.lerp(cu, 0.6 * smooth(3, -3, sd)); }
+        else if (harbour) makeWet(V3(0.62, 0.15, 0.77), 1);
+        else if (CITY.inBuilding(ch.x, ch.y)) c.copy(cu).multiplyScalar(0.7);  // (P1.5) the ground under a building is land: the water breaks against it
+        else if (Q.bareWater && sd > 0) makeWet(V3(0.62, 0.15, 0.77), 1);   // (P1.4) all open ground is water: only streets carry fur
+        else c.copy(cu); }                                                  // (P1.5) under the street fur: the coat's own undercoat, never turquoise
       else if (Q.bareWater && (reg === REG.body || reg === REG.back ? !coatAt(M.part, pb, reg, x, y, z) : (Q.faceWater || M.part !== 'head' || reg === REG.ear))) makeWet(pb.kind === 'head' || pb.kind === 'neck' ? V3(0, -1, 0.3) : distal(), 1); // (P1.4) every hairless patch is water
-      else if (reg === REG.body || reg === REG.back) { const rule = coatAt(M.part, pb, reg, x, y, z); if (rule) c.lerp(cu, clamp(rule[2], 0, 1) * (rule[0] > 0.03 ? 0.55 : 0.25)); }
+      else if (reg === REG.body || reg === REG.back) { const rule = coatAt(M.part, pb, reg, x, y, z); if (rule) c.lerp(cu, TURQ ? 1 : clamp(rule[2], 0, 1) * (rule[0] > 0.03 ? 0.55 : 0.25)); } // (P1.5) turquoise is for skin that shows: under fur it is undercoat
       const g = 0.92 + 0.16 * vnoise(x * 40 + 7, y * 40, z * 40); COL[q * 3] = c.r * g; COL[q * 3 + 1] = c.g * g; COL[q * 3 + 2] = c.b * g;
       SP[q * 4] = wet ? 0.24 : L[1]; SP[q * 4 + 1] = wet ? 0 : L[2]; SP[q * 4 + 2] = L[3]; SP[q * 4 + 3] = L[4];
     }
-    Object.assign(M, { SI, SW, COL, SP, RG, PB, WT }); STATS['water_' + M.part] = WT.filter((v, i) => i % 4 === 3 && v > 0).length; STATS['river_' + M.part] = WT.filter((v, i) => i % 4 === 3 && v > 1.5).length;
+    // (P1.5) distance along the skin from the nearest land (street, building, coat): where the surf breaks
+    const SH = new Float32Array(nv).fill(0.05);
+    { const adj = Array.from({ length: nv }, () => []), I = M.I;
+      for (let t = 0; t < I.length; t += 3) { const a = I[t], b = I[t + 1], cc = I[t + 2]; adj[a].push(b, cc); adj[b].push(a, cc); adj[cc].push(a, b); }
+      const hop = new Int32Array(nv).fill(-1), qu = new Int32Array(nv); let qh = 0, qt = 0;
+      for (let q = 0; q < nv; q++) if (WT[q * 4 + 3] < 0.5) { hop[q] = 0; qu[qt++] = q; }
+      while (qh < qt) { const q = qu[qh++]; if (hop[q] > 14) continue; for (const r of adj[q]) if (hop[r] < 0) { hop[r] = hop[q] + 1; qu[qt++] = r; } }
+      for (let q = 0; q < nv; q++) SH[q] = hop[q] < 0 ? 0.05 : Math.min(0.05, hop[q] * M.h); }
+    Object.assign(M, { SI, SW, COL, SP, RG, PB, WT, SH }); STATS['water_' + M.part] = WT.filter((v, i) => i % 4 === 3 && v > 0).length; STATS['river_' + M.part] = WT.filter((v, i) => i % 4 === 3 && v > 1.5).length;
     return M;
   }
 
@@ -362,33 +372,58 @@ export function createBody(THREE, brain, opts = {}) {
       return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
                  mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
     float ridge(vec3 p){ return 1.0 - abs(vn(p) * 2.0 - 1.0); }`;
-  // waves on the water skin, in rest-pose metres: a 7 mm chop on the harbour, a faster run downstream on the river (ARTISTIC)
+  // waves on the water skin, in rest-pose metres (ARTISTIC). P1.5: a long swell (4.2, 2.6, 1.7 cm) raised in the vertex shader with
+  // analytic normals, so the surface rolls instead of faceting; the short chop, whitecaps and surf are drawn per pixel
   const WAVE_GLSL = `
-    float waveH(vec3 p, vec3 dir, float t, float kind){
-      vec3 d1 = normalize(dir + 1e-4), d2 = normalize(cross(d1, vec3(0.31, 0.93, 0.19)) + 1e-4); float k = 6.2831 / 0.007, sp = kind > 1.5 ? 2.4 : 1.0;
-      return 0.00032 * (sin(dot(p, d1) * k - t * 2.6 * sp) + 0.55 * sin(dot(p, normalize(d1 + d2 * 0.8)) * k * 1.7 - t * 3.7 * sp) + 0.35 * sin(dot(p, d2) * k * 2.9 + t * 2.1) + 0.2 * sin(dot(p, d1 - d2) * k * 4.3 - t * 5.3 * sp));
+    vec3 wD1(vec3 dir){ return normalize(dir + 1e-4); }
+    vec3 wD2(vec3 dir){ vec3 d1 = wD1(dir); return normalize(cross(d1, vec3(0.31, 0.93, 0.19)) + 1e-4); }
+    // swell: height (x) and its gradient (yzw) in rest space
+    vec4 swell(vec3 p, vec3 dir, float t, float kind){
+      vec3 d1 = wD1(dir), d2 = wD2(dir), da = normalize(d1 + d2 * 0.7), db = normalize(d1 - d2 * 0.9);
+      float sp = kind > 1.5 ? 1.8 : 1.0; vec4 r = vec4(0.0);
+      float k1 = 6.2831 / 0.042, k2 = 6.2831 / 0.026, k3 = 6.2831 / 0.017;
+      float a1 = 0.0011, a2 = 0.0006, a3 = 0.00032;
+      float p1 = dot(p, d1) * k1 - t * 1.3 * sp, p2 = dot(p, da) * k2 - t * 1.75 * sp, p3 = dot(p, db) * k3 - t * 2.3 * sp;
+      r.x = a1 * sin(p1) + a2 * sin(p2) + a3 * sin(p3);
+      r.yzw = a1 * k1 * cos(p1) * d1 + a2 * k2 * cos(p2) * da + a3 * k3 * cos(p3) * db;
+      return r;
+    }
+    float chop(vec3 p, vec3 dir, float t, float kind){
+      vec3 d1 = wD1(dir), d2 = wD2(dir); float k = 6.2831 / 0.008, sp = kind > 1.5 ? 2.2 : 1.0;
+      return 0.00012 * (sin(dot(p, normalize(d1 + d2 * 0.3)) * k - t * 3.4 * sp) + 0.6 * sin(dot(p, normalize(d2 - d1 * 0.4)) * k * 1.6 - t * 4.1) + 0.4 * sin(dot(p, d1 + d2) * k * 2.7 - t * 5.9 * sp));
     }`;
   function skinMaterial() {
     const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.55, metalness: 0, specularIntensity: 0.55, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color(TURQ ? '#2a706b' : '#5a3a2c') });
     m.onBeforeCompile = sh => {
       sh.uniforms.uWaveT = WAVE_T;
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 skinP; attribute vec4 wat; varying vec4 vSkin; varying vec4 vWat; varying vec3 vBind; uniform float uWaveT;' + WAVE_GLSL)
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = skinP; vBind = position; vWat = wat; if (wat.w > 0.5) transformed += objectNormal * waveH(position, wat.xyz, uWaveT, wat.w);');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vSkin; varying vec4 vWat; varying vec3 vBind; uniform float uWaveT;' + NOISE_GLSL + WAVE_GLSL)
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 skinP; attribute vec4 wat; attribute float shore; varying vec4 vSkin; varying vec4 vWat; varying vec3 vBind; varying float vShore; varying float vSwell; uniform float uWaveT;' + WAVE_GLSL)
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvec4 sw4 = wat.w > 0.5 ? swell(position, wat.xyz, uWaveT, wat.w) : vec4(0.0); float calm = smoothstep(0.0, 0.006, shore);\nif (wat.w > 0.5) { vec3 gT = sw4.yzw - dot(sw4.yzw, objectNormal) * objectNormal; objectNormal = normalize(objectNormal - gT * calm); }')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = skinP; vBind = position; vWat = wat; vShore = shore; vSwell = sw4.x * calm; transformed += normalize(normal) * sw4.x * calm;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec4 vSkin; varying vec4 vWat; varying vec3 vBind; varying float vShore; varying float vSwell; uniform float uWaveT;' + NOISE_GLSL + WAVE_GLSL)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          float foam = 0.0;
+          if (vWat.w > 0.5) { // whitecaps on the swell's crests, broken up; surf lines running in to every shore (ARTISTIC)
+            float brk = vn(vBind * 900.0 + vec3(0.0, uWaveT * 0.6, 0.0)) * 0.65 + vn(vBind * 2300.0 - uWaveT * 0.4) * 0.35;
+            float crest = smoothstep(0.0011, 0.0019, vSwell + (brk - 0.5) * 0.0007);
+            float near = exp(-vShore / 0.006), band = 0.5 + 0.5 * sin(vShore * 6.2831 / 0.0045 + uWaveT * 3.2 + brk * 2.5);
+            float surf = near * smoothstep(0.45, 0.95, band * (0.55 + 0.6 * brk)) + smoothstep(0.0024, 0.0, vShore) * smoothstep(0.3, 0.7, brk);
+            foam = clamp(max(crest * smoothstep(0.35, 0.6, brk), surf), 0.0, 1.0);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.88, 0.9), foam);
+          }`)
         .replace('#include <lights_physical_pars_fragment>', SSS_CHUNK)
         .replace('#include <roughnessmap_fragment>', `float roughnessFactor = roughness * vSkin.x / 0.55;
           float pores = vn(vBind * 2600.0) * 0.6 + vn(vBind * 5200.0) * 0.4;
           float creases = ridge(vBind * vec3(260.0, 420.0, 300.0)) * 0.7 + ridge(vBind * 900.0) * 0.3;
-          roughnessFactor = clamp(roughnessFactor + (pores - 0.5) * 0.12 * vSkin.y, 0.1, 1.0);`)
+          roughnessFactor = clamp(mix(roughnessFactor + (pores - 0.5) * 0.12 * vSkin.y, 0.75, foam), 0.1, 1.0);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           { // procedural bump: pores everywhere skin shows, creases on palms, soles, lids and face (ARTISTIC scales)
-            float isW = step(0.5, vWat.w); float hgt = mix((pores - 0.5) * 0.000022 * vSkin.y - pow(creases, 6.0) * 0.00012 * vSkin.z, waveH(vBind, vWat.xyz, uWaveT, vWat.w) * 0.7, isW);
+            float isW = step(0.5, vWat.w); float hgt = mix((pores - 0.5) * 0.000022 * vSkin.y - pow(creases, 6.0) * 0.00012 * vSkin.z, chop(vBind, vWat.xyz, uWaveT, vWat.w) * (1.0 - foam), isW);
             vec3 sP = dFdx(-vViewPosition), tP = dFdy(-vViewPosition); vec3 R1 = cross(tP, normal), R2 = cross(normal, sP);
             float det = dot(sP, R1) * faceDirection; float dHx = dFdx(hgt), dHy = dFdy(hgt);
             vec3 grad = sign(det) * (dHx * R1 + dHy * R2); normal = normalize(abs(det) * normal - grad);
           }`);
     };
-    m.customProgramCacheKey = () => 'orangutan-skin-p1';
+    m.customProgramCacheKey = () => 'orangutan-skin-p15';
     return m;
   }
   const skinMat = skinMaterial();
@@ -396,7 +431,7 @@ export function createBody(THREE, brain, opts = {}) {
   for (const part in MESHES) {
     const M = MESHES[part], g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(M.P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(M.N, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(M.COL, 3)); g.setAttribute('skinP', new THREE.BufferAttribute(M.SP, 4)); g.setAttribute('wat', new THREE.BufferAttribute(M.WT, 4));
+    g.setAttribute('color', new THREE.BufferAttribute(M.COL, 3)); g.setAttribute('skinP', new THREE.BufferAttribute(M.SP, 4)); g.setAttribute('wat', new THREE.BufferAttribute(M.WT, 4)); g.setAttribute('shore', new THREE.BufferAttribute(M.SH, 1));
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(M.SI, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(M.SW, 4));
     g.setIndex(new THREE.BufferAttribute(M.I, 1)); g.computeBoundingSphere();
     const sm = new THREE.SkinnedMesh(g, skinMat); sm.name = 'skin · ' + part; sm.castShadow = sm.receiveShadow = true; sm.frustumCulled = false;
@@ -405,6 +440,45 @@ export function createBody(THREE, brain, opts = {}) {
   let cityMesh = null;
   if (CITY) { const t1 = performance.now(), cm = CITY.buildMesh(skeleton); cityMesh = cm.mesh; root.add(cityMesh); if (cm.glow) root.add(cm.glow);
     Object.assign(STATS, { buildings: cm.stats.buildings, buildingsSkipped: cm.stats.skipped, trees: cm.stats.trees, landmarks: cm.stats.landmarks, cityTris: cm.stats.tris, cityMs: Math.round(performance.now() - t1) }); }
+
+  // spray (P1.5): where the surf meets a street, a building or the coat, water is thrown up and falls back. Each droplet rides a shore
+  // vertex (skinned on the CPU with the same bone matrices as the skin), leaves along the surface normal and falls under world-down
+  // gravity, scaled to the 1:1500 city (ARTISTIC: real harbour spray rises a few metres; here a few millimetres)
+  let spray = null;
+  { const pool = [];
+    for (const part in MESHES) { const M = MESHES[part]; for (let q = 0; q < M.SH.length; q++) if (M.WT[q * 4 + 3] > 0.5 && M.SH[q] <= M.h * 1.01) {
+      const pb = BONES[M.PB[q]], ch = CITY && CITY.chartAt(pb, M.P[q * 3], M.P[q * 3 + 1], M.P[q * 3 + 2]);
+      if (ch || rnd() < 0.2) pool.push([M, q]); } } // the city's own quays and building fronts first; the coat's edge now and then
+    const NS = Math.min(Q.spray ?? 6400, pool.length * 4), PER = 16; // droplets, thrown in bursts of PER from one point of the shore
+    if (NS > 0) {
+      rs = Q.seed + 77; const D = []; let site = null;
+      for (let i = 0; i < NS; i++) {
+        if (i % PER === 0) { const [M, q] = pool[Math.floor(rnd() * pool.length)];
+          site = { M, q, ph: rnd(), per: 0.9 + rnd() * 1.4, grp: rnd(), n: V3(M.N[q * 3], M.N[q * 3 + 1], M.N[q * 3 + 2]).normalize() }; }
+        const { M, q } = site, tj = V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), o = V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(M.h * 1.2);
+        D.push({ p: V3(M.P[q * 3], M.P[q * 3 + 1], M.P[q * 3 + 2]).add(o), n: site.n.clone().addScaledVector(tj, 1.1).normalize(),
+          si: M.SI.subarray(q * 4, q * 4 + 4), sw: M.SW.subarray(q * 4, q * 4 + 4), ph: site.ph + rnd() * 0.05, per: site.per, v0: 0.05 + rnd() * 0.1, grp: site.grp }); }
+      const pos = new Float32Array(NS * 3), col = new Float32Array(NS * 4), g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+      const cv = (typeof OffscreenCanvas !== 'undefined') ? new OffscreenCanvas(64, 64) : Object.assign(document.createElement('canvas'), { width: 64, height: 64 });
+      const cx = cv.getContext('2d'), gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.8)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64); const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.PointsMaterial({ size: 0.008, map: tex, vertexColors: true, transparent: true, depthWrite: false, sizeAttenuation: true });
+      const pts = new THREE.Points(g, mat); pts.name = 'spray'; pts.frustumCulled = false; pts.renderOrder = 2; root.add(pts);
+      const _a = V3(), _b = V3(), _m = new THREE.Matrix4(), GE = 0.55; // effective gravity, m/s² (scaled)
+      const skinPt = (o, src, w4, si, out, isDir) => { out.set(0, 0, 0); for (let k = 0; k < 4; k++) { if (w4[k] <= 0) continue; _m.fromArray(skeleton.boneMatrices, si[k] * 16); _a.copy(src); if (isDir) _a.transformDirection(_m); else _a.applyMatrix4(_m); out.addScaledVector(_a, w4[k]); } return isDir ? out.normalize() : out; };
+      spray = { pts, n: NS, update(t) {
+        for (let i = 0; i < NS; i++) { const d = D[i], u = ((t / d.per + d.ph) % 1 + 1) % 1, cyc = Math.floor(t / d.per + d.ph);
+          const on = hsh(cyc * 1.37, d.grp * 91.0, 3.1) < 0.6;           // a wave strikes: most cycles at each point throw a burst
+          const life = 0.75, tau = u * d.per;
+          if (!on || tau > life) { col[i * 4 + 3] = 0; continue; }
+          skinPt(null, d.p, d.sw, d.si, _b, false); const P0 = _b.clone(); skinPt(null, d.n, d.sw, d.si, _b, true);
+          pos[i * 3] = P0.x + _b.x * d.v0 * tau; pos[i * 3 + 1] = P0.y + _b.y * d.v0 * tau - 0.5 * GE * tau * tau; pos[i * 3 + 2] = P0.z + _b.z * d.v0 * tau;
+          const f = tau / life, a = Math.min(1, f * 10) * Math.min(1, (1 - f) * 2.5); col[i * 4] = col[i * 4 + 1] = 1.0; col[i * 4 + 2] = 1.0; col[i * 4 + 3] = a; }
+        g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true; } };
+      STATS.spray = NS; STATS.shoreVerts = pool.length;
+    }
+  }
 
   // =================================================================
   // 5. eyes and lids (rigid, hung on the brain's eye and head joints)
@@ -487,7 +561,7 @@ export function createBody(THREE, brain, opts = {}) {
         const area = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx); if (area <= 0) continue;
         const pb = BONES[M.PB[a]], cxp = ax + (ux + vx) / 3, cyp = ay + (uy + vy) / 3, czp = az + (uz + vz) / 3; let rule = coatAt(part, pb, M.RG[a], cxp, cyp, czp); if (!rule) continue;
         let boost = 1;
-        if (CITY) { const ch = CITY.chartAt(pb, cxp, cyp, czp); if (ch) { if (CITY.streetDist(ch.x, ch.y) > 5) continue; rule = part === 'head' ? [0.008, 0.022, 1, 0.45, 0.004] : [0.015, 0.045, 1, 0.45, 0.006]; boost = 2.5; } } // the coat grows from the streets: short fur lining them, so the city stands clear
+        if (CITY) { const ch = CITY.chartAt(pb, cxp, cyp, czp); if (ch) { if (CITY.streetDist(ch.x, ch.y) > 5) continue; rule = part === 'head' ? [0.012, 0.03, 1, 0.42, 0.004] : [0.02, 0.055, 1, 0.42, 0.006]; boost = 2.5; } } // the coat grows from the streets: short fur lining them, so the city stands clear
         const wgt = area * rule[2] * boost * (rule[0] < 0.03 ? 2.2 : 1); total += wgt; cand.push([M, a, b, c, wgt, rule, pb]); } }
     rs = Q.seed;
     for (const [M, a, b, c, wgt, rule, pb] of cand) {
@@ -645,6 +719,7 @@ export function createBody(THREE, brain, opts = {}) {
     const w = G.wind, gust = 0.42 + 0.22 * Math.sin(w.t * 0.0648) + 0.16 * Math.sin(w.t * 0.153 + 1.3);
     HU.uWind.value.set(Math.sin(w.t * 0.52) + 0.4 * Math.sin(w.t * 1.31 + 1.0), 0, 0.6 * Math.sin(w.t * 0.41 + 2.0)).multiplyScalar(0.35 * w.amt * clamp(gust, 0.12, 0.95));
     HU.uTime.value = w.t; WAVE_T.value = w.t;
+    if (spray) spray.update(w.t);
   }
   // lights the coat shades with (the coat has its own shader; the studio tells it what the room looks like)
   function syncLights({ key, fill, hemi, res }) {
@@ -658,5 +733,5 @@ export function createBody(THREE, brain, opts = {}) {
   function direct(on) { HU.uOpaque.value = on ? 1 : 0; hairMat.alphaToCoverage = !on; } // for renders that go straight to the canvas (no multisampled target)
   function setHairFraction(f) { hairGeo.instanceCount = Math.max(1, Math.round(roots.length * clamp(f, 0.05, 1))); return hairGeo.instanceCount; }
   update(0);
-  return { root, update, syncLights, bounds, setHairFraction, direct, skeleton, meshes: skinMeshes, hair, city: cityMesh, stats: STATS, version: BODY_VERSION, materials: { skin: skinMat, hair: hairMat, eye: eyeMat } };
+  return { root, update, syncLights, bounds, setHairFraction, direct, skeleton, meshes: skinMeshes, hair, city: cityMesh, spray: spray && spray.pts, stats: STATS, version: BODY_VERSION, materials: { skin: skinMat, hair: hairMat, eye: eyeMat } };
 }

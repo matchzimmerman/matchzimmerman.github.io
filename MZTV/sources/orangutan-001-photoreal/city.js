@@ -69,7 +69,7 @@ export function createCitySkin(THREE, env, city) {
   const WIDE = /PRATT|LIGHT|PRESIDENT|CONWAY|MARTIN LUTHER|M L KING|JONES FALLS|EXPRESSWAY|I-83|FALLSWAY|CHARLES|ST PAUL|CALVERT|FAYETTE|LOMBARD|ORLEANS|KEY HWY|HOWARD|GAY/;
   const CELL = 30, key = (i, j) => (i + 512) * 8192 + (j + 512);
   const grid = new Map(), segs = [];
-  for (const s of city.streets) { const hw = WIDE.test(s.n || '') ? 11 : 7; for (let i = 0; i + 1 < s.c.length; i++) segs.push([s.c[i][0], s.c[i][1], s.c[i + 1][0], s.c[i + 1][1], hw]); }
+  for (const s of city.streets) { const hw = WIDE.test(s.n || '') ? 15 : 10; for (let i = 0; i + 1 < s.c.length; i++) segs.push([s.c[i][0], s.c[i][1], s.c[i + 1][0], s.c[i + 1][1], hw]); }
   segs.forEach((g, k) => { const pad = g[4] + 6;
     for (let i = Math.floor((Math.min(g[0], g[2]) - pad) / CELL); i <= Math.floor((Math.max(g[0], g[2]) + pad) / CELL); i++) for (let j = Math.floor((Math.min(g[1], g[3]) - pad) / CELL); j <= Math.floor((Math.max(g[1], g[3]) + pad) / CELL); j++) { const kk = key(i, j); if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(k); } });
   function streetDist(x, y) { const L = grid.get(key(Math.floor(x / CELL), Math.floor(y / CELL))); if (!L) return 99; let best = 99;

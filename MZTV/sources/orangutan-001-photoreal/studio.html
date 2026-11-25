@@ -71,7 +71,7 @@ const Q = new URLSearchParams(location.search);
 const SEED = Math.max(1, parseInt(Q.get('seed') || '1', 10) || 1);
 const SUBJECT = Q.get('subject') === 'test' ? 'test' : 'orangutan';
 const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));
-const HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '120000', 10)));
+const HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '220000', 10)));
 const AO = Q.get('ao') !== '0';
 // city skin (MZ.Human 2026-11-24): Baltimore from the MZ GROUND SURVEY Harborplace + Jones Falls fields; ?city=0 for the plain animal
 const CITY = Q.get('city') === '0' ? null : await fetch('./city.json').then(r => r.ok ? r.json() : null).catch(() => null);

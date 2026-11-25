@@ -76,6 +76,15 @@ HARIL STUDIO [#64](https://github.com/matchzimmerman/haril-studio/issues/64) (su
 - **Domino Sugars sign:** 120 × 70 ft, on a steel lattice of 12 ft bays with cross-bracing. Two rows of red-orange neon, 6 letters over 6, at the recorded letter heights (12–20 ft, the first of the top row about 40 ft; Baltimore Sun, Baltimore Fishbowl, Chesapeake Bay Magazine). The letterforms are not reproduced; each letter is a plain neon outline at its size.
 - **Glow:** neon and LEDs use HDR vertex colours, so they read as light through the tone curve.
 
+## P1.5: swell, surf, spray, a thicker coat (MZ.Human 2026-11-24)
+- **Waves are a swell now, not triangles.** P1.4's 7 mm chop was barely longer than the 5 mm skin mesh, so it faceted. The water now rolls in three long trains (4.2, 2.6 and 1.7 cm, up to about 2 mm high). The vertex shader raises them with analytic normals, so the surface shades smoothly. A short chop is drawn per pixel on top. On the river the waves run downstream and faster.
+- **Whitecaps** break on the swell's crests, with noise breaking them up.
+- **Surf:** every wet vertex knows how far it is from land along the skin (a breadth-first search over the mesh from streets, coat and building footprints). Foam lines run in toward each shore and a white rim sits at the water's edge.
+- **Spray:** 6,400 droplets, thrown in bursts of 16 from points on the shore, mostly the city's quays and building fronts. Each droplet leaves along the surface normal and falls back under world-down gravity, scaled to the 1:1500 city (artistic). They're skinned on the CPU with the skin's own bone matrices. The count is set by `spray` in `createBody` options.
+- **Buildings stand on land:** skin under a building footprint is no longer water, so the waves break against the buildings.
+- **More fur:** the default is 220,000 strands requested (about 176,000 grow after the city's placement rules, up from about 95,000). Streets are wider (15 m main / 10 m side, pavements included), and street fur is longer (2–5.5 cm, 1.2–3 cm on the crown).
+- **No turquoise under the fur:** P1.4 had only turned *hairless* skin to water. Skin under sparse fur (streets, chest, hand backs, crown) was still turquoise, tinted only partly toward the undercoat. That skin is now the coat's own dark undercoat. Turquoise remains only for skin that shows, under `?face=skin` or `?water=0`.
+
 ## What's evidence and what's art (#64 addendum)
 - **Measured:** none of the coat, skin or eye numbers are measurements of an adult female *P. pygmaeus*. None exist for this animal yet.
 - **Evidence-shaped:**
@@ -88,7 +97,7 @@ HARIL STUDIO [#64](https://github.com/matchzimmerman/haril-studio/issues/64) (su
 - **Artistic:** every other number. Colours were judged by eye against Batang (Smithsonian NZP, CC0, used as a link and reference only, never imported). Bonnie is a hybrid and is no longer used.
 
 ## URL parameters
-`seed` · `t` (fast-forward seconds) · `hair` (strand count, default 120000) · `skin` (skin resolution multiplier) · `pr` (pixel ratio) · `ao=0` · `dof=0` · `f` (f-stop, default 2.8) · `exposure` · `env` (environment intensity) · `hdri` · `grain` · `msaa` · `auto=0` · `crew=1` · `bay=0` · `wind=0` · `capture=1` · `subject=test`
+`seed` · `t` (fast-forward seconds) · `hair` (strand count, default 220000) · `skin` (skin resolution multiplier) · `pr` (pixel ratio) · `ao=0` · `dof=0` · `f` (f-stop, default 2.8) · `exposure` · `env` (environment intensity) · `hdri` · `grain` · `msaa` · `auto=0` · `crew=1` · `bay=0` · `wind=0` · `capture=1` · `subject=test`
 
 ## Open (P2 and on)
 - Real-GPU frame timing on MZ.Human's streaming machine. P1 was checked only on a software renderer, which can't measure GPU fps.

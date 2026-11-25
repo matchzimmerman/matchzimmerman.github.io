@@ -28,7 +28,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { createBrain, VERSION } from './brain.js';
 import { createBody, BODY_VERSION } from './body.js';""")
 rep("const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));",
-    "const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));\nconst HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '120000', 10)));\nconst AO = Q.get('ao') !== '0';\n// city skin (MZ.Human 2026-11-24): Baltimore from the MZ GROUND SURVEY Harborplace + Jones Falls fields; ?city=0 for the plain animal\nconst CITY = Q.get('city') === '0' ? null : await fetch('./city.json').then(r => r.ok ? r.json() : null).catch(() => null);")
+    "const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));\nconst HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '220000', 10)));\nconst AO = Q.get('ao') !== '0';\n// city skin (MZ.Human 2026-11-24): Baltimore from the MZ GROUND SURVEY Harborplace + Jones Falls fields; ?city=0 for the plain animal\nconst CITY = Q.get('city') === '0' ? null : await fetch('./city.json').then(r => r.ok ? r.json() : null).catch(() => null);")
 rep("$('spec').textContent = SUBJECT === 'test' ? 'TEST SUBJECT · studio check' : `SPECIMEN 001 · ORANGUTAN · seed ${SEED}`;",
     "$('spec').textContent = SUBJECT === 'test' ? 'TEST SUBJECT · studio check' : `SPECIMEN 001 · ORANGUTAN · PHOTOREAL · seed ${SEED}`;")
 
