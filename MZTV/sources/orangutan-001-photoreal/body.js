@@ -35,13 +35,15 @@
      ARTISTIC  every number below that is not one of the above.
    ===================================================================== */
 
-export const BODY_VERSION = 'orangutan-001 photoreal · body P1 · 2026-11-22';
+import { createCitySkin } from './city.js';
+
+export const BODY_VERSION = 'orangutan-001 photoreal · body P1.2 (city skin) · 2026-11-24';
 
 // skin + coat colours: ARTISTIC (sRGB), chosen by eye against Batang (Smithsonian NZP, CC0, reference only)
 export const LOOK = {
   skin: '#2c231f', skinHair: '#30261f', face: '#2a201b', eyeRing: '#1d1612', lid: '#6f5546', mottle: '#76574a', lip: '#1f1714', nose: '#251c18',
   palm: '#3b302a', nail: '#463a32',
-  hairRoot: '#4a2216', undercoat: '#3a1d12', hairMid: '#86391e', hairTip: '#b8602f',
+  hairRoot: '#4a2216', undercoat: '#3a1d12', harbour: '#26221f', hairMid: '#86391e', hairTip: '#b8602f',
   sclera: '#6a4e3c', scleraRing: '#33241b', irisEdge: '#6b6661', iris: '#3a2214', irisFleck: '#6a4122', pupil: '#060403',
 };
 
@@ -307,14 +309,18 @@ export function createBody(THREE, brain, opts = {}) {
       const reg = M.part === 'head' && pb === bHead ? headRegion(x, y, z) : (pb.kind === 'hand' || pb.kind === 'foot' || pb.kind === 'digit') ? endRegion(pb, x, y, z) : REG.body;
       RG[q] = reg; const L = REGLOOK[reg]; c.set(L[0]);
       if (reg === REG.muzzle || reg === REG.eyeRing || reg === REG.face) { const m = smooth(0.35, 0.85, vnoise(x * 55, y * 55, z * 55)) * (reg === REG.muzzle ? 0.22 : 0.08); c.lerp(cm, m); } // a few paler patches, not a uniformly black face (Kuze 2005)
-      if (reg === REG.body || reg === REG.back) { const rule = coatAt(M.part, pb, reg, x, y, z); if (rule) c.lerp(cu, clamp(rule[2], 0, 1) * (rule[0] > 0.03 ? 0.55 : 0.25)); }
+      const ch = CITY && (reg === REG.body || reg === REG.back) ? CITY.chartAt(pb, x, y, z) : null; let wet = false;
+      if (ch) { if (CITY.inWater(ch.x, ch.y)) { c.set(LOOK.harbour); wet = true; } else { const sd = CITY.streetDist(ch.x, ch.y); if (sd < 3) c.lerp(cu, 0.6 * smooth(3, -3, sd)); } } // city skin: streets carry the coat, the harbour is bare and wet
+      else if (reg === REG.body || reg === REG.back) { const rule = coatAt(M.part, pb, reg, x, y, z); if (rule) c.lerp(cu, clamp(rule[2], 0, 1) * (rule[0] > 0.03 ? 0.55 : 0.25)); }
       const g = 0.92 + 0.16 * vnoise(x * 40 + 7, y * 40, z * 40); COL[q * 3] = c.r * g; COL[q * 3 + 1] = c.g * g; COL[q * 3 + 2] = c.b * g;
-      SP[q * 4] = L[1]; SP[q * 4 + 1] = L[2]; SP[q * 4 + 2] = L[3]; SP[q * 4 + 3] = L[4];
+      SP[q * 4] = wet ? 0.36 : L[1]; SP[q * 4 + 1] = wet ? 0.3 : L[2]; SP[q * 4 + 2] = L[3]; SP[q * 4 + 3] = L[4];
     }
     Object.assign(M, { SI, SW, COL, SP, RG, PB });
     return M;
   }
 
+  // the city skin (optional): Baltimore from the MZ GROUND SURVEY fields; head, face, hands and feet stay as they are
+  const CITY = Q.city ? createCitySkin(THREE, { BONES, LB, bPelvis, bChest, bNeck, PRIMS, sdPrim, smin, smax }, Q.city) : null;
   const MESHES = {};
   for (const part in PARTS) { const M = finishPart(meshPart(part)); MESHES[part] = M; STATS['verts_' + part] = M.P.length / 3; STATS['tris_' + part] = M.I.length / 3; }
   STATS.skinMs = Math.round(performance.now() - t0);
@@ -376,6 +382,8 @@ export function createBody(THREE, brain, opts = {}) {
     const sm = new THREE.SkinnedMesh(g, skinMat); sm.name = 'skin · ' + part; sm.castShadow = sm.receiveShadow = true; sm.frustumCulled = false;
     sm.bind(skeleton, new THREE.Matrix4()); root.add(sm); skinMeshes.push(sm);
   }
+  let cityMesh = null;
+  if (CITY) { const t1 = performance.now(), cm = CITY.buildMesh(skeleton); cityMesh = cm.mesh; root.add(cityMesh); Object.assign(STATS, { buildings: cm.count, buildingsSkipped: cm.skipped, cityTris: cm.tris, cityMs: Math.round(performance.now() - t1) }); }
 
   // =================================================================
   // 5. eyes and lids (rigid, hung on the brain's eye and head joints)
@@ -456,14 +464,19 @@ export function createBody(THREE, brain, opts = {}) {
       for (let t = 0; t < I.length; t += 3) { const a = I[t], b = I[t + 1], c = I[t + 2];
         const ax = P[a * 3], ay = P[a * 3 + 1], az = P[a * 3 + 2], ux = P[b * 3] - ax, uy = P[b * 3 + 1] - ay, uz = P[b * 3 + 2] - az, vx = P[c * 3] - ax, vy = P[c * 3 + 1] - ay, vz = P[c * 3 + 2] - az;
         const area = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx); if (area <= 0) continue;
-        const pb = BONES[M.PB[a]], cxp = ax + (ux + vx) / 3, cyp = ay + (uy + vy) / 3, czp = az + (uz + vz) / 3, rule = coatAt(part, pb, M.RG[a], cxp, cyp, czp); if (!rule) continue;
-        const wgt = area * rule[2] * (rule[0] < 0.03 ? 2.2 : 1); total += wgt; cand.push([M, a, b, c, wgt, rule, pb]); } }
+        const pb = BONES[M.PB[a]], cxp = ax + (ux + vx) / 3, cyp = ay + (uy + vy) / 3, czp = az + (uz + vz) / 3; let rule = coatAt(part, pb, M.RG[a], cxp, cyp, czp); if (!rule) continue;
+        let boost = 1;
+        if (CITY) { const ch = CITY.chartAt(pb, cxp, cyp, czp); if (ch) { if (CITY.streetDist(ch.x, ch.y) > 5) continue; rule = [0.015, 0.045, 1, 0.45, 0.006]; boost = 2.5; } } // the coat grows from the streets: short fur lining them, so the city stands clear
+        const wgt = area * rule[2] * boost * (rule[0] < 0.03 ? 2.2 : 1); total += wgt; cand.push([M, a, b, c, wgt, rule, pb]); } }
     rs = Q.seed;
     for (const [M, a, b, c, wgt, rule, pb] of cand) {
       let n = wgt / total * Q.hair; n = Math.floor(n) + (rnd() < n % 1 ? 1 : 0);
       for (let k = 0; k < n; k++) {
-        let u = rnd(), v = rnd(); if (u + v > 1) { u = 1 - u; v = 1 - v; } const w = 1 - u - v, P = M.P, N = M.N;
-        const px = P[a * 3] * w + P[b * 3] * u + P[c * 3] * v, py = P[a * 3 + 1] * w + P[b * 3 + 1] * u + P[c * 3 + 1] * v, pz = P[a * 3 + 2] * w + P[b * 3 + 2] * u + P[c * 3 + 2] * v;
+        let u, v, w, px, py, pz, ok = false; const P = M.P, N = M.N;
+        for (let tries = 0; tries < 5 && !ok; tries++) { u = rnd(); v = rnd(); if (u + v > 1) { u = 1 - u; v = 1 - v; } w = 1 - u - v;
+          px = P[a * 3] * w + P[b * 3] * u + P[c * 3] * v; py = P[a * 3 + 1] * w + P[b * 3 + 1] * u + P[c * 3 + 1] * v; pz = P[a * 3 + 2] * w + P[b * 3 + 2] * u + P[c * 3 + 2] * v;
+          const ch = CITY && CITY.chartAt(pb, px, py, pz); ok = !ch || (CITY.streetDist(ch.x, ch.y) < 0 && !CITY.inBuilding(ch.x, ch.y)); }
+        if (!ok) continue;
         const nn = V3(N[a * 3] * w + N[b * 3] * u + N[c * 3] * v, N[a * 3 + 1] * w + N[b * 3 + 1] * u + N[c * 3 + 1] * v, N[a * 3 + 2] * w + N[b * 3 + 2] * u + N[c * 3 + 2] * v).normalize();
         const src = w >= u && w >= v ? a : u >= v ? b : c, comb = combAt(pb, px, py, pz);
         const cell = rule[4], gx = Math.floor(px / cell), gy = Math.floor(py / cell), gz = Math.floor(pz / cell);
@@ -624,5 +637,5 @@ export function createBody(THREE, brain, opts = {}) {
   function direct(on) { HU.uOpaque.value = on ? 1 : 0; hairMat.alphaToCoverage = !on; } // for renders that go straight to the canvas (no multisampled target)
   function setHairFraction(f) { hairGeo.instanceCount = Math.max(1, Math.round(roots.length * clamp(f, 0.05, 1))); return hairGeo.instanceCount; }
   update(0);
-  return { root, update, syncLights, bounds, setHairFraction, direct, skeleton, meshes: skinMeshes, hair, stats: STATS, version: BODY_VERSION, materials: { skin: skinMat, hair: hairMat, eye: eyeMat } };
+  return { root, update, syncLights, bounds, setHairFraction, direct, skeleton, meshes: skinMeshes, hair, city: cityMesh, stats: STATS, version: BODY_VERSION, materials: { skin: skinMat, hair: hairMat, eye: eyeMat } };
 }

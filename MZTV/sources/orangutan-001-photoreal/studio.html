@@ -73,6 +73,8 @@ const SUBJECT = Q.get('subject') === 'test' ? 'test' : 'orangutan';
 const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));
 const HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '120000', 10)));
 const AO = Q.get('ao') !== '0';
+// city skin (MZ.Human 2026-11-24): Baltimore from the MZ GROUND SURVEY Harborplace + Jones Falls fields; ?city=0 for the plain animal
+const CITY = Q.get('city') === '0' ? null : await fetch('./city.json').then(r => r.ok ? r.json() : null).catch(() => null);
 const $ = id => document.getElementById(id);
 const status = t => { $('status').textContent = t; $('status').classList.toggle('off', !t); };
 $('spec').textContent = SUBJECT === 'test' ? 'TEST SUBJECT · studio check' : `SPECIMEN 001 · ORANGUTAN · PHOTOREAL · seed ${SEED}`;
@@ -371,7 +373,7 @@ function hud(now) {
 /* ---------- build the subject ---------- */
 let SUBJ = null, BODY = null; const PERF = { sim: 0, render: 0, frames: 0, dt: [] };
 function makeAnimal(seed) { // the brain lives; the body follows it
-  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1) });
+  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1), city: CITY });
   const g = new THREE.Group(); g.name = 'ORANGUTAN 001 · photoreal'; g.add(brain.root, BODY.root);
   return { root: g, brain, body: BODY, update(dt, t, wind) { brain.update(dt, t, wind); BODY.update(dt); }, bounds: () => BODY.bounds(), observe: () => brain.observe(), reset: s => brain.reset(s),
     log: brain.log, metrics: brain.metrics, version: VERSION + ' · ' + BODY_VERSION, get state() { return brain.state; } };
@@ -384,7 +386,7 @@ function makeAnimal(seed) { // the brain lives; the body follows it
     scene.add(SUBJ.root);
     const ff = Math.min(1800, +(Q.get('t') || 0)); if (ff > 0 && SUBJECT !== 'test') { for (let k = 1; k <= ff * 60; k++) SUBJ.brain.update(1 / 60, k / 60, { t: k / 60, amt: 1 }); BODY.update(0); }
     BOX = SUBJ.bounds();
-    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands · ${Math.round(BODY.stats.buildMs)} ms`; } else { $('src').textContent = 'a still test form · no animal'; $('bCrew').disabled = true; }
+    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands${BODY.stats.buildings ? ` · ${BODY.stats.buildings} Baltimore buildings` : ''} · ${Math.round(BODY.stats.buildMs)} ms`; } else { $('src').textContent = 'a still test form · no animal'; $('bCrew').disabled = true; }
     frameAll(true); status('');
     if (Q.get('crew') === '1' && crew) toggleCrew(true);
     window.STUDIO_READY = true;

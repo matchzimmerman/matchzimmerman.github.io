@@ -29,6 +29,26 @@ HARIL STUDIO [#64](https://github.com/matchzimmerman/haril-studio/issues/64) (su
 - **Studio:** AgX tone mapping and a prebuilt image-based light (three's generated RoomEnvironment; `?hdri=<url>` swaps in a licensed HDRI for light and reflections only). It also has a 4096² key-light shadow that follows the animal, GTAO, thin-lens depth of field (focal length in mm, f-stop, and focus on the orbit target or the crew's aim), grain and a light vignette. The cyclorama and MZCAM are kept; the crew's monitors are straight renders with no post.
 - **24 fps governor:** if the rolling frame rate drops under 27, the coat thins (down to 25 %), then the pixel ratio. When there's headroom it comes back. Off with `?auto=0`; the log is in `MZ.perf().governor`.
 
+## P1.2: city skin, Baltimore (MZ.Human 2026-11-24)
+**What it is:** the skin is the map of Baltimore. The buildings of two MZ GROUND SURVEY fields grow out of the body, each where it stands on the map, at true relative height. The coat grows only from the streets, and the face, head, hands and feet are unchanged. `?city=0` gives the plain animal.
+
+**Data (`city.json`, built by `tools/build_city_skin.py`):**
+- **Harborplace field** (haril-studio `claude/mzgs-harborplace-now-future` @ `80d8d60`): today's buildings (City outlines with 2024 USGS lidar tiers), the **new Harborplace** (2024 design on the Jan 2026 permit footprints, proposed; the 4 City buildings on those sites are dropped), streets, and harbour water WT-1.
+- **Jones Falls field** (`claude/mzgs-jones-falls-field` @ `9d25779`): today's buildings and streets north of the Harborplace frame.
+- In total: 954 buildings and 1,242 streets.
+
+**The pattern** (`city.js`, one scale 1:1500, so 1 m of city is 0.67 mm of skin and a 161 m tower stands 10.7 cm):
+| piece | map window |
+|---|---|
+| trunk, small of the back to shoulders | the Pratt St shore and the new Harborplace, up through downtown (centred E 361230; unrolled around the trunk, seam down the belly, read from behind with north up and east right) |
+| arms, shoulder to wrist | the Jones Falls valley, north to south (left arm the west half, right arm the east half) |
+| thighs, hip to knee | either side of the harbour (west: Camden Yards / Ridgely's Delight; east: Harbor East) |
+| rump, head, face, hands, feet | no city: the ordinary coat and skin |
+
+- **Buildings:** each is ray-marched onto the skin's own distance field, stands along the skin normal at its centroid and rides its nearest joints rigidly. Facades show floors and window bays drawn in real metres. About 500 buildings land on the body per build; the rest fall outside the pattern pieces or off curved edges.
+- **Coat:** grows from the streets only, as short fur (1.5–4.5 cm) so the city stands clear. Open land and plazas are bare skin, and the harbour is wet skin.
+- **Provenance:** Ground Survey data was private research. This build puts the derived city file on this repo's branch (public sources only: City GIS outlines, USGS lidar, the public permit plan).
+
 ## What's evidence and what's art (#64 addendum)
 - **Measured:** none of the coat, skin or eye numbers are measurements of an adult female *P. pygmaeus*. None exist for this animal yet.
 - **Evidence-shaped:**

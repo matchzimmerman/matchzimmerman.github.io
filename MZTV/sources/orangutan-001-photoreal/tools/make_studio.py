@@ -28,7 +28,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { createBrain, VERSION } from './brain.js';
 import { createBody, BODY_VERSION } from './body.js';""")
 rep("const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));",
-    "const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));\nconst HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '120000', 10)));\nconst AO = Q.get('ao') !== '0';")
+    "const RATE = Math.max(0.1, Math.min(8, +(Q.get('rate') || 1)));\nconst HAIR = Math.max(0, Math.min(400000, parseInt(Q.get('hair') || '120000', 10)));\nconst AO = Q.get('ao') !== '0';\n// city skin (MZ.Human 2026-11-24): Baltimore from the MZ GROUND SURVEY Harborplace + Jones Falls fields; ?city=0 for the plain animal\nconst CITY = Q.get('city') === '0' ? null : await fetch('./city.json').then(r => r.ok ? r.json() : null).catch(() => null);")
 rep("$('spec').textContent = SUBJECT === 'test' ? 'TEST SUBJECT · studio check' : `SPECIMEN 001 · ORANGUTAN · seed ${SEED}`;",
     "$('spec').textContent = SUBJECT === 'test' ? 'TEST SUBJECT · studio check' : `SPECIMEN 001 · ORANGUTAN · PHOTOREAL · seed ${SEED}`;")
 
@@ -137,11 +137,11 @@ rep("function bay(W, H, isRT) {", "function bay(W, H, isRT) { // the four monito
 rep("    SUBJ = SUBJECT === 'test' ? testSubject() : createCreature(THREE, { seed: SEED });",
     """    SUBJ = SUBJECT === 'test' ? testSubject() : makeAnimal(SEED);""")
 rep("    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = 'built from code · ' + VERSION; }",
-    "    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands · ${Math.round(BODY.stats.buildMs)} ms`; }")
+    "    if (SUBJECT !== 'test') { initCrew(); $('src').textContent = `built from code · ${BODY.stats.strands.toLocaleString()} strands${BODY.stats.buildings ? ` · ${BODY.stats.buildings} Baltimore buildings` : ''} · ${Math.round(BODY.stats.buildMs)} ms`; }")
 rep("let SUBJ = null; const PERF = { sim: 0, render: 0, frames: 0, dt: [] };",
     """let SUBJ = null, BODY = null; const PERF = { sim: 0, render: 0, frames: 0, dt: [] };
 function makeAnimal(seed) { // the brain lives; the body follows it
-  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1) });
+  const brain = createBrain(THREE, { seed }); BODY = createBody(THREE, brain, { hair: HAIR, skinRes: +(Q.get('skin') || 1), city: CITY });
   const g = new THREE.Group(); g.name = 'ORANGUTAN 001 · photoreal'; g.add(brain.root, BODY.root);
   return { root: g, brain, body: BODY, update(dt, t, wind) { brain.update(dt, t, wind); BODY.update(dt); }, bounds: () => BODY.bounds(), observe: () => brain.observe(), reset: s => brain.reset(s),
     log: brain.log, metrics: brain.metrics, version: VERSION + ' · ' + BODY_VERSION, get state() { return brain.state; } };
